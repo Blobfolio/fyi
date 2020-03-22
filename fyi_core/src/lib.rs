@@ -23,7 +23,7 @@ use chrono::prelude::*;
 /// Generic message.
 pub enum Msg {
 	/// Custom.
-	Custom(String, String),
+	Custom(String, String, u8),
 	/// Debug.
 	Debug(String),
 	/// Error.
@@ -51,7 +51,7 @@ impl Msg {
 	/// Msg.
 	pub fn msg(&self) -> String {
 		format!("{}", Style::new().bold().paint(match *self {
-			Self::Custom(_, ref x) => x.clone(),
+			Self::Custom(_, ref x, _) => x.clone(),
 			Self::Debug(ref x) => x.clone(),
 			Self::Error(ref x) => x.clone(),
 			Self::Notice(ref x) => x.clone(),
@@ -63,12 +63,12 @@ impl Msg {
 	/// Prefix (Colored).
 	pub fn prefix(&self) -> String {
 		match *self {
-			Self::Custom(ref x, _) => match x.is_empty() {
+			Self::Custom(ref x, _, c) => match x.is_empty() {
 				true => "".to_string(),
 				false => format!(
 					"{}{}",
-					Colour::Fixed(199).bold().paint(x.clone()),
-					Colour::Fixed(199).bold().paint(":".to_string())
+					Colour::Fixed(c).bold().paint(x.clone()),
+					Colour::Fixed(c).bold().paint(":".to_string())
 				),
 			},
 			Self::Debug(_) => format!("{}", Colour::Cyan.bold().paint("Debug:")),

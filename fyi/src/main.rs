@@ -32,9 +32,13 @@ fn main() {
 			let msg: String = opts2.value_of("msg").unwrap_or("").to_string();
 
 			let out: Msg = match name {
-				"print" => match opts2.value_of("prefix") {
-					Some(p) => Msg::Custom(p.to_string(), msg),
-					_ => Msg::Custom("".to_string(), msg),
+				"print" => {
+					let color: u8 = parse_cli_u64(opts2.value_of("prefix_color").unwrap_or("199")) as u8;
+
+					match opts2.value_of("prefix") {
+						Some(p) => Msg::Custom(p.to_string(), msg, color),
+						_ => Msg::Custom("".to_string(), msg, color),
+					}
 				},
 				"debug" => Msg::Debug(msg),
 				"error" => Msg::Error(msg),
@@ -75,6 +79,13 @@ fn menu() -> App<'static, 'static> {
 					.default_value("")
 					.help("Set a custom prefix.")
 				)
+				.arg(clap::Arg::with_name("prefix_color")
+					.long("prefix-color")
+					.takes_value(true)
+					.default_value("199")
+					.validator(validate_cli_u64)
+					.help("Use this color for the prefix.")
+				)
 				.arg(clap::Arg::with_name("msg")
 					//.index(1)
 					.help("The message!")
@@ -105,7 +116,6 @@ fn menu() -> App<'static, 'static> {
 					.default_value("0")
 					.help("Exit with this status code after printing.")
 					.validator(validate_cli_u64)
-					.global(true)
 				)
 				.arg(clap::Arg::with_name("msg")
 					//.index(1)
