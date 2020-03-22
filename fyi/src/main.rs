@@ -15,29 +15,21 @@ FYI is a dead-simple status message printer for CLI use applications.
 extern crate clap;
 extern crate fyi_core;
 
-use clap::{App, AppSettings, ArgMatches, Shell, SubCommand};
+use clap::ArgMatches;
 use fyi_core::{Msg, Prefix, NO_COLOR, TIMESTAMP};
 use std::process::exit;
+
+mod menu;
 
 
 
 fn main() {
 	// Command line arguments.
-	let opts: ArgMatches = menu()
+	let opts: ArgMatches = menu::menu()
 		.get_matches();
 
 	// Make the message.
 	if let Some(name) = opts.subcommand_name() {
-		// Generate completions and exit.
-		if "completions" == name {
-			menu().gen_completions_to(
-				"fyi",
-				Shell::Bash,
-				&mut std::io::stdout()
-			);
-			exit(0);
-		}
-
 		if let Some(opts2) = opts.subcommand_matches(&name) {
 			// Convert the CLI subcommand into an appropriate prefix.
 			let prefix: Prefix = match name {
@@ -91,169 +83,11 @@ fn main() {
 	exit(parse_cli_u8(opts.value_of("exit").unwrap_or("0")) as i32);
 }
 
-/// CLI Menu.
-fn menu() -> App<'static, 'static> {
-	App::new("FYI")
-		.version(env!("CARGO_PKG_VERSION"))
-		.author("Blobfolio, LLC. <hello@blobfolio.com>")
-		.about(env!("CARGO_PKG_DESCRIPTION"))
-		.settings(&[
-			AppSettings::VersionlessSubcommands,
-			AppSettings::SubcommandRequiredElseHelp,
-		])
-		.subcommand(
-			SubCommand::with_name("completions")
-				.settings(&[AppSettings::Hidden])
-		)
-		.subcommand(
-			SubCommand::with_name("print")
-				.about("Print a message with a custom prefix (or no prefix).")
-				.arg(clap::Arg::with_name("prefix")
-					.short("p")
-					.long("prefix")
-					.takes_value(true)
-					.default_value("")
-					.help("Set a custom prefix.")
-				)
-				.arg(clap::Arg::with_name("prefix_color")
-					.short("c")
-					.long("prefix-color")
-					.takes_value(true)
-					.default_value("199")
-					.validator(validate_cli_u8)
-					.help("Use this color for the prefix.")
-				)
-				.arg(clap::Arg::with_name("msg")
-					.help("The message!")
-					.multiple(false)
-					.required(true)
-					.value_name("MSG")
-					.use_delimiter(false)
-				)
-		)
-		.subcommand(
-			SubCommand::with_name("debug")
-				.about("Print a debug message.")
-				.arg(clap::Arg::with_name("msg")
-					.help("The message!")
-					.multiple(false)
-					.required(true)
-					.value_name("MSG")
-					.use_delimiter(false)
-				)
-		)
-		.subcommand(
-			SubCommand::with_name("error")
-				.about("Print an error message.")
-				.arg(clap::Arg::with_name("exit")
-					.short("e")
-					.long("exit")
-					.takes_value(true)
-					.default_value("0")
-					.help("Exit with this status code after printing.")
-					.validator(validate_cli_u8)
-				)
-				.arg(clap::Arg::with_name("msg")
-					.help("The message!")
-					.multiple(false)
-					.value_name("MSG")
-					.use_delimiter(false)
-				)
-		)
-		.subcommand(
-			SubCommand::with_name("info")
-				.about("Print an informational message.")
-				.arg(clap::Arg::with_name("msg")
-					.help("The message!")
-					.multiple(false)
-					.required(true)
-					.value_name("MSG")
-					.use_delimiter(false)
-				)
-		)
-		.subcommand(
-			SubCommand::with_name("notice")
-				.about("Print a notice.")
-				.arg(clap::Arg::with_name("msg")
-					.help("The message!")
-					.multiple(false)
-					.required(true)
-					.value_name("MSG")
-					.use_delimiter(false)
-				)
-		)
-		.subcommand(
-			SubCommand::with_name("prompt")
-				.about("Ask a Yes/No question. An exit code of 0 indicates acceptance.")
-				.arg(clap::Arg::with_name("msg")
-					.help("The question!")
-					.multiple(false)
-					.required(true)
-					.value_name("QUESTION")
-					.use_delimiter(false)
-				)
-		)
-		.subcommand(
-			SubCommand::with_name("success")
-				.about("Print a success message.")
-				.arg(clap::Arg::with_name("msg")
-					.help("The message!")
-					.multiple(false)
-					.required(true)
-					.value_name("MSG")
-					.use_delimiter(false)
-				)
-		)
-		.subcommand(
-			SubCommand::with_name("warning")
-				.about("Print a warning message.")
-				.arg(clap::Arg::with_name("msg")
-					.help("The message!")
-					.multiple(false)
-					.required(true)
-					.value_name("MSG")
-					.use_delimiter(false)
-				)
-		)
-		.arg(clap::Arg::with_name("indent")
-			.short("i")
-			.long("indent")
-			.takes_value(true)
-			.default_value("0")
-			.help("Number of indentations.")
-			.validator(validate_cli_u8)
-			.global(true)
-		)
-		.arg(clap::Arg::with_name("no_color")
-			.long("no-color")
-			.takes_value(false)
-			.help("Print without any fancy formatting.")
-			.global(true)
-		)
-		.arg(clap::Arg::with_name("time")
-			.short("t")
-			.long("add-timestamp")
-			.alias("time")
-			.alias("timestamp")
-			.takes_value(false)
-			.help("Include a timestamp.")
-			.global(true)
-		)
-}
-
 /// Validate CLI numeric inputs.
 fn parse_cli_u8<S> (val: S) -> u8
 where S: Into<String> {
 	match val.into().parse::<u8>() {
 		Ok(x) => x,
 		_ => 0,
-	}
-}
-
-/// Validate CLI numeric inputs.
-fn validate_cli_u8(val: String) -> Result<(), String> {
-	match val.parse::<u8>().is_ok() {
-		true => Ok(()),
-		false => Err("Value must be at least 0.".to_string()),
 	}
 }

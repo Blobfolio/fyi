@@ -4,6 +4,10 @@ version = "0.0.3"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2018"
 description = "FYI is a dead-simple status message printer for CLI use applications."
+build = "build.rs"
+
+[build-dependencies]
+clap = "2.33.*"
 
 [dependencies]
 fyi_core = { path = "../fyi_core" }

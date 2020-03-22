@@ -38,8 +38,8 @@ build_ver     := "1"
 	chmod 755 "{{ debian_dir }}/usr/bin/fyi"
 	strip "{{ debian_dir }}/usr/bin/fyi"
 
-	# Generate completions.
-	"{{ debian_dir }}/usr/bin/fyi" completions > "{{ debian_dir }}/etc/bash_completion.d/fyi.bash"
+	# Copy completions.
+	cp -a "{{ cargo_dir }}/fyi.bash" "{{ debian_dir }}/etc/bash_completion.d"
 	chmod 644 "{{ debian_dir }}/etc/bash_completion.d/fyi.bash"
 
 	# Set up the control file.
