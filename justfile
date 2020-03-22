@@ -88,10 +88,11 @@ version:
 		exit 0
 	fi
 
-	just _info "Setting plugin version to $_ver2."
+	fyi success "Setting plugin version to $_ver2."
 
 	# Set the release version!
 	just _version "{{ justfile_directory() }}/fyi/Cargo.toml" "$_ver2" >/dev/null 2>&1
+	just _version "{{ justfile_directory() }}/fyi_core/Cargo.toml" "$_ver2" >/dev/null 2>&1
 
 
 # Truly set version.
@@ -127,12 +128,3 @@ _version TOML VER:
 # Init dependencies.
 @_init:
 	echo ""
-
-
-##             ##
-# NOTIFICATIONS #
-##             ##
-
-# Echo an informational comment.
-@_info COMMENT:
-	echo "\e[95;1m[Info] \e[0;1m{{ COMMENT }}\e[0m"
