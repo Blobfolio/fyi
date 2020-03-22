@@ -15,7 +15,7 @@ FYI is a dead-simple status message printer for CLI use applications.
 extern crate clap;
 extern crate fyi_core;
 
-use clap::{App, AppSettings, ArgMatches, SubCommand};
+use clap::{App, AppSettings, ArgMatches, Shell, SubCommand};
 use fyi_core::{Msg, Prefix, NO_COLOR, TIMESTAMP};
 use std::process::exit;
 
@@ -28,6 +28,16 @@ fn main() {
 
 	// Make the message.
 	if let Some(name) = opts.subcommand_name() {
+		// Generate completions and exit.
+		if "completions" == name {
+			menu().gen_completions_to(
+				"fyi",
+				Shell::Bash,
+				&mut std::io::stdout()
+			);
+			exit(0);
+		}
+
 		if let Some(opts2) = opts.subcommand_matches(&name) {
 			// Convert the CLI subcommand into an appropriate prefix.
 			let prefix: Prefix = match name {
@@ -90,6 +100,10 @@ fn menu() -> App<'static, 'static> {
 			AppSettings::VersionlessSubcommands,
 			AppSettings::SubcommandRequiredElseHelp,
 		])
+		.subcommand(
+			SubCommand::with_name("completions")
+				.settings(&[AppSettings::Hidden])
+		)
 		.subcommand(
 			SubCommand::with_name("print")
 				.about("Print a message with a custom prefix (or no prefix).")
