@@ -26,6 +26,7 @@ build_ver     := "1"
 @build-debian: build
 	[ ! -e "{{ debian_dir }}" ] || rm -rf "{{ debian_dir }}"
 	mkdir -p "{{ debian_dir }}/DEBIAN"
+	mkdir -p "{{ debian_dir }}/etc/bash_completion.d"
 	mkdir -p "{{ debian_dir }}/usr/bin"
 	mkdir -p "{{ debian_dir }}/usr/share/man/man1"
 
@@ -36,6 +37,10 @@ build_ver     := "1"
 	cp -a "{{ cargo_dir }}/release/fyi" "{{ debian_dir }}/usr/bin"
 	chmod 755 "{{ debian_dir }}/usr/bin/fyi"
 	strip "{{ debian_dir }}/usr/bin/fyi"
+
+	# Copy completions.
+	cp -a "{{ cargo_dir }}/fyi.bash" "{{ debian_dir }}/etc/bash_completion.d"
+	chmod 644 "{{ debian_dir }}/etc/bash_completion.d/fyi.bash"
 
 	# Set up the control file.
 	cp -a "{{ release_dir }}/skel/control" "{{ debian_dir }}/DEBIAN"
