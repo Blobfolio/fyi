@@ -18,24 +18,21 @@ use crate::prefix::Prefix;
 
 #[derive(Debug, Clone)]
 /// Message.
-pub struct Msg {
+pub struct Msg<'a> {
 	indent: u8,
-	prefix: Option<Prefix>,
+	prefix: Prefix<'a>,
 	msg: String,
 	flags: u8,
 }
 
-impl std::fmt::Display for Msg {
+impl std::fmt::Display for Msg<'_> {
 	/// Display.
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		// The message.
 		let mut out: String = format!(
 			"{}{}{}",
 			indentation(self.indent),
-			match self.prefix {
-				Some(ref p) => p.to_string(),
-				None => "".to_string(),
-			},
+			self.prefix.to_string(),
 			Style::new().bold().paint(&self.msg)
 		);
 
@@ -59,19 +56,19 @@ impl std::fmt::Display for Msg {
 	}
 }
 
-impl Default for Msg {
+impl Default for Msg<'_> {
 	/// Default.
 	fn default() -> Self {
 		Msg {
 			indent: 0,
-			prefix: None,
+			prefix: Prefix::None,
 			msg: "".to_string(),
 			flags: 0,
 		}
 	}
 }
 
-impl Msg {
+impl<'a> Msg<'a> {
 	/// New.
 	pub fn new<S> (msg: S) -> Self
 	where S: Into<String> {
@@ -94,17 +91,8 @@ impl Msg {
 	}
 
 	/// Set Prefix.
-	pub fn with_prefix(mut self, prefix: Option<Prefix>) -> Self {
-		if let Some(x) = prefix {
-			self.prefix = match x.to_string().is_empty() {
-				true => None,
-				false => Some(x),
-			};
-		}
-		else {
-			self.prefix = None;
-		}
-
+	pub fn with_prefix(mut self, prefix: Prefix<'a>) -> Self {
+		self.prefix = prefix;
 		self
 	}
 
@@ -127,7 +115,7 @@ impl Msg {
 	/// Print.
 	pub fn print(&self) {
 		match self.prefix {
-			Some(Prefix::Error) | Some(Prefix::Warning) => eprintln!("{}", self.to_string()),
+			Prefix::Error | Prefix::Warning => eprintln!("{}", self.to_string()),
 			_ => println!("{}", self.to_string()),
 		}
 	}

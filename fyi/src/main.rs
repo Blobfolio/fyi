@@ -30,18 +30,18 @@ fn main() {
 	if let Some(name) = opts.subcommand_name() {
 		if let Some(opts2) = opts.subcommand_matches(&name) {
 			// Convert the CLI subcommand into an appropriate prefix.
-			let prefix: Option<Prefix> = match name {
-				"debug" => Some(Prefix::Debug),
-				"error" => Some(Prefix::Error),
-				"notice" => Some(Prefix::Notice),
-				"success" => Some(Prefix::Success),
-				"warning" => Some(Prefix::Warning),
+			let prefix: Prefix = match name {
+				"debug" => Prefix::Debug,
+				"error" => Prefix::Error,
+				"notice" => Prefix::Notice,
+				"success" => Prefix::Success,
+				"warning" => Prefix::Warning,
 				_ => {
 					let color: u8 = parse_cli_u8(opts2.value_of("prefix_color").unwrap_or("199"));
 
 					match opts2.value_of("prefix") {
-						Some(p) => Some(Prefix::Custom(p.to_string(), color)),
-						_ => None,
+						Some(p) => Prefix::Custom(p, color),
+						_ => Prefix::None,
 					}
 				},
 			};
@@ -82,12 +82,14 @@ fn menu() -> App<'static, 'static> {
 			SubCommand::with_name("print")
 				.about("Print a message with a custom prefix (or no prefix).")
 				.arg(clap::Arg::with_name("prefix")
+					.short("p")
 					.long("prefix")
 					.takes_value(true)
 					.default_value("")
 					.help("Set a custom prefix.")
 				)
 				.arg(clap::Arg::with_name("prefix_color")
+					.short("c")
 					.long("prefix-color")
 					.takes_value(true)
 					.default_value("199")
@@ -117,6 +119,7 @@ fn menu() -> App<'static, 'static> {
 			SubCommand::with_name("error")
 				.about("Print an error message.")
 				.arg(clap::Arg::with_name("exit")
+					.short("e")
 					.long("exit")
 					.takes_value(true)
 					.default_value("0")
@@ -165,6 +168,7 @@ fn menu() -> App<'static, 'static> {
 				)
 		)
 		.arg(clap::Arg::with_name("indent")
+			.short("i")
 			.long("indent")
 			.takes_value(true)
 			.default_value("0")

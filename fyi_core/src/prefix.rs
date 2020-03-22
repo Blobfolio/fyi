@@ -14,11 +14,11 @@ use ansi_term::Colour;
 
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 /// Generic message.
-pub enum Prefix {
+pub enum Prefix<'b> {
 	/// Custom.
-	Custom(String, u8),
+	Custom(&'b str, u8),
 	/// Debug.
 	Debug,
 	/// Error.
@@ -29,9 +29,11 @@ pub enum Prefix {
 	Success,
 	/// Warning.
 	Warning,
+	/// None.
+	None,
 }
 
-impl std::fmt::Display for Prefix {
+impl std::fmt::Display for Prefix<'_> {
 	/// Display.
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		let prefix = self.prefix();
@@ -42,7 +44,7 @@ impl std::fmt::Display for Prefix {
 	}
 }
 
-impl Prefix {
+impl<'b> Prefix<'b> {
 	/// Prefix (Colored).
 	pub fn prefix(&self) -> String {
 		match *self {
@@ -59,6 +61,7 @@ impl Prefix {
 			Self::Notice => format!("{} ", Colour::Purple.bold().paint("Notice:")),
 			Self::Success => format!("{} ", Colour::Green.bold().paint("Success:")),
 			Self::Warning => format!("{} ", Colour::Yellow.bold().paint("Warning:")),
+			_ => "".to_string(),
 		}
 	}
 }
