@@ -12,6 +12,7 @@
 
 extern crate ansi_term;
 extern crate chrono;
+extern crate dialoguer;
 extern crate strip_ansi_escapes;
 
 mod msg;

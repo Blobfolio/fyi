@@ -34,6 +34,7 @@ fn main() {
 				"debug" => Prefix::Debug,
 				"error" => Prefix::Error,
 				"notice" => Prefix::Notice,
+				"prompt" => Prefix::None,
 				"success" => Prefix::Success,
 				"warning" => Prefix::Warning,
 				_ => {
@@ -56,11 +57,22 @@ fn main() {
 			}
 
 			// Build and print!
-			Msg::new(opts2.value_of("msg").unwrap_or("").to_string())
+			let msg: Msg = Msg::new(opts2.value_of("msg").unwrap_or(""))
 				.with_prefix(prefix)
 				.with_flags(flags)
-				.with_indent(parse_cli_u8(opts2.value_of("indent").unwrap_or("0")))
-				.print();
+				.with_indent(parse_cli_u8(opts2.value_of("indent").unwrap_or("0")));
+
+			// Prompt.
+			if "prompt" == name {
+				match msg.prompt() {
+					true => exit(0),
+					false => exit(1),
+				};
+			}
+			// Echo.
+			else {
+				msg.print();
+			}
 		}
 	}
 
@@ -137,6 +149,17 @@ fn menu() -> App<'static, 'static> {
 		.subcommand(
 			SubCommand::with_name("notice")
 				.about("Print a notice.")
+				.arg(clap::Arg::with_name("msg")
+					//.index(1)
+					.help("The message!")
+					.multiple(false)
+					.value_name("MSG")
+					.use_delimiter(false)
+				)
+		)
+		.subcommand(
+			SubCommand::with_name("prompt")
+				.about("Ask a Yes/No question. An exit code of 0 indicates acceptance.")
 				.arg(clap::Arg::with_name("msg")
 					//.index(1)
 					.help("The message!")

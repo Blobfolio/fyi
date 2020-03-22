@@ -10,18 +10,19 @@
 #![deny(missing_copy_implementations)]
 #![deny(missing_debug_implementations)]
 
-use ansi_term::Style;
+use ansi_term::{Colour, Style};
 use chrono::prelude::*;
 use crate::prefix::Prefix;
+use dialoguer::Confirmation;
 
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 /// Message.
 pub struct Msg<'a> {
 	indent: u8,
 	prefix: Prefix<'a>,
-	msg: String,
+	msg: &'a str,
 	flags: u8,
 }
 
@@ -33,7 +34,7 @@ impl std::fmt::Display for Msg<'_> {
 			"{}{}{}",
 			indentation(self.indent),
 			self.prefix.to_string(),
-			Style::new().bold().paint(&self.msg)
+			Style::new().bold().paint(self.msg)
 		);
 
 		// A timestamp?
@@ -62,7 +63,7 @@ impl Default for Msg<'_> {
 		Msg {
 			indent: 0,
 			prefix: Prefix::None,
-			msg: "".to_string(),
+			msg: "",
 			flags: 0,
 		}
 	}
@@ -71,7 +72,7 @@ impl Default for Msg<'_> {
 impl<'a> Msg<'a> {
 	/// New.
 	pub fn new<S> (msg: S) -> Self
-	where S: Into<String> {
+	where S: Into<&'a str> {
 		Msg {
 			msg: msg.into(),
 			..Msg::default()
@@ -110,6 +111,18 @@ impl<'a> Msg<'a> {
 		else {
 			"".to_string()
 		}
+	}
+
+	/// Prompt instead.
+	pub fn prompt(&self) -> bool {
+		Confirmation::new()
+			.with_text(&format!(
+				"{} {}",
+				Colour::Yellow.bold().paint("Confirm:"),
+				Style::new().bold().paint(self.msg)
+			))
+			.interact()
+			.unwrap_or(false)
 	}
 
 	/// Print.
