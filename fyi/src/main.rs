@@ -52,7 +52,7 @@ fn main() {
 			if opts2.is_present("no_color") {
 				flags |= NO_COLOR;
 			}
-			if opts2.is_present("timestamp") {
+			if opts2.is_present("time") {
 				flags |= TIMESTAMP;
 			}
 
@@ -205,8 +205,11 @@ fn menu() -> App<'static, 'static> {
 			.help("Print without any fancy formatting.")
 			.global(true)
 		)
-		.arg(clap::Arg::with_name("timestamp")
-			.long("timestamp")
+		.arg(clap::Arg::with_name("time")
+			.short("t")
+			.long("add-timestamp")
+			.alias("time")
+			.alias("timestamp")
 			.takes_value(false)
 			.help("Include a timestamp.")
 			.global(true)

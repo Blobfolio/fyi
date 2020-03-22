@@ -40,12 +40,7 @@ impl std::fmt::Display for Msg<'_> {
 		// A timestamp?
 		let timestamp = self.timestamp();
 		if false == timestamp.is_empty() {
-			out = format!(
-				"{}{}\n{}",
-				indentation(self.indent),
-				timestamp,
-				out
-			);
+			out = append_timestamp(out, timestamp);
 		}
 
 		// Strip color?
@@ -134,14 +129,45 @@ impl<'a> Msg<'a> {
 	}
 }
 
-/// Indent.
-fn indentation(indent: u8) -> String {
-	if 0 < indent {
-		String::from_utf8(vec![b' '; (indent * 4) as usize]).unwrap_or("".to_string())
+/// Append Timestamp.
+fn append_timestamp<S> (msg: S, timestamp: S) -> String
+where S: Into<String> {
+	let msg = msg.into();
+	let msg_len = stripped_len(&msg);
+	let timestamp = timestamp.into();
+	let timestamp_len = stripped_len(&timestamp);
+	let mut max_len = term_width();
+	if 80 < max_len {
+		max_len = 80;
+	}
+
+	// We can do it inline.
+	if msg_len + timestamp_len + 1 <= max_len {
+		format!(
+			"{}{}{}",
+			&msg,
+			whitespace(max_len - msg_len - timestamp_len),
+			&timestamp
+		)
 	}
 	else {
-		"".to_string()
+		format!(
+			"{}\n{}",
+			&timestamp,
+			&msg
+		)
 	}
+}
+
+/// Indent.
+fn indentation(indent: u8) -> String {
+	whitespace((indent * 4) as usize)
+}
+
+/// Stripped Length.
+fn stripped_len<S> (text: S) -> usize
+where S: Into<String> {
+	strip_styles(text).len()
 }
 
 /// Strip Styles
@@ -152,4 +178,22 @@ where S: Into<String> {
 	std::str::from_utf8(&text)
 		.unwrap_or("")
 		.to_string()
+}
+
+/// Obtain the terminal cli width.
+fn term_width() -> usize {
+	match term_size::dimensions() {
+		Some((w, _)) => w,
+		_ => 0,
+	}
+}
+
+/// Make whitespace.
+fn whitespace(count: usize) -> String {
+	if 0 < count {
+		String::from_utf8(vec![b' '; count]).unwrap_or("".to_string())
+	}
+	else {
+		"".to_string()
+	}
 }

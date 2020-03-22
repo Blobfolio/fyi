@@ -14,6 +14,7 @@ extern crate ansi_term;
 extern crate chrono;
 extern crate dialoguer;
 extern crate strip_ansi_escapes;
+extern crate term_size;
 
 mod msg;
 mod prefix;
@@ -24,5 +25,6 @@ pub const NO_COLOR: u8 = 1;
 /// Flag: Append Timestamp.
 pub const TIMESTAMP: u8 = 2;
 
+/// Exports.
 pub use crate::msg::Msg;
 pub use crate::prefix::Prefix;
