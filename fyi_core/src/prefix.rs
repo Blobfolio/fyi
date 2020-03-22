@@ -15,6 +15,8 @@ pub enum Prefix<'b> {
 	Debug,
 	/// Error.
 	Error,
+	/// Info.
+	Info,
 	/// Notice.
 	Notice,
 	/// Success.
@@ -50,6 +52,7 @@ impl<'b> Prefix<'b> {
 			},
 			Self::Debug => format!("{} ", Colour::Cyan.bold().paint("Debug:")),
 			Self::Error => format!("{} ", Colour::Red.bold().paint("Error:")),
+			Self::Info => format!("{} ", Colour::Cyan.bold().paint("Info:")),
 			Self::Notice => format!("{} ", Colour::Purple.bold().paint("Notice:")),
 			Self::Success => format!("{} ", Colour::Green.bold().paint("Success:")),
 			Self::Warning => format!("{} ", Colour::Yellow.bold().paint("Warning:")),

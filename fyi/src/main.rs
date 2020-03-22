@@ -43,6 +43,7 @@ fn main() {
 			let prefix: Prefix = match name {
 				"debug" => Prefix::Debug,
 				"error" => Prefix::Error,
+				"info" => Prefix::Info,
 				"notice" => Prefix::Notice,
 				"prompt" => Prefix::None,
 				"success" => Prefix::Success,
@@ -155,6 +156,17 @@ fn menu() -> App<'static, 'static> {
 				.arg(clap::Arg::with_name("msg")
 					.help("The message!")
 					.multiple(false)
+					.value_name("MSG")
+					.use_delimiter(false)
+				)
+		)
+		.subcommand(
+			SubCommand::with_name("info")
+				.about("Print an informational message.")
+				.arg(clap::Arg::with_name("msg")
+					.help("The message!")
+					.multiple(false)
+					.required(true)
 					.value_name("MSG")
 					.use_delimiter(false)
 				)
