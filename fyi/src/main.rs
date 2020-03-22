@@ -31,6 +31,23 @@ fn main() {
 	// Make the message.
 	if let Some(name) = opts.subcommand_name() {
 		if let Some(opts2) = opts.subcommand_matches(&name) {
+			// Blank lines are easy.
+			if "blank" == name {
+				let mut count: u8 = parse_cli_u8(opts2.value_of("count").unwrap_or("1"));
+				if 1 > count {
+					count = 1;
+				}
+
+				for _ in 0..count {
+					match opts2.is_present("stderr") {
+						true => eprintln!(""),
+						false => println!(""),
+					}
+				}
+
+				exit(0);
+			}
+
 			// Convert the CLI subcommand into an appropriate prefix.
 			let prefix: Prefix = match name {
 				"debug" => Prefix::Debug,
