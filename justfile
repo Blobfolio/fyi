@@ -92,6 +92,7 @@ version:
 
 	# Set the release version!
 	just _version "{{ justfile_directory() }}/fyi/Cargo.toml" "$_ver2" >/dev/null 2>&1
+	just _version "{{ justfile_directory() }}/fyi_core/Cargo.toml" "$_ver2" >/dev/null 2>&1
 
 
 # Truly set version.
