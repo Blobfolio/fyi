@@ -2,14 +2,6 @@
 # FYI Core: Prefix
 */
 
-#![warn(missing_docs)]
-#![warn(trivial_casts)]
-#![warn(trivial_numeric_casts)]
-#![warn(unused_import_braces)]
-
-#![deny(missing_copy_implementations)]
-#![deny(missing_debug_implementations)]
-
 use ansi_term::Colour;
 
 
