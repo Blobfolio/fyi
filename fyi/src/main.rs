@@ -16,7 +16,15 @@ extern crate clap;
 extern crate fyi_core;
 
 use clap::ArgMatches;
-use fyi_core::{Msg, Prefix, NO_COLOR, TIMESTAMP};
+use fyi_core::misc::cli;
+use fyi_core::{
+	Msg,
+	Prefix,
+	MSG_TIMESTAMP,
+	PRINT_NEWLINE,
+	PRINT_NO_COLOR,
+	PRINT_STDERR
+};
 use std::process::exit;
 
 mod menu;
@@ -38,11 +46,13 @@ fn main() {
 					count = 1;
 				}
 
+				let flags: u8 = match opts2.is_present("stderr") {
+					true => PRINT_STDERR | PRINT_NEWLINE,
+					false => PRINT_NEWLINE,
+				};
+
 				for _ in 0..count {
-					match opts2.is_present("stderr") {
-						true => eprintln!(""),
-						false => println!(""),
-					}
+					cli::print("", flags);
 				}
 
 				exit(0);
@@ -70,10 +80,10 @@ fn main() {
 			// Calculate flags.
 			let mut flags: u8 = 0;
 			if opts2.is_present("no_color") {
-				flags |= NO_COLOR;
+				flags |= PRINT_NO_COLOR;
 			}
 			if opts2.is_present("time") {
-				flags |= TIMESTAMP;
+				flags |= MSG_TIMESTAMP;
 			}
 
 			// Build and print!

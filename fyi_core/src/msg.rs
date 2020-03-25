@@ -4,6 +4,7 @@
 
 use ansi_term::{Colour, Style};
 use chrono::prelude::*;
+use crate::misc::{cli, strings};
 use crate::prefix::Prefix;
 use dialoguer::Confirmation;
 
@@ -24,7 +25,7 @@ impl std::fmt::Display for Msg<'_> {
 		// The message.
 		let mut out: String = format!(
 			"{}{}{}",
-			indentation(self.indent),
+			strings::indentation(self.indent),
 			self.prefix.to_string(),
 			Style::new().bold().paint(self.msg)
 		);
@@ -33,11 +34,6 @@ impl std::fmt::Display for Msg<'_> {
 		let timestamp = self.timestamp();
 		if false == timestamp.is_empty() {
 			out = append_timestamp(out, timestamp);
-		}
-
-		// Strip color?
-		if 0 != (super::NO_COLOR & self.flags) {
-			out = strip_styles(out);
 		}
 
 		f.write_str(&out)
@@ -86,7 +82,7 @@ impl<'a> Msg<'a> {
 
 	/// Formatted Timestamp.
 	fn timestamp(&self) -> String {
-		if 0 != (super::TIMESTAMP & self.flags) {
+		if 0 != (super::MSG_TIMESTAMP & self.flags) {
 			format!(
 				"[{}]",
 				Style::new().dimmed().paint(format!(
@@ -114,10 +110,12 @@ impl<'a> Msg<'a> {
 
 	/// Print.
 	pub fn print(&self) {
-		match self.prefix {
-			Prefix::Error | Prefix::Warning => eprintln!("{}", self.to_string()),
-			_ => println!("{}", self.to_string()),
+		let mut flags: u8 = self.flags | crate::PRINT_NEWLINE;
+		if false == self.prefix.happy() {
+			flags |= crate::PRINT_STDERR;
 		}
+
+		cli::print(&self.to_string(), flags);
 	}
 }
 
@@ -125,10 +123,10 @@ impl<'a> Msg<'a> {
 fn append_timestamp<S> (msg: S, timestamp: S) -> String
 where S: Into<String> {
 	let msg = msg.into();
-	let msg_len = stripped_len(&msg);
+	let msg_len = strings::stripped_len(&msg);
 	let timestamp = timestamp.into();
-	let timestamp_len = stripped_len(&timestamp);
-	let mut max_len = term_width();
+	let timestamp_len = strings::stripped_len(&timestamp);
+	let mut max_len = cli::term_width();
 	if 80 < max_len {
 		max_len = 80;
 	}
@@ -138,7 +136,7 @@ where S: Into<String> {
 		format!(
 			"{}{}{}",
 			&msg,
-			whitespace(max_len - msg_len - timestamp_len),
+			strings::whitespace(max_len - msg_len - timestamp_len),
 			&timestamp
 		)
 	}
@@ -148,44 +146,5 @@ where S: Into<String> {
 			&timestamp,
 			&msg
 		)
-	}
-}
-
-/// Indent.
-fn indentation(indent: u8) -> String {
-	whitespace((indent * 4) as usize)
-}
-
-/// Stripped Length.
-fn stripped_len<S> (text: S) -> usize
-where S: Into<String> {
-	strip_styles(text).len()
-}
-
-/// Strip Styles
-fn strip_styles<S> (text: S) -> String
-where S: Into<String> {
-	let text = strip_ansi_escapes::strip(text.into())
-		.unwrap_or(Vec::new());
-	std::str::from_utf8(&text)
-		.unwrap_or("")
-		.to_string()
-}
-
-/// Obtain the terminal cli width.
-fn term_width() -> usize {
-	match term_size::dimensions() {
-		Some((w, _)) => w,
-		_ => 0,
-	}
-}
-
-/// Make whitespace.
-fn whitespace(count: usize) -> String {
-	if 0 < count {
-		String::from_utf8(vec![b' '; count]).unwrap_or("".to_string())
-	}
-	else {
-		"".to_string()
 	}
 }
