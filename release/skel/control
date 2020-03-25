@@ -4,6 +4,7 @@ Section: base
 Priority: optional
 Architecture: amd64
 Maintainer: Blobfolio LLC <hello@blobfolio.com>
-Homepage: https://github.com/Blobfolio/channelz
+Homepage: https://github.com/Blobfolio/fyi
 Installed-Size: SIZE
-Description: FYI is a dead-simple status message printer for CLI use applications.
+Description: FYI is a dead-simple CLI status message printer for use in BASH
+ scripts, etc.

@@ -2,7 +2,7 @@
 # FYI Core: Prefix
 */
 
-use ansi_term::Colour;
+use ansi_term::{Colour, Style};
 
 
 
@@ -39,24 +39,55 @@ impl std::fmt::Display for Prefix<'_> {
 }
 
 impl<'b> Prefix<'b> {
-	/// Prefix (Colored).
-	pub fn prefix(&self) -> String {
+	/// Color.
+	pub fn color(&self) -> Style {
 		match *self {
 			Self::Custom(ref x, c) => match x.is_empty() {
-				true => "".to_string(),
-				false => format!(
-					"{}{} ",
-					Colour::Fixed(c).bold().paint(x.clone()),
-					Colour::Fixed(c).bold().paint(":".to_string())
-				),
+				true => Style::new(),
+				false => Colour::Fixed(c).bold(),
 			},
-			Self::Debug => format!("{} ", Colour::Cyan.bold().paint("Debug:")),
-			Self::Error => format!("{} ", Colour::Red.bold().paint("Error:")),
-			Self::Info => format!("{} ", Colour::Cyan.bold().paint("Info:")),
-			Self::Notice => format!("{} ", Colour::Purple.bold().paint("Notice:")),
-			Self::Success => format!("{} ", Colour::Green.bold().paint("Success:")),
-			Self::Warning => format!("{} ", Colour::Yellow.bold().paint("Warning:")),
-			_ => "".to_string(),
+			Self::Debug => Colour::Cyan.bold(),
+			Self::Error => Colour::Red.bold(),
+			Self::Info => Colour::Cyan.bold(),
+			Self::Notice => Colour::Purple.bold(),
+			Self::Success => Colour::Green.bold(),
+			Self::Warning => Colour::Yellow.bold(),
+			_ => Style::new(),
+		}
+	}
+
+	/// Happy or sad?
+	pub fn happy(&self) -> bool {
+		match *self {
+			Self::Error | Self::Warning => false,
+			_ => true,
+		}
+	}
+
+	/// Label.
+	pub fn label(&self) -> &'b str {
+		match *self {
+			Self::Custom(ref x, _) => match x.is_empty() {
+				true => "",
+				false => x,
+			},
+			Self::Debug => "Debug",
+			Self::Error => "Error",
+			Self::Info => "Info",
+			Self::Notice => "Notice",
+			Self::Success => "Success",
+			Self::Warning => "Warning",
+			_ => "",
+		}
+	}
+
+	/// Prefix (Colored).
+	pub fn prefix(&self) -> String {
+		let label = self.label();
+
+		match label.is_empty() {
+			true => "".to_string(),
+			false => format!("{} ", self.color().paint(format!("{}:", &label))).to_string(),
 		}
 	}
 }
