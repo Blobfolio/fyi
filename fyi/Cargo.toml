@@ -3,7 +3,8 @@ name = "fyi"
 version = "0.0.4"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2018"
-description = "FYI is a dead-simple status message printer for CLI use applications."
+description = "A dead-simple CLI status message printer for use in BASH scripts, etc."
+repository = "https://github.com/Blobfolio/fyi"
 build = "build.rs"
 
 [build-dependencies]
