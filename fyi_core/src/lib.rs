@@ -10,7 +10,9 @@
 #![deny(missing_copy_implementations)]
 #![deny(missing_debug_implementations)]
 
+#[cfg(feature = "progress")]
 extern crate ansi_escapes;
+
 extern crate ansi_term;
 extern crate chrono;
 extern crate dialoguer;
@@ -20,6 +22,8 @@ extern crate term_size;
 pub mod misc;
 mod msg;
 mod prefix;
+
+#[cfg(feature = "progress")]
 mod progress;
 
 /// Append a timestamp to the message.
@@ -43,5 +47,9 @@ pub const PROGRESS_NO_ELAPSED: u8 = 32;
 /// Exports.
 pub use crate::msg::Msg;
 pub use crate::prefix::Prefix;
+
+#[cfg(feature = "progress")]
 pub use crate::progress::arc as progress_arc;
+
+#[cfg(feature = "progress")]
 pub use crate::progress::Progress;
