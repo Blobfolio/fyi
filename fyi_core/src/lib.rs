@@ -43,5 +43,5 @@ pub const PROGRESS_NO_ELAPSED: u8 = 32;
 /// Exports.
 pub use crate::msg::Msg;
 pub use crate::prefix::Prefix;
-pub use crate::progress::Progress;
 pub use crate::progress::arc as progress_arc;
+pub use crate::progress::Progress;
