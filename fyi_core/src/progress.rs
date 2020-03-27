@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 
 
@@ -175,7 +175,8 @@ impl Progress {
 	#[cfg(feature = "witcher")]
 	pub fn set_path<P> (&self, path: P)
 	where P: AsRef<Path> {
-		let msg: Msg = Msg::new(path.as_ref().fyi_to_path_buf_abs().to_str().unwrap_or(""))
+		let path: PathBuf = path.as_ref().fyi_to_path_buf_abs();
+		let msg: Msg = Msg::new(path.to_str().unwrap_or(""))
 			.with_prefix(Prefix::Custom("Path", 199));
 
 		self.set_msg(msg.to_string());
