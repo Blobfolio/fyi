@@ -2,7 +2,21 @@
 # FYI Core: Strings
 */
 
+use std::ffi::{OsStr, OsString};
 
+
+
+/// From OsStr(ing).
+pub fn from_os_string<S> (text: S) -> String
+where S: Into<OsString> {
+	text.into().to_str().unwrap_or("").to_string()
+}
+
+/// To OsString.
+pub fn to_os_string<S> (text: S) -> OsString
+where S: Into<String> {
+	OsStr::new(&text.into()).to_os_string()
+}
 
 /// Inflect.
 ///
