@@ -4,13 +4,14 @@
 
 use ansi_term::{Colour, Style};
 use chrono::prelude::*;
-use crate::misc::{cli, strings};
+use crate::misc::{cli, numbers, strings, time};
 use crate::prefix::Prefix;
 use dialoguer::Confirmation;
+use std::time::Instant;
 
 
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 /// Message.
 pub struct Msg<'a> {
 	indent: u8,
@@ -78,6 +79,41 @@ impl<'a> Msg<'a> {
 	pub fn with_prefix(mut self, prefix: Prefix<'a>) -> Self {
 		self.prefix = prefix;
 		self
+	}
+
+	/// Crunched In...
+	pub fn msg_crunched_in(count: u64, time: Instant, size: Option<(u64, u64)>) -> Self {
+		let elapsed: String = time::human_elapsed(time.elapsed().as_secs() as usize, 0);
+		let (before, after) = size.unwrap_or((0, 0));
+		let saved = numbers::saved(before, after);
+
+		let msg: String = match saved {
+			0 => format!(
+				"{} in {}, but no dice.",
+				strings::inflect(count as usize, "file", "files"),
+				elapsed
+			),
+			_ => format!(
+				"{} in {}, saving {} bytes ({:3.*}%).",
+				strings::inflect(count as usize, "file", "files"),
+				elapsed,
+				numbers::human_int(saved),
+				2,
+				(1.0 - (after as f64 / before as f64)) * 100.0
+			),
+		};
+
+		Msg::new(msg)
+			.with_prefix(Prefix::Custom("Crunched", 2))
+	}
+
+	/// Finished In...
+	pub fn msg_finished_in(time: Instant) -> Self {
+		Msg::new(format!(
+			"Finished in {}.",
+			time::human_elapsed(time.elapsed().as_secs() as usize, 0)
+		))
+			.with_prefix(Prefix::Success)
 	}
 
 	/// Formatted Timestamp.
