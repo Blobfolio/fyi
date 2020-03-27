@@ -89,9 +89,13 @@ impl<'a> Msg<'a> {
 
 		let msg: String = match saved {
 			0 => format!(
-				"{} in {}, but no dice.",
+				"{} in {}{}.",
 				strings::inflect(count as usize, "file", "files"),
-				elapsed
+				elapsed,
+				match size.is_some() {
+					true => ", but no dice",
+					false => "",
+				},
 			),
 			_ => format!(
 				"{} in {}, saving {} bytes ({:3.*}%).",
