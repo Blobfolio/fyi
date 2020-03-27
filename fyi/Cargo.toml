@@ -1,6 +1,6 @@
 [package]
 name = "fyi"
-version = "0.0.4"
+version = "0.0.5"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2018"
 description = "A dead-simple CLI status message printer for use in BASH scripts, etc."
