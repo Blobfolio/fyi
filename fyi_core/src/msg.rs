@@ -15,7 +15,7 @@ use dialoguer::Confirmation;
 pub struct Msg<'a> {
 	indent: u8,
 	prefix: Prefix<'a>,
-	msg: &'a str,
+	msg: String,
 	flags: u8,
 }
 
@@ -27,7 +27,7 @@ impl std::fmt::Display for Msg<'_> {
 			"{}{}{}",
 			strings::indentation(self.indent),
 			self.prefix.to_string(),
-			Style::new().bold().paint(self.msg)
+			Style::new().bold().paint(self.msg.clone())
 		);
 
 		// A timestamp?
@@ -46,7 +46,7 @@ impl Default for Msg<'_> {
 		Msg {
 			indent: 0,
 			prefix: Prefix::None,
-			msg: "",
+			msg: "".to_string(),
 			flags: 0,
 		}
 	}
@@ -55,7 +55,7 @@ impl Default for Msg<'_> {
 impl<'a> Msg<'a> {
 	/// New.
 	pub fn new<S> (msg: S) -> Self
-	where S: Into<&'a str> {
+	where S: Into<String> {
 		Msg {
 			msg: msg.into(),
 			..Msg::default()
@@ -102,7 +102,7 @@ impl<'a> Msg<'a> {
 			.with_text(&format!(
 				"{} {}",
 				Colour::Yellow.bold().paint("Confirm:"),
-				Style::new().bold().paint(self.msg)
+				Style::new().bold().paint(self.msg.clone())
 			))
 			.interact()
 			.unwrap_or(false)
