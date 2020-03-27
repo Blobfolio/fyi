@@ -10,10 +10,15 @@ ansi-escapes = { version = "0.1.*", optional = true }
 ansi_term = "0.12.*"
 chrono = "0.4.*"
 dialoguer = "0.5.0"
+nix = { version = "0.16.*", optional = true }
 num-format = "0.4.0"
+rayon = { version = "1.3.*", optional = true }
+regex = { version = "1.3.6", optional = true }
 strip-ansi-escapes = "0.1.*"
 term_size = "0.3.*"
+walkdir = { version = "2.3.*", optional = true }
 
 [features]
 default = []
-progress = ["ansi-escapes"]
+progress = [ "ansi-escapes" ]
+witcher = [ "nix", "rayon", "regex", "walkdir" ]

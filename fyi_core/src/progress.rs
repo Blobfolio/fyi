@@ -4,6 +4,9 @@
 This is a very simple thread-capable CLI progress indicator.
 */
 
+#[cfg(feature = "witcher")]
+use crate::witcher::formats::FYIFormats;
+
 use ansi_term::{Colour, Style};
 use crate::misc::{cli, strings, time};
 use crate::msg::Msg;
@@ -169,14 +172,10 @@ impl Progress {
 	}
 
 	/// Set Message as Path
+	#[cfg(feature = "witcher")]
 	pub fn set_path<P> (&self, path: P)
 	where P: AsRef<Path> {
-		let mut path = path.as_ref().to_path_buf();
-		if let Ok(can) = path.canonicalize() {
-			path = can;
-		}
-
-		let msg: Msg = Msg::new(path.to_str().unwrap_or(""))
+		let msg: Msg = Msg::new(path.as_ref().fyi_to_path_buf_abs().to_str().unwrap_or(""))
 			.with_prefix(Prefix::Custom("Path", 199));
 
 		self.set_msg(msg.to_string());
@@ -417,6 +416,7 @@ pub mod arc {
 	}
 
 	/// Set Path as Message
+	#[cfg(feature = "witcher")]
 	pub fn set_path<P> (progress: Arc<Mutex<Progress>>, path: P)
 	where P: AsRef<Path> {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");

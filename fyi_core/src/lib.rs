@@ -13,6 +13,18 @@
 #[cfg(feature = "progress")]
 extern crate ansi_escapes;
 
+#[cfg(feature = "witcher")]
+extern crate nix;
+
+#[cfg(feature = "witcher")]
+extern crate rayon;
+
+#[cfg(feature = "witcher")]
+extern crate regex;
+
+#[cfg(feature = "witcher")]
+extern crate walkdir;
+
 extern crate ansi_term;
 extern crate chrono;
 extern crate dialoguer;
@@ -26,6 +38,9 @@ mod prefix;
 
 #[cfg(feature = "progress")]
 mod progress;
+
+#[cfg(feature = "witcher")]
+pub mod witcher;
 
 /// Append a timestamp to the message.
 pub const MSG_TIMESTAMP: u8 = 1;
