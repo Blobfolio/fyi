@@ -4,18 +4,19 @@
 
 use ansi_term::{Colour, Style};
 use chrono::prelude::*;
-use crate::misc::{cli, strings};
+use crate::misc::{cli, numbers, strings, time};
 use crate::prefix::Prefix;
 use dialoguer::Confirmation;
+use std::time::Instant;
 
 
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 /// Message.
 pub struct Msg<'a> {
 	indent: u8,
 	prefix: Prefix<'a>,
-	msg: &'a str,
+	msg: String,
 	flags: u8,
 }
 
@@ -27,7 +28,7 @@ impl std::fmt::Display for Msg<'_> {
 			"{}{}{}",
 			strings::indentation(self.indent),
 			self.prefix.to_string(),
-			Style::new().bold().paint(self.msg)
+			Style::new().bold().paint(self.msg.clone())
 		);
 
 		// A timestamp?
@@ -46,7 +47,7 @@ impl Default for Msg<'_> {
 		Msg {
 			indent: 0,
 			prefix: Prefix::None,
-			msg: "",
+			msg: "".to_string(),
 			flags: 0,
 		}
 	}
@@ -55,7 +56,7 @@ impl Default for Msg<'_> {
 impl<'a> Msg<'a> {
 	/// New.
 	pub fn new<S> (msg: S) -> Self
-	where S: Into<&'a str> {
+	where S: Into<String> {
 		Msg {
 			msg: msg.into(),
 			..Msg::default()
@@ -80,6 +81,41 @@ impl<'a> Msg<'a> {
 		self
 	}
 
+	/// Crunched In...
+	pub fn msg_crunched_in(count: u64, time: Instant, size: Option<(u64, u64)>) -> Self {
+		let elapsed: String = time::human_elapsed(time.elapsed().as_secs() as usize, 0);
+		let (before, after) = size.unwrap_or((0, 0));
+		let saved = numbers::saved(before, after);
+
+		let msg: String = match saved {
+			0 => format!(
+				"{} in {}, but no dice.",
+				strings::inflect(count as usize, "file", "files"),
+				elapsed
+			),
+			_ => format!(
+				"{} in {}, saving {} bytes ({:3.*}%).",
+				strings::inflect(count as usize, "file", "files"),
+				elapsed,
+				numbers::human_int(saved),
+				2,
+				(1.0 - (after as f64 / before as f64)) * 100.0
+			),
+		};
+
+		Msg::new(msg)
+			.with_prefix(Prefix::Custom("Crunched", 2))
+	}
+
+	/// Finished In...
+	pub fn msg_finished_in(time: Instant) -> Self {
+		Msg::new(format!(
+			"Finished in {}.",
+			time::human_elapsed(time.elapsed().as_secs() as usize, 0)
+		))
+			.with_prefix(Prefix::Success)
+	}
+
 	/// Formatted Timestamp.
 	fn timestamp(&self) -> String {
 		if 0 != (super::MSG_TIMESTAMP & self.flags) {
@@ -102,7 +138,7 @@ impl<'a> Msg<'a> {
 			.with_text(&format!(
 				"{} {}",
 				Colour::Yellow.bold().paint("Confirm:"),
-				Style::new().bold().paint(self.msg)
+				Style::new().bold().paint(self.msg.clone())
 			))
 			.interact()
 			.unwrap_or(false)

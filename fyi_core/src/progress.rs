@@ -126,14 +126,7 @@ impl Progress {
 
 		// Come up with a message.
 		let ptr = self.time.lock().expect("Failed to acquire lock: Progress.time");
-		let elapsed: String = time::human_elapsed(ptr.elapsed().as_secs() as usize, 0);
-
-		let msg: String = format!(
-			"Finished in {}.",
-			&elapsed
-		);
-		let msg: Msg = Msg::new(msg.as_str())
-			.with_prefix(Prefix::Success);
+		let msg: Msg = Msg::msg_finished_in(*ptr);
 		let msg: String = msg.to_string();
 
 		// Print it!

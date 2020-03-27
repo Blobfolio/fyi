@@ -3,12 +3,14 @@
 */
 
 use crate::witcher::formats::FYIFormats;
+use crate::witcher::mass::FYIMassOps;
 use crate::witcher::props::FYIProps;
 use regex::Regex;
 use std::env;
 use std::ffi::OsStr;
 use std::fs::{self, File};
 use std::io::prelude::*;
+use std::io::{BufReader, BufRead};
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
@@ -37,6 +39,9 @@ pub trait FYIOps {
 	/// Clone permissions and ownership from a path.
 	fn fyi_reference<P> (&self, src: P) -> Result<(), String>
 	where P: AsRef<Path>;
+
+	/// Walk contents (e.g. txt file).
+	fn fyi_walk_file_lines(&self, pat: Option<Regex>) -> Vec<PathBuf>;
 
 	/// Recursive walk.
 	fn fyi_walk(&self) -> Vec<PathBuf>;
@@ -133,6 +138,35 @@ impl FYIOps for Path {
 		}
 
 		Err(format!("Could not set ownership/permissions: {}", self.fyi_to_string()).to_string())
+	}
+
+	/// Walk contents (e.g. txt file).
+	fn fyi_walk_file_lines(&self, pat: Option<Regex>) -> Vec<PathBuf> {
+		if self.is_file() {
+			let input = File::open(&self).expect("Unable to open file.");
+			let buffered = BufReader::new(input);
+
+			let out: Vec<PathBuf> = buffered.lines()
+				.filter_map(|x| match x.ok() {
+					Some(x) => {
+						let x = x.trim();
+						match x.is_empty() {
+							true => None,
+							false => Some(PathBuf::from(x)),
+						}
+					},
+					_ => None,
+				})
+				.collect();
+
+			match pat {
+				Some(pat) => out.fyi_walk_filtered(&pat),
+				None => out.fyi_walk(),
+			}
+		}
+		else {
+			Vec::new()
+		}
 	}
 
 	/// Recursive walk.
