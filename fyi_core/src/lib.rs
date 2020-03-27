@@ -16,6 +16,7 @@ extern crate ansi_escapes;
 extern crate ansi_term;
 extern crate chrono;
 extern crate dialoguer;
+extern crate num_format;
 extern crate strip_ansi_escapes;
 extern crate term_size;
 
