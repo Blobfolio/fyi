@@ -6,6 +6,7 @@ edition = "2018"
 description = "A dead-simple CLI status message printer for use in BASH scripts, etc."
 repository = "https://github.com/Blobfolio/fyi"
 build = "build.rs"
+publish = false
 
 [build-dependencies]
 clap = "2.33.*"

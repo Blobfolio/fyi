@@ -4,6 +4,7 @@ version = "0.0.5"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2018"
 description = "FYI is a dead-simple status message printer for CLI use applications."
+publish = false
 
 [dependencies]
 ansi-escapes = { version = "0.1.*", optional = true }
