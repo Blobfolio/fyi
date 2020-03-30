@@ -61,6 +61,7 @@ impl FYIOps for Path {
 			let data: Vec<u8> = self.fyi_read()?;
 			let to = to.as_ref().to_path_buf();
 			to.fyi_write(&data)?;
+
 			Ok(())
 		}
 		else {
@@ -73,8 +74,8 @@ impl FYIOps for Path {
 		let mut to: PathBuf = env::temp_dir();
 		to.push(&self.fyi_file_name());
 		to = to.fyi_to_path_buf_unique()?;
-
 		self.fyi_copy(&to)?;
+
 		Ok(to)
 	}
 
@@ -97,6 +98,7 @@ impl FYIOps for Path {
 	where P: AsRef<Path> {
 		self.fyi_copy(&to)?;
 		self.fyi_delete()?;
+
 		Ok(())
 	}
 
