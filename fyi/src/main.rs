@@ -78,13 +78,16 @@ fn main() {
 			};
 
 			// Calculate flags.
-			let mut flags: u8 = 0;
-			if opts2.is_present("no_color") {
-				flags |= PRINT_NO_COLOR;
-			}
-			if opts2.is_present("time") {
-				flags |= MSG_TIMESTAMP;
-			}
+			let flags: u8 = {
+				let mut flags: u8 = 0;
+				if opts2.is_present("no_color") {
+					flags |= PRINT_NO_COLOR;
+				}
+				if opts2.is_present("time") {
+					flags |= MSG_TIMESTAMP;
+				}
+				flags
+			};
 
 			// Build and print!
 			let msg: Msg = Msg::new(opts2.value_of("msg").unwrap_or(""))
