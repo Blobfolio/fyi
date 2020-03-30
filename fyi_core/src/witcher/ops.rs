@@ -238,11 +238,14 @@ impl FYIOps for Path {
 	/// Write Bytes.
 	fn fyi_write(&self, data: &[u8]) -> Result<(), String> {
 		if false == self.is_dir() {
-			let mut output = File::create(&self)
-				.map_err(|e| e.to_string())?;
+			{
+				let mut output = File::create(&self)
+					.map_err(|e| e.to_string())?;
 
-			output.write_all(&data).map_err(|e| e.to_string())?;
-			output.flush().unwrap();
+				output.write_all(&data).map_err(|e| e.to_string())?;
+				output.flush().unwrap();
+			}
+
 			Ok(())
 		}
 		else {
