@@ -61,6 +61,7 @@ impl FYIOps for Path {
 			let data: Vec<u8> = self.fyi_read()?;
 			let to = to.as_ref().to_path_buf();
 			to.fyi_write(&data)?;
+
 			Ok(())
 		}
 		else {
@@ -73,8 +74,8 @@ impl FYIOps for Path {
 		let mut to: PathBuf = env::temp_dir();
 		to.push(&self.fyi_file_name());
 		to = to.fyi_to_path_buf_unique()?;
-
 		self.fyi_copy(&to)?;
+
 		Ok(to)
 	}
 
@@ -97,6 +98,7 @@ impl FYIOps for Path {
 	where P: AsRef<Path> {
 		self.fyi_copy(&to)?;
 		self.fyi_delete()?;
+
 		Ok(())
 	}
 
@@ -176,7 +178,14 @@ impl FYIOps for Path {
 				.follow_links(true)
 				.into_iter()
 				.filter_map(|x| match x {
-					Ok(y) => Some(y.path().fyi_to_path_buf_abs()),
+					Ok(y) => {
+						if y.file_type().is_file() {
+							Some(y.path().fyi_to_path_buf_abs())
+						}
+						else {
+							None
+						}
+					},
 					_ => None,
 				})
 				.collect();
@@ -199,10 +208,7 @@ impl FYIOps for Path {
 				.into_iter()
 				.filter_map(|x| match x {
 					Ok(y) => {
-						if y.file_type().is_dir() {
-							None
-						}
-						else {
+						if y.file_type().is_file() {
 							let name = y.file_name()
 								.to_str()
 								.unwrap_or("");
@@ -211,6 +217,10 @@ impl FYIOps for Path {
 								true => Some(y.path().fyi_to_path_buf_abs()),
 								false => None,
 							}
+						}
+						// Ignore directories.
+						else {
+							None
 						}
 					},
 					_ => None,
@@ -238,11 +248,15 @@ impl FYIOps for Path {
 	/// Write Bytes.
 	fn fyi_write(&self, data: &[u8]) -> Result<(), String> {
 		if false == self.is_dir() {
-			let mut output = File::create(&self)
-				.map_err(|e| e.to_string())?;
+			{
+				let mut output = File::create(&self)
+					.map_err(|e| e.to_string())?;
 
-			output.write_all(&data).map_err(|e| e.to_string())?;
-			output.flush().unwrap();
+				output.set_len(data.len() as u64).map_err(|e| e.to_string())?;
+				output.write_all(&data).map_err(|e| e.to_string())?;
+				output.flush().unwrap();
+			}
+
 			Ok(())
 		}
 		else {

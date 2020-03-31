@@ -87,7 +87,8 @@ impl<'b> Prefix<'b> {
 
 		match label.is_empty() {
 			true => "".to_string(),
-			false => format!("{} ", self.color().paint(format!("{}:", &label))).to_string(),
+			false => format!("{} ", self.color().paint(format!("{}:", &label)))
+				.to_string(),
 		}
 	}
 }

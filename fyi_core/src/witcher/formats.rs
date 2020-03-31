@@ -113,7 +113,7 @@ impl FYIFormats for Path {
 			}
 		}
 
-		return Err("No unique name could be created.".to_string());
+		Err("No unique name could be created.".to_string())
 	}
 
 	/// To String.

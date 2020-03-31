@@ -102,7 +102,7 @@ impl FYIProps for Path {
 	/// Parent Directory.
 	fn fyi_parent(&self) -> Result<PathBuf, String> {
 		let dir = self.parent()
-			.ok_or(format!("Missing parent: {}", self.fyi_to_string()).to_string())?;
+			.ok_or(format!("Invalid parent: {}", self.fyi_to_string()).to_string())?;
 
 		match dir.is_dir() {
 			true => Ok(dir.fyi_to_path_buf_abs()),

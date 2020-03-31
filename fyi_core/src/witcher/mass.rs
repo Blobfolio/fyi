@@ -69,9 +69,7 @@ impl FYIMassOps for Vec<PathBuf> {
 	/// To Abs PathBuf.
 	fn fyi_into_path_buf_abs(&mut self) {
 		self.retain(|ref x| x.exists());
-		for v in self.iter_mut() {
-			*v = v.fyi_to_path_buf_abs();
-		}
+		self.par_iter_mut().for_each(|x| *x = x.fyi_to_path_buf_abs());
 
 		if 1 < self.len() {
 			self.par_sort();
@@ -81,70 +79,52 @@ impl FYIMassOps for Vec<PathBuf> {
 
 	/// Recursive walk.
 	fn fyi_walk(&self) -> Vec<PathBuf> {
-		let mut out: Vec<PathBuf> = self.clone();
-		out.fyi_walk_mut();
+		let mut out: Vec<PathBuf> = Vec::new();
+
+		self.fyi_to_path_buf_abs()
+			.iter()
+			.for_each(|ref x| {
+				if x.is_dir() {
+					out.par_extend(x.fyi_walk());
+				}
+				else {
+					out.push(x.to_path_buf());
+				}
+			});
+
+		if 1 < out.len() {
+			out.par_sort();
+			out.dedup();
+		}
+
 		out
 	}
 
 	/// Mute walk.
 	fn fyi_walk_mut(&mut self) {
-		self.fyi_into_path_buf_abs();
-		if self.is_empty() {
-			return;
-		}
-
-		let sources: Vec<PathBuf> = self.clone();
-		self.clear();
-
-		for path in sources.as_parallel_slice() {
-			if path.is_dir() {
-				// Walk the directory.
-				let walked: Vec<PathBuf> = path.fyi_walk();
-
-				if false == walked.is_empty() {
-					self.par_extend(walked);
-				}
-			}
-			else if path.is_file() {
-				self.push(path.fyi_to_path_buf_abs());
-			}
-		}
-
-		if 1 < self.len() {
-			self.par_sort();
-			self.dedup();
-		}
+		*self = self.fyi_walk();
 	}
 
 	/// Careful walk.
 	fn fyi_walk_filtered(&self, pattern: &Regex) -> Vec<PathBuf> {
-		let mut out: Vec<PathBuf> = self.clone();
-		out.fyi_walk_filtered_mut(&pattern);
+		let mut out: Vec<PathBuf> = Vec::new();
+
+		self.fyi_to_path_buf_abs()
+			.iter()
+			.for_each(|ref x| {
+				out.par_extend(x.fyi_walk_filtered(&pattern));
+			});
+
+		if 1 < out.len() {
+			out.par_sort();
+			out.dedup();
+		}
+
 		out
 	}
 
 	/// Mute walk.
 	fn fyi_walk_filtered_mut(&mut self, pattern: &Regex) {
-		self.fyi_into_path_buf_abs();
-		if self.is_empty() {
-			return;
-		}
-
-		let sources: Vec<PathBuf> = self.clone();
-		self.clear();
-
-		for path in sources.as_parallel_slice() {
-			// Walk the directory.
-			let walked: Vec<PathBuf> = path.fyi_walk_filtered(&pattern);
-
-			if false == walked.is_empty() {
-				self.par_extend(walked);
-			}
-		}
-
-		if 1 < self.len() {
-			self.par_sort();
-			self.dedup();
-		}
+		*self = self.fyi_walk_filtered(&pattern);
 	}
 }

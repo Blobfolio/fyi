@@ -1,6 +1,6 @@
 [package]
 name = "fyi"
-version = "0.0.5"
+version = "0.0.6"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2018"
 description = "A dead-simple CLI status message printer for use in BASH scripts, etc."
@@ -11,8 +11,8 @@ publish = false
 [build-dependencies]
 clap = "2.33.*"
 
-[dependencies]
-fyi_core = { path = "../fyi_core" }
+[dependencies.fyi_core]
+path = "../fyi_core"
 
 [dependencies.clap]
 version = "2.33.*"
