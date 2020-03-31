@@ -208,10 +208,7 @@ impl FYIOps for Path {
 				.into_iter()
 				.filter_map(|x| match x {
 					Ok(y) => {
-						if y.file_type().is_dir() {
-							None
-						}
-						else {
+						if y.file_type().is_file() {
 							let name = y.file_name()
 								.to_str()
 								.unwrap_or("");
@@ -220,6 +217,10 @@ impl FYIOps for Path {
 								true => Some(y.path().fyi_to_path_buf_abs()),
 								false => None,
 							}
+						}
+						// Ignore directories.
+						else {
+							None
 						}
 					},
 					_ => None,
