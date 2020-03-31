@@ -178,7 +178,14 @@ impl FYIOps for Path {
 				.follow_links(true)
 				.into_iter()
 				.filter_map(|x| match x {
-					Ok(y) => Some(y.path().fyi_to_path_buf_abs()),
+					Ok(y) => {
+						if y.file_type().is_file() {
+							Some(y.path().fyi_to_path_buf_abs())
+						}
+						else {
+							None
+						}
+					},
 					_ => None,
 				})
 				.collect();
