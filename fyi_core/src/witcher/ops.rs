@@ -244,6 +244,7 @@ impl FYIOps for Path {
 				let mut output = File::create(&self)
 					.map_err(|e| e.to_string())?;
 
+				output.set_len(data.len() as u64).map_err(|e| e.to_string())?;
 				output.write_all(&data).map_err(|e| e.to_string())?;
 				output.flush().unwrap();
 			}
