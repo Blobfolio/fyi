@@ -69,9 +69,7 @@ impl FYIMassOps for Vec<PathBuf> {
 	/// To Abs PathBuf.
 	fn fyi_into_path_buf_abs(&mut self) {
 		self.retain(|ref x| x.exists());
-		for v in self.iter_mut() {
-			*v = v.fyi_to_path_buf_abs();
-		}
+		self.par_iter_mut().for_each(|x| *x = x.fyi_to_path_buf_abs());
 
 		if 1 < self.len() {
 			self.par_sort();
