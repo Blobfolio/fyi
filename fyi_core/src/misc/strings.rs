@@ -65,11 +65,11 @@ where S: Into<String> {
 	let glue: String = glue.into().trim().to_string();
 
 	match list.len() {
-		0 => "".to_string(),
+		0 => String::new(),
 		1 => list[0].to_string(),
 		2 => list.join(&format!(" {} ", &glue)),
 		_ => {
-			let last = list.pop().unwrap_or("".to_string());
+			let last = list.pop().unwrap_or(String::new());
 			format!("{}, and {}", list.join(", "), last)
 		}
 	}
@@ -94,7 +94,7 @@ where S: Into<String> {
 		0 => text,
 		x => format!(
 			"{}{}",
-			String::from_utf8(vec![pad_fill; x]).unwrap_or("".to_string()),
+			String::from_utf8(vec![pad_fill; x]).unwrap_or(String::new()),
 			text,
 		),
 	}
@@ -110,7 +110,7 @@ where S: Into<String> {
 		x => format!(
 			"{}{}",
 			text,
-			String::from_utf8(vec![pad_fill; x]).unwrap_or("".to_string()),
+			String::from_utf8(vec![pad_fill; x]).unwrap_or(String::new()),
 		),
 	}
 }
@@ -119,7 +119,7 @@ where S: Into<String> {
 pub fn shorten_left<S>(text: S, len: usize) -> String
 where S: Into<String> {
 	match len {
-		0 => "".to_string(),
+		0 => String::new(),
 		1 => "…".to_string(),
 		_ => {
 			// Pull text details.
@@ -144,7 +144,7 @@ where S: Into<String> {
 pub fn shorten_right<S>(text: S, len: usize) -> String
 where S: Into<String> {
 	match len {
-		0 => "".to_string(),
+		0 => String::new(),
 		1 => "…".to_string(),
 		_ => {
 			// Pull text details.
@@ -192,9 +192,9 @@ pub fn whitespace<N> (count: N) -> String
 where N: Into<usize> {
 	let count = count.into();
 	if 0 < count {
-		String::from_utf8(vec![b' '; count]).unwrap_or("".to_string())
+		String::from_utf8(vec![b' '; count]).unwrap_or(String::new())
 	}
 	else {
-		"".to_string()
+		String::new()
 	}
 }

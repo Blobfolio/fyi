@@ -128,7 +128,7 @@ impl<'a> Msg<'a> {
 			)
 		}
 		else {
-			"".to_string()
+			String::new()
 		}
 	}
 

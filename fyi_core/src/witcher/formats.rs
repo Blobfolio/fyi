@@ -98,7 +98,7 @@ impl FYIFormats for Path {
 				(n.to_string(), e.to_string())
 			}
 			else {
-				(name.clone(), "".to_string())
+				(name.clone(), String::new())
 			}
 		};
 

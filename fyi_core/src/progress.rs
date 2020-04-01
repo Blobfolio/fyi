@@ -138,7 +138,7 @@ impl Progress {
 
 		// We're done.
 		if 0 != (crate::PROGRESS_CLEAR_ON_FINISH & self.flags()) {
-			self.print("".to_string());
+			self.print(String::new());
 			return;
 		}
 
@@ -292,7 +292,7 @@ impl Progress {
 		self.running.store(false, Ordering::SeqCst);
 		self.done.store(self.total(), Ordering::SeqCst);
 		let mut ptr = self.msg.lock().expect("Failed to acquire lock: Progress.msg");
-		*ptr = "".to_string();
+		*ptr = String::new();
 	}
 
 	/// Tick bar.
@@ -301,16 +301,16 @@ impl Progress {
 		let pending_len: usize = width - done_len;
 
 		let done: String = match done_len {
-			0 => "".to_string(),
+			0 => String::new(),
 			x => format!("{}", Colour::Cyan.bold().paint(
-				String::from_utf8(vec![b'#'; x]).unwrap_or("".to_string())
+				String::from_utf8(vec![b'#'; x]).unwrap_or(String::new())
 			)),
 		};
 
 		let pending: String = match pending_len {
-			0 => "".to_string(),
+			0 => String::new(),
 			x => format!("{}", Colour::Cyan.dimmed().paint(
-				String::from_utf8(vec![b'#'; x]).unwrap_or("".to_string())
+				String::from_utf8(vec![b'#'; x]).unwrap_or(String::new())
 			)),
 		};
 
@@ -320,7 +320,7 @@ impl Progress {
 	/// Tick count.
 	fn tick_count(&self, done: u64, total: u64) -> String {
 		if 0 == total {
-			return "".to_string();
+			return String::new();
 		}
 
 		format!(

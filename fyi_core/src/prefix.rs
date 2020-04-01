@@ -96,7 +96,7 @@ impl<'b> Prefix<'b> {
 		let label = self.label();
 
 		match label.is_empty() {
-			true => "".to_string(),
+			true => String::new(),
 			false => format!("{} ", self.color().paint(format!("{}:", &label)))
 				.to_string(),
 		}
