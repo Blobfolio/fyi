@@ -7,15 +7,39 @@ This is a very simple thread-capable CLI progress indicator.
 #[cfg(feature = "witcher")]
 use crate::witcher::formats::FYIFormats;
 
-use ansi_term::{Colour, Style};
-use crate::misc::{cli, strings, time};
+use ansi_term::{
+	Colour,
+	Style,
+};
+use crate::misc::{
+	cli,
+	strings,
+	time,
+};
 use crate::msg::Msg;
 use crate::prefix::Prefix;
-use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::{Duration, Instant};
-use std::path::{Path, PathBuf};
+use std::sync::atomic::{
+	AtomicBool,
+	AtomicU8,
+	AtomicU64,
+	Ordering,
+};
+use std::sync::{
+	Arc,
+	Mutex,
+};
+use std::thread::{
+	self,
+	JoinHandle,
+};
+use std::time::{
+	Duration,
+	Instant,
+};
+use std::path::{
+	Path,
+	PathBuf,
+};
 
 
 
@@ -79,8 +103,10 @@ impl Progress {
 	/// one.
 	pub fn replace<S> (&self, msg: S, total: u64, flags: u8)
 	where S: Into<String> {
-		let mut ptr = self.time.lock().expect("Failed to acquire lock: Progress.time");
-		*ptr = Instant::now();
+		{
+			let mut ptr = self.time.lock().expect("Failed to acquire lock: Progress.time");
+			*ptr = Instant::now();
+		}
 
 		self.flags.store(flags, Ordering::SeqCst);
 		self.last_lines.store(0, Ordering::SeqCst);
@@ -125,9 +151,11 @@ impl Progress {
 		}
 
 		// Come up with a message.
-		let ptr = self.time.lock().expect("Failed to acquire lock: Progress.time");
-		let msg: Msg = Msg::msg_finished_in(*ptr);
-		let msg: String = msg.to_string();
+		let msg: String = {
+			let ptr = self.time.lock().expect("Failed to acquire lock: Progress.time");
+			let msg: Msg = Msg::msg_finished_in(*ptr);
+			msg.to_string()
+		};
 
 		// Print it!
 		self.print(&msg);
@@ -350,38 +378,42 @@ pub mod arc {
 	use super::*;
 
 	/// Is Running
-	pub fn is_running(progress: Arc<Mutex<Progress>>) -> bool {
+	pub fn is_running(progress: &Arc<Mutex<Progress>>) -> bool {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.is_running()
 	}
 
 	/// Event loop.
-	pub fn looper(progress: Arc<Mutex<Progress>>) {
-		// Ping every 150ms.
-		let sleep = Duration::from_millis(150);
-		loop {
-			tick(progress.clone());
+	pub fn looper(progress: &Arc<Mutex<Progress>>, interval: u64) -> JoinHandle<()> {
+		let pclone = progress.clone();
 
-			thread::sleep(sleep);
+		std::thread::spawn(move || {
+			// Ping every 150ms.
+			let sleep = Duration::from_millis(interval);
+			loop {
+				tick(&pclone);
 
-			// Are we done?
-			if ! is_running(progress.clone()) {
-				break;
+				thread::sleep(sleep);
+
+				// Are we done?
+				if ! is_running(&pclone) {
+					break;
+				}
 			}
-		}
 
-		// And finish up.
-		finish(progress.clone());
+			// And finish up.
+			finish(&pclone);
+		})
 	}
 
 	/// Increment Done.
-	pub fn increment(progress: Arc<Mutex<Progress>>, interval: u64) {
+	pub fn increment(progress: &Arc<Mutex<Progress>>, interval: u64) {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.increment(interval)
 	}
 
 	/// Tick progress.
-	pub fn progress(progress: Arc<Mutex<Progress>>) -> (u64, u64, u64, f64) {
+	pub fn progress(progress: &Arc<Mutex<Progress>>) -> (u64, u64, u64, f64) {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.progress()
 	}
@@ -390,20 +422,20 @@ pub mod arc {
 	///
 	/// Re-use the Arc/Mutex with new data instead of creating a new
 	/// one.
-	pub fn replace<S> (progress: Arc<Mutex<Progress>>, msg: S, total: u64, flags: u8)
+	pub fn replace<S> (progress: &Arc<Mutex<Progress>>, msg: S, total: u64, flags: u8)
 	where S: Into<String> {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.replace(msg, total, flags)
 	}
 
 	/// Set Done.
-	pub fn set_done(progress: Arc<Mutex<Progress>>, done: u64) {
+	pub fn set_done(progress: &Arc<Mutex<Progress>>, done: u64) {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.set_done(done)
 	}
 
 	/// Set Message.
-	pub fn set_msg<S> (progress: Arc<Mutex<Progress>>, msg: S)
+	pub fn set_msg<S> (progress: &Arc<Mutex<Progress>>, msg: S)
 	where S: Into<String> {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.set_msg(msg)
@@ -411,20 +443,20 @@ pub mod arc {
 
 	/// Set Path as Message
 	#[cfg(feature = "witcher")]
-	pub fn set_path<P> (progress: Arc<Mutex<Progress>>, path: P)
+	pub fn set_path<P> (progress: &Arc<Mutex<Progress>>, path: P)
 	where P: AsRef<Path> {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.set_path(path.as_ref())
 	}
 
 	/// Finish.
-	pub fn finish(progress: Arc<Mutex<Progress>>) {
+	pub fn finish(progress: &Arc<Mutex<Progress>>) {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.finish()
 	}
 
 	/// Tick.
-	pub fn tick(progress: Arc<Mutex<Progress>>) {
+	pub fn tick(progress: &Arc<Mutex<Progress>>) {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.tick()
 	}

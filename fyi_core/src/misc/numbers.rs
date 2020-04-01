@@ -2,7 +2,10 @@
 # FYI Core: Numbers
 */
 
-use num_format::{Locale, ToFormattedString};
+use num_format::{
+	Locale,
+	ToFormattedString,
+};
 
 
 

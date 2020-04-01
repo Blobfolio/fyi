@@ -2,7 +2,10 @@
 # FYI Core: Prefix
 */
 
-use ansi_term::{Colour, Style};
+use ansi_term::{
+	Colour,
+	Style,
+};
 
 
 

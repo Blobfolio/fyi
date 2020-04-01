@@ -2,9 +2,17 @@
 # FYI Core: Msg
 */
 
-use ansi_term::{Colour, Style};
+use ansi_term::{
+	Colour,
+	Style,
+};
 use chrono::prelude::*;
-use crate::misc::{cli, numbers, strings, time};
+use crate::misc::{
+	cli,
+	numbers,
+	strings,
+	time,
+};
 use crate::prefix::Prefix;
 use dialoguer::Confirmation;
 use std::time::Instant;
