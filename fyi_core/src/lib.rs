@@ -13,6 +13,10 @@
 #[cfg(feature = "progress")]
 extern crate ansi_escapes;
 
+#[cfg(feature = "progress")]
+#[macro_use]
+extern crate defaults;
+
 #[cfg(feature = "witcher")]
 extern crate nix;
 
@@ -24,9 +28,6 @@ extern crate regex;
 
 #[cfg(feature = "witcher")]
 extern crate walkdir;
-
-#[macro_use]
-extern crate defaults;
 
 extern crate ansi_term;
 extern crate chrono;
