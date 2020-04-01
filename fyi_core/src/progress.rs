@@ -79,8 +79,10 @@ impl Progress {
 	/// one.
 	pub fn replace<S> (&self, msg: S, total: u64, flags: u8)
 	where S: Into<String> {
-		let mut ptr = self.time.lock().expect("Failed to acquire lock: Progress.time");
-		*ptr = Instant::now();
+		{
+			let mut ptr = self.time.lock().expect("Failed to acquire lock: Progress.time");
+			*ptr = Instant::now();
+		}
 
 		self.flags.store(flags, Ordering::SeqCst);
 		self.last_lines.store(0, Ordering::SeqCst);
@@ -125,9 +127,11 @@ impl Progress {
 		}
 
 		// Come up with a message.
-		let ptr = self.time.lock().expect("Failed to acquire lock: Progress.time");
-		let msg: Msg = Msg::msg_finished_in(*ptr);
-		let msg: String = msg.to_string();
+		let msg: String = {
+			let ptr = self.time.lock().expect("Failed to acquire lock: Progress.time");
+			let msg: Msg = Msg::msg_finished_in(*ptr);
+			msg.to_string()
+		};
 
 		// Print it!
 		self.print(&msg);
