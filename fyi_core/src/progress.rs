@@ -114,6 +114,7 @@ impl Progress {
 		self.running.store(0 < total, Ordering::SeqCst);
 		self.set_msg(msg);
 		self.done.store(0, Ordering::SeqCst);
+		self.threads.store(0, Ordering::SeqCst);
 		self.total.store(total, Ordering::SeqCst);
 	}
 
@@ -349,6 +350,7 @@ impl Progress {
 	fn stop(&self) {
 		self.running.store(false, Ordering::SeqCst);
 		self.done.store(self.total(), Ordering::SeqCst);
+		self.threads.store(0, Ordering::SeqCst);
 		let mut ptr = self.msg.lock().expect("Failed to acquire lock: Progress.msg");
 		*ptr = String::new();
 	}
