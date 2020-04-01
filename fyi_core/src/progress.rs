@@ -145,7 +145,7 @@ impl Progress {
 		}
 
 		// We're done.
-		if 0 != (crate::PROGRESS_NO_ELAPSED & self.flags()) {
+		if 0 != (crate::PROGRESS_CLEAR_ON_FINISH & self.flags()) {
 			self.print("".to_string());
 			return;
 		}

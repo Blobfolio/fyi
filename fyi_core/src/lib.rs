@@ -58,7 +58,7 @@ pub const PRINT_NEWLINE: u8 = 8;
 pub const PRINT_STDERR: u8 = 16;
 
 /// Just clear the bar and call it a day.
-pub const PROGRESS_NO_ELAPSED: u8 = 32;
+pub const PROGRESS_CLEAR_ON_FINISH: u8 = 32;
 
 /// Exports.
 pub use crate::msg::Msg;
