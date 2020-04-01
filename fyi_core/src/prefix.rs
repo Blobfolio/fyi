@@ -30,6 +30,13 @@ pub enum Prefix<'b> {
 	None,
 }
 
+impl Default for Prefix<'_> {
+	/// Default.
+	fn default() -> Self {
+		Prefix::None
+	}
+}
+
 impl std::fmt::Display for Prefix<'_> {
 	/// Display.
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -89,7 +96,7 @@ impl<'b> Prefix<'b> {
 		let label = self.label();
 
 		match label.is_empty() {
-			true => "".to_string(),
+			true => String::new(),
 			false => format!("{} ", self.color().paint(format!("{}:", &label)))
 				.to_string(),
 		}

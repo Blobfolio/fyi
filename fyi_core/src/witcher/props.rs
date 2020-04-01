@@ -42,12 +42,12 @@ impl FYIProps for Path {
 	/// Extension.
 	fn fyi_file_extension(&self) -> String {
 		if self.is_dir() {
-			return "".to_string()
+			return String::new()
 		}
 		else {
 			match self.extension() {
 				Some(ext) => strings::from_os_string(ext).to_lowercase(),
-				_ => "".to_string(),
+				_ => String::new(),
 			}
 		}
 	}
@@ -55,7 +55,7 @@ impl FYIProps for Path {
 	/// File name.
 	fn fyi_file_name(&self) -> String {
 		match self.is_dir() {
-			true => "".to_string(),
+			true => String::new(),
 			false => self.file_name()
 				.unwrap_or(OsStr::new(""))
 				.to_str()
