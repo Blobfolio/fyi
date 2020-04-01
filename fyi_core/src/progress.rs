@@ -7,15 +7,39 @@ This is a very simple thread-capable CLI progress indicator.
 #[cfg(feature = "witcher")]
 use crate::witcher::formats::FYIFormats;
 
-use ansi_term::{Colour, Style};
-use crate::misc::{cli, strings, time};
+use ansi_term::{
+	Colour,
+	Style,
+};
+use crate::misc::{
+	cli,
+	strings,
+	time,
+};
 use crate::msg::Msg;
 use crate::prefix::Prefix;
-use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
-use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
-use std::path::{Path, PathBuf};
+use std::sync::atomic::{
+	AtomicBool,
+	AtomicU8,
+	AtomicU64,
+	Ordering,
+};
+use std::sync::{
+	Arc,
+	Mutex,
+};
+use std::thread::{
+	self,
+	JoinHandle,
+};
+use std::time::{
+	Duration,
+	Instant,
+};
+use std::path::{
+	Path,
+	PathBuf,
+};
 
 
 

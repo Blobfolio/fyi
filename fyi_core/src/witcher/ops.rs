@@ -2,17 +2,28 @@
 # FYI Core: Miscellany: Operations
 */
 
-use crate::witcher::formats::FYIFormats;
-use crate::witcher::mass::FYIMassOps;
-use crate::witcher::props::FYIProps;
+use crate::witcher::{
+	formats::FYIFormats,
+	mass::FYIMassOps,
+	props::FYIProps,
+};
 use regex::Regex;
 use std::env;
 use std::ffi::OsStr;
-use std::fs::{self, File};
-use std::io::prelude::*;
-use std::io::{BufReader, BufRead};
+use std::fs::{
+	self,
+	File,
+};
+use std::io::{
+	prelude::*,
+	BufReader,
+	BufRead,
+};
 use std::os::unix::fs::MetadataExt;
-use std::path::{Path, PathBuf};
+use std::path::{
+	Path,
+	PathBuf,
+};
 use walkdir::WalkDir;
 
 

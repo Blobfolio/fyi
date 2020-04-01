@@ -6,7 +6,7 @@ use crate::misc::strings;
 use std::time::{
 	Duration,
 	SystemTime,
-	UNIX_EPOCH
+	UNIX_EPOCH,
 };
 
 

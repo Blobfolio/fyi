@@ -6,7 +6,10 @@ use crate::misc::strings;
 use crate::witcher::formats::FYIFormats;
 use std::ffi::OsStr;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::path::{
+	Path,
+	PathBuf,
+};
 
 
 

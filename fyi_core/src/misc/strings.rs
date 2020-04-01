@@ -2,7 +2,10 @@
 # FYI Core: Strings
 */
 
-use std::ffi::{OsStr, OsString};
+use std::ffi::{
+	OsStr,
+	OsString,
+};
 
 
 

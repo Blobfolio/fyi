@@ -2,9 +2,11 @@
 # FYI Core: Miscellany: Mass Operations
 */
 
-use crate::witcher::formats::FYIFormats;
-use crate::witcher::ops::FYIOps;
-use crate::witcher::props::FYIProps;
+use crate::witcher::{
+	formats::FYIFormats,
+	ops::FYIOps,
+	props::FYIProps,
+};
 use rayon::prelude::*;
 use std::path::PathBuf;
 use regex::Regex;

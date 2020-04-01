@@ -3,7 +3,11 @@
 */
 
 use crate::misc::strings;
-use std::io::{stderr, stdout, Write};
+use std::io::{
+	stderr,
+	stdout,
+	Write
+};
 
 
 
