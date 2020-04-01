@@ -13,7 +13,7 @@ use crate::msg::Msg;
 use crate::prefix::Prefix;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::thread;
+use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 use std::path::{Path, PathBuf};
 
@@ -360,22 +360,26 @@ pub mod arc {
 	}
 
 	/// Event loop.
-	pub fn looper(progress: Arc<Mutex<Progress>>) {
-		// Ping every 150ms.
-		let sleep = Duration::from_millis(150);
-		loop {
-			tick(progress.clone());
+	pub fn looper(progress: &Arc<Mutex<Progress>>, interval: u64) -> JoinHandle<()> {
+		let pclone = progress.clone();
 
-			thread::sleep(sleep);
+		std::thread::spawn(move || {
+			// Ping every 150ms.
+			let sleep = Duration::from_millis(interval);
+			loop {
+				tick(&pclone);
 
-			// Are we done?
-			if ! is_running(progress.clone()) {
-				break;
+				thread::sleep(sleep);
+
+				// Are we done?
+				if ! is_running(&pclone) {
+					break;
+				}
 			}
-		}
 
-		// And finish up.
-		finish(progress.clone());
+			// And finish up.
+			finish(&pclone);
+		})
 	}
 
 	/// Increment Done.
