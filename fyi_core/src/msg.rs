@@ -19,7 +19,7 @@ use std::time::Instant;
 
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 /// Message.
 pub struct Msg<'a> {
 	indent: u8,
@@ -46,18 +46,6 @@ impl std::fmt::Display for Msg<'_> {
 		}
 
 		f.write_str(&out)
-	}
-}
-
-impl Default for Msg<'_> {
-	/// Default.
-	fn default() -> Self {
-		Msg {
-			indent: 0,
-			prefix: Prefix::None,
-			msg: "".to_string(),
-			flags: 0,
-		}
 	}
 }
 

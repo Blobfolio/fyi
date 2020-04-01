@@ -43,44 +43,36 @@ use std::path::{
 
 
 
-#[derive(Debug)]
+#[derive(Debug, Defaults)]
 /// Progress.
 pub struct Progress {
+	#[def = "Mutex::new(Instant::now())"]
 	/// Start time.
 	time: Mutex<Instant>,
 
+	#[def = "Arc::new(AtomicU8::new(0))"]
 	/// Flags.
 	flags: Arc<AtomicU8>,
 
+	#[def = "Arc::new(AtomicU8::new(0))"]
 	/// Lines last printed.
 	last_lines: Arc<AtomicU8>,
 
+	#[def = "Arc::new(AtomicBool::new(false))"]
 	/// Running?
 	running: Arc<AtomicBool>,
 
+	#[def = "Mutex::new(String::new())"]
 	/// A message to accompany progress.
 	msg: Mutex<String>,
 
+	#[def = "Arc::new(AtomicU64::new(0))"]
 	/// The total done.
 	done: Arc<AtomicU64>,
 
+	#[def = "Arc::new(AtomicU64::new(0))"]
 	/// The total total.
 	total: Arc<AtomicU64>,
-}
-
-impl Default for Progress {
-	/// Default.
-	fn default() -> Self {
-		Progress {
-			time: Mutex::new(Instant::now()),
-			flags: Arc::new(AtomicU8::new(0)),
-			last_lines: Arc::new(AtomicU8::new(0)),
-			running: Arc::new(AtomicBool::new(false)),
-			msg: Mutex::new("".to_string()),
-			done: Arc::new(AtomicU64::new(0)),
-			total: Arc::new(AtomicU64::new(0)),
-		}
-	}
 }
 
 /// Main methods.

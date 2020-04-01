@@ -30,6 +30,13 @@ pub enum Prefix<'b> {
 	None,
 }
 
+impl Default for Prefix<'_> {
+	/// Default.
+	fn default() -> Self {
+		Prefix::None
+	}
+}
+
 impl std::fmt::Display for Prefix<'_> {
 	/// Display.
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

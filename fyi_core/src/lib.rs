@@ -25,6 +25,9 @@ extern crate regex;
 #[cfg(feature = "witcher")]
 extern crate walkdir;
 
+#[macro_use]
+extern crate defaults;
+
 extern crate ansi_term;
 extern crate chrono;
 extern crate dialoguer;
