@@ -354,7 +354,7 @@ pub mod arc {
 	use super::*;
 
 	/// Is Running
-	pub fn is_running(progress: Arc<Mutex<Progress>>) -> bool {
+	pub fn is_running(progress: &Arc<Mutex<Progress>>) -> bool {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.is_running()
 	}
@@ -383,13 +383,13 @@ pub mod arc {
 	}
 
 	/// Increment Done.
-	pub fn increment(progress: Arc<Mutex<Progress>>, interval: u64) {
+	pub fn increment(progress: &Arc<Mutex<Progress>>, interval: u64) {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.increment(interval)
 	}
 
 	/// Tick progress.
-	pub fn progress(progress: Arc<Mutex<Progress>>) -> (u64, u64, u64, f64) {
+	pub fn progress(progress: &Arc<Mutex<Progress>>) -> (u64, u64, u64, f64) {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.progress()
 	}
@@ -398,20 +398,20 @@ pub mod arc {
 	///
 	/// Re-use the Arc/Mutex with new data instead of creating a new
 	/// one.
-	pub fn replace<S> (progress: Arc<Mutex<Progress>>, msg: S, total: u64, flags: u8)
+	pub fn replace<S> (progress: &Arc<Mutex<Progress>>, msg: S, total: u64, flags: u8)
 	where S: Into<String> {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.replace(msg, total, flags)
 	}
 
 	/// Set Done.
-	pub fn set_done(progress: Arc<Mutex<Progress>>, done: u64) {
+	pub fn set_done(progress: &Arc<Mutex<Progress>>, done: u64) {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.set_done(done)
 	}
 
 	/// Set Message.
-	pub fn set_msg<S> (progress: Arc<Mutex<Progress>>, msg: S)
+	pub fn set_msg<S> (progress: &Arc<Mutex<Progress>>, msg: S)
 	where S: Into<String> {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.set_msg(msg)
@@ -419,20 +419,20 @@ pub mod arc {
 
 	/// Set Path as Message
 	#[cfg(feature = "witcher")]
-	pub fn set_path<P> (progress: Arc<Mutex<Progress>>, path: P)
+	pub fn set_path<P> (progress: &Arc<Mutex<Progress>>, path: P)
 	where P: AsRef<Path> {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.set_path(path.as_ref())
 	}
 
 	/// Finish.
-	pub fn finish(progress: Arc<Mutex<Progress>>) {
+	pub fn finish(progress: &Arc<Mutex<Progress>>) {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.finish()
 	}
 
 	/// Tick.
-	pub fn tick(progress: Arc<Mutex<Progress>>) {
+	pub fn tick(progress: &Arc<Mutex<Progress>>) {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.tick()
 	}
