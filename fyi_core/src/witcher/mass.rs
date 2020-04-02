@@ -4,8 +4,8 @@
 
 use crate::witcher::{
 	formats::FYIFormats,
-	ops::FYIOps,
 	props::FYIProps,
+	walk::FYIWalk,
 };
 use rayon::prelude::*;
 use std::collections::HashSet;
@@ -28,14 +28,8 @@ pub trait FYIMassOps {
 	/// Recursive walk.
 	fn fyi_walk(&self) -> Self;
 
-	/// Mute walk.
-	fn fyi_walk_mut(&mut self);
-
 	/// Careful walk.
 	fn fyi_walk_filtered(&self, pattern: &Regex) -> Self;
-
-	/// Mute walk.
-	fn fyi_walk_filtered_mut(&mut self, pattern: &Regex);
 }
 
 impl FYIMassOps for Vec<PathBuf> {
@@ -103,11 +97,6 @@ impl FYIMassOps for Vec<PathBuf> {
 		out
 	}
 
-	/// Mute walk.
-	fn fyi_walk_mut(&mut self) {
-		*self = self.fyi_walk();
-	}
-
 	/// Careful walk.
 	fn fyi_walk_filtered(&self, pattern: &Regex) -> Vec<PathBuf> {
 		let mut out: Vec<PathBuf> = Vec::new();
@@ -124,11 +113,6 @@ impl FYIMassOps for Vec<PathBuf> {
 		}
 
 		out
-	}
-
-	/// Mute walk.
-	fn fyi_walk_filtered_mut(&mut self, pattern: &Regex) {
-		*self = self.fyi_walk_filtered(&pattern);
 	}
 }
 
@@ -173,11 +157,6 @@ impl FYIMassOps for HashSet<PathBuf> {
 		out
 	}
 
-	/// Mute walk.
-	fn fyi_walk_mut(&mut self) {
-		*self = self.fyi_walk();
-	}
-
 	/// Careful walk.
 	fn fyi_walk_filtered(&self, pattern: &Regex) -> HashSet<PathBuf> {
 		let mut out: HashSet<PathBuf> = HashSet::new();
@@ -189,10 +168,5 @@ impl FYIMassOps for HashSet<PathBuf> {
 			});
 
 		out
-	}
-
-	/// Mute walk.
-	fn fyi_walk_filtered_mut(&mut self, pattern: &Regex) {
-		*self = self.fyi_walk_filtered(&pattern);
 	}
 }

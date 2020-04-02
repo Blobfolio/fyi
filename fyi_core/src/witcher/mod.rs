@@ -6,6 +6,7 @@ pub mod formats;
 pub mod mass;
 pub mod ops;
 pub mod props;
+pub mod walk;
 
 
 
