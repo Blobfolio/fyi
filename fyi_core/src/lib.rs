@@ -17,6 +17,9 @@ extern crate ansi_escapes;
 #[macro_use]
 extern crate defaults;
 
+#[cfg(feature = "interactive")]
+extern crate dialoguer;
+
 #[cfg(feature = "witcher")]
 extern crate nix;
 
@@ -31,7 +34,6 @@ extern crate walkdir;
 
 extern crate ansi_term;
 extern crate chrono;
-extern crate dialoguer;
 extern crate num_format;
 extern crate strip_ansi_escapes;
 extern crate term_size;
