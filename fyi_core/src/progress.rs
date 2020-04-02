@@ -14,7 +14,6 @@ use crate::misc::{
 	time,
 };
 use crate::msg::Msg;
-use crate::prefix::Prefix;
 use std::sync::atomic::{
 	AtomicBool,
 	AtomicU8,
@@ -241,6 +240,15 @@ impl Progress {
 		self.print(out);
 	}
 
+	/// Increment and set message.
+	pub fn update(&self, interval: u64, msg: Option<String>) {
+		self.set_done(self.done() + interval);
+		match msg {
+			Some(s) => self.set_msg(s),
+			None => self.set_msg(""),
+		}
+	}
+
 
 
 	// -----------------------------------------------------------------
@@ -457,6 +465,18 @@ impl Progress {
 pub mod arc {
 	use super::*;
 
+	/// Finish.
+	pub fn finish(progress: &Arc<Mutex<Progress>>) {
+		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
+		ptr.finish()
+	}
+
+	/// Increment Done.
+	pub fn increment(progress: &Arc<Mutex<Progress>>, interval: u64) {
+		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
+		ptr.increment(interval)
+	}
+
 	/// Is Running
 	pub fn is_running(progress: &Arc<Mutex<Progress>>) -> bool {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
@@ -484,12 +504,6 @@ pub mod arc {
 			// And finish up.
 			finish(&pclone);
 		})
-	}
-
-	/// Increment Done.
-	pub fn increment(progress: &Arc<Mutex<Progress>>, interval: u64) {
-		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
-		ptr.increment(interval)
 	}
 
 	/// Tick progress.
@@ -521,15 +535,15 @@ pub mod arc {
 		ptr.set_msg(msg)
 	}
 
-	/// Finish.
-	pub fn finish(progress: &Arc<Mutex<Progress>>) {
-		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
-		ptr.finish()
-	}
-
 	/// Tick.
 	pub fn tick(progress: &Arc<Mutex<Progress>>) {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.tick()
+	}
+
+	/// Increment and set message.
+	pub fn update(progress: &Arc<Mutex<Progress>>, interval: u64, msg: Option<String>) {
+		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
+		ptr.update(interval, msg)
 	}
 }
