@@ -14,8 +14,9 @@ use crate::misc::{
 	time,
 };
 use crate::prefix::Prefix;
-use dialoguer::Confirmation;
 use std::time::Instant;
+
+
 
 
 
@@ -132,9 +133,10 @@ impl<'a> Msg<'a> {
 		}
 	}
 
+	#[cfg(feature = "interactive")]
 	/// Prompt instead.
 	pub fn prompt(&self) -> bool {
-		Confirmation::new()
+		dialoguer::Confirmation::new()
 			.with_text(&format!(
 				"{} {}",
 				Colour::Yellow.bold().paint("Confirm:"),
