@@ -528,8 +528,8 @@ impl Progress {
 			.map(|ref x| {
 				strings::shorten_right(format!(
 					"    {} {}",
-					Colour::Cyan.dimmed().paint("↳"),
-					x.to_str().unwrap_or(""),
+					Colour::Purple.dimmed().paint("↳"),
+					Colour::Purple.dimmed().paint(x.to_str().unwrap_or("")),
 				), width)
 			})
 			.collect();
