@@ -8,6 +8,7 @@ use crate::witcher::{
 	props::FYIProps,
 };
 use rayon::prelude::*;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use regex::Regex;
 
@@ -19,19 +20,19 @@ pub trait FYIMassOps {
 	fn fyi_file_sizes(&self) -> u64;
 
 	/// To Abs PathBuf.
-	fn fyi_to_path_buf_abs(&self) -> Vec<PathBuf>;
+	fn fyi_to_path_buf_abs(&self) -> Self;
 
 	/// To Abs PathBuf.
 	fn fyi_into_path_buf_abs(&mut self);
 
 	/// Recursive walk.
-	fn fyi_walk(&self) -> Vec<PathBuf>;
+	fn fyi_walk(&self) -> Self;
 
 	/// Mute walk.
 	fn fyi_walk_mut(&mut self);
 
 	/// Careful walk.
-	fn fyi_walk_filtered(&self, pattern: &Regex) -> Vec<PathBuf>;
+	fn fyi_walk_filtered(&self, pattern: &Regex) -> Self;
 
 	/// Mute walk.
 	fn fyi_walk_filtered_mut(&mut self, pattern: &Regex);
@@ -121,6 +122,71 @@ impl FYIMassOps for Vec<PathBuf> {
 			out.par_sort();
 			out.dedup();
 		}
+
+		out
+	}
+
+	/// Mute walk.
+	fn fyi_walk_filtered_mut(&mut self, pattern: &Regex) {
+		*self = self.fyi_walk_filtered(&pattern);
+	}
+}
+
+impl FYIMassOps for HashSet<PathBuf> {
+	/// File sizes.
+	fn fyi_file_sizes(&self) -> u64 {
+		let tmp: Vec<PathBuf> = self.par_iter().cloned().collect();
+		tmp.fyi_file_sizes()
+	}
+
+	/// To Abs PathBuf.
+	fn fyi_to_path_buf_abs(&self) -> HashSet<PathBuf> {
+		let tmp: HashSet<PathBuf> = self.par_iter()
+			.filter_map(|ref x| match x.exists() {
+				true => Some(x.fyi_to_path_buf_abs()),
+				false => None,
+			})
+			.collect();
+		tmp
+	}
+
+	/// To Abs PathBuf.
+	fn fyi_into_path_buf_abs(&mut self) {
+		*self = self.fyi_to_path_buf_abs();
+	}
+
+	/// Recursive walk.
+	fn fyi_walk(&self) -> HashSet<PathBuf> {
+		let mut out: HashSet<PathBuf> = HashSet::new();
+
+		self.fyi_to_path_buf_abs()
+			.iter()
+			.for_each(|ref x| {
+				if x.is_dir() {
+					out.par_extend(x.fyi_walk());
+				}
+				else {
+					out.insert(x.to_path_buf());
+				}
+			});
+
+		out
+	}
+
+	/// Mute walk.
+	fn fyi_walk_mut(&mut self) {
+		*self = self.fyi_walk();
+	}
+
+	/// Careful walk.
+	fn fyi_walk_filtered(&self, pattern: &Regex) -> HashSet<PathBuf> {
+		let mut out: HashSet<PathBuf> = HashSet::new();
+
+		self.fyi_to_path_buf_abs()
+			.iter()
+			.for_each(|ref x| {
+				out.par_extend(x.fyi_walk_filtered(&pattern));
+			});
 
 		out
 	}
