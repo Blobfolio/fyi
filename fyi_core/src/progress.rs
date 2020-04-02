@@ -4,9 +4,6 @@
 This is a very simple thread-capable CLI progress indicator.
 */
 
-#[cfg(feature = "witcher")]
-use crate::witcher::formats::FYIFormats;
-
 use ansi_term::{
 	Colour,
 	Style,
@@ -45,7 +42,6 @@ use std::path::{
 
 // Progress bar characters.
 pub const CHR_DONE: &str = "◼";
-pub const CHR_THREADS: &str = "▭";
 pub const CHR_PENDING: &str = "-";
 
 #[derive(Debug, Defaults)]
@@ -74,10 +70,6 @@ pub struct Progress {
 	#[def = "Arc::new(AtomicU64::new(0))"]
 	/// The total done.
 	done: Arc<AtomicU64>,
-
-	#[def = "Arc::new(AtomicU64::new(0))"]
-	/// The total in-progress threads happening.
-	threads: Arc<AtomicU64>,
 
 	#[def = "Arc::new(AtomicU64::new(0))"]
 	/// The total total.
@@ -114,7 +106,6 @@ impl Progress {
 		self.running.store(0 < total, Ordering::SeqCst);
 		self.set_msg(msg);
 		self.done.store(0, Ordering::SeqCst);
-		self.threads.store(0, Ordering::SeqCst);
 		self.total.store(total, Ordering::SeqCst);
 	}
 
@@ -124,20 +115,8 @@ impl Progress {
 	}
 
 	/// Tick state.
-	pub fn progress(&self) -> (u64, u64, u64) {
-		(self.done(), self.threads(), self.total())
-	}
-
-	/// Set Threads.
-	pub fn close_threads(&self, mut interval: u64) {
-		let old = self.threads();
-		if interval > old {
-			interval = old;
-		}
-
-		if 0 != interval {
-			self.set_threads(old - interval);
-		}
+	pub fn progress(&self) -> (u64, u64) {
+		(self.done(), self.total())
 	}
 
 	/// Finish.
@@ -168,36 +147,20 @@ impl Progress {
 		self.set_done(self.done() + interval);
 	}
 
-	/// Increment and decrease thread count.
-	pub fn increment_and_close_threads(&self, interval: u64, thread_interval: u64) {
-		self.increment(interval);
-		self.close_threads(thread_interval);
-	}
-
-	/// Set Threads.
-	pub fn open_threads(&self, interval: u64) {
-		self.set_threads(self.threads() + interval);
-	}
-
 	/// Set Done.
 	pub fn set_done(&self, mut done: u64) {
-		let (old, _, total) = self.progress();
+		let total = self.total();
 		if total <= done {
 			done = total;
 		}
 
-		if done != old {
+		if done != self.done() {
 			self.done.store(done, Ordering::SeqCst);
 
 			if done == total {
 				self.stop();
 			}
 		}
-	}
-
-	/// Set Thread Count.
-	pub fn set_threads(&self, threads: u64) {
-		self.threads.store(threads, Ordering::SeqCst);
 	}
 
 	/// Set Message.
@@ -210,22 +173,12 @@ impl Progress {
 		}
 	}
 
-	/// Set Message as Path
-	#[cfg(feature = "witcher")]
-	pub fn set_path<P> (&self, path: P)
-	where P: AsRef<Path> {
-		let path: PathBuf = path.as_ref().fyi_to_path_buf_abs();
-		let msg: Msg = Msg::new(path.to_str().unwrap_or(""))
-			.with_prefix(Prefix::Custom("Path", 199));
-
-		self.set_msg(msg.to_string());
-	}
-
 	/// Tick.
 	pub fn tick(&self) {
 		// Build the new message.
 		let width = cli::term_width();
-		let (done, threads, total) = self.progress();
+		let done = self.done();
+		let total = self.total();
 
 		// Start building the second line first.
 		let p_count = self.part_count(done, total);
@@ -261,7 +214,7 @@ impl Progress {
 
 			count
 		};
-		let p_bar = self.part_bar(done, threads, total, p_bar_len);
+		let p_bar = self.part_bar(done, total, p_bar_len);
 
 		// Let's go ahead and make this line.
 		let mut out: String = format!(
@@ -309,11 +262,6 @@ impl Progress {
 		self.last_lines.load(Ordering::SeqCst)
 	}
 
-	/// Get threads.
-	fn threads(&self) -> u64 {
-		self.threads.load(Ordering::SeqCst)
-	}
-
 	/// Get total.
 	fn total(&self) -> u64 {
 		self.total.load(Ordering::SeqCst)
@@ -350,7 +298,6 @@ impl Progress {
 	fn stop(&self) {
 		self.running.store(false, Ordering::SeqCst);
 		self.done.store(self.total(), Ordering::SeqCst);
-		self.threads.store(0, Ordering::SeqCst);
 		let mut ptr = self.msg.lock().expect("Failed to acquire lock: Progress.msg");
 		*ptr = String::new();
 	}
@@ -362,7 +309,7 @@ impl Progress {
 	// -----------------------------------------------------------------
 
 	/// Part: Bar
-	fn part_bar(&self, done: u64, threads: u64, total: u64, mut width: usize) -> String {
+	fn part_bar(&self, done: u64, total: u64, mut width: usize) -> String {
 		// Early abort.
 		if 10 > width {
 			return String::new();
@@ -383,44 +330,14 @@ impl Progress {
 			tmp
 		};
 
-		// And calculate the percentage in-progress.
-		let threads_percent: f64 = {
-			let mut tmp: f64 = 0.0;
-			if 0 < threads {
-				if total <= done + threads {
-					tmp = 1.0;
-				}
-				else {
-					tmp = threads as f64 / total as f64;
-				}
-			}
-
-			if done_percent + tmp > 1.0 {
-				tmp = 1.0 - done_percent;
-			}
-
-			tmp
-		};
-
 		// Now we can do the lengths!
 		let done_len: usize = f64::floor(done_percent * width as f64) as usize;
-		let threads_len: usize = {
-			let mut tmp: usize = f64::floor(threads_percent * width as f64) as usize;
-			if done_len + tmp > width {
-				tmp = width - done_len;
-			}
-			tmp
-		};
-		let pending_len: usize = width - threads_len - done_len;
+		let pending_len: usize = width - done_len;
 
 		// And now we can build the base strings.
 		let done_str: String = match done_len {
 			0 => String::new(),
 			x => CHR_DONE.repeat(x),
-		};
-		let threads_str: String = match threads_len {
-			0 => String::new(),
-			x => CHR_THREADS.repeat(x),
 		};
 		let pending_str: String = match pending_len {
 			0 => String::new(),
@@ -429,10 +346,9 @@ impl Progress {
 
 		// And now we can send pretty stuff back.
 		format!(
-			"{}{}{}{}{}",
+			"{}{}{}{}",
 			Style::new().dimmed().paint("["),
 			Colour::Cyan.bold().paint(&done_str),
-			Colour::Cyan.dimmed().paint(&threads_str),
 			Colour::Cyan.dimmed().paint(&pending_str),
 			Style::new().dimmed().paint("]"),
 		).to_string()
@@ -570,32 +486,14 @@ pub mod arc {
 		})
 	}
 
-	/// Set Threads.
-	pub fn close_threads(progress: &Arc<Mutex<Progress>>, interval: u64) {
-		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
-		ptr.close_threads(interval)
-	}
-
 	/// Increment Done.
 	pub fn increment(progress: &Arc<Mutex<Progress>>, interval: u64) {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.increment(interval)
 	}
 
-	/// Increment and decrease thread count.
-	pub fn increment_and_close_threads(progress: &Arc<Mutex<Progress>>, interval: u64, thread_interval: u64) {
-		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
-		ptr.increment_and_close_threads(interval, thread_interval)
-	}
-
-	/// Set Threads.
-	pub fn open_threads(progress: &Arc<Mutex<Progress>>, interval: u64) {
-		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
-		ptr.open_threads(interval);
-	}
-
 	/// Tick progress.
-	pub fn progress(progress: &Arc<Mutex<Progress>>) -> (u64, u64, u64) {
+	pub fn progress(progress: &Arc<Mutex<Progress>>) -> (u64, u64) {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.progress()
 	}
@@ -621,20 +519,6 @@ pub mod arc {
 	where S: Into<String> {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.set_msg(msg)
-	}
-
-	/// Set Path as Message
-	#[cfg(feature = "witcher")]
-	pub fn set_path<P> (progress: &Arc<Mutex<Progress>>, path: P)
-	where P: AsRef<Path> {
-		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
-		ptr.set_path(path.as_ref())
-	}
-
-	/// Set Thread Count.
-	pub fn set_threads(progress: &Arc<Mutex<Progress>>, threads: u64) {
-		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
-		ptr.set_threads(threads);
 	}
 
 	/// Finish.
