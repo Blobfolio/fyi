@@ -14,15 +14,16 @@ use crate::misc::{
 	time,
 };
 use crate::msg::Msg;
-use std::sync::atomic::{
-	AtomicBool,
-	AtomicU8,
-	AtomicU64,
-	Ordering,
-};
+use std::collections::HashSet;
 use std::sync::{
 	Arc,
 	Mutex,
+	atomic::{
+		AtomicBool,
+		AtomicU8,
+		AtomicU64,
+		Ordering,
+	},
 };
 use std::thread::{
 	self,
@@ -73,6 +74,10 @@ pub struct Progress {
 	#[def = "Arc::new(AtomicU64::new(0))"]
 	/// The total total.
 	total: Arc<AtomicU64>,
+
+	#[def = "Mutex::new(HashSet::new())"]
+	/// Working Paths.
+	working: Mutex<HashSet<PathBuf>>,
 }
 
 /// Main methods.
@@ -100,6 +105,11 @@ impl Progress {
 			*ptr = Instant::now();
 		}
 
+		{
+			let mut ptr = self.working.lock().expect("Failed to acquire lock: Progress.working");
+			ptr.clear();
+		}
+
 		self.flags.store(flags, Ordering::SeqCst);
 		self.last_lines.store(0, Ordering::SeqCst);
 		self.running.store(0 < total, Ordering::SeqCst);
@@ -107,6 +117,12 @@ impl Progress {
 		self.done.store(0, Ordering::SeqCst);
 		self.total.store(total, Ordering::SeqCst);
 	}
+
+
+
+	// -----------------------------------------------------------------
+	// Public Getters
+	// -----------------------------------------------------------------
 
 	/// Is Running
 	pub fn is_running(&self) -> bool {
@@ -116,6 +132,26 @@ impl Progress {
 	/// Tick state.
 	pub fn progress(&self) -> (u64, u64) {
 		(self.done(), self.total())
+	}
+
+
+
+	// -----------------------------------------------------------------
+	// Ops
+	// -----------------------------------------------------------------
+
+	/// Remove working path.
+	pub fn add_working<P> (&self, path: P)
+	where P: AsRef<Path> {
+		let path: PathBuf = if cfg!(feature = "witcher") {
+			use crate::witcher::formats::FYIFormats;
+			path.as_ref().fyi_to_path_buf_abs()
+		} else {
+			path.as_ref().to_path_buf()
+		};
+
+		let mut ptr = self.working.lock().expect("Failed to acquire lock: Progress.working");
+		ptr.insert(path);
 	}
 
 	/// Finish.
@@ -144,6 +180,20 @@ impl Progress {
 	/// Set Done.
 	pub fn increment(&self, interval: u64) {
 		self.set_done(self.done() + interval);
+	}
+
+	/// Remove working path.
+	pub fn remove_working<P> (&self, path: P)
+	where P: AsRef<Path> {
+		let path: PathBuf = if cfg!(feature = "witcher") {
+			use crate::witcher::formats::FYIFormats;
+			path.as_ref().fyi_to_path_buf_abs()
+		} else {
+			path.as_ref().to_path_buf()
+		};
+
+		let mut ptr = self.working.lock().expect("Failed to acquire lock: Progress.working");
+		ptr.remove(&path);
 	}
 
 	/// Set Done.
@@ -225,27 +275,36 @@ impl Progress {
 			&p_eta
 		).to_string();
 
-		// Is there a message to add to it?
-		let p_msg = self.part_msg(width - 6);
+		// Is there a message to prepend to it?
+		let p_msg = self.part_msg(width);
 		if false == p_msg.is_empty() {
-			out = format!(
-				"{}\n    {} {}",
-				out,
-				Colour::Cyan.dimmed().paint("↳"),
-				&p_msg
-			);
+			out = format!("{}\n{}", &p_msg, out);
+		}
+
+		// How about working paths to add to it?
+		let p_working = self.part_working(width);
+		if false == p_working.is_empty() {
+			out = format!("{}\n{}", out, &p_working);
 		}
 
 		// Send it to the printer!
 		self.print(out);
 	}
 
-	/// Increment and set message.
-	pub fn update(&self, interval: u64, msg: Option<String>) {
+	/// Increment, set message, remove working path.
+	pub fn update(
+		&self,
+		interval: u64,
+		msg: Option<String>,
+		working: Option<PathBuf>
+	) {
 		self.set_done(self.done() + interval);
 		match msg {
 			Some(s) => self.set_msg(s),
 			None => self.set_msg(""),
+		}
+		if let Some(w) = working {
+			self.remove_working(w);
 		}
 	}
 
@@ -393,6 +452,39 @@ impl Progress {
 		).to_string()
 	}
 
+	/// ETA.
+	fn part_eta(&self, done: u64, total: u64) -> String {
+		let done: f64 = done as f64;
+		let total: f64 = total as f64;
+
+		// Abort if no progress has been made.
+		if done < 2.0 || done >= total {
+			return String::new();
+		}
+
+		let elapsed: f64 = {
+			let ptr = self.time.lock().expect("Failed to acquire lock: Progress.time");
+			ptr.elapsed().as_secs() as f64
+		};
+
+		// Abort if we haven't spent ten seconds doing anything yet.
+		if elapsed < 10.0 {
+			return String::new();
+		}
+
+		let s_per: f64 = elapsed / done;
+		let remaining: String = time::human_elapsed(
+			f64::ceil(s_per * (total - done)) as usize,
+			crate::PRINT_COMPACT
+		);
+
+		format!(
+			"{} {}",
+			Colour::Purple.dimmed().paint("ETA:"),
+			Colour::Purple.bold().paint(&remaining),
+		).to_string()
+	}
+
 	/// Tick message.
 	fn part_msg(&self, width: usize) -> String {
 		let ptr = self.msg.lock().expect("Failed to acquire lock: Progress.msg");
@@ -425,37 +517,26 @@ impl Progress {
 		).to_string()
 	}
 
-	/// Tick elapsed.
-	fn part_eta(&self, done: u64, total: u64) -> String {
-		let done: f64 = done as f64;
-		let total: f64 = total as f64;
-
-		// Abort if no progress has been made.
-		if done < 2.0 || done >= total {
+	/// Tick working.
+	fn part_working(&self, width: usize) -> String {
+		let ptr = self.working.lock().expect("Failed to acquire lock: Progress.working");
+		if ptr.is_empty() {
 			return String::new();
 		}
 
-		let elapsed: f64 = {
-			let ptr = self.time.lock().expect("Failed to acquire lock: Progress.time");
-			ptr.elapsed().as_secs() as f64
-		};
+		let mut out: Vec<String> = ptr.iter()
+			.cloned()
+			.map(|ref x| {
+				strings::shorten_right(format!(
+					"    {} {}",
+					Colour::Cyan.dimmed().paint("↳"),
+					x.to_str().unwrap_or(""),
+				), width)
+			})
+			.collect();
 
-		// Abort if we haven't spent ten seconds doing anything yet.
-		if elapsed < 10.0 {
-			return String::new();
-		}
-
-		let s_per: f64 = elapsed / done;
-		let remaining: String = time::human_elapsed(
-			f64::ceil(s_per * (total - done)) as usize,
-			crate::PRINT_COMPACT
-		);
-
-		format!(
-			"{} {}",
-			Colour::Purple.dimmed().paint("ETA:"),
-			Colour::Purple.bold().paint(&remaining),
-		).to_string()
+		out.sort();
+		out.join("\n")
 	}
 }
 
@@ -464,6 +545,13 @@ impl Progress {
 /// Arc wrappers.
 pub mod arc {
 	use super::*;
+
+	/// Remove working path.
+	pub fn add_working<P> (progress: &Arc<Mutex<Progress>>, path: P)
+	where P: AsRef<Path> {
+		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
+		ptr.add_working(path)
+	}
 
 	/// Finish.
 	pub fn finish(progress: &Arc<Mutex<Progress>>) {
@@ -512,6 +600,13 @@ pub mod arc {
 		ptr.progress()
 	}
 
+	/// Remove working path.
+	pub fn remove_working<P> (progress: &Arc<Mutex<Progress>>, path: P)
+	where P: AsRef<Path> {
+		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
+		ptr.remove_working(&path)
+	}
+
 	/// Replace.
 	///
 	/// Re-use the Arc/Mutex with new data instead of creating a new
@@ -542,8 +637,13 @@ pub mod arc {
 	}
 
 	/// Increment and set message.
-	pub fn update(progress: &Arc<Mutex<Progress>>, interval: u64, msg: Option<String>) {
+	pub fn update(
+		progress: &Arc<Mutex<Progress>>,
+		interval: u64,
+		msg: Option<String>,
+		working: Option<PathBuf>
+	) {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
-		ptr.update(interval, msg)
+		ptr.update(interval, msg, working)
 	}
 }
