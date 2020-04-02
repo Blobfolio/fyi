@@ -299,9 +299,8 @@ impl Progress {
 		working: Option<PathBuf>
 	) {
 		self.set_done(self.done() + interval);
-		match msg {
-			Some(s) => self.set_msg(s),
-			None => self.set_msg(""),
+		if let Some(s) = msg {
+			self.set_msg(s);
 		}
 		if let Some(w) = working {
 			self.remove_working(w);
