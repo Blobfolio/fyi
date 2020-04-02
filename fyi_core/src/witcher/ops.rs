@@ -19,6 +19,7 @@ use std::io::{
 	BufReader,
 	BufRead,
 };
+use std::collections::HashSet;
 use std::os::unix::fs::MetadataExt;
 use std::path::{
 	Path,
@@ -59,6 +60,12 @@ pub trait FYIOps {
 
 	/// Careful walk.
 	fn fyi_walk_filtered(&self, pattern: &Regex) -> Vec<PathBuf>;
+
+	/// Recursive walk (HashSet version).
+	fn fyi_walk_hs(&self) -> HashSet<PathBuf>;
+
+	/// Careful walk (HashSet version).
+	fn fyi_walk_filtered_hs(&self, pattern: &Regex) -> HashSet<PathBuf>;
 
 	/// Write Bytes.
 	fn fyi_write(&self, data: &[u8]) -> Result<(), String>;
@@ -253,6 +260,86 @@ impl FYIOps for Path {
 		}
 		else {
 			Vec::new()
+		}
+	}
+
+	/// Recursive walk.
+	fn fyi_walk_hs(&self) -> HashSet<PathBuf> {
+		if self.is_dir() {
+			let walked: HashSet<PathBuf> = WalkDir::new(self.fyi_to_path_buf_abs())
+				.follow_links(true)
+				.into_iter()
+				.filter_map(|x| match x {
+					Ok(y) => {
+						if y.file_type().is_file() {
+							Some(y.path().fyi_to_path_buf_abs())
+						}
+						else {
+							None
+						}
+					},
+					_ => None,
+				})
+				.collect();
+
+			walked
+		}
+		else if self.is_file() {
+			let mut walked = HashSet::new();
+			walked.insert(self.fyi_to_path_buf_abs());
+			walked
+		}
+		else {
+			HashSet::new()
+		}
+	}
+
+	/// Careful walk.
+	fn fyi_walk_filtered_hs(&self, pattern: &Regex) -> HashSet<PathBuf> {
+		if self.is_dir() {
+			let walked: HashSet<PathBuf> = WalkDir::new(self.fyi_to_path_buf_abs())
+				.follow_links(true)
+				.into_iter()
+				.filter_map(|x| match x {
+					Ok(y) => {
+						if y.file_type().is_file() {
+							let name = y.file_name()
+								.to_str()
+								.unwrap_or("");
+
+							match pattern.is_match(&name) {
+								true => Some(y.path().fyi_to_path_buf_abs()),
+								false => None,
+							}
+						}
+						// Ignore directories.
+						else {
+							None
+						}
+					},
+					_ => None,
+				})
+				.collect();
+
+			walked
+		}
+		else if self.is_file() {
+			let name = self.file_name()
+				.unwrap_or(OsStr::new(""))
+				.to_str()
+				.unwrap_or("");
+
+			match pattern.is_match(&name) {
+				true => {
+					let mut walked = HashSet::new();
+					walked.insert(self.fyi_to_path_buf_abs());
+					walked
+				},
+				false => HashSet::new(),
+			}
+		}
+		else {
+			HashSet::new()
 		}
 	}
 
