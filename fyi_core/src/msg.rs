@@ -2,10 +2,10 @@
 # FYI Core: Msg
 */
 
-use ansi_term::{
-	Colour,
-	Style,
-};
+#[cfg(feature = "interactive")]
+use ansi_term::Colour;
+
+use ansi_term::Style;
 use chrono::prelude::*;
 use crate::misc::{
 	cli,
