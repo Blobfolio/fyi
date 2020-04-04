@@ -33,7 +33,9 @@ extern crate regex;
 extern crate walkdir;
 
 extern crate ansi_term;
+extern crate bytecount;
 extern crate chrono;
+extern crate num_traits;
 extern crate num_format;
 extern crate strip_ansi_escapes;
 extern crate term_size;
