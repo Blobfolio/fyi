@@ -92,7 +92,7 @@ where
 	S: Into<Cow<'a, str>>,
 	N: ToPrimitive
 {
-	let text_len: usize = text.into().len();
+	let text_len: usize = bytecount::num_chars(text.into().as_bytes());
 	let len = len.to_usize().unwrap_or(0);
 	match text_len >= len {
 		true => 0,
@@ -136,11 +136,8 @@ where
 		0 => String::new(),
 		1 => "…".to_string(),
 		x => {
-			// Pull text details.
 			let text = text.into();
-			let text_len: usize = text.len();
-
-			// Shorten away!
+			let text_len = bytecount::num_chars(text.as_bytes());
 			match text_len <= x {
 				true => text,
 				false => [
@@ -165,12 +162,8 @@ where
 		0 => String::new(),
 		1 => "…".to_string(),
 		x => {
-			// Pull text details.
 			let text = text.into();
-			let text_len: usize = text.len();
-
-			// Shorten away!
-			match text_len <= x {
+			match bytecount::num_chars(text.as_bytes()) <= x {
 				true => text,
 				false => [
 					text.chars()
@@ -189,7 +182,7 @@ where
 /// Return the length of a string without counting any ANSI codes, etc.
 pub fn stripped_len<'a, S> (text: S) -> usize
 where S: Into<Cow<'a, str>> {
-	strip_styles(text).len()
+	bytecount::num_chars(strip_styles(text).as_bytes())
 }
 
 /// Strip Styles
