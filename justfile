@@ -19,6 +19,7 @@ build_ver     := "1"
 @bench:
 	# First let's build the Rust bit.
 	cd "{{ justfile_directory() }}/fyi_core" && cargo bench \
+		--features progress,witcher \
 		--target-dir "{{ cargo_dir }}"
 
 
