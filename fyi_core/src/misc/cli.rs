@@ -2,7 +2,7 @@
 # FYI Core: CLI
 */
 
-use crate::misc::strings;
+use crate::misc::strings::FYIStrings;
 use std::io::{
 	stderr,
 	stdout,
@@ -18,12 +18,12 @@ where S: Into<String> {
 
 	// Strip colors.
 	if 0 != (crate::PRINT_NO_COLOR & flags) {
-		msg = strings::strip_styles(&msg);
+		msg = msg.fyi_strip_ansi().to_string();
 	}
 
 	// Add a new line to the end.
 	if 0 != (crate::PRINT_NEWLINE & flags) {
-		msg = format!("{}\n", &msg).to_string();
+		msg.push_str("\n");
 	}
 
 	// Print it!

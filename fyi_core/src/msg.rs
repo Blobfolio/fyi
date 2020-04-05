@@ -10,7 +10,10 @@ use chrono::prelude::*;
 use crate::misc::{
 	cli,
 	numbers,
-	strings,
+	strings::{
+		self,
+		FYIStrings,
+	},
 	time,
 };
 use crate::prefix::Prefix;
@@ -161,9 +164,9 @@ impl<'a> Msg<'a> {
 fn append_timestamp<S> (msg: S, timestamp: S) -> String
 where S: Into<String> {
 	let msg = msg.into();
-	let msg_len = strings::stripped_len(&msg);
+	let msg_len = msg.fyi_width();
 	let timestamp = timestamp.into();
-	let timestamp_len = strings::stripped_len(&timestamp);
+	let timestamp_len = timestamp.fyi_width();
 	let mut max_len = cli::term_width();
 	if 80 < max_len {
 		max_len = 80;
@@ -171,18 +174,17 @@ where S: Into<String> {
 
 	// We can do it inline.
 	if msg_len + timestamp_len + 1 <= max_len {
-		format!(
-			"{}{}{}",
-			&msg,
+		[
+			msg,
 			strings::whitespace(max_len - msg_len - timestamp_len),
-			&timestamp
-		)
+			timestamp,
+		].concat()
 	}
 	else {
-		format!(
-			"{}\n{}",
-			&timestamp,
-			&msg
-		)
+		[
+			timestamp.as_str(),
+			"\n",
+			msg.as_str(),
+		].concat()
 	}
 }

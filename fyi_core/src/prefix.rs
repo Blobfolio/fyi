@@ -9,7 +9,7 @@ use ansi_term::{
 
 
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 /// Generic message.
 pub enum Prefix<'b> {
 	/// Custom.
@@ -97,7 +97,7 @@ impl<'b> Prefix<'b> {
 
 		match label.is_empty() {
 			true => String::new(),
-			false => format!("{} ", self.color().paint(format!("{}:", &label)))
+			false => format!("{} ", self.color().paint([&label, ":"].concat()))
 				.to_string(),
 		}
 	}

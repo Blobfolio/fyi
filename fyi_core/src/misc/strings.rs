@@ -51,16 +51,6 @@ where N: ToPrimitive {
 	whitespace(indent.to_usize().unwrap_or(0) * 4)
 }
 
-/// Line Count.
-pub fn lines<'a, S> (text: S) -> usize
-where S: Into<Cow<'a, str>> {
-	let text: String = text.into().trim().to_string();
-	match text.is_empty() {
-		true => 0,
-		false => bytecount::count(text.as_bytes(), b'\n') + 1,
-	}
-}
-
 /// Oxford Join
 ///
 /// Join a `Vec<String>` with correct comma usage and placement. If
@@ -86,116 +76,6 @@ where S: Into<Cow<'a, str>> {
 	}
 }
 
-/// Find Padding Needed.
-fn pad_diff<'a, S, N> (text: S, len: N) -> usize
-where
-	S: Into<Cow<'a, str>>,
-	N: ToPrimitive
-{
-	let text_len: usize = bytecount::num_chars(text.into().as_bytes());
-	let len = len.to_usize().unwrap_or(0);
-	match text_len >= len {
-		true => 0,
-		false => len - text_len,
-	}
-}
-
-/// Pad String On Left.
-pub fn pad_left<S>(text: S, pad_len: usize, pad_fill: u8) -> String
-where S: Into<String> {
-	let text = text.into();
-	match pad_diff(&text, pad_len) {
-		0 => text,
-		x => [
-			String::from_utf8(vec![pad_fill; x]).unwrap_or(String::new()),
-			text,
-		].concat(),
-	}
-}
-
-/// Pad String On Right.
-pub fn pad_right<S>(text: S, pad_len: usize, pad_fill: u8) -> String
-where S: Into<String> {
-	let text = text.into();
-	match pad_diff(&text, pad_len) {
-		0 => text,
-		x => [
-			text,
-			String::from_utf8(vec![pad_fill; x]).unwrap_or(String::new()),
-		].concat(),
-	}
-}
-
-/// Shorten String From Left (Keeping Right).
-pub fn shorten_left<S, N>(text: S, len: N) -> String
-where
-	S: Into<String>,
-	N: ToPrimitive
-{
-	match len.to_usize().unwrap_or(0) {
-		0 => String::new(),
-		1 => "…".to_string(),
-		x => {
-			let text = text.into();
-			let text_len = bytecount::num_chars(text.as_bytes());
-			match text_len <= x {
-				true => text,
-				false => [
-					"…",
-					text.chars()
-						.skip(text_len - x + 1)
-						.collect::<String>()
-						.trim(),
-				].concat(),
-			}
-		}
-	}
-}
-
-/// Shorten String From Right (Keeping Left).
-pub fn shorten_right<S, N>(text: S, len: N) -> String
-where
-	S: Into<String>,
-	N: ToPrimitive
-{
-	match len.to_usize().unwrap_or(0) {
-		0 => String::new(),
-		1 => "…".to_string(),
-		x => {
-			let text = text.into();
-			match bytecount::num_chars(text.as_bytes()) <= x {
-				true => text,
-				false => [
-					text.chars()
-						.take(x - 1)
-						.collect::<String>()
-						.trim(),
-					"…",
-				].concat(),
-			}
-		}
-	}
-}
-
-/// Stripped Length.
-///
-/// Return the length of a string without counting any ANSI codes, etc.
-pub fn stripped_len<'a, S> (text: S) -> usize
-where S: Into<Cow<'a, str>> {
-	bytecount::num_chars(strip_styles(text).as_bytes())
-}
-
-/// Strip Styles
-///
-/// Remove ANSI codes, etc., from a string.
-pub fn strip_styles<'a, S> (text: S) -> String
-where S: Into<Cow<'a, str>> {
-	match strip_ansi_escapes::strip(text.into().as_bytes()) {
-		Ok(x) => String::from_utf8(x).unwrap_or(String::new()),
-		_ => String::new(),
-	}
-}
-
 /// Make whitespace.
 ///
 /// Generate a string consisting of X spaces.
@@ -206,3 +86,422 @@ where N: ToPrimitive {
 		x => String::from_utf8(vec![b' '; x]).unwrap_or(String::new())
 	}
 }
+
+/// Find End Byte of First X Chars.
+fn char_len_n(data: &[u8], stop: usize) -> usize {
+	let mut chars = 0;
+
+	for (k, &v) in data.iter().enumerate() {
+		if (&v >> 6) != 0b10u8 {
+			chars += 1;
+			if chars > stop {
+				return k;
+			}
+		}
+	}
+
+	data.len()
+}
+
+/// String helpers!
+pub trait FYIStrings {
+	/// Find Byte Index X Chars From Start.
+	fn fyi_chars_len_start(&self, num: usize) -> usize;
+
+	/// Find Byte Index X Chars From End.
+	fn fyi_chars_len_end(&self, num: usize) -> usize;
+
+	/// Number of Chars in String.
+	fn fyi_chars_len(&self) -> usize;
+
+	/// Number of Chars in String.
+	fn fyi_lines_len(&self) -> usize;
+
+	/// Truncate to X Chars.
+	fn fyi_shorten(&self, keep: usize) -> Cow<'_, str>;
+
+	/// Remove First X Chars.
+	fn fyi_shorten_reverse(&self, keep: usize) -> Cow<'_, str>;
+
+	/// Stretch a String Filling End With X.
+	fn fyi_stretch(&self, num: usize, filler: u8) -> Cow<'_, str>;
+
+	/// Stretch a String Filling Start With X.
+	fn fyi_stretch_reverse(&self, num: usize, filler: u8) -> Cow<'_, str>;
+
+	/// Strip Formatting.
+	fn fyi_strip_ansi(&self) -> Cow<'_, str>;
+
+	/// String "width".
+	fn fyi_width(&self) -> usize;
+}
+
+impl <T> FYIStrings for T
+where T: AsRef<str> {
+	/// Find Byte Index X Chars From Start.
+	fn fyi_chars_len_start(&self, num: usize) -> usize {
+		if num == 0 {
+			return 0;
+		}
+
+		let me = self.as_ref();
+		let len = me.len();
+		if len == 0 {
+			return 0;
+		}
+		else if num >= len {
+			return len;
+		}
+
+		char_len_n(me.as_bytes(), num)
+	}
+
+	/// Find Byte Index X Chars From End.
+	fn fyi_chars_len_end(&self, num: usize) -> usize {
+		if num == 0 {
+			return 0;
+		}
+
+		let me = self.as_ref();
+		let len = me.len();
+		if len == 0 {
+			return 0;
+		}
+		else if num >= len {
+			return len;
+		}
+
+		char_len_n(me.as_bytes(), me.fyi_chars_len() - num)
+	}
+
+	/// Number of Chars in String.
+	fn fyi_lines_len(&self) -> usize {
+		let me = self.as_ref();
+		match me.is_empty() {
+			true => 0,
+			false => bytecount::count(me.as_bytes(), b'\n') + 1,
+		}
+	}
+
+	/// Number of Chars in String.
+	fn fyi_chars_len(&self) -> usize {
+		let me = self.as_ref();
+		match me.is_empty() {
+			true => 0,
+			false => bytecount::num_chars(me.as_bytes()),
+		}
+	}
+
+	/// Truncate to X Chars.
+	fn fyi_shorten(&self, keep: usize) -> Cow<'_, str> {
+		let me = self.as_ref();
+		let size = me.fyi_chars_len();
+		if keep >= size {
+			Cow::Borrowed(&me)
+		}
+		else if 1 == keep {
+			Cow::Borrowed("…")
+		}
+		else if 0 == keep {
+			Cow::Borrowed("")
+		}
+		else {
+			let len = me.len();
+			let end = me.fyi_chars_len_start(keep - 1);
+			if end != len {
+				if let Some(x) = me.get(0..end) {
+					Cow::Owned([
+						x,
+						"…"
+					].concat())
+				}
+				else {
+					Cow::Borrowed("…")
+				}
+			}
+			else {
+				Cow::Borrowed(&me)
+			}
+		}
+	}
+
+	/// Remove First X Chars.
+	fn fyi_shorten_reverse(&self, keep: usize) -> Cow<'_, str> {
+		let me = self.as_ref();
+		let size = me.fyi_chars_len();
+		if keep >= size {
+			Cow::Borrowed(&me)
+		}
+		else if 1 == keep {
+			Cow::Borrowed("…")
+		}
+		else if 0 == keep {
+			Cow::Borrowed("")
+		}
+		else {
+			let len = me.len();
+			let end = me.fyi_chars_len_end(keep - 1);
+			if end != len {
+				if let Some(x) = me.get(end..) {
+					Cow::Owned([
+						"…",
+						x,
+					].concat())
+				}
+				else {
+					Cow::Borrowed("…")
+				}
+			}
+			else {
+				Cow::Borrowed(&me)
+			}
+		}
+	}
+
+	/// Stretch a String Filling End With X.
+	fn fyi_stretch(&self, num: usize, filler: u8) -> Cow<'_, str> {
+		let me = self.as_ref();
+		let size = me.fyi_chars_len();
+		if num <= size {
+			Cow::Borrowed(&me)
+		}
+		else {
+			let len = num - size;
+			if let Ok(x) = String::from_utf8(vec![filler; len]) {
+				Cow::Owned([
+					&me,
+					x.as_str(),
+				].concat())
+			}
+			else {
+				Cow::Borrowed(&me)
+			}
+		}
+	}
+
+	/// Stretch a String Filling Start With X.
+	fn fyi_stretch_reverse(&self, num: usize, filler: u8) -> Cow<'_, str> {
+		let me = self.as_ref();
+		let size = me.fyi_chars_len();
+		if num <= size {
+			Cow::Borrowed(&me)
+		}
+		else {
+			let len = num - size;
+			if let Ok(x) = String::from_utf8(vec![filler; len]) {
+				Cow::Owned([
+					x.as_str(),
+					&me,
+				].concat())
+			}
+			else {
+				Cow::Borrowed(&me)
+			}
+		}
+	}
+
+	/// Strip ANSI.
+	fn fyi_strip_ansi(&self) -> Cow<'_, str> {
+		let me = self.as_ref();
+		if false == me.is_empty() {
+			if let Ok(x) = strip_ansi_escapes::strip(me.as_bytes()) {
+				if let Ok(y) = String::from_utf8(x) {
+					if y == *me {
+						return Cow::Borrowed(&me);
+					}
+					else {
+						return Cow::Owned(y);
+					}
+				}
+			}
+		}
+
+		Cow::Borrowed("")
+	}
+
+	/// String "width".
+	fn fyi_width(&self) -> usize {
+		bytecount::num_chars(self.fyi_strip_ansi().as_bytes())
+	}
+}
+
+/*impl FYIStrings for String {
+	/// Find Byte Index X Chars From Start.
+	fn fyi_chars_len_start(&self, num: usize) -> usize {
+		let num = num.to_usize().unwrap_or(0);
+		if num == 0 {
+			return 0;
+		}
+
+		let len = self.len();
+		if len == 0 {
+			return 0;
+		}
+		else if num >= len {
+			return len;
+		}
+
+		char_len_n(self.as_bytes(), num)
+	}
+
+	/// Find Byte Index X Chars From End.
+	fn fyi_chars_len_end(&self, num: usize) -> usize {
+		let num = num.to_usize().unwrap_or(0);
+		if num == 0 {
+			return 0;
+		}
+
+		let len = self.len();
+		if len == 0 {
+			return 0;
+		}
+		else if num >= len {
+			return len;
+		}
+
+		char_len_n(self.as_bytes(), self.fyi_chars_len() - num)
+	}
+
+	/// Number of Chars in String.
+	fn fyi_lines_len(&self) -> usize {
+		match self.is_empty() {
+			true => 0,
+			false => bytecount::count(self.as_bytes(), b'\n') + 1,
+		}
+	}
+
+	/// Number of Chars in String.
+	fn fyi_chars_len(&self) -> usize {
+		match self.is_empty() {
+			true => 0,
+			false => bytecount::num_chars(self.as_bytes()),
+		}
+	}
+
+	/// Truncate to X Chars.
+	fn fyi_shorten(&self, keep: usize) -> Cow<'_, str> {
+		let size = self.fyi_chars_len();
+		if keep >= size {
+			Cow::Borrowed(&self)
+		}
+		else if 1 == keep {
+			Cow::Borrowed("…")
+		}
+		else if 0 == keep {
+			Cow::Borrowed("")
+		}
+		else {
+			let len = self.len();
+			let end = self.fyi_chars_len_start(keep - 1);
+			if end != len {
+				if let Some(x) = self.get(0..end) {
+					Cow::Owned([
+						x,
+						"…"
+					].concat())
+				}
+				else {
+					Cow::Borrowed("…")
+				}
+			}
+			else {
+				Cow::Borrowed(&self)
+			}
+		}
+	}
+
+	/// Remove First X Chars.
+	fn fyi_shorten_reverse(&self, keep: usize) -> Cow<'_, str> {
+		let size = self.fyi_chars_len();
+		if keep >= size {
+			Cow::Borrowed(&self)
+		}
+		else if 1 == keep {
+			Cow::Borrowed("…")
+		}
+		else if 0 == keep {
+			Cow::Borrowed("")
+		}
+		else {
+			let len = self.len();
+			let end = self.fyi_chars_len_end(keep - 1);
+			if end != len {
+				if let Some(x) = self.get(end..) {
+					Cow::Owned([
+						"…",
+						x,
+					].concat())
+				}
+				else {
+					Cow::Borrowed("…")
+				}
+			}
+			else {
+				Cow::Borrowed(&self)
+			}
+		}
+	}
+
+	/// Stretch a String Filling End With X.
+	fn fyi_stretch(&self, num: usize, filler: u8) -> Cow<'_, str> {
+		let size = self.fyi_chars_len();
+		if num <= size {
+			Cow::Borrowed(&self)
+		}
+		else {
+			let len = num - size;
+			if let Ok(x) = String::from_utf8(vec![filler; len]) {
+				Cow::Owned([
+					&self,
+					x.as_str(),
+				].concat())
+			}
+			else {
+				Cow::Borrowed(&self)
+			}
+		}
+	}
+
+	/// Stretch a String Filling Start With X.
+	fn fyi_stretch_reverse(&self, num: usize, filler: u8) -> Cow<'_, str> {
+		let size = self.fyi_chars_len();
+		if num <= size {
+			Cow::Borrowed(&self)
+		}
+		else {
+			let len = num - size;
+			if let Ok(x) = String::from_utf8(vec![filler; len]) {
+				Cow::Owned([
+					x.as_str(),
+					&self,
+				].concat())
+			}
+			else {
+				Cow::Borrowed(&self)
+			}
+		}
+	}
+
+	/// Strip ANSI.
+	fn fyi_strip_ansi(&self) -> Cow<'_, str> {
+		if false == self.is_empty() {
+			if let Ok(x) = strip_ansi_escapes::strip(self.as_bytes()) {
+				if let Ok(y) = String::from_utf8(x) {
+					if y == *self {
+						return Cow::Borrowed(&self);
+					}
+					else {
+						return Cow::Owned(y);
+					}
+				}
+			}
+		}
+
+		Cow::Borrowed("")
+	}
+
+	/// String "width".
+	fn fyi_width(&self) -> usize {
+		bytecount::num_chars(self.fyi_strip_ansi().as_bytes())
+	}
+}*/

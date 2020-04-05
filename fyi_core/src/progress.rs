@@ -10,7 +10,10 @@ use ansi_term::{
 };
 use crate::misc::{
 	cli,
-	strings,
+	strings::{
+		self,
+		FYIStrings,
+	},
 	time,
 };
 use crate::msg::Msg;
@@ -236,9 +239,9 @@ impl Progress {
 		let mut p_eta = self.part_eta(done, total);
 
 		// How much space have we used?
-		let p_space = strings::stripped_len(&p_elapsed) +
-			strings::stripped_len(&p_count) +
-			strings::stripped_len(&p_percent) +
+		let p_space = p_elapsed.fyi_width() +
+			p_count.fyi_width() +
+			&p_percent.fyi_width() +
 			3;
 
 		// The bar can have the remaining space.
@@ -249,7 +252,7 @@ impl Progress {
 			}
 
 			// Adjust the ETA again.
-			let eta_len = strings::stripped_len(&p_eta);
+			let eta_len = p_eta.fyi_width();
 			if 0 != eta_len && p_space + count + eta_len + 1 <= width {
 				p_eta = format!(
 					"{}{}",
@@ -350,7 +353,7 @@ impl Progress {
 			);
 		}
 
-		let nlines: u8 = strings::lines(&msg) as u8;
+		let nlines: u8 = msg.fyi_lines_len() as u8;
 		if nlines != lines {
 			self.last_lines.store(nlines, Ordering::SeqCst);
 		}
@@ -491,8 +494,7 @@ impl Progress {
 			return String::new();
 		}
 
-		let msg: String = ptr.clone();
-		strings::shorten_right(msg, width)
+		ptr.clone().fyi_shorten(width).into()
 	}
 
 	/// Tick percent.
@@ -526,11 +528,12 @@ impl Progress {
 		let mut out: Vec<String> = ptr.iter()
 			.cloned()
 			.map(|ref x| {
-				strings::shorten_right(format!(
+				let out: String = format!(
 					"    {} {}",
 					Colour::Purple.dimmed().paint("↳"),
 					Colour::Purple.dimmed().paint(x.to_str().unwrap_or("")),
-				), width)
+				);
+				out.fyi_shorten(width).to_string()
 			})
 			.collect();
 
