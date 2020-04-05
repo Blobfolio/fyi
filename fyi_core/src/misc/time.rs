@@ -3,10 +3,14 @@
 */
 
 use crate::misc::strings;
-use std::time::{
-	Duration,
-	SystemTime,
-	UNIX_EPOCH,
+use num_traits::cast::ToPrimitive;
+use std::{
+	borrow::Cow,
+	time::{
+		Duration,
+		SystemTime,
+		UNIX_EPOCH,
+	},
 };
 
 
@@ -20,15 +24,15 @@ use std::time::{
 /// The long format will be a list of the non-empty bits in English,
 /// like "15 seconds" or "3 hours and 2 seconds" or "4 days, 3 hours,
 /// 2 minutes, and 13 seconds".
-pub fn human_elapsed<N> (elapsed: N, flags: u8) -> String
-where N: Into<usize> {
-	let elapsed = elapsed.into();
+pub fn human_elapsed<N> (elapsed: N, flags: u8) -> Cow<'static, str>
+where N: ToPrimitive {
+	let elapsed = elapsed.to_usize().unwrap_or(0);
 	let compact: bool = 0 != (crate::PRINT_COMPACT & flags);
 
 	if elapsed <= 0 {
 		return match compact {
-			true => "00:00:00".to_string(),
-			false => "0 seconds".to_string(),
+			true => Cow::Borrowed("00:00:00"),
+			false => Cow::Borrowed("0 seconds"),
 		};
 	}
 
@@ -42,13 +46,15 @@ where N: Into<usize> {
 
 	// Return a shortened version.
 	if true == compact {
-		return bits.iter()
-			.filter_map(|(num, singular, _)| match (*num > 0) | (&"day" != singular) {
-				true => Some(format!("{:02}", num)),
-				false => None,
-			})
-			.collect::<Vec<String>>()
-			.join(":");
+		return Cow::Owned(
+			bits.iter()
+				.filter_map(|(num, singular, _)| match (*num > 0) | (&"day" != singular) {
+					true => Some(format!("{:02}", num)),
+					false => None,
+				})
+				.collect::<Vec<String>>()
+				.join(":")
+		);
 	}
 
 	// A longer version.
@@ -62,8 +68,8 @@ where N: Into<usize> {
 	// Let's grammar-up the response with Oxford joins.
 	let joined = strings::oxford_join(out, " and ");
 	match joined.len() {
-		0 => "0 seconds".to_string(),
-		_ => joined
+		0 => Cow::Borrowed("0 seconds"),
+		_ => joined,
 	}
 }
 

@@ -7,6 +7,7 @@ use num_format::{
 	ToFormattedString,
 };
 use num_traits::cast::ToPrimitive;
+use std::borrow::Cow;
 
 
 
@@ -14,7 +15,7 @@ use num_traits::cast::ToPrimitive;
 ///
 /// Convert a numerical byte size into a string with the best unit
 /// given the value.
-pub fn human_bytes<N> (size: N) -> String
+pub fn human_bytes<N> (size: N) -> Cow<'static, str>
 where N: ToPrimitive {
 	let bytes:f64 = size.to_f64().unwrap_or(0.0);
 
@@ -29,18 +30,18 @@ where N: ToPrimitive {
 	} else if bytes > kb * 0.9 {
 		(bytes / kb, "KB")
 	} else {
-		return format!("{}B", bytes);
+		return Cow::Owned(format!("{}B", bytes));
 	};
 
-	format!("{:.*}{}", 2, bytes, unit)
+	Cow::Owned(format!("{:.*}{}", 2, bytes, unit))
 }
 
 /// Nice Int.
-pub fn human_int<N> (num: N) -> String
+pub fn human_int<N> (num: N) -> Cow<'static, str>
 where N: ToPrimitive {
-	num.to_u64()
+	Cow::Owned(num.to_u64()
 		.unwrap_or(0)
-		.to_formatted_string(&Locale::en)
+		.to_formatted_string(&Locale::en))
 }
 
 /// Saved.

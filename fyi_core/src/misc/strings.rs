@@ -46,7 +46,7 @@ where
 /// Indentation in Spaces.
 ///
 /// Return a string consisting of 4 spaces for each requested tab.
-pub fn indentation<N> (indent: N) -> String
+pub fn indentation<N> (indent: N) -> Cow<'static, str>
 where N: ToPrimitive {
 	whitespace(indent.to_usize().unwrap_or(0) * 4)
 }
@@ -57,21 +57,21 @@ where N: ToPrimitive {
 /// there is one item, that item is returned. If there are two, they
 /// are joined with the operator. Three or more entries will use
 /// the Oxford Comma.
-pub fn oxford_join<'a, S> (mut list: Vec<String>, glue: S) -> String
+pub fn oxford_join<'a, S> (mut list: Vec<String>, glue: S) -> Cow<'static, str>
 where S: Into<Cow<'a, str>> {
 	match list.len() {
-		0 => String::new(),
-		1 => list[0].to_string(),
-		2 => list.join(&[" ", glue.into().trim(), " "].concat()),
+		0 => Cow::Borrowed(""),
+		1 => Cow::Owned(list[0].to_string()),
+		2 => Cow::Owned(list.join(&[" ", glue.into().trim(), " "].concat())),
 		_ => {
 			let last = list.pop().unwrap();
-			[
+			Cow::Owned([
 				&list.join(", "),
 				", ",
 				glue.into().trim(),
 				" ",
 				&last
-			].concat()
+			].concat())
 		}
 	}
 }
@@ -79,11 +79,14 @@ where S: Into<Cow<'a, str>> {
 /// Make whitespace.
 ///
 /// Generate a string consisting of X spaces.
-pub fn whitespace<N> (count: N) -> String
+pub fn whitespace<N> (count: N) -> Cow<'static, str>
 where N: ToPrimitive {
 	match count.to_usize().unwrap_or(0) {
-		0 => String::new(),
-		x => String::from_utf8(vec![b' '; x]).unwrap_or(String::new())
+		0 => Cow::Borrowed(""),
+		x => match String::from_utf8(vec![b' '; x]) {
+			Ok(y) => Cow::Owned(y),
+			_ => Cow::Borrowed(""),
+		},
 	}
 }
 

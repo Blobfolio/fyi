@@ -38,7 +38,7 @@ impl std::fmt::Display for Msg<'_> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		// The message.
 		let mut out: String = [
-			strings::indentation(self.indent),
+			strings::indentation(self.indent).to_string(),
 			self.prefix.to_string(),
 			Style::new().bold().paint(&*self.msg).to_string()
 		].concat();
@@ -46,7 +46,7 @@ impl std::fmt::Display for Msg<'_> {
 		// A timestamp?
 		let timestamp = self.timestamp();
 		if false == timestamp.is_empty() {
-			out = append_timestamp(out, timestamp);
+			out = append_timestamp(out, timestamp.to_string()).to_string();
 		}
 
 		f.write_str(&out)
@@ -83,7 +83,7 @@ impl<'a> Msg<'a> {
 
 	/// Crunched In...
 	pub fn msg_crunched_in(count: u64, time: Instant, size: Option<(u64, u64)>) -> Self {
-		let elapsed: String = time::human_elapsed(time.elapsed().as_secs() as usize, 0);
+		let elapsed = time::human_elapsed(time.elapsed().as_secs() as usize, 0);
 		let (before, after) = size.unwrap_or((0, 0));
 		let saved = numbers::saved(before, after);
 
@@ -115,22 +115,22 @@ impl<'a> Msg<'a> {
 	pub fn msg_finished_in(time: Instant) -> Self {
 		Msg::new([
 			"Finished in ",
-			time::human_elapsed(time.elapsed().as_secs() as usize, 0).as_str(),
+			&time::human_elapsed(time.elapsed().as_secs() as usize, 0),
 			"."
 		].concat())
 			.with_prefix(Prefix::Success)
 	}
 
 	/// Formatted Timestamp.
-	fn timestamp(&self) -> String {
+	fn timestamp(&self) -> Cow<'static, str> {
 		if 0 != (super::MSG_TIMESTAMP & self.flags) {
-			format!(
+			Cow::Owned(format!(
 				"[{}]",
 				Style::new().dimmed().paint(Local::now().format("%F %T").to_string())
-			)
+			))
 		}
 		else {
-			String::new()
+			Cow::Borrowed("")
 		}
 	}
 
@@ -159,7 +159,7 @@ impl<'a> Msg<'a> {
 }
 
 /// Append Timestamp.
-fn append_timestamp<S> (msg: S, timestamp: S) -> String
+fn append_timestamp<S> (msg: S, timestamp: S) -> Cow<'static, str>
 where S: Into<String> {
 	let msg = msg.into();
 	let msg_len = msg.fyi_width();
@@ -172,17 +172,17 @@ where S: Into<String> {
 
 	// We can do it inline.
 	if msg_len + timestamp_len + 1 <= max_len {
-		[
+		Cow::Owned([
 			msg,
-			strings::whitespace(max_len - msg_len - timestamp_len),
+			strings::whitespace(max_len - msg_len - timestamp_len).to_string(),
 			timestamp,
-		].concat()
+		].concat())
 	}
 	else {
-		[
+		Cow::Owned([
 			timestamp.as_str(),
 			"\n",
 			msg.as_str(),
-		].concat()
+		].concat())
 	}
 }

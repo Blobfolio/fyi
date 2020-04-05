@@ -454,7 +454,7 @@ impl Progress {
 	/// Tick elapsed.
 	fn part_elapsed(&self) -> Cow<'_, str> {
 		let ptr = self.time.lock().expect("Failed to acquire lock: Progress.time");
-		let elapsed: String = time::human_elapsed(
+		let elapsed = time::human_elapsed(
 			ptr.elapsed().as_secs() as usize,
 			crate::PRINT_COMPACT
 		);
@@ -462,7 +462,7 @@ impl Progress {
 		Cow::Owned(format!(
 			"{}{}{}",
 			Style::new().dimmed().paint("["),
-			Style::new().bold().paint(&elapsed),
+			Style::new().bold().paint(&elapsed.to_string()),
 			Style::new().dimmed().paint("]"),
 		))
 	}
@@ -488,7 +488,7 @@ impl Progress {
 		}
 
 		let s_per: f64 = elapsed / done;
-		let remaining: String = time::human_elapsed(
+		let remaining = time::human_elapsed(
 			f64::ceil(s_per * (total - done)) as usize,
 			crate::PRINT_COMPACT
 		);
@@ -496,7 +496,7 @@ impl Progress {
 		Cow::Owned(format!(
 			"{} {}",
 			Colour::Purple.dimmed().paint("ETA:"),
-			Colour::Purple.bold().paint(&remaining),
+			Colour::Purple.bold().paint(&remaining.to_string()),
 		))
 	}
 
