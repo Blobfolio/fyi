@@ -48,3 +48,10 @@ default = []
 interactive = [ "dialoguer" ]
 progress = [ "ansi-escapes", "defaults" ]
 witcher = [ "nix", "rayon", "regex", "walkdir" ]
+
+[dev-dependencies]
+criterion = "*"
+
+[[bench]]
+name = "scratchpad"
+harness = false
