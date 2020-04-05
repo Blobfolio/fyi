@@ -3,7 +3,7 @@
 */
 
 use crate::misc::strings;
-use crate::witcher::formats::FYIFormats;
+use crate::witcher::formats::FYIPathFormat;
 use std::ffi::OsStr;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{
@@ -14,7 +14,7 @@ use std::path::{
 
 
 /// Format/Conversion/Mutation Helpers!
-pub trait FYIProps {
+pub trait FYIPath {
 	/// Extension.
 	fn fyi_file_extension(&self) -> String;
 
@@ -38,7 +38,7 @@ pub trait FYIProps {
 	fn fyi_parent(&self) -> Result<PathBuf, String>;
 }
 
-impl FYIProps for Path {
+impl FYIPath for Path {
 	/// Extension.
 	fn fyi_file_extension(&self) -> String {
 		if self.is_dir() {

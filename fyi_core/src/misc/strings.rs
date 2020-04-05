@@ -104,7 +104,7 @@ fn char_len_n(data: &[u8], stop: usize) -> usize {
 }
 
 /// String helpers!
-pub trait FYIStrings {
+pub trait FYIStringFormat {
 	/// Find Byte Index X Chars From Start.
 	fn fyi_chars_len_start(&self, num: usize) -> usize;
 
@@ -136,7 +136,7 @@ pub trait FYIStrings {
 	fn fyi_width(&self) -> usize;
 }
 
-impl <T> FYIStrings for T
+impl <T> FYIStringFormat for T
 where T: AsRef<str> {
 	/// Find Byte Index X Chars From Start.
 	fn fyi_chars_len_start(&self, num: usize) -> usize {
@@ -325,7 +325,7 @@ where T: AsRef<str> {
 	}
 }
 
-/*impl FYIStrings for String {
+/*impl FYIStringFormat for String {
 	/// Find Byte Index X Chars From Start.
 	fn fyi_chars_len_start(&self, num: usize) -> usize {
 		let num = num.to_usize().unwrap_or(0);

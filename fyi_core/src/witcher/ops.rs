@@ -3,8 +3,8 @@
 */
 
 use crate::witcher::{
-	formats::FYIFormats,
-	props::FYIProps,
+	formats::FYIPathFormat,
+	props::FYIPath,
 };
 use std::{
 	env,
@@ -23,7 +23,7 @@ use std::{
 
 
 /// Format/Conversion/Mutation Helpers!
-pub trait FYIOps {
+pub trait FYIPathIO {
 	/// Byte for Byte Copy.
 	fn fyi_copy<P> (&self, to: P) -> Result<(), String>
 	where P: AsRef<Path>;
@@ -49,7 +49,7 @@ pub trait FYIOps {
 	fn fyi_write(&self, data: &[u8]) -> Result<(), String>;
 }
 
-impl FYIOps for Path {
+impl FYIPathIO for Path {
 	/// Byte for Byte Copy.
 	fn fyi_copy<P> (&self, to: P) -> Result<(), String>
 	where P: AsRef<Path> {

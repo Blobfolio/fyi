@@ -3,7 +3,7 @@
 */
 
 use crate::misc::strings;
-use crate::witcher::props::FYIProps;
+use crate::witcher::props::FYIPath;
 use std::path::{
 	Path,
 	PathBuf,
@@ -12,7 +12,7 @@ use std::path::{
 
 
 /// Format/Conversion/Mutation Helpers!
-pub trait FYIFormats {
+pub trait FYIPathFormat {
 	/// Append to Path.
 	fn fyi_append<S> (&self, name: S) -> PathBuf
 	where S: Into<String>;
@@ -31,7 +31,7 @@ pub trait FYIFormats {
 	where S: Into<String>;
 }
 
-impl FYIFormats for Path {
+impl FYIPathFormat for Path {
 	/// Append to Path.
 	fn fyi_append<S> (&self, name: S) -> PathBuf
 	where S: Into<String> {

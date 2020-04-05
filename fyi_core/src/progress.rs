@@ -12,7 +12,7 @@ use crate::misc::{
 	cli,
 	strings::{
 		self,
-		FYIStrings,
+		FYIStringFormat,
 	},
 	time,
 };
@@ -147,7 +147,7 @@ impl Progress {
 	pub fn add_working<P> (&self, path: P)
 	where P: AsRef<Path> {
 		let path: PathBuf = if cfg!(feature = "witcher") {
-			use crate::witcher::formats::FYIFormats;
+			use crate::witcher::formats::FYIPathFormat;
 			path.as_ref().fyi_to_path_buf_abs()
 		} else {
 			path.as_ref().to_path_buf()
@@ -189,7 +189,7 @@ impl Progress {
 	pub fn remove_working<P> (&self, path: P)
 	where P: AsRef<Path> {
 		let path: PathBuf = if cfg!(feature = "witcher") {
-			use crate::witcher::formats::FYIFormats;
+			use crate::witcher::formats::FYIPathFormat;
 			path.as_ref().fyi_to_path_buf_abs()
 		} else {
 			path.as_ref().to_path_buf()

@@ -2,7 +2,7 @@
 # FYI Core: CLI
 */
 
-use crate::misc::strings::FYIStrings;
+use crate::misc::strings::FYIStringFormat;
 use std::io::{
 	stderr,
 	stdout,

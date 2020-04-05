@@ -3,8 +3,8 @@
 */
 
 use crate::witcher::{
-	formats::FYIFormats,
-	mass::FYIMassOps,
+	formats::FYIPathFormat,
+	mass::FYIPathMIO,
 };
 use regex::Regex;
 use std::{
@@ -25,7 +25,7 @@ use walkdir::WalkDir;
 
 
 /// Path walking!
-pub trait FYIWalk {
+pub trait FYIPathWalk {
 	/// Recursive walk.
 	fn fyi_walk(&self) -> Vec<PathBuf>;
 
@@ -45,7 +45,7 @@ pub trait FYIWalk {
 	fn fyi_walk_file_lines_hs(&self, pat: Option<Regex>) -> HashSet<PathBuf>;
 }
 
-impl FYIWalk for Path {
+impl FYIPathWalk for Path {
 	/// Recursive walk.
 	fn fyi_walk(&self) -> Vec<PathBuf> {
 		if self.is_dir() {

@@ -77,3 +77,23 @@ pub use crate::progress::arc as progress_arc;
 
 #[cfg(feature = "progress")]
 pub use crate::progress::Progress;
+
+/// Re-export traits under a more convenient heading.
+pub mod traits {
+	#[cfg(feature = "witcher")]
+	pub use crate::witcher::props::FYIPath;
+
+	#[cfg(feature = "witcher")]
+	pub use crate::witcher::formats::FYIPathFormat;
+
+	#[cfg(feature = "witcher")]
+	pub use crate::witcher::ops::FYIPathIO;
+
+	#[cfg(feature = "witcher")]
+	pub use crate::witcher::mass::FYIPathMIO;
+
+	#[cfg(feature = "witcher")]
+	pub use crate::witcher::walk::FYIPathWalk;
+
+	pub use crate::misc::strings::FYIStringFormat;
+}

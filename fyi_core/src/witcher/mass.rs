@@ -3,9 +3,9 @@
 */
 
 use crate::witcher::{
-	formats::FYIFormats,
-	props::FYIProps,
-	walk::FYIWalk,
+	formats::FYIPathFormat,
+	props::FYIPath,
+	walk::FYIPathWalk,
 };
 use rayon::prelude::*;
 use std::collections::HashSet;
@@ -15,7 +15,7 @@ use regex::Regex;
 
 
 /// Vector Business.
-pub trait FYIMassOps {
+pub trait FYIPathMIO {
 	/// File sizes.
 	fn fyi_file_sizes(&self) -> u64;
 
@@ -32,7 +32,7 @@ pub trait FYIMassOps {
 	fn fyi_walk_filtered(&self, pattern: &Regex) -> Self;
 }
 
-impl FYIMassOps for Vec<PathBuf> {
+impl FYIPathMIO for Vec<PathBuf> {
 	/// File sizes.
 	fn fyi_file_sizes(&self) -> u64 {
 		self.par_iter()
@@ -116,7 +116,7 @@ impl FYIMassOps for Vec<PathBuf> {
 	}
 }
 
-impl FYIMassOps for HashSet<PathBuf> {
+impl FYIPathMIO for HashSet<PathBuf> {
 	/// File sizes.
 	fn fyi_file_sizes(&self) -> u64 {
 		let tmp: Vec<PathBuf> = self.par_iter().cloned().collect();

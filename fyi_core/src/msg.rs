@@ -12,11 +12,12 @@ use crate::misc::{
 	numbers,
 	strings::{
 		self,
-		FYIStrings,
+		FYIStringFormat,
 	},
 	time,
 };
 use crate::prefix::Prefix;
+use std::borrow::Cow;
 use std::time::Instant;
 
 
@@ -28,7 +29,7 @@ use std::time::Instant;
 pub struct Msg<'a> {
 	indent: u8,
 	prefix: Prefix<'a>,
-	msg: String,
+	msg: Cow<'a, str>,
 	flags: u8,
 }
 
@@ -40,7 +41,7 @@ impl std::fmt::Display for Msg<'_> {
 			"{}{}{}",
 			strings::indentation(self.indent),
 			self.prefix.to_string(),
-			Style::new().bold().paint(self.msg.clone())
+			Style::new().bold().paint(&*self.msg)
 		);
 
 		// A timestamp?
@@ -56,7 +57,7 @@ impl std::fmt::Display for Msg<'_> {
 impl<'a> Msg<'a> {
 	/// New.
 	pub fn new<S> (msg: S) -> Self
-	where S: Into<String> {
+	where S: Into<Cow<'a, str>> {
 		Msg {
 			msg: msg.into(),
 			..Msg::default()
@@ -113,10 +114,10 @@ impl<'a> Msg<'a> {
 
 	/// Finished In...
 	pub fn msg_finished_in(time: Instant) -> Self {
-		Msg::new(format!(
+		Msg::new([
 			"Finished in {}.",
-			time::human_elapsed(time.elapsed().as_secs() as usize, 0)
-		))
+			time::human_elapsed(time.elapsed().as_secs() as usize, 0).as_str()
+		].concat())
 			.with_prefix(Prefix::Success)
 	}
 
@@ -156,7 +157,7 @@ impl<'a> Msg<'a> {
 			flags |= crate::PRINT_STDERR;
 		}
 
-		cli::print(&self.to_string(), flags);
+		cli::print(self.to_string(), flags);
 	}
 }
 
