@@ -44,7 +44,7 @@ impl FYIPath for Path {
 	/// Extension.
 	fn fyi_file_extension(&self) -> String {
 		if self.is_dir() {
-			return String::new()
+			String::new()
 		}
 		else {
 			match self.extension() {
