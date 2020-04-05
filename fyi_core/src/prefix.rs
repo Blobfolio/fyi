@@ -95,7 +95,7 @@ impl<'b> Prefix<'b> {
 		match label.is_empty() {
 			true => Cow::Borrowed(""),
 			false => Cow::Owned(
-				self.color().paint([&label, ":"].concat()).to_string()
+				self.color().paint([&label, ": "].concat()).to_string()
 			)
 		}
 	}
