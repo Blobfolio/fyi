@@ -37,12 +37,11 @@ impl std::fmt::Display for Msg<'_> {
 	/// Display.
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		// The message.
-		let mut out: String = format!(
-			"{}{}{}",
+		let mut out: String = [
 			strings::indentation(self.indent),
 			self.prefix.to_string(),
-			Style::new().bold().paint(&*self.msg)
-		);
+			Style::new().bold().paint(&*self.msg).to_string()
+		].concat();
 
 		// A timestamp?
 		let timestamp = self.timestamp();
@@ -127,10 +126,7 @@ impl<'a> Msg<'a> {
 		if 0 != (super::MSG_TIMESTAMP & self.flags) {
 			format!(
 				"[{}]",
-				Style::new().dimmed().paint(format!(
-					"{}",
-					Local::now().format("%F %T"),
-				))
+				Style::new().dimmed().paint(Local::now().format("%F %T").to_string())
 			)
 		}
 		else {
