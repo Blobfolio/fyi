@@ -49,11 +49,11 @@ impl FYIPathMIO for Vec<PathBuf> {
 	/// To Abs PathBuf.
 	fn fyi_to_path_buf_abs(&self) -> Vec<PathBuf> {
 		let mut out: Vec<PathBuf> = self.iter()
-		.filter_map(|ref x| match x.exists() {
-			true => Some(x.fyi_to_path_buf_abs()),
-			false => None,
-		})
-		.collect();
+			.filter_map(|ref x| match x.exists() {
+				true => Some(x.fyi_to_path_buf_abs()),
+				false => None,
+			})
+			.collect();
 
 		if 1 < out.len() {
 			out.par_sort();
