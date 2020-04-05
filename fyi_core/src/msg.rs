@@ -115,8 +115,9 @@ impl<'a> Msg<'a> {
 	/// Finished In...
 	pub fn msg_finished_in(time: Instant) -> Self {
 		Msg::new([
-			"Finished in {}.",
-			time::human_elapsed(time.elapsed().as_secs() as usize, 0).as_str()
+			"Finished in ",
+			time::human_elapsed(time.elapsed().as_secs() as usize, 0).as_str(),
+			"."
 		].concat())
 			.with_prefix(Prefix::Success)
 	}
