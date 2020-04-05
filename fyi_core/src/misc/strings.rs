@@ -91,6 +91,8 @@ where N: ToPrimitive {
 }
 
 /// Find End Byte of First X Chars.
+///
+/// This is used internally for shortening.
 fn char_len_n(data: &[u8], stop: usize) -> usize {
 	let mut chars = 0;
 
@@ -105,6 +107,8 @@ fn char_len_n(data: &[u8], stop: usize) -> usize {
 
 	data.len()
 }
+
+
 
 /// String helpers!
 pub trait FYIStringFormat {
@@ -327,184 +331,3 @@ where T: AsRef<str> {
 		bytecount::num_chars(self.fyi_strip_ansi().as_bytes())
 	}
 }
-
-/*impl FYIStringFormat for String {
-	/// Find Byte Index X Chars From Start.
-	fn fyi_chars_len_start(&self, num: usize) -> usize {
-		let num = num.to_usize().unwrap_or(0);
-		if num == 0 {
-			return 0;
-		}
-
-		let len = self.len();
-		if len == 0 {
-			return 0;
-		}
-		else if num >= len {
-			return len;
-		}
-
-		char_len_n(self.as_bytes(), num)
-	}
-
-	/// Find Byte Index X Chars From End.
-	fn fyi_chars_len_end(&self, num: usize) -> usize {
-		let num = num.to_usize().unwrap_or(0);
-		if num == 0 {
-			return 0;
-		}
-
-		let len = self.len();
-		if len == 0 {
-			return 0;
-		}
-		else if num >= len {
-			return len;
-		}
-
-		char_len_n(self.as_bytes(), self.fyi_chars_len() - num)
-	}
-
-	/// Number of Chars in String.
-	fn fyi_lines_len(&self) -> usize {
-		match self.is_empty() {
-			true => 0,
-			false => bytecount::count(self.as_bytes(), b'\n') + 1,
-		}
-	}
-
-	/// Number of Chars in String.
-	fn fyi_chars_len(&self) -> usize {
-		match self.is_empty() {
-			true => 0,
-			false => bytecount::num_chars(self.as_bytes()),
-		}
-	}
-
-	/// Truncate to X Chars.
-	fn fyi_shorten(&self, keep: usize) -> Cow<'_, str> {
-		let size = self.fyi_chars_len();
-		if keep >= size {
-			Cow::Borrowed(&self)
-		}
-		else if 1 == keep {
-			Cow::Borrowed("…")
-		}
-		else if 0 == keep {
-			Cow::Borrowed("")
-		}
-		else {
-			let len = self.len();
-			let end = self.fyi_chars_len_start(keep - 1);
-			if end != len {
-				if let Some(x) = self.get(0..end) {
-					Cow::Owned([
-						x,
-						"…"
-					].concat())
-				}
-				else {
-					Cow::Borrowed("…")
-				}
-			}
-			else {
-				Cow::Borrowed(&self)
-			}
-		}
-	}
-
-	/// Remove First X Chars.
-	fn fyi_shorten_reverse(&self, keep: usize) -> Cow<'_, str> {
-		let size = self.fyi_chars_len();
-		if keep >= size {
-			Cow::Borrowed(&self)
-		}
-		else if 1 == keep {
-			Cow::Borrowed("…")
-		}
-		else if 0 == keep {
-			Cow::Borrowed("")
-		}
-		else {
-			let len = self.len();
-			let end = self.fyi_chars_len_end(keep - 1);
-			if end != len {
-				if let Some(x) = self.get(end..) {
-					Cow::Owned([
-						"…",
-						x,
-					].concat())
-				}
-				else {
-					Cow::Borrowed("…")
-				}
-			}
-			else {
-				Cow::Borrowed(&self)
-			}
-		}
-	}
-
-	/// Stretch a String Filling End With X.
-	fn fyi_stretch(&self, num: usize, filler: u8) -> Cow<'_, str> {
-		let size = self.fyi_chars_len();
-		if num <= size {
-			Cow::Borrowed(&self)
-		}
-		else {
-			let len = num - size;
-			if let Ok(x) = String::from_utf8(vec![filler; len]) {
-				Cow::Owned([
-					&self,
-					x.as_str(),
-				].concat())
-			}
-			else {
-				Cow::Borrowed(&self)
-			}
-		}
-	}
-
-	/// Stretch a String Filling Start With X.
-	fn fyi_stretch_reverse(&self, num: usize, filler: u8) -> Cow<'_, str> {
-		let size = self.fyi_chars_len();
-		if num <= size {
-			Cow::Borrowed(&self)
-		}
-		else {
-			let len = num - size;
-			if let Ok(x) = String::from_utf8(vec![filler; len]) {
-				Cow::Owned([
-					x.as_str(),
-					&self,
-				].concat())
-			}
-			else {
-				Cow::Borrowed(&self)
-			}
-		}
-	}
-
-	/// Strip ANSI.
-	fn fyi_strip_ansi(&self) -> Cow<'_, str> {
-		if false == self.is_empty() {
-			if let Ok(x) = strip_ansi_escapes::strip(self.as_bytes()) {
-				if let Ok(y) = String::from_utf8(x) {
-					if y == *self {
-						return Cow::Borrowed(&self);
-					}
-					else {
-						return Cow::Owned(y);
-					}
-				}
-			}
-		}
-
-		Cow::Borrowed("")
-	}
-
-	/// String "width".
-	fn fyi_width(&self) -> usize {
-		bytecount::num_chars(self.fyi_strip_ansi().as_bytes())
-	}
-}*/

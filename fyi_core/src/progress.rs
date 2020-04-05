@@ -50,6 +50,8 @@ use std::{
 pub const CHR_DONE: &str = "◼";
 pub const CHR_PENDING: &str = "-";
 
+
+
 #[derive(Debug, Defaults)]
 /// Progress.
 pub struct Progress {
