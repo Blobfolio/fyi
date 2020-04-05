@@ -50,9 +50,9 @@ impl FYIPathFormat for Path {
 
 	/// Absolute PathBuf.
 	fn fyi_to_path_buf_abs(&self) -> PathBuf {
-		match self.canonicalize() {
+		match std::fs::canonicalize(self) {
 			Ok(path) => path,
-			_ => self.to_path_buf(),
+			_ => self.into(),
 		}
 	}
 
