@@ -49,7 +49,7 @@ impl FYIPathWalk for Path {
 	/// Recursive walk.
 	fn fyi_walk(&self) -> Vec<PathBuf> {
 		if self.is_dir() {
-			let walked: Vec<PathBuf> = WalkDir::new(self.fyi_to_path_buf_abs())
+			WalkDir::new(self.fyi_to_path_buf_abs())
 				.follow_links(true)
 				.into_iter()
 				.filter_map(|x| match x {
@@ -63,9 +63,7 @@ impl FYIPathWalk for Path {
 					},
 					_ => None,
 				})
-				.collect();
-
-			walked
+				.collect::<Vec<PathBuf>>()
 		}
 		else if self.is_file() {
 			vec![self.fyi_to_path_buf_abs()]
@@ -78,7 +76,7 @@ impl FYIPathWalk for Path {
 	/// Careful walk.
 	fn fyi_walk_filtered(&self, pattern: &Regex) -> Vec<PathBuf> {
 		if self.is_dir() {
-			let walked: Vec<PathBuf> = WalkDir::new(self.fyi_to_path_buf_abs())
+			WalkDir::new(self.fyi_to_path_buf_abs())
 				.follow_links(true)
 				.into_iter()
 				.filter_map(|x| match x {
@@ -100,9 +98,7 @@ impl FYIPathWalk for Path {
 					},
 					_ => None,
 				})
-				.collect();
-
-			walked
+				.collect::<Vec<PathBuf>>()
 		}
 		else if self.is_file() {
 			let name = self.file_name()
@@ -152,7 +148,7 @@ impl FYIPathWalk for Path {
 	/// Recursive walk.
 	fn fyi_walk_hs(&self) -> HashSet<PathBuf> {
 		if self.is_dir() {
-			let walked: HashSet<PathBuf> = WalkDir::new(self.fyi_to_path_buf_abs())
+			WalkDir::new(self.fyi_to_path_buf_abs())
 				.follow_links(true)
 				.into_iter()
 				.filter_map(|x| match x {
@@ -166,9 +162,7 @@ impl FYIPathWalk for Path {
 					},
 					_ => None,
 				})
-				.collect();
-
-			walked
+				.collect::<HashSet<PathBuf>>()
 		}
 		else if self.is_file() {
 			let mut walked = HashSet::new();
@@ -183,7 +177,7 @@ impl FYIPathWalk for Path {
 	/// Careful walk.
 	fn fyi_walk_filtered_hs(&self, pattern: &Regex) -> HashSet<PathBuf> {
 		if self.is_dir() {
-			let walked: HashSet<PathBuf> = WalkDir::new(self.fyi_to_path_buf_abs())
+			WalkDir::new(self.fyi_to_path_buf_abs())
 				.follow_links(true)
 				.into_iter()
 				.filter_map(|x| match x {
@@ -205,9 +199,7 @@ impl FYIPathWalk for Path {
 					},
 					_ => None,
 				})
-				.collect();
-
-			walked
+				.collect::<HashSet<PathBuf>>()
 		}
 		else if self.is_file() {
 			let name = self.file_name()
