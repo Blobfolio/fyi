@@ -4,11 +4,13 @@
 
 use crate::misc::strings;
 use crate::witcher::formats::FYIPathFormat;
-use std::ffi::OsStr;
-use std::os::unix::fs::PermissionsExt;
-use std::path::{
-	Path,
-	PathBuf,
+use std::{
+	ffi::OsStr,
+	os::unix::fs::PermissionsExt,
+	path::{
+		Path,
+		PathBuf,
+	},
 };
 
 
