@@ -38,7 +38,7 @@ where
 	N: One + Display + PartialEq,
 	S: Into<Cow<'a, str>> {
 	match num.is_one() {
-		true => ["1", &singular.into()].concat(),
+		true => ["1 ", &singular.into()].concat(),
 		false => [num.to_string().as_ref(), " ", &plural.into()].concat(),
 	}
 }
