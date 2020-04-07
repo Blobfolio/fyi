@@ -13,10 +13,6 @@ use std::path::{
 
 /// Format/Conversion/Mutation Helpers!
 pub trait FYIPathFormat {
-	/// Append to Path.
-	fn fyi_append<S> (&self, name: S) -> PathBuf
-	where S: Into<String>;
-
 	/// Absolute PathBuf.
 	fn fyi_to_path_buf_abs(&self) -> PathBuf;
 
@@ -32,22 +28,6 @@ pub trait FYIPathFormat {
 }
 
 impl FYIPathFormat for Path {
-	/// Append to Path.
-	fn fyi_append<S> (&self, name: S) -> PathBuf
-	where S: Into<String> {
-		// A directory? Just push it.
-		if self.is_dir() {
-			self.fyi_with_file_name(name)
-		}
-		else {
-			PathBuf::from(format!(
-				"{}{}",
-				self.fyi_to_string(),
-				name.into()
-			))
-		}
-	}
-
 	/// Absolute PathBuf.
 	fn fyi_to_path_buf_abs(&self) -> PathBuf {
 		match std::fs::canonicalize(self) {

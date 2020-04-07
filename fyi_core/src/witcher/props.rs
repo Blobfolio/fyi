@@ -26,13 +26,6 @@ pub trait FYIPath {
 	/// File Size.
 	fn fyi_file_size(&self) -> u64;
 
-	/// Has Extension.
-	fn fyi_has_extension<S> (&self, ext: S) -> bool
-	where S: Into<String>;
-
-	/// Has Extension.
-	fn fyi_has_extensions(&self, exts: &Vec<&str>) -> bool;
-
 	/// Is Executable?
 	fn fyi_is_executable(&self) -> bool;
 
@@ -75,21 +68,6 @@ impl FYIPath for Path {
 		}
 
 		0
-	}
-
-	/// Has Extension.
-	fn fyi_has_extension<S> (&self, ext: S) -> bool
-	where S: Into<String> {
-		self.fyi_file_extension() == ext.into().to_lowercase()
-	}
-
-	/// Has Extension.
-	fn fyi_has_extensions(&self, exts: &Vec<&str>) -> bool {
-		let ext = self.fyi_file_extension();
-		match ext.is_empty() {
-			true => false,
-			false => exts.contains(&ext.as_str()),
-		}
 	}
 
 	/// Is Executable?
