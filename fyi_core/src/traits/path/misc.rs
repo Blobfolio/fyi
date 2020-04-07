@@ -2,8 +2,10 @@
 # FYI Core: Miscellany: Path Properties
 */
 
-use crate::misc::strings;
-use crate::witcher::formats::FYIPathFormat;
+use crate::{
+	traits::path::FYIPathFormat,
+	util::strings,
+};
 use std::{
 	ffi::OsStr,
 	os::unix::fs::PermissionsExt,

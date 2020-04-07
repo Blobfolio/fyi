@@ -2,8 +2,10 @@
 # FYI Core: Miscellany: Path Formatting
 */
 
-use crate::misc::strings;
-use crate::witcher::props::FYIPath;
+use crate::{
+	traits::path::FYIPath,
+	util::strings,
+};
 use std::path::{
 	Path,
 	PathBuf,

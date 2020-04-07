@@ -8,15 +8,15 @@ use ansi_term::{
 	Colour,
 	Style,
 };
-use crate::misc::{
-	cli,
-	strings::{
-		self,
-		FYIStringFormat,
+use crate::{
+	msg::Msg,
+	traits::str::FYIStringFormat,
+	util::{
+		cli,
+		strings,
+		time,
 	},
-	time,
 };
-use crate::msg::Msg;
 use std::{
 	borrow::Cow,
 	collections::HashSet,
@@ -152,7 +152,7 @@ impl Progress {
 	pub fn add_working<P> (&self, path: P)
 	where P: AsRef<Path> {
 		let path: PathBuf = if cfg!(feature = "witcher") {
-			use crate::witcher::formats::FYIPathFormat;
+			use crate::traits::path::FYIPathFormat;
 			path.as_ref().fyi_to_path_buf_abs()
 		} else {
 			path.as_ref().to_path_buf()
@@ -194,7 +194,7 @@ impl Progress {
 	pub fn remove_working<P> (&self, path: P)
 	where P: AsRef<Path> {
 		let path: PathBuf = if cfg!(feature = "witcher") {
-			use crate::witcher::formats::FYIPathFormat;
+			use crate::traits::path::FYIPathFormat;
 			path.as_ref().fyi_to_path_buf_abs()
 		} else {
 			path.as_ref().to_path_buf()

@@ -2,9 +2,9 @@
 # FYI Core: Miscellany: Operations
 */
 
-use crate::witcher::{
-	formats::FYIPathFormat,
-	props::FYIPath,
+use crate::traits::path::{
+	FYIPath,
+	FYIPathFormat,
 };
 use std::{
 	env,

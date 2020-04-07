@@ -7,18 +7,20 @@ use ansi_term::Colour;
 
 use ansi_term::Style;
 use chrono::prelude::*;
-use crate::misc::{
-	cli,
-	numbers,
-	strings::{
-		self,
-		FYIStringFormat,
+use crate::{
+	prefix::Prefix,
+	traits::str::FYIStringFormat,
+	util::{
+		cli,
+		numbers,
+		strings,
+		time,
 	},
-	time,
 };
-use crate::prefix::Prefix;
-use std::borrow::Cow;
-use std::time::Instant;
+use std::{
+	borrow::Cow,
+	time::Instant,
+};
 
 
 

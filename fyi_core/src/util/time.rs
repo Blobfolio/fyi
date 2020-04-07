@@ -2,7 +2,7 @@
 # FYI Core: Time
 */
 
-use crate::misc::strings;
+use crate::util::strings;
 use num_traits::cast::ToPrimitive;
 use std::{
 	borrow::Cow,

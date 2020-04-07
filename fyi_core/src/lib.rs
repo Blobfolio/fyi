@@ -37,7 +37,11 @@ extern crate num_format;
 extern crate strip_ansi_escapes;
 extern crate term_size;
 
-pub mod misc;
+/// Traits.
+pub mod traits;
+
+/// Utilities.
+pub mod util;
 mod msg;
 mod prefix;
 
@@ -45,7 +49,7 @@ mod prefix;
 mod progress;
 
 #[cfg(feature = "witcher")]
-pub mod witcher;
+mod witch;
 
 /// Append a timestamp to the message.
 pub const MSG_TIMESTAMP: u8 = 1;
@@ -70,24 +74,10 @@ pub use crate::msg::Msg;
 pub use crate::prefix::Prefix;
 
 #[cfg(feature = "witcher")]
-pub use crate::witcher::witch::Witch;
+pub use crate::witch::Witch;
 
 #[cfg(feature = "progress")]
 pub use crate::progress::arc as progress_arc;
 
 #[cfg(feature = "progress")]
 pub use crate::progress::Progress;
-
-/// Re-export traits under a more convenient heading.
-pub mod traits {
-	#[cfg(feature = "witcher")]
-	pub use crate::witcher::props::FYIPath;
-
-	#[cfg(feature = "witcher")]
-	pub use crate::witcher::formats::FYIPathFormat;
-
-	#[cfg(feature = "witcher")]
-	pub use crate::witcher::ops::FYIPathIO;
-
-	pub use crate::misc::strings::FYIStringFormat;
-}
