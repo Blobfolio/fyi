@@ -2,6 +2,7 @@
 # FYI Core: Witch
 */
 
+use rayon::prelude::*;
 use regex::Regex;
 use std::{
 	borrow::Cow,
@@ -108,6 +109,83 @@ impl Witch {
 	/// Get Length.
 	pub fn len(&self) -> usize {
 		self.files.len()
+	}
+
+
+
+	// -----------------------------------------------------------------
+	// Loopers
+	// -----------------------------------------------------------------
+
+	/// Parallel Loop.
+	pub fn process<F> (&self, cb: F)
+	where F: Fn(&PathBuf) + Send + Sync {
+		self.files.par_iter().for_each(cb);
+	}
+
+	/// Common Progress Tasks.
+	#[cfg(feature = "progress")]
+	fn _progress<S, F> (&self, name: S, cb: F)
+	where
+		S: Into<Cow<'static, str>>,
+		F: Fn(&PathBuf) + Send + Sync {
+		use crate::{
+			arc::progress as parc,
+			Msg,
+			Prefix,
+			Progress,
+			PROGRESS_CLEAR_ON_FINISH,
+		};
+
+		let bar = Progress::new(
+			Msg::new("Reticulating splines…")
+				.with_prefix(Prefix::Custom(name.into().as_ref(), 199))
+				.to_string(),
+			self.files.len() as u64,
+			PROGRESS_CLEAR_ON_FINISH
+		);
+		let looper = parc::looper(&bar, 60);
+		self.files().par_iter().for_each(|ref x| {
+			parc::add_working(&bar, &x);
+			cb(x);
+			parc::update(&bar, 1, None, Some(x.to_path_buf()));
+		});
+		parc::finish(&bar);
+		looper.join().unwrap();
+	}
+
+	/// Parallel Loop w/ Progress.
+	#[cfg(feature = "progress")]
+	pub fn progress<S, F> (&self, name: S, cb: F)
+	where
+		S: Into<Cow<'static, str>>,
+		F: Fn(&PathBuf) + Send + Sync {
+		use crate::Msg;
+		use std::time::Instant;
+
+		let time = Instant::now();
+		self._progress(name, cb);
+		Msg::msg_crunched_in(self.files.len() as u64, time, None)
+			.print();
+	}
+
+	/// Parallel Loop w/ Progress and Size Comparison.
+	#[cfg(feature = "progress")]
+	pub fn progress_crunch<S, F> (&self, name: S, cb: F)
+	where
+		S: Into<Cow<'static, str>>,
+		F: Fn(&PathBuf) + Send + Sync {
+		use crate::Msg;
+		use std::time::Instant;
+
+		let time = Instant::now();
+		let before: u64 = self.du();
+
+		self._progress(name, cb);
+
+		let after: u64 = self.du();
+		Msg::msg_crunched_in(self.files.len() as u64, time, Some((before, after)))
+			.print();
 	}
 
 
