@@ -8,6 +8,7 @@ use std::{
 	collections::HashSet,
 	ffi::OsStr,
 	fs::{
+		self,
 		DirEntry,
 		File,
 	},
@@ -124,7 +125,7 @@ impl Witch {
 				}
 			}
 			// Recurse for symlinks.
-			else if let Ok(path) = std::fs::read_link(&path) {
+			else if let Ok(path) = fs::read_link(&path) {
 				if path.is_file() {
 					if let Ok(p) = path.canonicalize() {
 						self.files.insert(p);
@@ -142,7 +143,7 @@ impl Witch {
 	/// Walk Dir.
 	fn _walk_dir(&mut self, path: &PathBuf) -> Result<(), Error> {
 		if self.dirs.insert(path.to_path_buf()) {
-			for entry in std::fs::read_dir(&path)? {
+			for entry in fs::read_dir(&path)? {
 				if let Ok(e) = entry {
 					if self._walk_dir_entry(Cow::Borrowed(&&e)).is_err() {
 						self._walk_route(&e.path());
@@ -190,7 +191,7 @@ impl Witch {
 				}
 			}
 			// Recurse for symlinks.
-			else if let Ok(path) = std::fs::read_link(&path) {
+			else if let Ok(path) = fs::read_link(&path) {
 				if path.is_file() {
 					if let Ok(p) = path.canonicalize() {
 						self._walk_file_filtered(&p, &pattern);
@@ -208,7 +209,7 @@ impl Witch {
 	/// Walk Dir.
 	fn _walk_dir_filtered(&mut self, path: &PathBuf, pattern: &Regex) -> Result<(), Error> {
 		if self.dirs.insert(path.to_path_buf()) {
-			for entry in std::fs::read_dir(&path)? {
+			for entry in fs::read_dir(&path)? {
 				if let Ok(e) = entry {
 					if self._walk_dir_entry_filtered(Cow::Borrowed(&&e), &pattern).is_err() {
 						self._walk_route_filtered(&e.path(), &pattern);

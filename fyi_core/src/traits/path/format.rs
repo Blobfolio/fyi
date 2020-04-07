@@ -6,9 +6,12 @@ use crate::{
 	traits::path::FYIPath,
 	util::strings,
 };
-use std::path::{
-	Path,
-	PathBuf,
+use std::{
+	fs,
+	path::{
+		Path,
+		PathBuf,
+	},
 };
 
 
@@ -32,7 +35,7 @@ pub trait FYIPathFormat {
 impl FYIPathFormat for Path {
 	/// Absolute PathBuf.
 	fn fyi_to_path_buf_abs(&self) -> PathBuf {
-		match std::fs::canonicalize(self) {
+		match fs::canonicalize(self) {
 			Ok(path) => path,
 			_ => self.into(),
 		}
