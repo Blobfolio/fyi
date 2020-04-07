@@ -123,8 +123,8 @@ impl Witch {
 		self.files.par_iter().for_each(cb);
 	}
 
-	/// Common Progress Tasks.
 	#[cfg(feature = "progress")]
+	/// Common Progress Tasks.
 	fn _progress<S, F> (&self, name: S, cb: F)
 	where
 		S: Into<Cow<'static, str>>,
@@ -154,23 +154,47 @@ impl Witch {
 		looper.join().unwrap();
 	}
 
-	/// Parallel Loop w/ Progress.
 	#[cfg(feature = "progress")]
+	/// Parallel Loop w/ Progress.
 	pub fn progress<S, F> (&self, name: S, cb: F)
 	where
 		S: Into<Cow<'static, str>>,
 		F: Fn(&PathBuf) + Send + Sync {
-		use crate::Msg;
+		use crate::{
+			arc::progress as parc,
+			Msg,
+			Prefix,
+			Progress,
+			PROGRESS_CLEAR_ON_FINISH,
+		};
 		use std::time::Instant;
 
 		let time = Instant::now();
-		self._progress(name, cb);
+
+		{
+			let bar = Progress::new(
+				Msg::new("Reticulating splines…")
+					.with_prefix(Prefix::Custom(name.into().as_ref(), 199))
+					.to_string(),
+				self.files.len() as u64,
+				PROGRESS_CLEAR_ON_FINISH
+			);
+			let looper = parc::looper(&bar, 60);
+			self.files().par_iter().for_each(|ref x| {
+				parc::add_working(&bar, &x);
+				cb(x);
+				parc::update(&bar, 1, None, Some(x.to_path_buf()));
+			});
+			parc::finish(&bar);
+			looper.join().unwrap();
+		}
+
 		Msg::msg_crunched_in(self.files.len() as u64, time, None)
 			.print();
 	}
 
-	/// Parallel Loop w/ Progress and Size Comparison.
 	#[cfg(feature = "progress")]
+	/// Parallel Loop w/ Progress and Size Comparison.
 	pub fn progress_crunch<S, F> (&self, name: S, cb: F)
 	where
 		S: Into<Cow<'static, str>>,
