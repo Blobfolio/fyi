@@ -46,6 +46,9 @@ impl Witch {
 			}
 		}
 
+		me.dirs.clear();
+		me.dirs.shrink_to_fit();
+
 		me
 	}
 
