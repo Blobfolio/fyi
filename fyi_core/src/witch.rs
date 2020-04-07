@@ -88,6 +88,11 @@ impl Witch {
 		Cow::Borrowed(&self.files)
 	}
 
+	/// Is Empty.
+	pub fn is_empty(&self) -> bool {
+		self.files.is_empty()
+	}
+
 	/// Get Length.
 	pub fn len(&self) -> usize {
 		self.files.len()
