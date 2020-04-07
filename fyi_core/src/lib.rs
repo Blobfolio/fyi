@@ -13,7 +13,7 @@
 #[cfg(feature = "progress")]
 extern crate ansi_escapes;
 
-#[cfg(feature = "progress")]
+#[cfg(any(feature = "witcher", feature = "progress"))]
 #[macro_use]
 extern crate defaults;
 
@@ -28,9 +28,6 @@ extern crate rayon;
 
 #[cfg(feature = "witcher")]
 extern crate regex;
-
-#[cfg(feature = "witcher")]
-extern crate walkdir;
 
 extern crate ansi_term;
 extern crate bytecount;
@@ -72,6 +69,9 @@ pub const PROGRESS_CLEAR_ON_FINISH: u8 = 32;
 pub use crate::msg::Msg;
 pub use crate::prefix::Prefix;
 
+#[cfg(feature = "witcher")]
+pub use crate::witcher::witch::Witch;
+
 #[cfg(feature = "progress")]
 pub use crate::progress::arc as progress_arc;
 
@@ -88,12 +88,6 @@ pub mod traits {
 
 	#[cfg(feature = "witcher")]
 	pub use crate::witcher::ops::FYIPathIO;
-
-	#[cfg(feature = "witcher")]
-	pub use crate::witcher::mass::FYIPathMIO;
-
-	#[cfg(feature = "witcher")]
-	pub use crate::witcher::walk::FYIPathWalk;
 
 	pub use crate::misc::strings::FYIStringFormat;
 }

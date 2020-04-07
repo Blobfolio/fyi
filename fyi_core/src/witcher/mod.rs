@@ -3,10 +3,9 @@
 */
 
 pub mod formats;
-pub mod mass;
 pub mod ops;
 pub mod props;
-pub mod walk;
+pub mod witch;
 
 
 
@@ -18,3 +17,4 @@ pub fn pattern_to_regex<S> (pat: S) -> regex::Regex
 where S: Into<&'static str> {
 	regex::Regex::new(pat.into()).expect("Invalid pattern.")
 }
+
