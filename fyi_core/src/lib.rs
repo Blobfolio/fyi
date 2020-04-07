@@ -77,7 +77,10 @@ pub use crate::prefix::Prefix;
 pub use crate::witch::Witch;
 
 #[cfg(feature = "progress")]
-pub use crate::progress::arc as progress_arc;
+/// Arc helpers.
+pub mod arc {
+	pub use crate::progress::arc as progress;
+}
 
 #[cfg(feature = "progress")]
 pub use crate::progress::Progress;
