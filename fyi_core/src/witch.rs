@@ -83,6 +83,18 @@ impl Witch {
 		Witch::new(&out, pattern)
 	}
 
+	/// Get Disk Size.
+	pub fn du(&self) -> u64 {
+		use rayon::prelude::*;
+
+		self.files().par_iter()
+			.map(|ref x| match x.metadata() {
+				Ok(meta) => meta.len(),
+				_ => 0,
+			})
+			.sum()
+	}
+
 	/// Get Files.
 	pub fn files(&self) -> Cow<HashSet<PathBuf>> {
 		Cow::Borrowed(&self.files)
@@ -96,18 +108,6 @@ impl Witch {
 	/// Get Length.
 	pub fn len(&self) -> usize {
 		self.files.len()
-	}
-
-	/// Get Disk Size.
-	pub fn du(&self) -> u64 {
-		use rayon::prelude::*;
-
-		self.files().par_iter()
-			.map(|ref x| match x.metadata() {
-				Ok(meta) => meta.len(),
-				_ => 0,
-			})
-			.sum()
 	}
 
 
