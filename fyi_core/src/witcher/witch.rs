@@ -7,10 +7,15 @@ use std::{
 	borrow::Cow,
 	collections::HashSet,
 	ffi::OsStr,
-	fs::DirEntry,
+	fs::{
+		DirEntry,
+		File,
+	},
 	io::{
+		BufReader,
+		BufRead,
 		Error,
-		ErrorKind
+		ErrorKind,
 	},
 	path::PathBuf,
 };
@@ -50,6 +55,31 @@ impl Witch {
 		me.dirs.shrink_to_fit();
 
 		me
+	}
+
+	/// From File List
+	pub fn from_file(path: &PathBuf, pattern: Option<String>) -> Self {
+		if false == path.is_file() {
+			return Witch::default();
+		}
+
+		let input = File::open(&path).expect("Unable to open file.");
+		let buffered = BufReader::new(input);
+
+		let out: Vec<PathBuf> = buffered.lines()
+			.filter_map(|x| match x.ok() {
+				Some(x) => {
+					let x = x.trim();
+					match x.is_empty() {
+						true => None,
+						false => Some(PathBuf::from(x)),
+					}
+				},
+				_ => None,
+			})
+			.collect();
+
+		Witch::new(&out, pattern)
 	}
 
 	/// Get Files.
