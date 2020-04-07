@@ -16,14 +16,14 @@ extern crate clap;
 extern crate fyi_core;
 
 use clap::ArgMatches;
-use fyi_core::misc::cli;
 use fyi_core::{
 	Msg,
-	Prefix,
 	MSG_TIMESTAMP,
+	Prefix,
 	PRINT_NEWLINE,
 	PRINT_NO_COLOR,
-	PRINT_STDERR
+	PRINT_STDERR,
+	util::cli,
 };
 use std::process::exit;
 

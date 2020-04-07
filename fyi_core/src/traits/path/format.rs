@@ -2,21 +2,22 @@
 # FYI Core: Miscellany: Path Formatting
 */
 
-use crate::misc::strings;
-use crate::witcher::props::FYIProps;
-use std::path::{
-	Path,
-	PathBuf,
+use crate::{
+	traits::path::FYIPath,
+	util::strings,
+};
+use std::{
+	fs,
+	path::{
+		Path,
+		PathBuf,
+	},
 };
 
 
 
 /// Format/Conversion/Mutation Helpers!
-pub trait FYIFormats {
-	/// Append to Path.
-	fn fyi_append<S> (&self, name: S) -> PathBuf
-	where S: Into<String>;
-
+pub trait FYIPathFormat {
 	/// Absolute PathBuf.
 	fn fyi_to_path_buf_abs(&self) -> PathBuf;
 
@@ -31,28 +32,12 @@ pub trait FYIFormats {
 	where S: Into<String>;
 }
 
-impl FYIFormats for Path {
-	/// Append to Path.
-	fn fyi_append<S> (&self, name: S) -> PathBuf
-	where S: Into<String> {
-		// A directory? Just push it.
-		if self.is_dir() {
-			self.fyi_with_file_name(name)
-		}
-		else {
-			PathBuf::from(format!(
-				"{}{}",
-				self.fyi_to_string(),
-				name.into()
-			))
-		}
-	}
-
+impl FYIPathFormat for Path {
 	/// Absolute PathBuf.
 	fn fyi_to_path_buf_abs(&self) -> PathBuf {
-		match self.canonicalize() {
+		match fs::canonicalize(self) {
 			Ok(path) => path,
-			_ => self.to_path_buf(),
+			_ => self.into(),
 		}
 	}
 

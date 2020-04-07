@@ -13,7 +13,7 @@
 #[cfg(feature = "progress")]
 extern crate ansi_escapes;
 
-#[cfg(feature = "progress")]
+#[cfg(any(feature = "witcher", feature = "progress"))]
 #[macro_use]
 extern crate defaults;
 
@@ -29,16 +29,19 @@ extern crate rayon;
 #[cfg(feature = "witcher")]
 extern crate regex;
 
-#[cfg(feature = "witcher")]
-extern crate walkdir;
-
 extern crate ansi_term;
+extern crate bytecount;
 extern crate chrono;
+extern crate num_traits;
 extern crate num_format;
 extern crate strip_ansi_escapes;
 extern crate term_size;
 
-pub mod misc;
+/// Traits.
+pub mod traits;
+
+/// Utilities.
+pub mod util;
 mod msg;
 mod prefix;
 
@@ -46,7 +49,7 @@ mod prefix;
 mod progress;
 
 #[cfg(feature = "witcher")]
-pub mod witcher;
+mod witch;
 
 /// Append a timestamp to the message.
 pub const MSG_TIMESTAMP: u8 = 1;
@@ -70,8 +73,14 @@ pub const PROGRESS_CLEAR_ON_FINISH: u8 = 32;
 pub use crate::msg::Msg;
 pub use crate::prefix::Prefix;
 
+#[cfg(feature = "witcher")]
+pub use crate::witch::Witch;
+
 #[cfg(feature = "progress")]
-pub use crate::progress::arc as progress_arc;
+/// Arc helpers.
+pub mod arc {
+	pub use crate::progress::arc as progress;
+}
 
 #[cfg(feature = "progress")]
 pub use crate::progress::Progress;

@@ -8,34 +8,40 @@ use ansi_term::{
 	Colour,
 	Style,
 };
-use crate::misc::{
-	cli,
-	strings,
-	time,
-};
-use crate::msg::Msg;
-use std::collections::HashSet;
-use std::sync::{
-	Arc,
-	Mutex,
-	atomic::{
-		AtomicBool,
-		AtomicU8,
-		AtomicU64,
-		Ordering,
+use crate::{
+	msg::Msg,
+	traits::str::FYIStringFormat,
+	util::{
+		cli,
+		strings,
+		time,
 	},
 };
-use std::thread::{
-	self,
-	JoinHandle,
-};
-use std::time::{
-	Duration,
-	Instant,
-};
-use std::path::{
-	Path,
-	PathBuf,
+use std::{
+	borrow::Cow,
+	collections::HashSet,
+	path::{
+		Path,
+		PathBuf,
+	},
+	sync::{
+		Arc,
+		Mutex,
+		atomic::{
+			AtomicBool,
+			AtomicU8,
+			AtomicU64,
+			Ordering,
+		},
+	},
+	thread::{
+		self,
+		JoinHandle,
+	},
+	time::{
+		Duration,
+		Instant,
+	},
 };
 
 
@@ -43,6 +49,8 @@ use std::path::{
 // Progress bar characters.
 pub const CHR_DONE: &str = "◼";
 pub const CHR_PENDING: &str = "-";
+
+
 
 #[derive(Debug, Defaults)]
 /// Progress.
@@ -144,7 +152,7 @@ impl Progress {
 	pub fn add_working<P> (&self, path: P)
 	where P: AsRef<Path> {
 		let path: PathBuf = if cfg!(feature = "witcher") {
-			use crate::witcher::formats::FYIFormats;
+			use crate::traits::path::FYIPathFormat;
 			path.as_ref().fyi_to_path_buf_abs()
 		} else {
 			path.as_ref().to_path_buf()
@@ -186,7 +194,7 @@ impl Progress {
 	pub fn remove_working<P> (&self, path: P)
 	where P: AsRef<Path> {
 		let path: PathBuf = if cfg!(feature = "witcher") {
-			use crate::witcher::formats::FYIFormats;
+			use crate::traits::path::FYIPathFormat;
 			path.as_ref().fyi_to_path_buf_abs()
 		} else {
 			path.as_ref().to_path_buf()
@@ -236,9 +244,9 @@ impl Progress {
 		let mut p_eta = self.part_eta(done, total);
 
 		// How much space have we used?
-		let p_space = strings::stripped_len(&p_elapsed) +
-			strings::stripped_len(&p_count) +
-			strings::stripped_len(&p_percent) +
+		let p_space = p_elapsed.fyi_width() +
+			p_count.fyi_width() +
+			&p_percent.fyi_width() +
 			3;
 
 		// The bar can have the remaining space.
@@ -249,16 +257,16 @@ impl Progress {
 			}
 
 			// Adjust the ETA again.
-			let eta_len = strings::stripped_len(&p_eta);
+			let eta_len = p_eta.fyi_width();
 			if 0 != eta_len && p_space + count + eta_len + 1 <= width {
-				p_eta = format!(
+				*(p_eta.to_mut()) = format!(
 					"{}{}",
 					strings::whitespace(width - eta_len - count - p_space),
 					&p_eta
 				);
 			}
 			else if 0 != eta_len {
-				p_eta = String::new();
+				*(p_eta.to_mut()) = String::new();
 			}
 
 			count
@@ -266,25 +274,35 @@ impl Progress {
 		let p_bar = self.part_bar(done, total, p_bar_len);
 
 		// Let's go ahead and make this line.
-		let mut out: String = format!(
-			"{} {} {} {}{}",
+		let mut out: String = [
 			&p_elapsed,
+			" ",
 			&p_bar,
+			" ",
 			&p_count,
+			" ",
 			&p_percent,
 			&p_eta
-		).to_string();
+		].concat();
 
 		// Is there a message to prepend to it?
 		let p_msg = self.part_msg(width);
 		if false == p_msg.is_empty() {
-			out = format!("{}\n{}", &p_msg, out);
+			out = [
+				&p_msg,
+				"\n",
+				&out
+			].concat();
 		}
 
 		// How about working paths to add to it?
 		let p_working = self.part_working(width);
 		if false == p_working.is_empty() {
-			out = format!("{}\n{}", out, &p_working);
+			out = [
+				&out,
+				"\n",
+				&p_working
+			].concat();
 		}
 
 		// Send it to the printer!
@@ -350,7 +368,7 @@ impl Progress {
 			);
 		}
 
-		let nlines: u8 = strings::lines(&msg) as u8;
+		let nlines: u8 = msg.fyi_lines_len() as u8;
 		if nlines != lines {
 			self.last_lines.store(nlines, Ordering::SeqCst);
 		}
@@ -375,10 +393,10 @@ impl Progress {
 	// -----------------------------------------------------------------
 
 	/// Part: Bar
-	fn part_bar(&self, done: u64, total: u64, mut width: usize) -> String {
+	fn part_bar(&self, done: u64, total: u64, mut width: usize) -> Cow<'_, str> {
 		// Early abort.
 		if 10 > width {
-			return String::new();
+			return Cow::Borrowed("");
 		}
 		width = width - 2;
 
@@ -411,92 +429,93 @@ impl Progress {
 		};
 
 		// And now we can send pretty stuff back.
-		format!(
+		Cow::Owned(format!(
 			"{}{}{}{}",
 			Style::new().dimmed().paint("["),
 			Colour::Cyan.bold().paint(&done_str),
 			Colour::Cyan.dimmed().paint(&pending_str),
 			Style::new().dimmed().paint("]"),
-		).to_string()
+		))
 	}
 
 	/// Tick count.
-	fn part_count(&self, done: u64, total: u64) -> String {
+	fn part_count(&self, done: u64, total: u64) -> Cow<'_, str> {
 		if 0 == total {
-			String::new()
+			Cow::Borrowed("")
 		}
 		else {
-			format!(
+			Cow::Owned(format!(
 				"{}{}{}",
-				Colour::Cyan.bold().paint(format!("{}", done)),
+				Colour::Cyan.bold().paint(done.to_string()),
 				Style::new().dimmed().paint("/"),
-				Colour::Cyan.dimmed().paint(format!("{}", total))
-			)
+				Colour::Cyan.dimmed().paint(total.to_string())
+			))
 		}
 	}
 
 	/// Tick elapsed.
-	fn part_elapsed(&self) -> String {
+	fn part_elapsed(&self) -> Cow<'_, str> {
 		let ptr = self.time.lock().expect("Failed to acquire lock: Progress.time");
-		let elapsed: String = time::human_elapsed(
+		let elapsed = time::human_elapsed(
 			ptr.elapsed().as_secs() as usize,
 			crate::PRINT_COMPACT
 		);
 
-		format!(
+		Cow::Owned(format!(
 			"{}{}{}",
 			Style::new().dimmed().paint("["),
-			Style::new().bold().paint(&elapsed),
+			Style::new().bold().paint(&elapsed.to_string()),
 			Style::new().dimmed().paint("]"),
-		).to_string()
+		))
 	}
 
 	/// ETA.
-	fn part_eta(&self, done: u64, total: u64) -> String {
+	fn part_eta(&self, done: u64, total: u64) -> Cow<'_, str> {
 		let done: f64 = done as f64;
 		let total: f64 = total as f64;
 
 		// Abort if no progress has been made.
 		if done < 2.0 || done >= total {
-			return String::new();
+			return Cow::Borrowed("");
 		}
 
 		let elapsed: f64 = {
 			let ptr = self.time.lock().expect("Failed to acquire lock: Progress.time");
-			ptr.elapsed().as_secs() as f64
+			ptr.elapsed().as_secs_f64()
 		};
 
 		// Abort if we haven't spent ten seconds doing anything yet.
 		if elapsed < 10.0 {
-			return String::new();
+			return Cow::Borrowed("");
 		}
 
 		let s_per: f64 = elapsed / done;
-		let remaining: String = time::human_elapsed(
+		let remaining = time::human_elapsed(
 			f64::ceil(s_per * (total - done)) as usize,
 			crate::PRINT_COMPACT
 		);
 
-		format!(
+		Cow::Owned(format!(
 			"{} {}",
 			Colour::Purple.dimmed().paint("ETA:"),
-			Colour::Purple.bold().paint(&remaining),
-		).to_string()
+			Colour::Purple.bold().paint(&remaining.to_string()),
+		))
 	}
 
 	/// Tick message.
-	fn part_msg(&self, width: usize) -> String {
+	fn part_msg(&self, width: usize) -> Cow<'_, str> {
 		let ptr = self.msg.lock().expect("Failed to acquire lock: Progress.msg");
 		if ptr.is_empty() {
-			return String::new();
+			Cow::Borrowed("")
 		}
-
-		let msg: String = ptr.clone();
-		strings::shorten_right(msg, width)
+		else {
+			let tmp: String = ptr.fyi_shorten(width).into();
+			Cow::Owned(tmp)
+		}
 	}
 
 	/// Tick percent.
-	fn part_percent(&self, done: u64, total: u64) -> String {
+	fn part_percent(&self, done: u64, total: u64) -> Cow<'_, str> {
 		let percent: f64 = {
 			let mut tmp: f64 = 0.0;
 			if 0 < total {
@@ -510,32 +529,33 @@ impl Progress {
 			tmp
 		};
 
-		format!(
+		Cow::Owned(format!(
 			"{}",
 			Style::new().bold().paint(format!("{:>3.*}%", 2, percent * 100.0))
-		).to_string()
+		))
 	}
 
 	/// Tick working.
-	fn part_working(&self, width: usize) -> String {
+	fn part_working(&self, width: usize) -> Cow<'_, str> {
 		let ptr = self.working.lock().expect("Failed to acquire lock: Progress.working");
 		if ptr.is_empty() {
-			return String::new();
+			return Cow::Borrowed("")
 		}
 
 		let mut out: Vec<String> = ptr.iter()
 			.cloned()
 			.map(|ref x| {
-				strings::shorten_right(format!(
+				let out: String = format!(
 					"    {} {}",
 					Colour::Purple.dimmed().paint("↳"),
 					Colour::Purple.dimmed().paint(x.to_str().unwrap_or("")),
-				), width)
+				);
+				out.fyi_shorten(width).to_string()
 			})
 			.collect();
 
 		out.sort();
-		out.join("\n")
+		Cow::Owned(out.join("\n"))
 	}
 }
 

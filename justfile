@@ -14,6 +14,15 @@ release_dir   := justfile_directory() + "/release"
 build_ver     := "1"
 
 
+
+# Build Release!
+@bench:
+	# First let's build the Rust bit.
+	cd "{{ justfile_directory() }}/fyi_core" && cargo bench \
+		--features progress,witcher \
+		--target-dir "{{ cargo_dir }}"
+
+
 # Build Release!
 @build:
 	# First let's build the Rust bit.
@@ -132,4 +141,5 @@ _version TOML VER:
 
 # Init dependencies.
 @_init:
+	[ ! -f "{{ justfile_directory() }}/Cargo.lock" ] || rm "{{ justfile_directory() }}/Cargo.lock"
 	cargo update

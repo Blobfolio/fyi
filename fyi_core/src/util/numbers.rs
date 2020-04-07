@@ -6,6 +6,8 @@ use num_format::{
 	Locale,
 	ToFormattedString,
 };
+use num_traits::cast::ToPrimitive;
+use std::borrow::Cow;
 
 
 
@@ -13,9 +15,9 @@ use num_format::{
 ///
 /// Convert a numerical byte size into a string with the best unit
 /// given the value.
-pub fn human_bytes<N> (size: N) -> String
-where N: Into<u64> {
-	let bytes = size.into() as f64;
+pub fn human_bytes<N> (size: N) -> Cow<'static, str>
+where N: ToPrimitive {
+	let bytes:f64 = size.to_f64().unwrap_or(0.0);
 
 	let kb: f64 = 1024.0;
 	let mb: f64 = 1024.0 * 1024.0;
@@ -28,23 +30,25 @@ where N: Into<u64> {
 	} else if bytes > kb * 0.9 {
 		(bytes / kb, "KB")
 	} else {
-		return format!("{}B", bytes);
+		return Cow::Owned(format!("{}B", bytes));
 	};
 
-	format!("{:.*}{}", 2, bytes, unit)
+	Cow::Owned(format!("{:.*}{}", 2, bytes, unit))
 }
 
 /// Nice Int.
-pub fn human_int<N> (num: N) -> String
-where N: Into<u64> {
-	num.into().to_formatted_string(&Locale::en)
+pub fn human_int<N> (num: N) -> Cow<'static, str>
+where N: ToPrimitive {
+	Cow::Owned(num.to_u64()
+		.unwrap_or(0)
+		.to_formatted_string(&Locale::en))
 }
 
 /// Saved.
 pub fn saved<N> (before: N, after: N) -> u64
-where N: Into<u64> {
-	let before = before.into();
-	let after = after.into();
+where N: ToPrimitive {
+	let before = before.to_u64().unwrap_or(0);
+	let after = after.to_u64().unwrap_or(0);
 	match 0 < after && after < before {
 		true => before - after,
 		false => 0

@@ -6,10 +6,11 @@ use ansi_term::{
 	Colour,
 	Style,
 };
+use std::borrow::Cow;
 
 
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 /// Generic message.
 pub enum Prefix<'b> {
 	/// Custom.
@@ -40,11 +41,7 @@ impl Default for Prefix<'_> {
 impl std::fmt::Display for Prefix<'_> {
 	/// Display.
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let prefix = self.prefix();
-		match prefix.is_empty() {
-			true => f.write_str(""),
-			false => f.write_str(&prefix),
-		}
+		f.write_str(&self.prefix())
 	}
 }
 
@@ -92,13 +89,14 @@ impl<'b> Prefix<'b> {
 	}
 
 	/// Prefix (Colored).
-	pub fn prefix(&self) -> String {
+	pub fn prefix(&self) -> Cow<'_, str> {
 		let label = self.label();
 
 		match label.is_empty() {
-			true => String::new(),
-			false => format!("{} ", self.color().paint(format!("{}:", &label)))
-				.to_string(),
+			true => Cow::Borrowed(""),
+			false => Cow::Owned(
+				self.color().paint([&label, ": "].concat()).to_string()
+			)
 		}
 	}
 }
