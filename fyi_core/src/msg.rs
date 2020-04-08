@@ -2,10 +2,6 @@
 # FYI Core: Msg
 */
 
-#[cfg(feature = "interactive")]
-use ansi_term::Colour;
-
-use ansi_term::Style;
 use chrono::prelude::*;
 use crate::{
 	prefix::Prefix,
@@ -42,7 +38,9 @@ impl std::fmt::Display for Msg<'_> {
 		let mut out: String = [
 			strings::indentation(self.indent).to_string(),
 			self.prefix.to_string(),
-			Style::new().bold().paint(&*self.msg).to_string()
+			"\u{1B}[1m".to_string(),
+			self.msg.to_string(),
+			"\u{1B}[0m".to_string(),
 		].concat();
 
 		// A timestamp?
@@ -126,10 +124,11 @@ impl<'a> Msg<'a> {
 	/// Formatted Timestamp.
 	fn timestamp(&self) -> Cow<'static, str> {
 		if 0 != (super::MSG_TIMESTAMP & self.flags) {
-			Cow::Owned(format!(
-				"[{}]",
-				Style::new().dimmed().paint(Local::now().format("%F %T").to_string())
-			))
+			Cow::Owned([
+				"\u{1B}[2m[",
+				Local::now().format("%F %T").to_string().as_str(),
+				"]\u{1B}[0m",
+			].concat())
 		}
 		else {
 			Cow::Borrowed("")
@@ -140,11 +139,11 @@ impl<'a> Msg<'a> {
 	/// Prompt instead.
 	pub fn prompt(&self) -> bool {
 		dialoguer::Confirmation::new()
-			.with_text(&format!(
-				"{} {}",
-				Colour::Yellow.bold().paint("Confirm:"),
-				Style::new().bold().paint(self.msg.clone())
-			))
+			.with_text(&[
+				"\u{1B}[93;1mConfirm:\u{1B}[0m \u{1B}[1m",
+				&self.msg,
+				"\u{1B}[0m",
+			].concat())
 			.interact()
 			.unwrap_or(false)
 	}

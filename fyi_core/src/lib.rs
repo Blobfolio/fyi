@@ -29,7 +29,6 @@ extern crate rayon;
 #[cfg(feature = "witcher")]
 extern crate regex;
 
-extern crate ansi_term;
 extern crate bytecount;
 extern crate chrono;
 extern crate num_traits;

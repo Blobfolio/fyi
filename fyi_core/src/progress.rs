@@ -4,10 +4,6 @@
 This is a very simple thread-capable CLI progress indicator.
 */
 
-use ansi_term::{
-	Colour,
-	Style,
-};
 use crate::{
 	msg::Msg,
 	traits::str::FYIStringFormat,
@@ -421,13 +417,13 @@ impl Progress {
 		};
 
 		// And now we can send pretty stuff back.
-		Cow::Owned(format!(
-			"{}{}{}{}",
-			Style::new().dimmed().paint("["),
-			Colour::Cyan.bold().paint(&done_str),
-			Colour::Cyan.dimmed().paint(&pending_str),
-			Style::new().dimmed().paint("]"),
-		))
+		Cow::Owned([
+			"\u{1B}[2m[\u{1B}[0m\u{1B}[96;1m",
+			&done_str,
+			"\u{1B}[0m\u{1B}[36m",
+			&pending_str,
+			"\u{1B}[0m\u{1B}[2m]\u{1B}[0m",
+		].concat())
 	}
 
 	/// Tick count.
@@ -436,12 +432,13 @@ impl Progress {
 			Cow::Borrowed("")
 		}
 		else {
-			Cow::Owned(format!(
-				"{}{}{}",
-				Colour::Cyan.bold().paint(done.to_string()),
-				Style::new().dimmed().paint("/"),
-				Colour::Cyan.dimmed().paint(total.to_string())
-			))
+			Cow::Owned([
+				"\u{1B}[96;1m".to_string(),
+				done.to_string(),
+				"\u{1B}[0m\u{1B}[2m/\u{1B}[0m\u{1B}[36m".to_string(),
+				total.to_string(),
+				"\u{1B}[0m".to_string(),
+			].concat())
 		}
 	}
 
@@ -453,12 +450,11 @@ impl Progress {
 			crate::PRINT_COMPACT
 		);
 
-		Cow::Owned(format!(
-			"{}{}{}",
-			Style::new().dimmed().paint("["),
-			Style::new().bold().paint(&elapsed.to_string()),
-			Style::new().dimmed().paint("]"),
-		))
+		Cow::Owned([
+			"\u{1B}[2m[\u{1B}[0m\u{1B}[1m",
+			&elapsed,
+			"\u{1B}[0m\u{1B}[2m]\u{1B}[0m",
+		].concat())
 	}
 
 	/// ETA.
@@ -487,11 +483,11 @@ impl Progress {
 			crate::PRINT_COMPACT
 		);
 
-		Cow::Owned(format!(
-			"{} {}",
-			Colour::Purple.dimmed().paint("ETA:"),
-			Colour::Purple.bold().paint(&remaining.to_string()),
-		))
+		Cow::Owned([
+			"\u{1B}[35mETA: \u{1B}[0m\u{1B}[95;1m",
+			&remaining,
+			"\u{1B}[0m",
+		].concat())
 	}
 
 	/// Tick message.
@@ -521,10 +517,11 @@ impl Progress {
 			tmp
 		};
 
-		Cow::Owned(format!(
-			"{}",
-			Style::new().bold().paint(format!("{:>3.*}%", 2, percent * 100.0))
-		))
+		Cow::Owned([
+			"\u{1B}[1m",
+			format!("{:>3.*}%", 2, percent * 100.0).as_str(),
+			"\u{1B}[0m"
+		].concat())
 	}
 
 	/// Tick working.
@@ -537,11 +534,12 @@ impl Progress {
 		let mut out: Vec<String> = ptr.iter()
 			.cloned()
 			.map(|ref x| {
-				let out: String = format!(
-					"    {} {}",
-					Colour::Purple.dimmed().paint("↳"),
-					Colour::Purple.dimmed().paint(x.to_str().unwrap_or("")),
-				);
+				let out: String = [
+					"    \u{1B}[35m↳ ",
+					x.to_str().unwrap_or(""),
+					"\u{1B}[0m",
+				].concat();
+
 				out.fyi_shorten(width).to_string()
 			})
 			.collect();
