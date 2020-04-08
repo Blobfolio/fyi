@@ -20,6 +20,7 @@ use std::{
 		ErrorKind,
 	},
 	path::PathBuf,
+	sync::Arc,
 };
 
 
@@ -31,7 +32,7 @@ pub struct Witch {
 	files: HashSet<PathBuf>,
 
 	#[def = "HashSet::with_capacity(1024)"]
-	dirs: HashSet<PathBuf>,
+	dirs: HashSet<Arc<PathBuf>>,
 }
 
 impl Witch {
@@ -43,12 +44,12 @@ impl Witch {
 			Some(p) => {
 				let pattern = Regex::new(p.as_str()).expect("Invalid pattern.");
 				for path in paths {
-					me._walk_route_filtered(path, &pattern);
+					me._walk_route_filtered(&Arc::from(path.clone()), &pattern);
 				}
 			},
 			_ => {
 				for path in paths {
-					me._walk_route(path);
+					me._walk_route(&Arc::from(path.clone()));
 				}
 			}
 		}
@@ -124,42 +125,12 @@ impl Witch {
 	}
 
 	#[cfg(feature = "progress")]
-	/// Common Progress Tasks.
-	fn _progress<S, F> (&self, name: S, cb: F)
-	where
-		S: Into<Cow<'static, str>>,
-		F: Fn(&PathBuf) + Send + Sync {
-		use crate::{
-			arc::progress as parc,
-			Msg,
-			Prefix,
-			Progress,
-			PROGRESS_CLEAR_ON_FINISH,
-		};
-
-		let bar = Progress::new(
-			Msg::new("Reticulating splines…")
-				.with_prefix(Prefix::Custom(name.into().as_ref(), 199))
-				.to_string(),
-			self.files.len() as u64,
-			PROGRESS_CLEAR_ON_FINISH
-		);
-		let looper = parc::looper(&bar, 60);
-		self.files().par_iter().for_each(|ref x| {
-			parc::add_working(&bar, &x);
-			cb(x);
-			parc::update(&bar, 1, None, Some(x.to_path_buf()));
-		});
-		parc::finish(&bar);
-		looper.join().unwrap();
-	}
-
-	#[cfg(feature = "progress")]
 	/// Parallel Loop w/ Progress.
 	pub fn progress<S, F> (&self, name: S, cb: F)
 	where
 		S: Into<Cow<'static, str>>,
-		F: Fn(&PathBuf) + Send + Sync {
+		F: Fn(&Arc<PathBuf>) + Send + Sync
+	{
 		use crate::{
 			arc::progress as parc,
 			Msg,
@@ -170,26 +141,26 @@ impl Witch {
 		use std::time::Instant;
 
 		let time = Instant::now();
+		let found: u64 = self.files.len() as u64;
 
-		{
-			let bar = Progress::new(
-				Msg::new("Reticulating splines…")
-					.with_prefix(Prefix::Custom(name.into().as_ref(), 199))
-					.to_string(),
-				self.files.len() as u64,
-				PROGRESS_CLEAR_ON_FINISH
-			);
-			let looper = parc::looper(&bar, 60);
-			self.files().par_iter().for_each(|ref x| {
-				parc::add_working(&bar, &x);
-				cb(x);
-				parc::update(&bar, 1, None, Some(x.to_path_buf()));
-			});
-			parc::finish(&bar);
-			looper.join().unwrap();
-		}
+		let bar = Progress::new(
+			Msg::new("Reticulating splines…")
+				.with_prefix(Prefix::Custom(name.into().as_ref(), 199))
+				.to_string(),
+			found,
+			PROGRESS_CLEAR_ON_FINISH
+		);
+		let looper = parc::looper(&bar, 60);
+		self.files().par_iter().for_each(|x| {
+			let file: Arc<PathBuf> = Arc::new(x.clone());
+			parc::add_working(&bar, &file);
+			cb(&file);
+			parc::update(&bar, 1, None, Some(&file));
+		});
+		parc::finish(&bar);
+		looper.join().unwrap();
 
-		Msg::msg_crunched_in(self.files.len() as u64, time, None)
+		Msg::msg_crunched_in(found, time, None)
 			.print();
 	}
 
@@ -198,17 +169,39 @@ impl Witch {
 	pub fn progress_crunch<S, F> (&self, name: S, cb: F)
 	where
 		S: Into<Cow<'static, str>>,
-		F: Fn(&PathBuf) + Send + Sync {
-		use crate::Msg;
+		F: Fn(&Arc<PathBuf>) + Send + Sync {
+		use crate::{
+			arc::progress as parc,
+			Msg,
+			Prefix,
+			Progress,
+			PROGRESS_CLEAR_ON_FINISH,
+		};
 		use std::time::Instant;
 
 		let time = Instant::now();
 		let before: u64 = self.du();
+		let found: u64 = self.files.len() as u64;
 
-		self._progress(name, cb);
+		let bar = Progress::new(
+			Msg::new("Reticulating splines…")
+				.with_prefix(Prefix::Custom(name.into().as_ref(), 199))
+				.to_string(),
+			found,
+			PROGRESS_CLEAR_ON_FINISH
+		);
+		let looper = parc::looper(&bar, 60);
+		self.files().par_iter().for_each(|x| {
+			let file: Arc<PathBuf> = Arc::new(x.clone());
+			parc::add_working(&bar, &file);
+			cb(&file);
+			parc::update(&bar, 1, None, Some(&file));
+		});
+		parc::finish(&bar);
+		looper.join().unwrap();
 
 		let after: u64 = self.du();
-		Msg::msg_crunched_in(self.files.len() as u64, time, Some((before, after)))
+		Msg::msg_crunched_in(found, time, Some((before, after)))
 			.print();
 	}
 
@@ -219,7 +212,7 @@ impl Witch {
 	// -----------------------------------------------------------------
 
 	/// Route path.
-	fn _walk_route(&mut self, path: &PathBuf) {
+	fn _walk_route(&mut self, path: &Arc<PathBuf>) {
 		if let Ok(meta) = path.symlink_metadata() {
 			if meta.is_file() {
 				if let Ok(p) = path.canonicalize() {
@@ -228,11 +221,11 @@ impl Witch {
 			}
 			else if meta.is_dir() {
 				if let Ok(p) = path.canonicalize() {
-					let _ = self._walk_dir(&p).is_ok();
+					let _ = self._walk_dir(&Arc::from(p)).is_ok();
 				}
 			}
 			// Recurse for symlinks.
-			else if let Ok(path) = fs::read_link(&path) {
+			else if let Ok(path) = fs::read_link(path.as_ref()) {
 				if path.is_file() {
 					if let Ok(p) = path.canonicalize() {
 						self.files.insert(p);
@@ -240,7 +233,7 @@ impl Witch {
 				}
 				else if path.is_dir() {
 					if let Ok(p) = path.canonicalize() {
-						let _ = self._walk_dir(&p).is_ok();
+						let _ = self._walk_dir(&Arc::from(p)).is_ok();
 					}
 				}
 			}
@@ -248,12 +241,12 @@ impl Witch {
 	}
 
 	/// Walk Dir.
-	fn _walk_dir(&mut self, path: &PathBuf) -> Result<(), Error> {
-		if self.dirs.insert(path.to_path_buf()) {
-			for entry in fs::read_dir(&path)? {
+	fn _walk_dir(&mut self, path: &Arc<PathBuf>) -> Result<(), Error> {
+		if self.dirs.insert(path.clone()) {
+			for entry in fs::read_dir(path.as_ref())? {
 				if let Ok(e) = entry {
 					if self._walk_dir_entry(Cow::Borrowed(&&e)).is_err() {
-						self._walk_route(&e.path());
+						self._walk_route(&Arc::from(e.path()));
 					}
 				}
 			}
@@ -270,7 +263,7 @@ impl Witch {
 				return Ok(());
 			}
 			else if ft.is_dir() {
-				let _ = self._walk_dir(&path.path()).is_ok();
+				let _ = self._walk_dir(&Arc::from(path.path())).is_ok();
 				return Ok(());
 			}
 		}
@@ -285,28 +278,28 @@ impl Witch {
 	// -----------------------------------------------------------------
 
 	/// Route path.
-	fn _walk_route_filtered(&mut self, path: &PathBuf, pattern: &Regex) {
+	fn _walk_route_filtered(&mut self, path: &Arc<PathBuf>, pattern: &Regex) {
 		if let Ok(meta) = path.symlink_metadata() {
 			if meta.is_file() {
 				if let Ok(p) = path.canonicalize() {
-					self._walk_file_filtered(&p, &pattern);
+					self._walk_file_filtered(&Arc::from(p), &pattern);
 				}
 			}
 			else if meta.is_dir() {
 				if let Ok(p) = path.canonicalize() {
-					let _ = self._walk_dir_filtered(&p, &pattern).is_ok();
+					let _ = self._walk_dir_filtered(&Arc::from(p), &pattern).is_ok();
 				}
 			}
 			// Recurse for symlinks.
-			else if let Ok(path) = fs::read_link(&path) {
+			else if let Ok(path) = fs::read_link(path.as_ref()) {
 				if path.is_file() {
 					if let Ok(p) = path.canonicalize() {
-						self._walk_file_filtered(&p, &pattern);
+						self._walk_file_filtered(&Arc::from(p), &pattern);
 					}
 				}
 				else if path.is_dir() {
 					if let Ok(p) = path.canonicalize() {
-						let _ = self._walk_dir_filtered(&p, &pattern).is_ok();
+						let _ = self._walk_dir_filtered(&Arc::from(p), &pattern).is_ok();
 					}
 				}
 			}
@@ -314,12 +307,12 @@ impl Witch {
 	}
 
 	/// Walk Dir.
-	fn _walk_dir_filtered(&mut self, path: &PathBuf, pattern: &Regex) -> Result<(), Error> {
-		if self.dirs.insert(path.to_path_buf()) {
-			for entry in fs::read_dir(&path)? {
+	fn _walk_dir_filtered(&mut self, path: &Arc<PathBuf>, pattern: &Regex) -> Result<(), Error> {
+		if self.dirs.insert(path.clone()) {
+			for entry in fs::read_dir(path.as_ref())? {
 				if let Ok(e) = entry {
 					if self._walk_dir_entry_filtered(Cow::Borrowed(&&e), &pattern).is_err() {
-						self._walk_route_filtered(&e.path(), &pattern);
+						self._walk_route_filtered(&Arc::from(e.path()), &pattern);
 					}
 				}
 			}
@@ -332,11 +325,11 @@ impl Witch {
 	fn _walk_dir_entry_filtered(&mut self, path: Cow<&DirEntry>, pattern: &Regex) -> Result<(), Error> {
 		if let Ok(ft) = path.file_type() {
 			if ft.is_file() {
-				self._walk_file_filtered(&path.path(), &pattern);
+				self._walk_file_filtered(&Arc::from(path.path()), &pattern);
 				return Ok(());
 			}
 			else if ft.is_dir() {
-				let _ = self._walk_dir_filtered(&path.path(), &pattern).is_ok();
+				let _ = self._walk_dir_filtered(&Arc::from(path.path()), &pattern).is_ok();
 				return Ok(());
 			}
 		}
@@ -345,7 +338,7 @@ impl Witch {
 	}
 
 	/// Push file.
-	fn _walk_file_filtered(&mut self, path: &PathBuf, pattern: &Regex) {
+	fn _walk_file_filtered(&mut self, path: &Arc<PathBuf>, pattern: &Regex) {
 		let name = path.file_name()
 			.unwrap_or(OsStr::new(""))
 			.to_str()
