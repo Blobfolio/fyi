@@ -2,9 +2,9 @@
 # FYI Core: Strings
 */
 
+use crate::util::numbers;
 use std::{
 	borrow::Cow,
-	fmt::Display,
 	ffi::{
 		OsStr,
 		OsString,
@@ -35,11 +35,15 @@ where S: Into<Cow<'a, str>> {
 /// appropriately singular or plural given the value.
 pub fn inflect<'a, N, S> (num: N, singular: S, plural: S) -> String
 where
-	N: One + Display + PartialEq,
+	N: ToPrimitive + One + PartialEq,
 	S: Into<Cow<'a, str>> {
 	match num.is_one() {
 		true => ["1 ", &singular.into()].concat(),
-		false => [num.to_string().as_ref(), " ", &plural.into()].concat(),
+		false => format!(
+			"{} {}",
+			numbers::human_int(num),
+			&plural.into(),
+		),
 	}
 }
 

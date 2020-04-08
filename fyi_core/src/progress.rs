@@ -4,10 +4,6 @@
 This is a very simple thread-capable CLI progress indicator.
 */
 
-use ansi_term::{
-	Colour,
-	Style,
-};
 use crate::{
 	msg::Msg,
 	traits::str::FYIStringFormat,
@@ -20,10 +16,7 @@ use crate::{
 use std::{
 	borrow::Cow,
 	collections::HashSet,
-	path::{
-		Path,
-		PathBuf,
-	},
+	path::PathBuf,
 	sync::{
 		Arc,
 		Mutex,
@@ -63,9 +56,9 @@ pub struct Progress {
 	/// Flags.
 	flags: Arc<AtomicU8>,
 
-	#[def = "Arc::new(AtomicU8::new(0))"]
-	/// Lines last printed.
-	last_lines: Arc<AtomicU8>,
+	#[def = "Mutex::new(String::new())"]
+	/// Last message.
+	last: Mutex<String>,
 
 	#[def = "Arc::new(AtomicBool::new(false))"]
 	/// Running?
@@ -85,7 +78,7 @@ pub struct Progress {
 
 	#[def = "Mutex::new(HashSet::new())"]
 	/// Working Paths.
-	working: Mutex<HashSet<PathBuf>>,
+	working: Mutex<HashSet<Arc<PathBuf>>>,
 }
 
 /// Main methods.
@@ -118,8 +111,12 @@ impl Progress {
 			ptr.clear();
 		}
 
+		{
+			let mut ptr = self.last.lock().expect("Failed to acquire lock: Progress.last");
+			ptr.clear();
+		}
+
 		self.flags.store(flags, Ordering::SeqCst);
-		self.last_lines.store(0, Ordering::SeqCst);
 		self.running.store(0 < total, Ordering::SeqCst);
 		self.set_msg(msg);
 		self.done.store(0, Ordering::SeqCst);
@@ -149,17 +146,9 @@ impl Progress {
 	// -----------------------------------------------------------------
 
 	/// Remove working path.
-	pub fn add_working<P> (&self, path: P)
-	where P: AsRef<Path> {
-		let path: PathBuf = if cfg!(feature = "witcher") {
-			use crate::traits::path::FYIPathFormat;
-			path.as_ref().fyi_to_path_buf_abs()
-		} else {
-			path.as_ref().to_path_buf()
-		};
-
+	pub fn add_working(&self, path: &Arc<PathBuf>) {
 		let mut ptr = self.working.lock().expect("Failed to acquire lock: Progress.working");
-		ptr.insert(path);
+		ptr.insert(path.clone());
 	}
 
 	/// Finish.
@@ -191,17 +180,9 @@ impl Progress {
 	}
 
 	/// Remove working path.
-	pub fn remove_working<P> (&self, path: P)
-	where P: AsRef<Path> {
-		let path: PathBuf = if cfg!(feature = "witcher") {
-			use crate::traits::path::FYIPathFormat;
-			path.as_ref().fyi_to_path_buf_abs()
-		} else {
-			path.as_ref().to_path_buf()
-		};
-
+	pub fn remove_working(&self, path: &Arc<PathBuf>) {
 		let mut ptr = self.working.lock().expect("Failed to acquire lock: Progress.working");
-		ptr.remove(&path);
+		ptr.remove(path);
 	}
 
 	/// Set Done.
@@ -314,7 +295,7 @@ impl Progress {
 		&self,
 		interval: u64,
 		msg: Option<String>,
-		working: Option<PathBuf>
+		working: Option<&Arc<PathBuf>>
 	) {
 		self.set_done(self.done() + interval);
 		if let Some(s) = msg {
@@ -341,11 +322,6 @@ impl Progress {
 		self.flags.load(Ordering::SeqCst)
 	}
 
-	/// Get last.
-	fn last_lines(&self) -> u8 {
-		self.last_lines.load(Ordering::SeqCst)
-	}
-
 	/// Get total.
 	fn total(&self) -> u64 {
 		self.total.load(Ordering::SeqCst)
@@ -360,7 +336,17 @@ impl Progress {
 	fn print<S> (&self, msg: S)
 	where S: Into<String> {
 		let msg = msg.into();
-		let lines: u8 = self.last_lines();
+		let last: String = {
+			let ptr = self.last.lock().expect("Failed to acquire lock: Progress.lock");
+			ptr.clone()
+		};
+
+		// No change.
+		if msg == last {
+			return;
+		}
+
+		let lines: u8 = last.fyi_lines_len() as u8;
 		if 0 < lines {
 			cli::print(
 				&format!("{}", ansi_escapes::EraseLines(lines as u16 + 1)),
@@ -369,12 +355,14 @@ impl Progress {
 		}
 
 		let nlines: u8 = msg.fyi_lines_len() as u8;
-		if nlines != lines {
-			self.last_lines.store(nlines, Ordering::SeqCst);
-		}
-
 		if 0 < nlines {
-			cli::print(msg, crate::PRINT_NEWLINE | crate::PRINT_STDERR | self.flags());
+			cli::print(&msg, crate::PRINT_NEWLINE | crate::PRINT_STDERR | self.flags());
+			let mut ptr = self.last.lock().expect("Failed to acquire lock: Progress.lock");
+			*ptr = msg;
+		}
+		else {
+			let mut ptr = self.last.lock().expect("Failed to acquire lock: Progress.lock");
+			ptr.clear();
 		}
 	}
 
@@ -429,13 +417,13 @@ impl Progress {
 		};
 
 		// And now we can send pretty stuff back.
-		Cow::Owned(format!(
-			"{}{}{}{}",
-			Style::new().dimmed().paint("["),
-			Colour::Cyan.bold().paint(&done_str),
-			Colour::Cyan.dimmed().paint(&pending_str),
-			Style::new().dimmed().paint("]"),
-		))
+		Cow::Owned([
+			"\u{1B}[2m[\u{1B}[0m\u{1B}[96;1m",
+			&done_str,
+			"\u{1B}[0m\u{1B}[36m",
+			&pending_str,
+			"\u{1B}[0m\u{1B}[2m]\u{1B}[0m",
+		].concat())
 	}
 
 	/// Tick count.
@@ -444,12 +432,13 @@ impl Progress {
 			Cow::Borrowed("")
 		}
 		else {
-			Cow::Owned(format!(
-				"{}{}{}",
-				Colour::Cyan.bold().paint(done.to_string()),
-				Style::new().dimmed().paint("/"),
-				Colour::Cyan.dimmed().paint(total.to_string())
-			))
+			Cow::Owned([
+				"\u{1B}[96;1m".to_string(),
+				done.to_string(),
+				"\u{1B}[0m\u{1B}[2m/\u{1B}[0m\u{1B}[36m".to_string(),
+				total.to_string(),
+				"\u{1B}[0m".to_string(),
+			].concat())
 		}
 	}
 
@@ -461,12 +450,11 @@ impl Progress {
 			crate::PRINT_COMPACT
 		);
 
-		Cow::Owned(format!(
-			"{}{}{}",
-			Style::new().dimmed().paint("["),
-			Style::new().bold().paint(&elapsed.to_string()),
-			Style::new().dimmed().paint("]"),
-		))
+		Cow::Owned([
+			"\u{1B}[2m[\u{1B}[0m\u{1B}[1m",
+			&elapsed,
+			"\u{1B}[0m\u{1B}[2m]\u{1B}[0m",
+		].concat())
 	}
 
 	/// ETA.
@@ -495,11 +483,11 @@ impl Progress {
 			crate::PRINT_COMPACT
 		);
 
-		Cow::Owned(format!(
-			"{} {}",
-			Colour::Purple.dimmed().paint("ETA:"),
-			Colour::Purple.bold().paint(&remaining.to_string()),
-		))
+		Cow::Owned([
+			"\u{1B}[35mETA: \u{1B}[0m\u{1B}[95;1m",
+			&remaining,
+			"\u{1B}[0m",
+		].concat())
 	}
 
 	/// Tick message.
@@ -529,10 +517,11 @@ impl Progress {
 			tmp
 		};
 
-		Cow::Owned(format!(
-			"{}",
-			Style::new().bold().paint(format!("{:>3.*}%", 2, percent * 100.0))
-		))
+		Cow::Owned([
+			"\u{1B}[1m",
+			format!("{:>3.*}%", 2, percent * 100.0).as_str(),
+			"\u{1B}[0m"
+		].concat())
 	}
 
 	/// Tick working.
@@ -545,11 +534,12 @@ impl Progress {
 		let mut out: Vec<String> = ptr.iter()
 			.cloned()
 			.map(|ref x| {
-				let out: String = format!(
-					"    {} {}",
-					Colour::Purple.dimmed().paint("↳"),
-					Colour::Purple.dimmed().paint(x.to_str().unwrap_or("")),
-				);
+				let out: String = [
+					"    \u{1B}[35m↳ ",
+					x.to_str().unwrap_or(""),
+					"\u{1B}[0m",
+				].concat();
+
 				out.fyi_shorten(width).to_string()
 			})
 			.collect();
@@ -566,8 +556,7 @@ pub mod arc {
 	use super::*;
 
 	/// Remove working path.
-	pub fn add_working<P> (progress: &Arc<Mutex<Progress>>, path: P)
-	where P: AsRef<Path> {
+	pub fn add_working(progress: &Arc<Mutex<Progress>>, path: &Arc<PathBuf>) {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.add_working(path)
 	}
@@ -620,10 +609,9 @@ pub mod arc {
 	}
 
 	/// Remove working path.
-	pub fn remove_working<P> (progress: &Arc<Mutex<Progress>>, path: P)
-	where P: AsRef<Path> {
+	pub fn remove_working(progress: &Arc<Mutex<Progress>>, path: &Arc<PathBuf>) {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
-		ptr.remove_working(&path)
+		ptr.remove_working(path)
 	}
 
 	/// Replace.
@@ -660,7 +648,7 @@ pub mod arc {
 		progress: &Arc<Mutex<Progress>>,
 		interval: u64,
 		msg: Option<String>,
-		working: Option<PathBuf>
+		working: Option<&Arc<PathBuf>>
 	) {
 		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
 		ptr.update(interval, msg, working)

@@ -2,10 +2,6 @@
 # FYI Core: Msg
 */
 
-#[cfg(feature = "interactive")]
-use ansi_term::Colour;
-
-use ansi_term::Style;
 use chrono::prelude::*;
 use crate::{
 	prefix::Prefix,
@@ -42,13 +38,15 @@ impl std::fmt::Display for Msg<'_> {
 		let mut out: String = [
 			strings::indentation(self.indent).to_string(),
 			self.prefix.to_string(),
-			Style::new().bold().paint(&*self.msg).to_string()
+			"\u{1B}[1m".to_string(),
+			self.msg.to_string(),
+			"\u{1B}[0m".to_string(),
 		].concat();
 
 		// A timestamp?
 		let timestamp = self.timestamp();
 		if false == timestamp.is_empty() {
-			out = append_timestamp(out, timestamp.to_string()).to_string();
+			out = append_timestamp(&out, &timestamp);
 		}
 
 		f.write_str(&out)
@@ -126,10 +124,11 @@ impl<'a> Msg<'a> {
 	/// Formatted Timestamp.
 	fn timestamp(&self) -> Cow<'static, str> {
 		if 0 != (super::MSG_TIMESTAMP & self.flags) {
-			Cow::Owned(format!(
-				"[{}]",
-				Style::new().dimmed().paint(Local::now().format("%F %T").to_string())
-			))
+			Cow::Owned([
+				"\u{1B}[2m[\u{1B}[34;2m",
+				Local::now().format("%F %T").to_string().as_str(),
+				"\u{1B}[0m\u{1B}[1m]\u{1B}[0m",
+			].concat())
 		}
 		else {
 			Cow::Borrowed("")
@@ -140,11 +139,11 @@ impl<'a> Msg<'a> {
 	/// Prompt instead.
 	pub fn prompt(&self) -> bool {
 		dialoguer::Confirmation::new()
-			.with_text(&format!(
-				"{} {}",
-				Colour::Yellow.bold().paint("Confirm:"),
-				Style::new().bold().paint(self.msg.clone())
-			))
+			.with_text(&[
+				"\u{1B}[93;1mConfirm:\u{1B}[0m \u{1B}[1m",
+				&self.msg,
+				"\u{1B}[0m",
+			].concat())
 			.interact()
 			.unwrap_or(false)
 	}
@@ -161,11 +160,8 @@ impl<'a> Msg<'a> {
 }
 
 /// Append Timestamp.
-fn append_timestamp<S> (msg: S, timestamp: S) -> Cow<'static, str>
-where S: Into<String> {
-	let msg = msg.into();
+fn append_timestamp<'a> (msg: &'a str, timestamp: &'a str) -> String {
 	let msg_len = msg.fyi_width();
-	let timestamp = timestamp.into();
 	let timestamp_len = timestamp.fyi_width();
 	let mut max_len = cli::term_width();
 	if 80 < max_len {
@@ -174,17 +170,17 @@ where S: Into<String> {
 
 	// We can do it inline.
 	if msg_len + timestamp_len + 1 <= max_len {
-		Cow::Owned([
+		[
 			msg,
-			strings::whitespace(max_len - msg_len - timestamp_len).to_string(),
+			&strings::whitespace(max_len - msg_len - timestamp_len),
 			timestamp,
-		].concat())
+		].concat()
 	}
 	else {
-		Cow::Owned([
-			timestamp.as_str(),
+		[
+			timestamp,
 			"\n",
-			msg.as_str(),
-		].concat())
+			msg,
+		].concat()
 	}
 }

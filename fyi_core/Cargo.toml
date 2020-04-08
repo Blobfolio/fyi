@@ -1,13 +1,12 @@
 [package]
 name = "fyi_core"
-version = "0.0.9"
+version = "0.1.0"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2018"
 description = "FYI is a dead-simple status message printer for CLI use applications."
 publish = false
 
 [dependencies]
-ansi_term = "0.12.*"
 bytecount = "0.6.*"
 chrono = "0.4.*"
 num-traits = "0.2.*"
