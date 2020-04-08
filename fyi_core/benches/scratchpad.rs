@@ -15,6 +15,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 	};
 	use rayon::prelude::*;
 	use std::path::PathBuf;
+	use std::sync::Arc;
 	use std::thread;
 	use std::time::Duration;
 
@@ -22,12 +23,12 @@ fn criterion_benchmark(c: &mut Criterion) {
 		let bar = Progress::new("Funny thing is happening!", 300, 0);
 		let looper = parc::looper(&bar, 60);
 		(0..300).into_par_iter().for_each(|ref x| {
-			let fakep = PathBuf::from(format!("/tmp/{:?}", x));
-			parc::add_working(&bar, fakep.to_path_buf());
+			let fakep = Arc::new(PathBuf::from(format!("/tmp/{:?}", x)));
+			parc::add_working(&bar, &fakep);
 
 			thread::sleep(Duration::from_millis(200));
 
-			parc::update(&bar, 1, None, Some(fakep.to_path_buf()));
+			parc::update(&bar, 1, None, Some(&fakep));
 		});
 		parc::finish(&bar);
 		looper.join().unwrap();
