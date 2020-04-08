@@ -7,7 +7,6 @@ description = "FYI is a dead-simple status message printer for CLI use applicati
 publish = false
 
 [dependencies]
-ansi_term = "0.12.*"
 bytecount = "0.6.*"
 chrono = "0.4.*"
 num-traits = "0.2.*"
