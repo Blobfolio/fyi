@@ -46,7 +46,7 @@ impl std::fmt::Display for Msg<'_> {
 		// A timestamp?
 		let timestamp = self.timestamp();
 		if false == timestamp.is_empty() {
-			out = append_timestamp(out, timestamp.to_string()).to_string();
+			out = append_timestamp(&out, &timestamp);
 		}
 
 		f.write_str(&out)
@@ -125,9 +125,9 @@ impl<'a> Msg<'a> {
 	fn timestamp(&self) -> Cow<'static, str> {
 		if 0 != (super::MSG_TIMESTAMP & self.flags) {
 			Cow::Owned([
-				"\u{1B}[2m[",
+				"\u{1B}[2m[\u{1B}[34;2m",
 				Local::now().format("%F %T").to_string().as_str(),
-				"]\u{1B}[0m",
+				"\u{1B}[0m\u{1B}[1m]\u{1B}[0m",
 			].concat())
 		}
 		else {
@@ -160,11 +160,8 @@ impl<'a> Msg<'a> {
 }
 
 /// Append Timestamp.
-fn append_timestamp<S> (msg: S, timestamp: S) -> Cow<'static, str>
-where S: Into<String> {
-	let msg = msg.into();
+fn append_timestamp<'a> (msg: &'a str, timestamp: &'a str) -> String {
 	let msg_len = msg.fyi_width();
-	let timestamp = timestamp.into();
 	let timestamp_len = timestamp.fyi_width();
 	let mut max_len = cli::term_width();
 	if 80 < max_len {
@@ -173,17 +170,17 @@ where S: Into<String> {
 
 	// We can do it inline.
 	if msg_len + timestamp_len + 1 <= max_len {
-		Cow::Owned([
+		[
 			msg,
-			strings::whitespace(max_len - msg_len - timestamp_len).to_string(),
+			&strings::whitespace(max_len - msg_len - timestamp_len),
 			timestamp,
-		].concat())
+		].concat()
 	}
 	else {
-		Cow::Owned([
-			timestamp.as_str(),
+		[
+			timestamp,
 			"\n",
-			msg.as_str(),
-		].concat())
+			msg,
+		].concat()
 	}
 }
