@@ -106,11 +106,14 @@ fn main() {
 			else {
 				msg.print();
 			}
+
+			// We might have a custom exit code.
+			let exit: u8 = parse_cli_u8(opts2.value_of("exit").unwrap_or("0"));
+			if 0 != exit {
+				process::exit(exit as i32);
+			}
 		}
 	}
-
-	// We're done!
-	exit(parse_cli_u8(opts.value_of("exit").unwrap_or("0")) as i32);
 }
 
 /// Validate CLI numeric inputs.
