@@ -132,36 +132,31 @@ impl Witch {
 		F: Fn(&Arc<PathBuf>) + Send + Sync
 	{
 		use crate::{
-			arc::progress as parc,
 			Msg,
 			Prefix,
 			Progress,
-			PROGRESS_CLEAR_ON_FINISH,
+			traits::path::FYIPathFormat,
 		};
-		use std::time::Instant;
 
-		let time = Instant::now();
-		let found: u64 = self.files.len() as u64;
-
-		let bar = Progress::new(
+		let bar = Arc::new(Progress::new(
 			Msg::new("Reticulating splines…")
 				.with_prefix(Prefix::Custom(name.into().as_ref(), 199))
 				.to_string(),
-			found,
-			PROGRESS_CLEAR_ON_FINISH
-		);
-		let looper = parc::looper(&bar, 60);
-		self.files().par_iter().for_each(|x| {
-			let file: Arc<PathBuf> = Arc::new(x.clone());
-			parc::add_working(&bar, &file);
-			cb(&file);
-			parc::update(&bar, 1, None, Some(&file));
-		});
-		parc::finish(&bar);
-		looper.join().unwrap();
+			self.files.len() as u64,
+			0
+		));
 
-		Msg::msg_crunched_in(found, time, None)
-			.print();
+		// Loop!
+		let handle = Progress::steady_tick(&bar, None);
+		self.files().par_iter().for_each(|x| {
+			let file: String = x.fyi_to_string();
+			bar.clone().add_task(&file);
+			cb(&Arc::new(x.clone()));
+			bar.clone().update(1, None, Some(file));
+		});
+		handle.join().unwrap();
+
+		bar.crunched_in(None);
 	}
 
 	#[cfg(feature = "progress")]
@@ -171,38 +166,33 @@ impl Witch {
 		S: Into<Cow<'static, str>>,
 		F: Fn(&Arc<PathBuf>) + Send + Sync {
 		use crate::{
-			arc::progress as parc,
 			Msg,
 			Prefix,
 			Progress,
-			PROGRESS_CLEAR_ON_FINISH,
+			traits::path::FYIPathFormat,
 		};
-		use std::time::Instant;
 
-		let time = Instant::now();
-		let before: u64 = self.du();
-		let found: u64 = self.files.len() as u64;
-
-		let bar = Progress::new(
+		let bar = Arc::new(Progress::new(
 			Msg::new("Reticulating splines…")
 				.with_prefix(Prefix::Custom(name.into().as_ref(), 199))
 				.to_string(),
-			found,
-			PROGRESS_CLEAR_ON_FINISH
-		);
-		let looper = parc::looper(&bar, 60);
+			self.files.len() as u64,
+			0
+		));
+		let before: u64 = self.du();
+
+		// Loop!
+		let handle = Progress::steady_tick(&bar, None);
 		self.files().par_iter().for_each(|x| {
-			let file: Arc<PathBuf> = Arc::new(x.clone());
-			parc::add_working(&bar, &file);
-			cb(&file);
-			parc::update(&bar, 1, None, Some(&file));
+			let file: String = x.fyi_to_string();
+			bar.clone().add_task(&file);
+			cb(&Arc::new(x.clone()));
+			bar.clone().update(1, None, Some(file));
 		});
-		parc::finish(&bar);
-		looper.join().unwrap();
+		handle.join().unwrap();
 
 		let after: u64 = self.du();
-		Msg::msg_crunched_in(found, time, Some((before, after)))
-			.print();
+		bar.crunched_in(Some((before, after)));
 	}
 
 
