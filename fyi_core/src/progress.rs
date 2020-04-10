@@ -175,7 +175,7 @@ impl<'pi> ProgressInner<'pi> {
 	pub fn crunched_in(&mut self, saved: Option<(u64, u64)>) {
 		if ! self.is_running() {
 			self.print(Cow::Owned(
-				Msg::msg_crunched_in(self.total, self.time, saved).to_string()
+				Msg::crunched_in(self.total, self.time, saved).to_string()
 			));
 		}
 	}
@@ -184,7 +184,7 @@ impl<'pi> ProgressInner<'pi> {
 	pub fn finished_in(&mut self) {
 		if ! self.is_running() {
 			self.print(Cow::Owned(
-				Msg::msg_finished_in(self.time).to_string()
+				Msg::finished_in(self.time).to_string()
 			));
 		}
 	}

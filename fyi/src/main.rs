@@ -25,7 +25,10 @@ use fyi_core::{
 	PRINT_STDERR,
 	util::cli,
 };
-use std::process::exit;
+use std::{
+	borrow::Cow,
+	process,
+};
 
 mod menu;
 
@@ -55,7 +58,7 @@ fn main() {
 					cli::print("", flags);
 				}
 
-				exit(0);
+				process::exit(0);
 			}
 
 			// Convert the CLI subcommand into an appropriate prefix.
@@ -71,7 +74,7 @@ fn main() {
 					let color: u8 = parse_cli_u8(opts2.value_of("prefix_color").unwrap_or("199"));
 
 					match opts2.value_of("prefix") {
-						Some(p) => Prefix::Custom(p, color),
+						Some(p) => Prefix::Custom(Cow::Borrowed(p), color),
 						_ => Prefix::None,
 					}
 				},
@@ -98,8 +101,8 @@ fn main() {
 			// Prompt.
 			if "prompt" == name {
 				match msg.prompt() {
-					true => exit(0),
-					false => exit(1),
+					true => process::exit(0),
+					false => process::exit(1),
 				};
 			}
 			// Echo.

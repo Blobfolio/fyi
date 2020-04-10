@@ -42,7 +42,6 @@ pub mod traits;
 /// Utilities.
 pub mod util;
 mod msg;
-mod prefix;
 
 #[cfg(feature = "progress")]
 mod progress;
@@ -69,8 +68,10 @@ pub const PRINT_STDERR: u8 = 16;
 pub const PROGRESSING: u8 = 32;
 
 /// Exports.
-pub use crate::msg::Msg;
-pub use crate::prefix::Prefix;
+pub use crate::msg::{
+	Msg,
+	Prefix,
+};
 
 #[cfg(feature = "progress")]
 pub use crate::progress::Progress;

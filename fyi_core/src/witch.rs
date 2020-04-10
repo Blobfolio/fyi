@@ -140,7 +140,7 @@ impl Witch {
 
 		let bar = Arc::new(Progress::new(
 			Msg::new("Reticulating splines…")
-				.with_prefix(Prefix::Custom(name.into().as_ref(), 199))
+				.with_prefix(Prefix::new(name, 199))
 				.to_string(),
 			self.files.len() as u64,
 			0
@@ -174,7 +174,7 @@ impl Witch {
 
 		let bar = Arc::new(Progress::new(
 			Msg::new("Reticulating splines…")
-				.with_prefix(Prefix::Custom(name.into().as_ref(), 199))
+				.with_prefix(Prefix::new(name, 199))
 				.to_string(),
 			self.files.len() as u64,
 			0
