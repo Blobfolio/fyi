@@ -46,7 +46,7 @@ impl FYIPathFormat for Path {
 	/// To Unique PathBuf.
 	fn fyi_to_path_buf_unique(&self) -> Result<PathBuf> {
 		if self.is_dir() {
-			return Err(Error::InvalidPath("is a directory", self.to_path_buf()));
+			return Err(Error::PathInvalid(self.to_path_buf(), "is a directory"));
 		}
 
 		// The parent must exist.
@@ -60,7 +60,7 @@ impl FYIPathFormat for Path {
 		// Grab the name.
 		let name: String = self.fyi_file_name();
 		if name.is_empty() {
-			return Err(Error::InvalidPath("has no name", self.to_path_buf()));
+			return Err(Error::PathInvalid(self.to_path_buf(), "has no name"));
 		}
 
 		// Split it on the first period; we'll add our uniqueness before

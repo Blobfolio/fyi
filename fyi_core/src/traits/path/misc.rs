@@ -94,6 +94,6 @@ impl FYIPath for Path {
 			}
 		}
 
-		Err(Error::InvalidPath("has no parent", self.to_path_buf()))
+		Err(Error::PathInvalid(self.to_path_buf(), "has no parent"))
 	}
 }

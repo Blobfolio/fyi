@@ -22,10 +22,6 @@ pub enum Error {
 	/// Passthru IO.
 	Nix(#[from] nix::Error),
 
-	#[error("Invalid path: {1} {0}.")]
-	/// Invalid path (for miscellaneous reasons).
-	InvalidPath(&'static str, PathBuf),
-
 	#[error("Failed to copy: {0}.")]
 	/// Copy failed.
 	PathCopy(PathBuf),
@@ -33,6 +29,10 @@ pub enum Error {
 	#[error("Failed to delete: {0}.")]
 	/// Delete failed.
 	PathDelete(PathBuf),
+
+	#[error("Invalid path: {0} {1}.")]
+	/// Invalid path (for miscellaneous reasons).
+	PathInvalid(PathBuf, &'static str),
 
 	#[error("Failed to read: {0}.")]
 	/// Read failed.
