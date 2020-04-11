@@ -14,7 +14,7 @@ mod working {
 /// Bench.
 fn criterion_benchmark(c: &mut Criterion) {
 	let paths = [std::path::PathBuf::from("/usr/lib/node_modules/npm")];
-	let pattern: String = r"(?i).+\.html?$".to_string();
+	let pattern: String = r"(?i).+\.(js|html?)$".to_string();
 
 	let w = fyi_core::Witch::new(&paths, Some(pattern.clone()));
 	w.progress("Apples", |p| {
