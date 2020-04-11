@@ -47,14 +47,6 @@ where
 	}
 }
 
-/// Indentation in Spaces.
-///
-/// Return a string consisting of 4 spaces for each requested tab.
-pub fn indentation<N> (indent: N) -> Cow<'static, str>
-where N: ToPrimitive {
-	whitespace(indent.to_usize().unwrap_or(0) * 4)
-}
-
 /// Oxford Join
 ///
 /// Join a `Vec<String>` with correct comma usage and placement. If
