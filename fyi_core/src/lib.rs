@@ -25,13 +25,14 @@ extern crate nix;
 #[cfg(feature = "witcher")]
 extern crate rayon;
 
-#[cfg(feature = "witcher")]
-extern crate regex;
+#[macro_use]
+extern crate lazy_static;
 
 extern crate bytecount;
 extern crate chrono;
 extern crate num_traits;
 extern crate num_format;
+extern crate regex;
 extern crate term_size;
 
 /// Traits.

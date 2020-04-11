@@ -1,4 +1,7 @@
 use std::borrow::Cow;
+use regex::Regex;
+
+
 
 /// String helpers!
 pub trait FYIStringFormat {
@@ -199,47 +202,13 @@ where T: AsRef<str> {
 
 	/// Strip ANSI.
 	fn fyi_strip_ansi(&self) -> Cow<'_, str> {
-		if false == self.as_ref().is_empty() {
-			const STATE_NORMAL: u8 = 1;
-			const STATE_ESCAPE: u8 = 2;
-			const STATE_CSI: u8 = 3;
+		lazy_static::lazy_static! {
+			static ref STRIP_ANSI_RE: Regex =
+				Regex::new(r"[\x1b\x9b][\[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-PRZcf-nqry=><]")
+					.unwrap();
+		}
 
-			let mut state = STATE_NORMAL;
-			Cow::Owned(
-				String::from_utf8(
-					self.as_ref().as_bytes()
-						.iter()
-						.filter_map(|x|
-							match state {
-								STATE_NORMAL => if *x == 0x1B {
-										state = STATE_ESCAPE;
-										None
-									} else {
-										Some(*x)
-									},
-								STATE_ESCAPE => if *x == 0x5B {
-										state = STATE_CSI;
-										None
-									} else {
-										state = STATE_NORMAL;
-										None
-									},
-								STATE_CSI => if *x >= 0x40 && *x < 0x80 {
-										state = STATE_NORMAL;
-										None
-									} else {
-										None
-									}
-								_ => None,
-							}
-						)
-						.collect::<Vec<u8>>()
-				).expect("Failed to unwrap string.")
-			)
-		}
-		else {
-			Cow::Borrowed("")
-		}
+		STRIP_ANSI_RE.replace_all(self.as_ref(), "")
 	}
 
 	/// String "width".
