@@ -201,6 +201,8 @@ where T: AsRef<str> {
 	}
 
 	/// Strip ANSI.
+	///
+	/// This approach courtesy of "console"!
 	fn fyi_strip_ansi(&self) -> Cow<'_, str> {
 		lazy_static::lazy_static! {
 			static ref STRIP_ANSI_RE: Regex =
