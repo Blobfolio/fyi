@@ -10,9 +10,6 @@
 #![deny(missing_copy_implementations)]
 #![deny(missing_debug_implementations)]
 
-#[cfg(feature = "progress")]
-extern crate ansi_escapes;
-
 #[cfg(feature = "interactive")]
 extern crate casual;
 
@@ -24,6 +21,9 @@ extern crate nix;
 
 #[cfg(feature = "witcher")]
 extern crate rayon;
+
+#[cfg(feature = "witcher")]
+extern crate tempfile;
 
 #[macro_use]
 extern crate lazy_static;

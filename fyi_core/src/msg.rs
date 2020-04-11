@@ -76,19 +76,19 @@ impl<'mp> Prefix<'mp> {
 			Self::Custom(ref p, c) => match p.is_empty() {
 				true => Cow::Borrowed(""),
 				false => Cow::Owned([
-					"\u{1B}[1;38;5;",
+					"\x1B[1;38;5;",
 					c.to_string().as_str(),
 					"m",
 					p,
-					":\u{1B}[0m ",
+					":\x1B[0m ",
 				].concat()),
 			},
-			Self::Debug => Cow::Borrowed("\u{1B}[96;1mDebug:\u{1B}[0m "),
-			Self::Error => Cow::Borrowed("\u{1B}[91;1mError:\u{1B}[0m "),
-			Self::Info => Cow::Borrowed("\u{1B}[96;1mInfo:\u{1B}[0m "),
-			Self::Notice => Cow::Borrowed("\u{1B}[95;1mNotice:\u{1B}[0m "),
-			Self::Success => Cow::Borrowed("\u{1B}[92;1mSuccess:\u{1B}[0m "),
-			Self::Warning => Cow::Borrowed("\u{1B}[93;1mWarning:\u{1B}[0m "),
+			Self::Debug => Cow::Borrowed("\x1B[96;1mDebug:\x1B[0m "),
+			Self::Error => Cow::Borrowed("\x1B[91;1mError:\x1B[0m "),
+			Self::Info => Cow::Borrowed("\x1B[96;1mInfo:\x1B[0m "),
+			Self::Notice => Cow::Borrowed("\x1B[95;1mNotice:\x1B[0m "),
+			Self::Success => Cow::Borrowed("\x1B[92;1mSuccess:\x1B[0m "),
+			Self::Warning => Cow::Borrowed("\x1B[93;1mWarning:\x1B[0m "),
 			_ => Cow::Borrowed(""),
 		}
 	}
@@ -152,9 +152,9 @@ impl<'m> Msg<'m> {
 		let msg: Cow<'_, str> = Cow::Owned([
 			&strings::whitespace(self.indent * 4),
 			&self.prefix.prefix(),
-			"\u{1B}[1m",
+			"\x1B[1m",
 			&self.msg,
-			"\u{1B}[0m"
+			"\x1B[0m"
 		].concat());
 
 		match 0 != (self.flags & MSG_TIMESTAMP) {
@@ -162,9 +162,9 @@ impl<'m> Msg<'m> {
 			true => {
 				// A formatted timestamp.
 				let timestamp: Cow<'_, str> = Cow::Owned([
-					"\u{1B}[2m[\u{1B}[34;2m",
+					"\x1B[2m[\x1B[34;2m",
 					&self.timestamp(),
-					"\u{1B}[0m\u{1B}[1m]\u{1B}[0m",
+					"\x1B[0m\x1B[1m]\x1B[0m",
 				].concat());
 
 				let msg_len = &msg.fyi_width();
@@ -210,9 +210,9 @@ impl<'m> Msg<'m> {
 	/// Prompt instead.
 	pub fn prompt(&self) -> bool {
 		casual::confirm(&[
-			"\u{1B}[93;1mConfirm:\u{1B}[0m \u{1B}[1m",
+			"\x1B[93;1mConfirm:\x1B[0m \x1B[1m",
 			&self.msg,
-			"\u{1B}[0m",
+			"\x1B[0m",
 		].concat())
 	}
 
