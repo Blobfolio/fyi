@@ -199,21 +199,47 @@ where T: AsRef<str> {
 
 	/// Strip ANSI.
 	fn fyi_strip_ansi(&self) -> Cow<'_, str> {
-		let me = self.as_ref();
-		if false == me.is_empty() {
-			if let Ok(x) = strip_ansi_escapes::strip(me.as_bytes()) {
-				if let Ok(y) = String::from_utf8(x) {
-					if y == *me {
-						return Cow::Borrowed(&me);
-					}
-					else {
-						return Cow::Owned(y);
-					}
-				}
-			}
-		}
+		if false == self.as_ref().is_empty() {
+			const STATE_NORMAL: u8 = 1;
+			const STATE_ESCAPE: u8 = 2;
+			const STATE_CSI: u8 = 3;
 
-		Cow::Borrowed("")
+			let mut state = STATE_NORMAL;
+			Cow::Owned(
+				String::from_utf8(
+					self.as_ref().as_bytes()
+						.iter()
+						.filter_map(|x|
+							match state {
+								STATE_NORMAL => if *x == 0x1B {
+										state = STATE_ESCAPE;
+										None
+									} else {
+										Some(*x)
+									},
+								STATE_ESCAPE => if *x == 0x5B {
+										state = STATE_CSI;
+										None
+									} else {
+										state = STATE_NORMAL;
+										None
+									},
+								STATE_CSI => if *x >= 0x40 && *x < 0x80 {
+										state = STATE_NORMAL;
+										None
+									} else {
+										None
+									}
+								_ => None,
+							}
+						)
+						.collect::<Vec<u8>>()
+				).expect("Failed to unwrap string.")
+			)
+		}
+		else {
+			Cow::Borrowed("")
+		}
 	}
 
 	/// String "width".
