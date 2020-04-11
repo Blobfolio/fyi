@@ -5,7 +5,11 @@ This is a very simple thread-capable CLI progress indicator.
 */
 
 use crate::{
-	msg::Msg,
+	Msg,
+	PRINT_COMPACT,
+	PRINT_NEWLINE,
+	PRINT_STDERR,
+	PROGRESSING,
 	traits::str::FYIStringFormat,
 	util::{
 		cli,
@@ -16,16 +20,9 @@ use crate::{
 use std::{
 	borrow::Cow,
 	collections::HashSet,
-	path::PathBuf,
 	sync::{
 		Arc,
 		Mutex,
-		atomic::{
-			AtomicBool,
-			AtomicU8,
-			AtomicU64,
-			Ordering,
-		},
 	},
 	thread::{
 		self,
@@ -39,618 +36,514 @@ use std::{
 
 
 
-// Progress bar characters.
-pub const CHR_DONE: &str = "◼";
-pub const CHR_PENDING: &str = "-";
-
-
-
-#[derive(Debug, Defaults)]
-/// Progress.
-pub struct Progress {
-	#[def = "Mutex::new(Instant::now())"]
-	/// Start time.
-	time: Mutex<Instant>,
-
-	#[def = "Arc::new(AtomicU8::new(0))"]
-	/// Flags.
-	flags: Arc<AtomicU8>,
-
-	#[def = "Mutex::new(String::new())"]
-	/// Last message.
-	last: Mutex<String>,
-
-	#[def = "Arc::new(AtomicBool::new(false))"]
-	/// Running?
-	running: Arc<AtomicBool>,
-
-	#[def = "Mutex::new(String::new())"]
-	/// A message to accompany progress.
-	msg: Mutex<String>,
-
-	#[def = "Arc::new(AtomicU64::new(0))"]
-	/// The total done.
-	done: Arc<AtomicU64>,
-
-	#[def = "Arc::new(AtomicU64::new(0))"]
-	/// The total total.
-	total: Arc<AtomicU64>,
-
-	#[def = "Mutex::new(HashSet::new())"]
-	/// Working Paths.
-	working: Mutex<HashSet<Arc<PathBuf>>>,
+#[derive(Debug, Clone)]
+/// Progress Bar (Internal)
+pub struct ProgressInner<'pi> {
+	done: u64,
+	flags: u8,
+	last: Cow<'pi, str>,
+	msg: Cow<'pi, str>,
+	tasks: HashSet<String>,
+	time: Instant,
+	total: u64,
 }
 
-/// Main methods.
-impl Progress {
-	/// New.
-	pub fn new<S> (msg: S, total: u64, flags: u8) -> Arc<Mutex<Self>>
-	where S: Into<String> {
-		Arc::new(Mutex::new(Progress {
-			flags: Arc::new(AtomicU8::new(flags)),
-			running: Arc::new(AtomicBool::new(0 < total)),
-			msg: Mutex::new(msg.into()),
-			total: Arc::new(AtomicU64::new(total)),
-			..Progress::default()
-		}))
-	}
-
-	/// Replace.
-	///
-	/// Re-use the Arc/Mutex with new data instead of creating a new
-	/// one.
-	pub fn replace<S> (&self, msg: S, total: u64, flags: u8)
-	where S: Into<String> {
-		{
-			let mut ptr = self.time.lock().expect("Failed to acquire lock: Progress.time");
-			*ptr = Instant::now();
+impl<'pi> Default for ProgressInner<'pi> {
+	/// Default.
+	fn default() -> Self {
+		Self {
+			tasks: HashSet::new(),
+			done: 0,
+			flags: 0,
+			last: Cow::Borrowed(""),
+			msg: Cow::Borrowed(""),
+			time: Instant::now(),
+			total: 0,
 		}
+	}
+}
 
-		{
-			let mut ptr = self.working.lock().expect("Failed to acquire lock: Progress.working");
-			ptr.clear();
+impl<'pi> ProgressInner<'pi> {
+	// -------------------------------------------------------------
+	// Getters
+	// -------------------------------------------------------------
+
+	/// Active paths.
+	pub fn tasks(&self) -> Option<HashSet<String>> {
+		match self.tasks.is_empty() {
+			true => None,
+			false => Some(self.tasks.clone()),
 		}
+	}
 
-		{
-			let mut ptr = self.last.lock().expect("Failed to acquire lock: Progress.last");
-			ptr.clear();
+	/// Finished.
+	pub fn done(&self) -> u64 {
+		self.done
+	}
+
+	/// Flags.
+	pub fn flags(&self) -> u8 {
+		self.flags
+	}
+
+	/// Last.
+	pub fn last(&self) -> Cow<'pi, str> {
+		self.last.clone()
+	}
+
+	/// Msg.
+	pub fn msg(&self) -> Cow<'pi, str> {
+		self.msg.clone()
+	}
+
+	/// Percent done.
+	pub fn percent(&self) -> f64 {
+		if self.total > 0 {
+			match self.total > self.done {
+				true => self.done as f64 / self.total as f64,
+				false => 1.0,
+			}
 		}
+		else {
+			0.0
+		}
+	}
 
-		self.flags.store(flags, Ordering::SeqCst);
-		self.running.store(0 < total, Ordering::SeqCst);
-		self.set_msg(msg);
-		self.done.store(0, Ordering::SeqCst);
-		self.total.store(total, Ordering::SeqCst);
+	/// Time.
+	pub fn time(&self) -> Instant {
+		self.time
+	}
+
+	/// Total.
+	pub fn total(&self) -> u64 {
+		self.total
 	}
 
 
 
-	// -----------------------------------------------------------------
-	// Public Getters
-	// -----------------------------------------------------------------
+	// -------------------------------------------------------------
+	// Setters
+	// -------------------------------------------------------------
 
-	/// Is Running
-	pub fn is_running(&self) -> bool {
-		self.running.load(Ordering::SeqCst)
-	}
-
-	/// Tick state.
-	pub fn progress(&self) -> (u64, u64) {
-		(self.done(), self.total())
-	}
-
-
-
-	// -----------------------------------------------------------------
-	// Ops
-	// -----------------------------------------------------------------
-
-	/// Remove working path.
-	pub fn add_working(&self, path: &Arc<PathBuf>) {
-		let mut ptr = self.working.lock().expect("Failed to acquire lock: Progress.working");
-		ptr.insert(path.clone());
-	}
-
-	/// Finish.
-	pub fn finish(&self) {
+	/// Push Active.
+	pub fn add_tasks(&mut self, task: String) {
 		if self.is_running() {
-			self.stop();
+			self.tasks.insert(task);
 		}
-
-		// We're done.
-		if 0 != (crate::PROGRESS_CLEAR_ON_FINISH & self.flags()) {
-			self.print(String::new());
-			return;
-		}
-
-		// Come up with a message.
-		let msg: String = {
-			let ptr = self.time.lock().expect("Failed to acquire lock: Progress.time");
-			let msg: Msg = Msg::msg_finished_in(*ptr);
-			msg.to_string()
-		};
-
-		// Print it!
-		self.print(&msg);
 	}
 
-	/// Set Done.
-	pub fn increment(&self, interval: u64) {
-		self.set_done(self.done() + interval);
-	}
-
-	/// Remove working path.
-	pub fn remove_working(&self, path: &Arc<PathBuf>) {
-		let mut ptr = self.working.lock().expect("Failed to acquire lock: Progress.working");
-		ptr.remove(path);
-	}
-
-	/// Set Done.
-	pub fn set_done(&self, mut done: u64) {
-		let total = self.total();
-		if total <= done {
-			done = total;
+	/// Remove Active.
+	pub fn remove_tasks(&mut self, task: String) {
+		if self.is_running() {
+			self.tasks.remove(&task);
 		}
+	}
 
-		if done != self.done() {
-			self.done.store(done, Ordering::SeqCst);
+	/// Increment Done.
+	pub fn increment(&mut self, num: u64) {
+		if self.is_running() {
+			self.set_done(self.done + num);
+		}
+	}
 
-			if done == total {
+	/// Finished.
+	pub fn set_done(&mut self, done: u64) {
+		if self.is_running() {
+			if done >= self.total {
 				self.stop();
+			}
+			else {
+				self.done = done;
 			}
 		}
 	}
 
-	/// Set Message.
-	pub fn set_msg<S> (&self, msg: S)
-	where S: Into<String> {
-		let mut ptr = self.msg.lock().expect("Failed to acquire lock: Progress.msg");
-		let msg = msg.into();
-		if msg != *ptr {
-			*ptr = msg;
+	/// Msg.
+	pub fn set_msg(&mut self, msg: Cow<'pi, str>) {
+		if self.is_running() {
+			self.msg = msg;
+		}
+	}
+
+
+
+	// -------------------------------------------------------------
+	// Summaries
+	// -------------------------------------------------------------
+
+	/// Crunched in X.
+	pub fn crunched_in(&mut self, saved: Option<(u64, u64)>) {
+		if ! self.is_running() {
+			self.print(Cow::Owned(
+				Msg::crunched_in(self.total, self.time, saved).to_string()
+			));
+		}
+	}
+
+	/// Finished in X.
+	pub fn finished_in(&mut self) {
+		if ! self.is_running() {
+			self.print(Cow::Owned(
+				Msg::finished_in(self.time).to_string()
+			));
+		}
+	}
+
+
+
+	// -------------------------------------------------------------
+	// Misc Operations
+	// -------------------------------------------------------------
+
+	/// Is Running?
+	pub fn is_running(&self) -> bool {
+		(self.flags & PROGRESSING) != 0
+	}
+
+	/// Print Whatever.
+	pub fn print(&mut self, msg: Cow<'pi, str>) {
+		// No change.
+		if self.last == msg {
+			return;
+		}
+
+		// We might need to clear the previous entry.
+		let lines: u16 = self.last.fyi_lines_len() as u16;
+		if 0 < lines {
+			cli::print(
+				&format!("{}", ansi_escapes::EraseLines(lines + 1)),
+				PRINT_STDERR
+			);
+		}
+
+		// Anything doing?
+		if msg.is_empty() {
+			self.last = Cow::Borrowed("");
+			return;
+		}
+
+		self.last = msg.clone();
+		cli::print(msg, PRINT_NEWLINE | PRINT_STDERR | self.flags);
+	}
+
+	/// Wrap it up.
+	pub fn stop(&mut self) {
+		if self.is_running() {
+			self.done = self.total;
+			self.flags &= !PROGRESSING;
+			self.tasks.clear();
+			self.msg = Cow::Borrowed("");
+			self.print(Cow::Borrowed(""));
 		}
 	}
 
 	/// Tick.
-	pub fn tick(&self) {
-		// Build the new message.
-		let width = cli::term_width();
-		let done = self.done();
-		let total = self.total();
-
-		// Start building the second line first.
-		let p_count = self.part_count(done, total);
-		let p_percent = self.part_percent(done, total);
-		let p_elapsed = self.part_elapsed();
-		let mut p_eta = self.part_eta(done, total);
-
-		// How much space have we used?
-		let p_space = p_elapsed.fyi_width() +
-			p_count.fyi_width() +
-			&p_percent.fyi_width() +
-			3;
-
-		// The bar can have the remaining space.
-		let p_bar_len = {
-			let mut count = width - p_space;
-			if count > 60 {
-				count = 60;
-			}
-
-			// Adjust the ETA again.
-			let eta_len = p_eta.fyi_width();
-			if 0 != eta_len && p_space + count + eta_len + 1 <= width {
-				*(p_eta.to_mut()) = format!(
-					"{}{}",
-					strings::whitespace(width - eta_len - count - p_space),
-					&p_eta
-				);
-			}
-			else if 0 != eta_len {
-				*(p_eta.to_mut()) = String::new();
-			}
-
-			count
-		};
-		let p_bar = self.part_bar(done, total, p_bar_len);
-
-		// Let's go ahead and make this line.
-		let mut out: String = [
-			&p_elapsed,
-			" ",
-			&p_bar,
-			" ",
-			&p_count,
-			" ",
-			&p_percent,
-			&p_eta
-		].concat();
-
-		// Is there a message to prepend to it?
-		let p_msg = self.part_msg(width);
-		if false == p_msg.is_empty() {
-			out = [
-				&p_msg,
-				"\n",
-				&out
-			].concat();
-		}
-
-		// How about working paths to add to it?
-		let p_working = self.part_working(width);
-		if false == p_working.is_empty() {
-			out = [
-				&out,
-				"\n",
-				&p_working
-			].concat();
-		}
-
-		// Send it to the printer!
-		self.print(out);
-	}
-
-	/// Increment, set message, remove working path.
-	pub fn update(
-		&self,
-		interval: u64,
-		msg: Option<String>,
-		working: Option<&Arc<PathBuf>>
-	) {
-		self.set_done(self.done() + interval);
-		if let Some(s) = msg {
-			self.set_msg(s);
-		}
-		if let Some(w) = working {
-			self.remove_working(w);
-		}
-	}
-
-
-
-	// -----------------------------------------------------------------
-	// Internal Getters
-	// -----------------------------------------------------------------
-
-	/// Get done.
-	fn done(&self) -> u64 {
-		self.done.load(Ordering::SeqCst)
-	}
-
-	/// Get flags.
-	fn flags(&self) -> u8 {
-		self.flags.load(Ordering::SeqCst)
-	}
-
-	/// Get total.
-	fn total(&self) -> u64 {
-		self.total.load(Ordering::SeqCst)
-	}
-
-
-	// -----------------------------------------------------------------
-	// Internal Ops
-	// -----------------------------------------------------------------
-
-	/// Print.
-	fn print<S> (&self, msg: S)
-	where S: Into<String> {
-		let msg = msg.into();
-		let last: String = {
-			let ptr = self.last.lock().expect("Failed to acquire lock: Progress.lock");
-			ptr.clone()
-		};
-
-		// No change.
-		if msg == last {
+	pub fn tick(&mut self) {
+		if ! self.is_running() {
 			return;
 		}
 
-		let lines: u8 = last.fyi_lines_len() as u8;
-		if 0 < lines {
-			cli::print(
-				&format!("{}", ansi_escapes::EraseLines(lines as u16 + 1)),
-				crate::PRINT_STDERR
-			);
+		let width: usize = cli::term_width();
+		let p_elapsed = self.part_elapsed();
+		let p_progress = self.part_progress();
+
+		// Space the bar can't have.
+		let p_space = p_elapsed.fyi_width() + p_progress.fyi_width() + 2;
+		if width < p_space + 10 {
+			return;
 		}
 
-		let nlines: u8 = msg.fyi_lines_len() as u8;
-		if 0 < nlines {
-			cli::print(&msg, crate::PRINT_NEWLINE | crate::PRINT_STDERR | self.flags());
-			let mut ptr = self.last.lock().expect("Failed to acquire lock: Progress.lock");
-			*ptr = msg;
+		// Space the bar can have.
+		let mut p_eta = self.part_eta();
+		let p_bar_len: usize = {
+			let mut size = width - p_space;
+			if size > 60 {
+				size = 60;
+			}
+
+			// Adjust the ETA maybe.
+			let eta_len = p_eta.fyi_width();
+			if 0 != eta_len && p_space + size + eta_len + 1 <= width {
+				p_eta = Cow::Owned([
+					strings::whitespace(width - eta_len - size - p_space),
+					p_eta,
+				].concat());
+			}
+			else if 0 != eta_len {
+				p_eta = Cow::Borrowed("");
+			}
+
+			size
+		};
+		let p_bar = self.part_bar(p_bar_len);
+
+		let p_tasks = self.part_tasks(width);
+		let has_msg: bool = ! self.msg.is_empty();
+		let has_tasks = ! p_tasks.is_empty();
+		let out = Cow::Owned(if ! has_msg && ! has_tasks {
+			[
+				&p_elapsed,
+				" ",
+				&p_bar,
+				" ",
+				&p_progress,
+				&p_eta,
+			].concat()
+		}
+		else if has_msg && ! has_tasks {
+			[
+				&self.msg.clone(),
+				"\n",
+				&p_elapsed,
+				" ",
+				&p_bar,
+				" ",
+				&p_progress,
+				&p_eta,
+			].concat()
 		}
 		else {
-			let mut ptr = self.last.lock().expect("Failed to acquire lock: Progress.lock");
-			ptr.clear();
+			[
+				&self.msg.clone(),
+				"\n",
+				&p_elapsed,
+				" ",
+				&p_bar,
+				" ",
+				&p_progress,
+				&p_eta,
+				"\n",
+				&p_tasks,
+			].concat()
+		});
+
+		self.print(out);
+	}
+
+
+
+	// -------------------------------------------------------------
+	// Build-a-Bar
+	// -------------------------------------------------------------
+
+	/// Active paths!
+	fn part_tasks(&self, width: usize) -> Cow<'_, str> {
+		if self.tasks.is_empty() {
+			Cow::Borrowed("")
+		}
+		else {
+			let mut out: Vec<String> = self.tasks.iter()
+				.cloned()
+				.map(|ref x| {
+					let out: String = [
+						"    \u{1B}[35m↳ ",
+						&x,
+						"\u{1B}[0m",
+					].concat();
+
+					out.fyi_shorten(width).to_string()
+				})
+				.collect();
+
+			out.sort();
+			Cow::Owned(out.join("\n"))
 		}
 	}
 
-	/// Stop
-	fn stop(&self) {
-		self.running.store(false, Ordering::SeqCst);
-		self.done.store(self.total(), Ordering::SeqCst);
-		let mut ptr = self.msg.lock().expect("Failed to acquire lock: Progress.msg");
-		*ptr = String::new();
-	}
-
-
-
-	// -----------------------------------------------------------------
-	// Bar Parts
-	// -----------------------------------------------------------------
-
-	/// Part: Bar
-	fn part_bar(&self, done: u64, total: u64, mut width: usize) -> Cow<'_, str> {
-		// Early abort.
-		if 10 > width {
+	/// Bar!
+	fn part_bar(&self, mut width: usize) -> Cow<'_, str> {
+		// We need at least 10 chars.
+		if width < 10 {
 			return Cow::Borrowed("");
 		}
-		width = width - 2;
 
-		// Calculate the percentage done.
-		let done_percent: f64 = {
-			let mut tmp: f64 = 0.0;
-			if 0 < total {
-				if total <= done {
-					tmp = 1.0;
-				}
-				else {
-					tmp = done as f64 / total as f64;
-				}
-			}
-			tmp
+		// Reserve two characters for brackets.
+		width -= 2;
+
+		let done_len: usize = f64::floor(self.percent() * width as f64) as usize;
+		let undone_len: usize = width - done_len;
+
+		let done: String = match done_len {
+			0 => "".to_string(),
+			x => "◼".to_string().repeat(x),
+		};
+		let undone: String = match undone_len {
+			0 => "".to_string(),
+			x => String::from_utf8(vec![b'-'; x]).unwrap(),
 		};
 
-		// Now we can do the lengths!
-		let done_len: usize = f64::floor(done_percent * width as f64) as usize;
-		let pending_len: usize = width - done_len;
-
-		// And now we can build the base strings.
-		let done_str: String = match done_len {
-			0 => String::new(),
-			x => CHR_DONE.repeat(x),
-		};
-		let pending_str: String = match pending_len {
-			0 => String::new(),
-			x => CHR_PENDING.repeat(x),
-		};
-
-		// And now we can send pretty stuff back.
 		Cow::Owned([
 			"\u{1B}[2m[\u{1B}[0m\u{1B}[96;1m",
-			&done_str,
+			&done,
 			"\u{1B}[0m\u{1B}[36m",
-			&pending_str,
+			&undone,
 			"\u{1B}[0m\u{1B}[2m]\u{1B}[0m",
 		].concat())
 	}
 
-	/// Tick count.
-	fn part_count(&self, done: u64, total: u64) -> Cow<'_, str> {
-		if 0 == total {
-			Cow::Borrowed("")
-		}
-		else {
-			Cow::Owned([
-				"\u{1B}[96;1m".to_string(),
-				done.to_string(),
-				"\u{1B}[0m\u{1B}[2m/\u{1B}[0m\u{1B}[36m".to_string(),
-				total.to_string(),
-				"\u{1B}[0m".to_string(),
-			].concat())
-		}
-	}
-
-	/// Tick elapsed.
+	/// Elapsed.
 	fn part_elapsed(&self) -> Cow<'_, str> {
-		let ptr = self.time.lock().expect("Failed to acquire lock: Progress.time");
-		let elapsed = time::human_elapsed(
-			ptr.elapsed().as_secs() as usize,
-			crate::PRINT_COMPACT
-		);
-
 		Cow::Owned([
 			"\u{1B}[2m[\u{1B}[0m\u{1B}[1m",
-			&elapsed,
+			&time::human_elapsed(
+				self.time.elapsed().as_secs() as usize,
+				PRINT_COMPACT
+			),
 			"\u{1B}[0m\u{1B}[2m]\u{1B}[0m",
 		].concat())
 	}
 
 	/// ETA.
-	fn part_eta(&self, done: u64, total: u64) -> Cow<'_, str> {
-		let done: f64 = done as f64;
-		let total: f64 = total as f64;
-
-		// Abort if no progress has been made.
-		if done < 2.0 || done >= total {
+	fn part_eta(&self) -> Cow<'_, str> {
+		// Don't bother printing an ETA if we haven't gotten far
+		// enough along to have good math.
+		let percent: f64 = self.percent();
+		if percent < 0.1 || percent == 1.0 {
 			return Cow::Borrowed("");
 		}
 
-		let elapsed: f64 = {
-			let ptr = self.time.lock().expect("Failed to acquire lock: Progress.time");
-			ptr.elapsed().as_secs_f64()
-		};
-
-		// Abort if we haven't spent ten seconds doing anything yet.
+		// And abort if we haven't been at it for at least 10s.
+		let elapsed: f64 = self.time.elapsed().as_secs_f64();
 		if elapsed < 10.0 {
 			return Cow::Borrowed("");
 		}
 
-		let s_per: f64 = elapsed / done;
-		let remaining = time::human_elapsed(
-			f64::ceil(s_per * (total - done)) as usize,
-			crate::PRINT_COMPACT
-		);
-
+		let s_per: f64 = elapsed / self.done as f64;
 		Cow::Owned([
 			"\u{1B}[35mETA: \u{1B}[0m\u{1B}[95;1m",
-			&remaining,
+			&time::human_elapsed(
+				f64::ceil(s_per * (self.total - self.done) as f64) as usize,
+				PRINT_COMPACT
+			),
 			"\u{1B}[0m",
 		].concat())
 	}
 
-	/// Tick message.
-	fn part_msg(&self, width: usize) -> Cow<'_, str> {
-		let ptr = self.msg.lock().expect("Failed to acquire lock: Progress.msg");
-		if ptr.is_empty() {
-			Cow::Borrowed("")
-		}
-		else {
-			let tmp: String = ptr.fyi_shorten(width).into();
-			Cow::Owned(tmp)
-		}
-	}
-
-	/// Tick percent.
-	fn part_percent(&self, done: u64, total: u64) -> Cow<'_, str> {
-		let percent: f64 = {
-			let mut tmp: f64 = 0.0;
-			if 0 < total {
-				if total <= done {
-					tmp = 1.0;
-				}
-				else {
-					tmp = done as f64 / total as f64;
-				}
-			}
-			tmp
-		};
-
+	/// Progress bits (count, percent).
+	fn part_progress(&self) -> Cow<'_, str> {
 		Cow::Owned([
-			"\u{1B}[1m",
-			format!("{:>3.*}%", 2, percent * 100.0).as_str(),
+			"\u{1B}[96;1m",
+			self.done.to_string().as_str(),
+			"\u{1B}[0m\u{1B}[2m/\u{1B}[0m\u{1B}[36m",
+			self.total.to_string().as_str(),
+			"\u{1B}[0m \u{1B}[1m",
+			format!("{:>3.*}%", 2, self.percent() * 100.0).as_str(),
 			"\u{1B}[0m"
 		].concat())
-	}
-
-	/// Tick working.
-	fn part_working(&self, width: usize) -> Cow<'_, str> {
-		let ptr = self.working.lock().expect("Failed to acquire lock: Progress.working");
-		if ptr.is_empty() {
-			return Cow::Borrowed("")
-		}
-
-		let mut out: Vec<String> = ptr.iter()
-			.cloned()
-			.map(|ref x| {
-				let out: String = [
-					"    \u{1B}[35m↳ ",
-					x.to_str().unwrap_or(""),
-					"\u{1B}[0m",
-				].concat();
-
-				out.fyi_shorten(width).to_string()
-			})
-			.collect();
-
-		out.sort();
-		Cow::Owned(out.join("\n"))
 	}
 }
 
 
 
-/// Arc wrappers.
-pub mod arc {
-	use super::*;
+#[derive(Debug)]
+/// Progress Bar!
+pub struct Progress<'p>(Mutex<ProgressInner<'p>>);
 
-	/// Remove working path.
-	pub fn add_working(progress: &Arc<Mutex<Progress>>, path: &Arc<PathBuf>) {
-		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
-		ptr.add_working(path)
+impl<'p> Progress<'p> {
+	/// New.
+	pub fn new<S>(msg: S, total: u64, mut flags: u8) -> Self
+	where S: Into<Cow<'static, str>> {
+		if total > 0 {
+			flags |= PROGRESSING;
+		}
+
+		Self(Mutex::new(ProgressInner{
+			msg: msg.into(),
+			total: total,
+			flags: flags,
+			..ProgressInner::default()
+		}))
 	}
 
-	/// Finish.
-	pub fn finish(progress: &Arc<Mutex<Progress>>) {
-		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
-		ptr.finish()
+	/// Add Task.
+	pub fn add_task<S>(&self, task: S)
+	where S: Into<String> {
+		let mut ptr = self.0.lock().expect("Failed to acquire lock: Progress.0");
+		ptr.tasks.insert(task.into());
 	}
 
-	/// Increment Done.
-	pub fn increment(progress: &Arc<Mutex<Progress>>, interval: u64) {
-		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
-		ptr.increment(interval)
+	/// Crunched in X.
+	pub fn crunched_in(&self, saved: Option<(u64, u64)>) {
+		let mut ptr = self.0.lock().expect("Failed to acquire lock: Progress.0");
+		ptr.crunched_in(saved);
 	}
 
-	/// Is Running
-	pub fn is_running(progress: &Arc<Mutex<Progress>>) -> bool {
-		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
+	/// Finished in X.
+	pub fn finished_in(&self) {
+		let mut ptr = self.0.lock().expect("Failed to acquire lock: Progress.0");
+		ptr.finished_in();
+	}
+
+	/// Is Running?
+	pub fn is_running(&self) -> bool {
+		let ptr = self.0.lock().expect("Failed to acquire lock: Progress.0");
 		ptr.is_running()
 	}
 
-	/// Event loop.
-	pub fn looper(progress: &Arc<Mutex<Progress>>, interval: u64) -> JoinHandle<()> {
-		let pclone = progress.clone();
-
-		std::thread::spawn(move || {
-			// Ping every 150ms.
-			let sleep = Duration::from_millis(interval);
-			loop {
-				tick(&pclone);
-
-				thread::sleep(sleep);
-
-				// Are we done?
-				if ! is_running(&pclone) {
-					break;
-				}
-			}
-
-			// And finish up.
-			finish(&pclone);
-		})
+	/// Increment.
+	pub fn increment<S>(&self, num: u64) {
+		let mut ptr = self.0.lock().expect("Failed to acquire lock: Progress.0");
+		ptr.increment(num);
 	}
 
-	/// Tick progress.
-	pub fn progress(progress: &Arc<Mutex<Progress>>) -> (u64, u64) {
-		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
-		ptr.progress()
-	}
-
-	/// Remove working path.
-	pub fn remove_working(progress: &Arc<Mutex<Progress>>, path: &Arc<PathBuf>) {
-		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
-		ptr.remove_working(path)
-	}
-
-	/// Replace.
-	///
-	/// Re-use the Arc/Mutex with new data instead of creating a new
-	/// one.
-	pub fn replace<S> (progress: &Arc<Mutex<Progress>>, msg: S, total: u64, flags: u8)
+	/// Add Task.
+	pub fn remove_task<S>(&self, task: S)
 	where S: Into<String> {
-		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
-		ptr.replace(msg, total, flags)
-	}
-
-	/// Set Done.
-	pub fn set_done(progress: &Arc<Mutex<Progress>>, done: u64) {
-		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
-		ptr.set_done(done)
+		let mut ptr = self.0.lock().expect("Failed to acquire lock: Progress.0");
+		ptr.tasks.remove(&task.into());
 	}
 
 	/// Set Message.
-	pub fn set_msg<S> (progress: &Arc<Mutex<Progress>>, msg: S)
-	where S: Into<String> {
-		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
-		ptr.set_msg(msg)
+	pub fn set_msg<S>(&self, msg: S)
+	where S: Into<Cow<'static, str>> {
+		let mut ptr = self.0.lock().expect("Failed to acquire lock: Progress.0");
+		ptr.msg = msg.into();
+	}
+
+	/// Steady tick.
+	pub fn steady_tick(me: &Arc<Progress<'static>>, rate: Option<u64>) -> JoinHandle<()> {
+		let sleep = Duration::from_millis(match rate {
+			Some(r) => r,
+			_ => 60,
+		});
+
+		let me2 = me.clone();
+		thread::spawn(move || {
+			loop {
+				me2.clone().tick();
+				thread::sleep(sleep);
+
+				// Are we done?
+				if ! me2.clone().is_running() {
+					break;
+				}
+			}
+		})
+	}
+
+	/// Stop.
+	pub fn stop(&self) {
+		let mut ptr = self.0.lock().expect("Failed to acquire lock: Progress.0");
+		ptr.stop();
 	}
 
 	/// Tick.
-	pub fn tick(progress: &Arc<Mutex<Progress>>) {
-		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
-		ptr.tick()
+	pub fn tick(&self) {
+		let mut ptr = self.0.lock().expect("Failed to acquire lock: Progress.0");
+		ptr.tick();
 	}
 
-	/// Increment and set message.
-	pub fn update(
-		progress: &Arc<Mutex<Progress>>,
-		interval: u64,
-		msg: Option<String>,
-		working: Option<&Arc<PathBuf>>
-	) {
-		let ptr = progress.lock().expect("Failed to acquire lock: Progress");
-		ptr.update(interval, msg, working)
+	/// Update one-liner.
+	pub fn update(&self, increment: u64, msg: Option<String>, task: Option<String>) {
+		let mut ptr = self.0.lock().expect("Failed to acquire lock: Progress.0");
+		if increment > 0 {
+			ptr.increment(increment);
+		}
+		if let Some(msg) = msg {
+			ptr.msg = Cow::Owned(msg);
+		}
+		if let Some(task) = task {
+			ptr.tasks.remove(&task);
+		}
 	}
 }

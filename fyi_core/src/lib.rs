@@ -13,12 +13,11 @@
 #[cfg(feature = "progress")]
 extern crate ansi_escapes;
 
-#[cfg(any(feature = "witcher", feature = "progress"))]
-#[macro_use]
-extern crate defaults;
-
 #[cfg(feature = "interactive")]
 extern crate dialoguer;
+
+#[cfg(feature = "witcher")]
+extern crate jwalk;
 
 #[cfg(feature = "witcher")]
 extern crate nix;
@@ -42,7 +41,6 @@ pub mod traits;
 /// Utilities.
 pub mod util;
 mod msg;
-mod prefix;
 
 #[cfg(feature = "progress")]
 mod progress;
@@ -65,21 +63,20 @@ pub const PRINT_NEWLINE: u8 = 8;
 /// Print to STDERR instead of STDOUT.
 pub const PRINT_STDERR: u8 = 16;
 
-/// Just clear the bar and call it a day.
-pub const PROGRESS_CLEAR_ON_FINISH: u8 = 32;
+/// Progress Active.
+pub const PROGRESSING: u8 = 32;
 
 /// Exports.
-pub use crate::msg::Msg;
-pub use crate::prefix::Prefix;
-
-#[cfg(feature = "witcher")]
-pub use crate::witch::Witch;
-
-#[cfg(feature = "progress")]
-/// Arc helpers.
-pub mod arc {
-	pub use crate::progress::arc as progress;
-}
+pub use crate::msg::{
+	Msg,
+	Prefix,
+};
 
 #[cfg(feature = "progress")]
 pub use crate::progress::Progress;
+
+#[cfg(feature = "progress")]
+pub use crate::progress::ProgressInner;
+
+#[cfg(feature = "witcher")]
+pub use crate::witch::Witch;
