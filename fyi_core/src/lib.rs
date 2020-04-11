@@ -13,12 +13,11 @@
 #[cfg(feature = "progress")]
 extern crate ansi_escapes;
 
-#[cfg(any(feature = "witcher", feature = "progress"))]
-#[macro_use]
-extern crate defaults;
-
 #[cfg(feature = "interactive")]
 extern crate dialoguer;
+
+#[cfg(feature = "witcher")]
+extern crate jwalk;
 
 #[cfg(feature = "witcher")]
 extern crate nix;

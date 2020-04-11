@@ -18,12 +18,12 @@ term_size = "0.3.*"
 version = "0.1.*"
 optional = true
 
-[dependencies.defaults]
-version = "0.2.*"
-optional = true
-
 [dependencies.dialoguer]
 version = "0.5.*"
+optional = true
+
+[dependencies.jwalk]
+version = "*"
 optional = true
 
 [dependencies.nix]
@@ -41,8 +41,8 @@ optional = true
 [features]
 default = []
 interactive = [ "dialoguer" ]
-progress = [ "ansi-escapes", "defaults" ]
-witcher = [ "defaults", "nix", "rayon", "regex" ]
+progress = [ "ansi-escapes" ]
+witcher = [ "jwalk", "nix", "rayon", "regex" ]
 
 [dev-dependencies]
 criterion = "*"

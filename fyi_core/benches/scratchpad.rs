@@ -5,41 +5,27 @@ use criterion::{
 	Criterion
 };
 
+mod working {
+
+}
+
 
 
 /// Bench.
 fn criterion_benchmark(c: &mut Criterion) {
-	use fyi_core::{
-		Progress,
-		arc::progress as parc,
-	};
-	use rayon::prelude::*;
-	use std::path::PathBuf;
-	use std::sync::Arc;
-	use std::thread;
-	use std::time::Duration;
+	let paths = [std::path::PathBuf::from("/usr/lib/node_modules/npm")];
+	let pattern: String = r"(?i).+\.html?$".to_string();
 
-	{
-		let bar = Progress::new("Funny thing is happening!", 300, 0);
-		let looper = parc::looper(&bar, 60);
-		(0..300).into_par_iter().for_each(|ref x| {
-			let fakep = Arc::new(PathBuf::from(format!("/tmp/{:?}", x)));
-			parc::add_working(&bar, &fakep);
+	let w = fyi_core::Witch::new(&paths, Some(pattern.clone()));
+	w.progress("Apples", |p| {
+		std::thread::sleep(std::time::Duration::from_millis(100));
+	});
 
-			thread::sleep(Duration::from_millis(200));
-
-			parc::update(&bar, 1, None, Some(&fakep));
-		});
-		parc::finish(&bar);
-		looper.join().unwrap();
-	}
-
-
-	c.bench_function("Progress::new", |b| b.iter(|| Progress::new(
-		black_box("The rain in Spain rhymes with plain."),
-		black_box(100),
-		black_box(0),
-	)));
+	/*
+	c.bench_function("Walk (new)", |b| b.iter(||
+		working::Witch::new(black_box(&paths), None)
+	));
+	*/
 }
 
 criterion_group!(benches, criterion_benchmark);
