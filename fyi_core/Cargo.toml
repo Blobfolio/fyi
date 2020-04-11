@@ -18,8 +18,8 @@ term_size = "0.3.*"
 version = "0.1.*"
 optional = true
 
-[dependencies.dialoguer]
-version = "0.5.*"
+[dependencies.casual]
+version = "0.1.*"
 optional = true
 
 [dependencies.jwalk]
@@ -40,7 +40,7 @@ optional = true
 
 [features]
 default = []
-interactive = [ "dialoguer" ]
+interactive = [ "casual" ]
 progress = [ "ansi-escapes" ]
 witcher = [ "jwalk", "nix", "rayon", "regex" ]
 

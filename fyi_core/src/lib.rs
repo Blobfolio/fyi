@@ -14,7 +14,7 @@
 extern crate ansi_escapes;
 
 #[cfg(feature = "interactive")]
-extern crate dialoguer;
+extern crate casual;
 
 #[cfg(feature = "witcher")]
 extern crate jwalk;

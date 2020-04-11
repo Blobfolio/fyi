@@ -209,14 +209,11 @@ impl<'m> Msg<'m> {
 	#[cfg(feature = "interactive")]
 	/// Prompt instead.
 	pub fn prompt(&self) -> bool {
-		dialoguer::Confirmation::new()
-			.with_text(&[
-				"\u{1B}[93;1mConfirm:\u{1B}[0m \u{1B}[1m",
-				&self.msg,
-				"\u{1B}[0m",
-			].concat())
-			.interact()
-			.unwrap_or(false)
+		casual::confirm(&[
+			"\u{1B}[93;1mConfirm:\u{1B}[0m \u{1B}[1m",
+			&self.msg,
+			"\u{1B}[0m",
+		].concat())
 	}
 
 	/// Print.
