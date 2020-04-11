@@ -2,9 +2,13 @@
 # FYI Core: Miscellany: Operations
 */
 
-use crate::traits::path::{
-	FYIPath,
-	FYIPathFormat,
+use crate::{
+	Error,
+	Result,
+	traits::path::{
+		FYIPath,
+		FYIPathFormat,
+	},
 };
 use std::{
 	env,
@@ -25,33 +29,33 @@ use std::{
 /// Format/Conversion/Mutation Helpers!
 pub trait FYIPathIO {
 	/// Byte for Byte Copy.
-	fn fyi_copy<P> (&self, to: P) -> Result<(), String>
+	fn fyi_copy<P> (&self, to: P) -> Result<()>
 	where P: AsRef<Path>;
 
 	/// Copy To Temporary Location.
-	fn fyi_copy_tmp(&self) -> Result<PathBuf, String>;
+	fn fyi_copy_tmp(&self) -> Result<PathBuf>;
 
 	/// Delete.
-	fn fyi_delete(&self) -> Result<(), String>;
+	fn fyi_delete(&self) -> Result<()>;
 
 	/// Move.
-	fn fyi_move<P> (&self, to: P) -> Result<(), String>
+	fn fyi_move<P> (&self, to: P) -> Result<()>
 	where P: AsRef<Path>;
 
 	/// Read Bytes.
-	fn fyi_read(&self) -> Result<Vec<u8>, String>;
+	fn fyi_read(&self) -> Result<Vec<u8>>;
 
 	/// Clone permissions and ownership from a path.
-	fn fyi_reference<P> (&self, src: P) -> Result<(), String>
+	fn fyi_reference<P> (&self, src: P) -> Result<()>
 	where P: AsRef<Path>;
 
 	/// Write Bytes.
-	fn fyi_write(&self, data: &[u8]) -> Result<(), String>;
+	fn fyi_write(&self, data: &[u8]) -> Result<()>;
 }
 
 impl FYIPathIO for Path {
 	/// Byte for Byte Copy.
-	fn fyi_copy<P> (&self, to: P) -> Result<(), String>
+	fn fyi_copy<P> (&self, to: P) -> Result<()>
 	where P: AsRef<Path> {
 		if self.is_file() {
 			let data: Vec<u8> = self.fyi_read()?;
@@ -61,12 +65,12 @@ impl FYIPathIO for Path {
 			Ok(())
 		}
 		else {
-			Err(format!("Unable to copy: {}", self.fyi_to_string()).to_string())
+			Err(Error::PathFailed("copy", self.to_path_buf()))
 		}
 	}
 
 	/// Copy To Temporary Location.
-	fn fyi_copy_tmp(&self) -> Result<PathBuf, String> {
+	fn fyi_copy_tmp(&self) -> Result<PathBuf> {
 		let mut to: PathBuf = env::temp_dir();
 		to.push(&self.fyi_file_name());
 		to = to.fyi_to_path_buf_unique()?;
@@ -76,21 +80,21 @@ impl FYIPathIO for Path {
 	}
 
 	/// Delete.
-	fn fyi_delete(&self) -> Result<(), String> {
+	fn fyi_delete(&self) -> Result<()> {
 		if self.is_file() {
-			let _ = fs::remove_file(&self).map_err(|x| x.to_string())?;
+			let _ = fs::remove_file(&self)?;
 			Ok(())
 		}
 		else if false == self.exists() {
 			Ok(())
 		}
 		else {
-			Err(format!("Could not delete: {}", self.fyi_to_string()).to_string())
+			Err(Error::PathFailed("delete", self.to_path_buf()))
 		}
 	}
 
 	/// Move.
-	fn fyi_move<P> (&self, to: P) -> Result<(), String>
+	fn fyi_move<P> (&self, to: P) -> Result<()>
 	where P: AsRef<Path> {
 		self.fyi_copy(&to)?;
 		self.fyi_delete()?;
@@ -99,20 +103,17 @@ impl FYIPathIO for Path {
 	}
 
 	/// Read Bytes.
-	fn fyi_read(&self) -> Result<Vec<u8>, String> {
+	fn fyi_read(&self) -> Result<Vec<u8>> {
 		if self.is_file() {
-			match fs::read(&self) {
-				Ok(data) => Ok(data),
-				Err(e) => Err(e.to_string())
-			}
+			Ok(fs::read(&self)?)
 		}
 		else {
-			Err(format!("Could not read: {}", self.fyi_to_string()).to_string())
+			Err(Error::PathFailed("read", self.to_path_buf()))
 		}
 	}
 
 	/// Clone permissions and ownership from a path.
-	fn fyi_reference<P> (&self, src: P) -> Result<(), String>
+	fn fyi_reference<P> (&self, src: P) -> Result<()>
 	where P: AsRef<Path> {
 		if self.is_file() {
 			if let Ok(meta) = src.as_ref().metadata() {
@@ -120,40 +121,38 @@ impl FYIPathIO for Path {
 					use nix::unistd::{self, Uid, Gid};
 
 					// Permissions are easy.
-					fs::set_permissions(&self, meta.permissions())
-						.map_err(|x| x.to_string())?;
+					fs::set_permissions(&self, meta.permissions())?;
 
 					// Ownership is a little more annoying.
 					unistd::chown(
 						self,
 						Some(Uid::from_raw(meta.uid())),
 						Some(Gid::from_raw(meta.gid()))
-					).map_err(|x| x.to_string())?;
+					)?;
 
 					return Ok(());
 				}
 			}
 		}
 
-		Err(format!("Could not set ownership/permissions: {}", self.fyi_to_string()).to_string())
+		Err(Error::PathFailed("owner/perms", self.to_path_buf()))
 	}
 
 	/// Write Bytes.
-	fn fyi_write(&self, data: &[u8]) -> Result<(), String> {
+	fn fyi_write(&self, data: &[u8]) -> Result<()> {
 		if false == self.is_dir() {
 			{
-				let mut output = File::create(&self)
-					.map_err(|e| e.to_string())?;
+				let mut output = File::create(&self)?;
 
-				output.set_len(data.len() as u64).map_err(|e| e.to_string())?;
-				output.write_all(&data).map_err(|e| e.to_string())?;
+				output.set_len(data.len() as u64)?;
+				output.write_all(&data)?;
 				output.flush().unwrap();
 			}
 
 			Ok(())
 		}
 		else {
-			Err(format!("Could not write to: {}", self.fyi_to_string()).to_string())
+			Err(Error::PathFailed("write", self.to_path_buf()))
 		}
 	}
 }

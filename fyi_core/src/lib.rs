@@ -29,13 +29,14 @@ extern crate num_traits;
 extern crate num_format;
 extern crate regex;
 extern crate term_size;
+extern crate thiserror;
 
+mod error;
+mod msg;
 /// Traits.
 pub mod traits;
-
 /// Utilities.
 pub mod util;
-mod msg;
 
 #[cfg(feature = "progress")]
 mod progress;
@@ -65,6 +66,10 @@ pub const PROGRESSING: u8 = 32;
 pub use crate::msg::{
 	Msg,
 	Prefix,
+};
+pub use crate::error::{
+	Error,
+	Result,
 };
 
 #[cfg(feature = "progress")]
