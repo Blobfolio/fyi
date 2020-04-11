@@ -22,14 +22,9 @@ extern crate nix;
 #[cfg(feature = "witcher")]
 extern crate rayon;
 
-#[cfg(feature = "witcher")]
-extern crate tempfile;
-
-#[macro_use]
-extern crate lazy_static;
-
 extern crate bytecount;
 extern crate chrono;
+extern crate lazy_static;
 extern crate num_traits;
 extern crate num_format;
 extern crate regex;
