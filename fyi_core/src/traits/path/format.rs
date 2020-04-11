@@ -97,7 +97,7 @@ impl FYIPathFormat for Path {
 			}
 		}
 
-		Err(Error::PathFailed("unique", self.to_path_buf()))
+		Err(Error::PathUnique(self.to_path_buf()))
 	}
 
 	/// To String.

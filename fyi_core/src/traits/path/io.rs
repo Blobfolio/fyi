@@ -65,7 +65,7 @@ impl FYIPathIO for Path {
 			Ok(())
 		}
 		else {
-			Err(Error::PathFailed("copy", self.to_path_buf()))
+			Err(Error::PathCopy(self.to_path_buf()))
 		}
 	}
 
@@ -89,7 +89,7 @@ impl FYIPathIO for Path {
 			Ok(())
 		}
 		else {
-			Err(Error::PathFailed("delete", self.to_path_buf()))
+			Err(Error::PathDelete(self.to_path_buf()))
 		}
 	}
 
@@ -108,7 +108,7 @@ impl FYIPathIO for Path {
 			Ok(fs::read(&self)?)
 		}
 		else {
-			Err(Error::PathFailed("read", self.to_path_buf()))
+			Err(Error::PathRead(self.to_path_buf()))
 		}
 	}
 
@@ -135,7 +135,7 @@ impl FYIPathIO for Path {
 			}
 		}
 
-		Err(Error::PathFailed("owner/perms", self.to_path_buf()))
+		Err(Error::PathReference(self.to_path_buf()))
 	}
 
 	/// Write Bytes.
@@ -152,7 +152,7 @@ impl FYIPathIO for Path {
 			Ok(())
 		}
 		else {
-			Err(Error::PathFailed("write", self.to_path_buf()))
+			Err(Error::PathWrite(self.to_path_buf()))
 		}
 	}
 }

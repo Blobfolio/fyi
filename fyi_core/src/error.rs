@@ -21,12 +21,32 @@ pub enum Error {
 	Nix(#[from] nix::Error),
 
 	#[error("Invalid path: {1} {0}.")]
-	/// Expecting an absolute value.
+	/// Invalid path (for miscellaneous reasons).
 	InvalidPath(&'static str, PathBuf),
 
-	#[error("Operation failed: {0} on {1}.")]
-	/// Expecting an absolute value.
-	PathFailed(&'static str, PathBuf),
+	#[error("Failed to copy: {0}.")]
+	/// Copy failed.
+	PathCopy(PathBuf),
+
+	#[error("Failed to delete: {0}.")]
+	/// Delete failed.
+	PathDelete(PathBuf),
+
+	#[error("Failed to read: {0}.")]
+	/// Read failed.
+	PathRead(PathBuf),
+
+	#[error("Failed to set owner/perms: {0}.")]
+	/// Reference failed.
+	PathReference(PathBuf),
+
+	#[error("Failed to create unique path: {0}.")]
+	/// Could not create unique path.
+	PathUnique(PathBuf),
+
+	#[error("Failed to write: {0}.")]
+	/// Write failed.
+	PathWrite(PathBuf),
 }
 
 impl fmt::Debug for Error {
