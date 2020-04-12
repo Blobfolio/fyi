@@ -68,34 +68,6 @@ impl<'pi> ProgressInner<'pi> {
 	// Getters
 	// -------------------------------------------------------------
 
-	/// Active paths.
-	pub fn tasks(&self) -> Option<HashSet<String>> {
-		match self.tasks.is_empty() {
-			true => None,
-			false => Some(self.tasks.clone()),
-		}
-	}
-
-	/// Finished.
-	pub fn done(&self) -> u64 {
-		self.done
-	}
-
-	/// Flags.
-	pub fn flags(&self) -> u8 {
-		self.flags
-	}
-
-	/// Last.
-	pub fn last(&self) -> Cow<'pi, str> {
-		self.last.clone()
-	}
-
-	/// Msg.
-	pub fn msg(&self) -> Cow<'pi, str> {
-		self.msg.clone()
-	}
-
 	/// Percent done.
 	pub fn percent(&self) -> f64 {
 		if self.total > 0 {
@@ -107,16 +79,6 @@ impl<'pi> ProgressInner<'pi> {
 		else {
 			0.0
 		}
-	}
-
-	/// Time.
-	pub fn time(&self) -> Instant {
-		self.time
-	}
-
-	/// Total.
-	pub fn total(&self) -> u64 {
-		self.total
 	}
 
 
