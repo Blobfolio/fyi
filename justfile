@@ -31,57 +31,24 @@ build_ver     := "1"
 		--target-dir "{{ cargo_dir }}"
 
 
-# Build Debian Package.
-@build-debian: build
-	[ ! -e "{{ debian_dir }}" ] || rm -rf "{{ debian_dir }}"
-	mkdir -p "{{ debian_dir }}/DEBIAN"
-	mkdir -p "{{ debian_dir }}/etc/bash_completion.d"
-	mkdir -p "{{ debian_dir }}/usr/bin"
-	mkdir -p "{{ debian_dir }}/usr/share/man/man1"
+# Build Debian package!
+@build-deb:
+	[ $( command -v cargo-deb ) ] || cargo install cargo-deb
 
-	# Steal the version from Cargo.toml really quick.
-	cat "{{ justfile_directory() }}/fyi/Cargo.toml" | grep version | head -n 1 | sed 's/[^0-9\.]//g' > "/tmp/VERSION"
+	# First let's build the Rust bit.
+	RUSTFLAGS="-C link-arg=-s" cargo-deb \
+		-p fyi \
+		-o "{{ justfile_directory() }}/release"
 
-	# Copy the application.
-	cp -a "{{ cargo_dir }}/release/fyi" "{{ debian_dir }}/usr/bin"
-	chmod 755 "{{ debian_dir }}/usr/bin/fyi"
-	strip "{{ debian_dir }}/usr/bin/fyi"
-
-	# Copy completions.
-	cp -a "{{ cargo_dir }}/fyi.bash" "{{ debian_dir }}/etc/bash_completion.d"
-	chmod 644 "{{ debian_dir }}/etc/bash_completion.d/fyi.bash"
-
-	# Set up the control file.
-	cp -a "{{ release_dir }}/skel/control" "{{ debian_dir }}/DEBIAN"
-	sed -i "s/VERSION/$( cat "/tmp/VERSION" )-{{ build_ver }}/g" "{{ debian_dir }}/DEBIAN/control"
-	sed -i "s/SIZE/$( du -scb "{{ debian_dir }}/usr" | tail -n 1 | awk '{print $1}' )/g" "{{ debian_dir }}/DEBIAN/control"
-
-	# Generate the manual.
-	just _build-man
-
-	# Build the Debian package.
-	chown -R root:root "{{ debian_dir }}"
-	cd "$( dirname "{{ debian_dir }}" )" && dpkg-deb --build fyi
-	chown --reference="{{ justfile() }}" "$( dirname "{{ debian_dir }}" )/fyi.deb"
-
-	# And a touch of clean-up.
-	mv "$( dirname "{{ debian_dir }}" )/fyi.deb" "{{ release_dir }}/fyi_$( cat "/tmp/VERSION" )-{{ build_ver }}.deb"
-	rm -rf "/tmp/VERSION" "{{ debian_dir }}"
+	chown -R --reference="{{ justfile() }}" "{{ release_dir }}"
 
 
-# Build MAN page.
-@_build-man:
-	# Most of it can come straight from the help screen.
-	help2man -N \
-		"{{ debian_dir }}/usr/bin/fyi" > "{{ debian_dir }}/usr/share/man/man1/fyi.1"
-
-	# Fix a few formatting quirks.
-	sed -i -e ':a' -e 'N' -e '$!ba' -Ee \
-		"s#FYI [0-9\.]+[\n]Blobfolio, LLC. <hello@blobfolio.com>[\n]##g" \
-		"{{ debian_dir }}/usr/share/man/man1/fyi.1"
-
-	# Wrap up by gzipping to save some space.
-	gzip -9 "{{ debian_dir }}/usr/share/man/man1/fyi.1"
+# Check Release!
+@check:
+	# First let's build the Rust bit.
+	RUSTFLAGS="-C link-arg=-s" cargo check \
+		--release \
+		--target-dir "{{ cargo_dir }}"
 
 
 # Get/Set FYI version.
