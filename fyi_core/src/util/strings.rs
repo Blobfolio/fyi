@@ -33,18 +33,18 @@ where S: Into<Cow<'a, str>> {
 ///
 /// Return a string like "NUMBER LABEL" where the label is
 /// appropriately singular or plural given the value.
-pub fn inflect<'a, N, S> (num: N, singular: S, plural: S) -> String
+pub fn inflect<'a, N, S> (num: N, singular: S, plural: S) -> Cow<'static, str>
 where
 	N: ToPrimitive + One + PartialEq,
 	S: Into<Cow<'a, str>> {
-	match num.is_one() {
+	Cow::Owned(match num.is_one() {
 		true => ["1 ", &singular.into()].concat(),
 		false => format!(
 			"{} {}",
 			numbers::human_int(num),
 			&plural.into(),
 		),
-	}
+	})
 }
 
 /// Oxford Join

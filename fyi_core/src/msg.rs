@@ -236,7 +236,7 @@ impl<'m> Msg<'m> {
 
 		Msg::new(Cow::Owned(match du {
 			Some((before, after)) => [
-				&strings::inflect(num as usize, "file", "files"),
+				strings::inflect(num as usize, "file", "files").as_ref(),
 				" in ",
 				&elapsed,
 				&match numbers::saved(before, after) {
