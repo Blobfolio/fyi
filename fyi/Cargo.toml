@@ -10,8 +10,7 @@ build = "build.rs"
 publish = false
 
 [build-dependencies]
-clap = { version = "2.33.*", default-features = false, features = [ "color", "suggestions", "vec_map", "wrap_help" ] }
-regex = "1.3.6"
+clap = { version = "2.33.*", default-features = false }
 
 [dependencies.fyi_core]
 path = "../fyi_core"
@@ -33,5 +32,5 @@ section = "utility"
 assets = [
     ["target/release/fyi", "usr/bin/", "755"],
     ["../release/completions/fyi.bash", "etc/bash_completion.d/", "644"],
-    ["../release/man/fyi.1", "usr/share/man/man1/", "644"],
+    ["../release/man/fyi.1.gz", "usr/share/man/man1/", "644"],
 ]
