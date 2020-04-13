@@ -13,7 +13,7 @@ fn main() {
 	completions();
 }
 
-/// Bash and Zsh completions.
+/// Bash completions.
 fn completions() {
 	use clap::Shell;
 	use std::path::PathBuf;
