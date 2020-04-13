@@ -1,6 +1,7 @@
 [package]
 name = "fyi"
-version = "0.1.1"
+version = "0.1.2"
+license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2018"
 description = "A dead-simple CLI status message printer for use in BASH scripts, etc."
@@ -8,15 +9,28 @@ repository = "https://github.com/Blobfolio/fyi"
 build = "build.rs"
 publish = false
 
-[build-dependencies]
-clap = "2.33.*"
+[package.metadata.deb]
+maintainer = "Josh Stoik <hello@blobfolio.com>"
+copyright = "2020, Blobfolio, LLC <hello@blobfolio.com>"
+license-file = ["../LICENSE", "0"]
+revision = "1"
+depends = "$auto"
+section = "utility"
+assets = [
+    ["target/release/fyi", "usr/bin/", "755"],
+    ["../release/completions/fyi.bash", "etc/bash_completion.d/", "644"],
+    ["../release/man/fyi.1.gz", "usr/share/man/man1/", "644"],
+]
 
-[dependencies.fyi_core]
-path = "../fyi_core"
-default-features = false
-features = [ "interactive" ]
+[build-dependencies]
+clap = { version = "2.33.*", default-features = false }
 
 [dependencies.clap]
 version = "2.33.*"
 default-features = false
 features = [ "color", "suggestions", "vec_map", "wrap_help" ]
+
+[dependencies.fyi_core]
+path = "../fyi_core"
+default-features = false
+features = [ "interactive" ]

@@ -29,22 +29,21 @@ where S: Into<String> {
 	// Print it!
 	match 0 == (crate::PRINT_STDERR & flags) {
 		true => {
-			let mut writer = stdout();
-			print_custom(&mut writer, &msg.as_bytes())
+			let writer = stdout();
+			let mut handle = writer.lock();
+			match handle.write_all(&msg.as_bytes()).is_ok() {
+				true => handle.flush().is_ok(),
+				false => false,
+			}
 		},
 		false => {
-			let mut writer = stderr();
-			print_custom(&mut writer, &msg.as_bytes())
+			let writer = stderr();
+			let mut handle = writer.lock();
+			match handle.write_all(&msg.as_bytes()).is_ok() {
+				true => handle.flush().is_ok(),
+				false => false,
+			}
 		},
-	}
-}
-
-/// Print (to a specific writer).
-pub fn print_custom<W> (writer: &mut W, msg: &[u8]) -> bool
-where W: Write {
-	match writer.write_all(&msg).is_ok() {
-		true => writer.flush().is_ok(),
-		false => false,
 	}
 }
 

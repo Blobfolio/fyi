@@ -1,4 +1,7 @@
 use std::borrow::Cow;
+use regex::Regex;
+
+
 
 /// String helpers!
 pub trait FYIStringFormat {
@@ -198,22 +201,16 @@ where T: AsRef<str> {
 	}
 
 	/// Strip ANSI.
+	///
+	/// This approach courtesy of "console"!
 	fn fyi_strip_ansi(&self) -> Cow<'_, str> {
-		let me = self.as_ref();
-		if false == me.is_empty() {
-			if let Ok(x) = strip_ansi_escapes::strip(me.as_bytes()) {
-				if let Ok(y) = String::from_utf8(x) {
-					if y == *me {
-						return Cow::Borrowed(&me);
-					}
-					else {
-						return Cow::Owned(y);
-					}
-				}
-			}
+		lazy_static::lazy_static! {
+			static ref STRIP_ANSI_RE: Regex =
+				Regex::new(r"[\x1b\x9b][\[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-PRZcf-nqry=><]")
+					.unwrap();
 		}
 
-		Cow::Borrowed("")
+		STRIP_ANSI_RE.replace_all(self.as_ref(), "")
 	}
 
 	/// String "width".

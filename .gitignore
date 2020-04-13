@@ -1,3 +1,4 @@
 /target/
 /Cargo.lock
 /fyi_core/target/
+/release/man/fyi.1.gz

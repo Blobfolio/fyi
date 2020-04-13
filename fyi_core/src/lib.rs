@@ -10,11 +10,8 @@
 #![deny(missing_copy_implementations)]
 #![deny(missing_debug_implementations)]
 
-#[cfg(feature = "progress")]
-extern crate ansi_escapes;
-
 #[cfg(feature = "interactive")]
-extern crate dialoguer;
+extern crate casual;
 
 #[cfg(feature = "witcher")]
 extern crate jwalk;
@@ -25,22 +22,21 @@ extern crate nix;
 #[cfg(feature = "witcher")]
 extern crate rayon;
 
-#[cfg(feature = "witcher")]
-extern crate regex;
-
 extern crate bytecount;
 extern crate chrono;
+extern crate lazy_static;
 extern crate num_traits;
 extern crate num_format;
-extern crate strip_ansi_escapes;
+extern crate regex;
 extern crate term_size;
+extern crate thiserror;
 
+mod error;
+mod msg;
 /// Traits.
 pub mod traits;
-
 /// Utilities.
 pub mod util;
-mod msg;
 
 #[cfg(feature = "progress")]
 mod progress;
@@ -70,6 +66,10 @@ pub const PROGRESSING: u8 = 32;
 pub use crate::msg::{
 	Msg,
 	Prefix,
+};
+pub use crate::error::{
+	Error,
+	Result,
 };
 
 #[cfg(feature = "progress")]

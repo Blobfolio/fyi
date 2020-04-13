@@ -3,6 +3,8 @@
 */
 
 use crate::{
+	Error,
+	Result,
 	traits::path::FYIPath,
 	util::strings,
 };
@@ -22,7 +24,7 @@ pub trait FYIPathFormat {
 	fn fyi_to_path_buf_abs(&self) -> PathBuf;
 
 	/// To Unique PathBuf.
-	fn fyi_to_path_buf_unique(&self) -> Result<PathBuf, String>;
+	fn fyi_to_path_buf_unique(&self) -> Result<PathBuf>;
 
 	/// To String.
 	fn fyi_to_string(&self) -> String;
@@ -42,12 +44,9 @@ impl FYIPathFormat for Path {
 	}
 
 	/// To Unique PathBuf.
-	fn fyi_to_path_buf_unique(&self) -> Result<PathBuf, String> {
+	fn fyi_to_path_buf_unique(&self) -> Result<PathBuf> {
 		if self.is_dir() {
-			return Err(format!(
-				"Path cannot be a directory: {}",
-				self.fyi_to_string()
-			));
+			return Err(Error::PathInvalid(self.to_path_buf(), "is a directory"));
 		}
 
 		// The parent must exist.
@@ -61,10 +60,7 @@ impl FYIPathFormat for Path {
 		// Grab the name.
 		let name: String = self.fyi_file_name();
 		if name.is_empty() {
-			return Err(format!(
-				"Missing name: {}",
-				self.fyi_to_string()
-			));
+			return Err(Error::PathInvalid(self.to_path_buf(), "has no name"));
 		}
 
 		// Split it on the first period; we'll add our uniqueness before
@@ -101,7 +97,7 @@ impl FYIPathFormat for Path {
 			}
 		}
 
-		Err("No unique name could be created.".to_string())
+		Err(Error::PathUnique(self.to_path_buf()))
 	}
 
 	/// To String.

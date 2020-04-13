@@ -61,15 +61,14 @@ where N: ToPrimitive {
 	let out = bits.iter()
 		.filter_map(|(num, singular, plural)| match *num {
 			0 => None,
-			_ => Some(strings::inflect(*num, *singular, *plural)),
+			_ => Some(strings::inflect(*num, *singular, *plural).to_string()),
 		})
 		.collect::<Vec<String>>();
 
 	// Let's grammar-up the response with Oxford joins.
-	let joined = strings::oxford_join(out, " and ");
-	match joined.len() {
-		0 => Cow::Borrowed("0 seconds"),
-		_ => joined,
+	match out.is_empty() {
+		true => Cow::Borrowed("0 seconds"),
+		false => strings::oxford_join(out, " and "),
 	}
 }
 

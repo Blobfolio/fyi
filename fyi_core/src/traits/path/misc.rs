@@ -3,6 +3,8 @@
 */
 
 use crate::{
+	Error,
+	Result,
 	traits::path::FYIPathFormat,
 	util::strings,
 };
@@ -32,7 +34,7 @@ pub trait FYIPath {
 	fn fyi_is_executable(&self) -> bool;
 
 	/// Parent Directory.
-	fn fyi_parent(&self) -> Result<PathBuf, String>;
+	fn fyi_parent(&self) -> Result<PathBuf>;
 }
 
 impl FYIPath for Path {
@@ -85,13 +87,13 @@ impl FYIPath for Path {
 	}
 
 	/// Parent Directory.
-	fn fyi_parent(&self) -> Result<PathBuf, String> {
-		let dir = self.parent()
-			.ok_or(format!("Invalid parent: {}", self.fyi_to_string()).to_string())?;
-
-		match dir.is_dir() {
-			true => Ok(dir.fyi_to_path_buf_abs()),
-			false => Err(format!("Invalid parent: {}", dir.fyi_to_string()).to_string())
+	fn fyi_parent(&self) -> Result<PathBuf> {
+		if let Some(dir) = self.parent() {
+			if dir.is_dir() {
+				return Ok(dir.fyi_to_path_buf_abs());
+			}
 		}
+
+		Err(Error::PathInvalid(self.to_path_buf(), "has no parent"))
 	}
 }

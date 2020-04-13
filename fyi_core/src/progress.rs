@@ -68,34 +68,6 @@ impl<'pi> ProgressInner<'pi> {
 	// Getters
 	// -------------------------------------------------------------
 
-	/// Active paths.
-	pub fn tasks(&self) -> Option<HashSet<String>> {
-		match self.tasks.is_empty() {
-			true => None,
-			false => Some(self.tasks.clone()),
-		}
-	}
-
-	/// Finished.
-	pub fn done(&self) -> u64 {
-		self.done
-	}
-
-	/// Flags.
-	pub fn flags(&self) -> u8 {
-		self.flags
-	}
-
-	/// Last.
-	pub fn last(&self) -> Cow<'pi, str> {
-		self.last.clone()
-	}
-
-	/// Msg.
-	pub fn msg(&self) -> Cow<'pi, str> {
-		self.msg.clone()
-	}
-
 	/// Percent done.
 	pub fn percent(&self) -> f64 {
 		if self.total > 0 {
@@ -107,16 +79,6 @@ impl<'pi> ProgressInner<'pi> {
 		else {
 			0.0
 		}
-	}
-
-	/// Time.
-	pub fn time(&self) -> Instant {
-		self.time
-	}
-
-	/// Total.
-	pub fn total(&self) -> u64 {
-		self.total
 	}
 
 
@@ -208,12 +170,18 @@ impl<'pi> ProgressInner<'pi> {
 		}
 
 		// We might need to clear the previous entry.
-		let lines: u16 = self.last.fyi_lines_len() as u16;
-		if 0 < lines {
-			cli::print(
-				&format!("{}", ansi_escapes::EraseLines(lines + 1)),
-				PRINT_STDERR
-			);
+		let lines = self.last.fyi_lines_len() + 1;
+		if 1 < lines {
+			for i in 0..lines {
+				if i > 0 {
+					// Move the cursor up, left, and clear to end of line.
+					cli::print("\x1B[1A\x1B[1000D\x1B[K", PRINT_STDERR);
+				}
+				else {
+					// Move the cursor left and clear to end of line.
+					cli::print("\x1B[1000D\x1B[K", PRINT_STDERR);
+				}
+			}
 		}
 
 		// Anything doing?
@@ -336,9 +304,9 @@ impl<'pi> ProgressInner<'pi> {
 				.cloned()
 				.map(|ref x| {
 					let out: String = [
-						"    \u{1B}[35m↳ ",
+						"    \x1B[35m↳ ",
 						&x,
-						"\u{1B}[0m",
+						"\x1B[0m",
 					].concat();
 
 					out.fyi_shorten(width).to_string()
@@ -373,23 +341,23 @@ impl<'pi> ProgressInner<'pi> {
 		};
 
 		Cow::Owned([
-			"\u{1B}[2m[\u{1B}[0m\u{1B}[96;1m",
+			"\x1B[2m[\x1B[0m\x1B[96;1m",
 			&done,
-			"\u{1B}[0m\u{1B}[36m",
+			"\x1B[0m\x1B[36m",
 			&undone,
-			"\u{1B}[0m\u{1B}[2m]\u{1B}[0m",
+			"\x1B[0m\x1B[2m]\x1B[0m",
 		].concat())
 	}
 
 	/// Elapsed.
 	fn part_elapsed(&self) -> Cow<'_, str> {
 		Cow::Owned([
-			"\u{1B}[2m[\u{1B}[0m\u{1B}[1m",
+			"\x1B[2m[\x1B[0m\x1B[1m",
 			&time::human_elapsed(
 				self.time.elapsed().as_secs() as usize,
 				PRINT_COMPACT
 			),
-			"\u{1B}[0m\u{1B}[2m]\u{1B}[0m",
+			"\x1B[0m\x1B[2m]\x1B[0m",
 		].concat())
 	}
 
@@ -410,25 +378,25 @@ impl<'pi> ProgressInner<'pi> {
 
 		let s_per: f64 = elapsed / self.done as f64;
 		Cow::Owned([
-			"\u{1B}[35mETA: \u{1B}[0m\u{1B}[95;1m",
+			"\x1B[35mETA: \x1B[0m\x1B[95;1m",
 			&time::human_elapsed(
 				f64::ceil(s_per * (self.total - self.done) as f64) as usize,
 				PRINT_COMPACT
 			),
-			"\u{1B}[0m",
+			"\x1B[0m",
 		].concat())
 	}
 
 	/// Progress bits (count, percent).
 	fn part_progress(&self) -> Cow<'_, str> {
 		Cow::Owned([
-			"\u{1B}[96;1m",
+			"\x1B[96;1m",
 			self.done.to_string().as_str(),
-			"\u{1B}[0m\u{1B}[2m/\u{1B}[0m\u{1B}[36m",
+			"\x1B[0m\x1B[2m/\x1B[0m\x1B[36m",
 			self.total.to_string().as_str(),
-			"\u{1B}[0m \u{1B}[1m",
+			"\x1B[0m \x1B[1m",
 			format!("{:>3.*}%", 2, self.percent() * 100.0).as_str(),
-			"\u{1B}[0m"
+			"\x1B[0m"
 		].concat())
 	}
 }
