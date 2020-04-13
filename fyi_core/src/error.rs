@@ -22,6 +22,10 @@ pub enum Error {
 	/// Passthru IO.
 	Nix(#[from] nix::Error),
 
+	#[error("Error: {0}")]
+	/// Miscellaneous.
+	Other(String),
+
 	#[error("Failed to copy: {0}.")]
 	/// Copy failed.
 	PathCopy(PathBuf),
