@@ -7,15 +7,20 @@
 # just --list
 ##
 
-cargo_dir     := "/tmp/fyi-cargo"
-release_dir   := justfile_directory() + "/release"
+pkg_id      := "fyi"
+pkg_name    := "FYI"
+pkg_dir1    := justfile_directory() + "/fyi_core"
+pkg_dir2    := justfile_directory() + "/fyi"
+
+cargo_dir   := "/tmp/" + pkg_id + "-cargo"
+release_dir := justfile_directory() + "/release"
 
 
 
 # Build Release!
 @bench:
 	# First let's build the Rust bit.
-	cd "{{ justfile_directory() }}/fyi_core" && cargo bench \
+	cd "{{ pkg_dir1 }}" && cargo bench \
 		--features progress,witcher \
 		--target-dir "{{ cargo_dir }}"
 
@@ -38,7 +43,7 @@ release_dir   := justfile_directory() + "/release"
 
 	# First let's build the Rust bit.
 	RUSTFLAGS="-C link-arg=-s" cargo-deb \
-		-p fyi \
+		-p {{ pkg_id }} \
 		-o "{{ justfile_directory() }}/release"
 
 	just _fix-chown "{{ release_dir }}"
@@ -51,13 +56,16 @@ release_dir   := justfile_directory() + "/release"
 	rm "{{ release_dir }}/man"/*
 
 	# Use help2man to make a crappy MAN page.
-	help2man -o "{{ release_dir }}/man/fyi.1" -N "{{ cargo_dir }}/release/fyi"
+	help2man -o "{{ release_dir }}/man/{{ pkg_id }}.1" \
+		-N "{{ cargo_dir }}/release/{{ pkg_id }}"
 
 	# Strip some ugly out.
-	sd 'FYI [0-9.]+\nBlobfolio, LLC. <hello@blobfolio.com>\n' '' "{{ release_dir }}/man/fyi.1"
+	sd '{{ pkg_name }} [0-9.]+\nBlobfolio, LLC. <hello@blobfolio.com>\n' \
+		'' \
+		"{{ release_dir }}/man/{{ pkg_id }}.1"
 
 	# Gzip it and reset ownership.
-	gzip -k -f -9 "{{ release_dir }}/man/fyi.1"
+	gzip -k -f -9 "{{ release_dir }}/man/{{ pkg_id }}.1"
 	just _fix-chown "{{ release_dir }}/man"
 
 
@@ -69,42 +77,43 @@ release_dir   := justfile_directory() + "/release"
 		--target-dir "{{ cargo_dir }}"
 
 
-# Get/Set FYI version.
+# Get/Set version.
 version:
 	#!/usr/bin/env bash
 
 	# Current version.
-	_ver1="$( toml get "{{ justfile_directory() }}/fyi_core/Cargo.toml" package.version | \
+	_ver1="$( toml get "{{ pkg_dir1 }}/Cargo.toml" package.version | \
 		sed 's/"//g' )"
 
 	# Find out if we want to bump it.
-	_ver2="$( whiptail --inputbox "Set FYI version:" --title "Release Version" 0 0 "$_ver1" 3>&1 1>&2 2>&3 )"
+	_ver2="$( whiptail --inputbox "Set {{ pkg_name }} version:" --title "Release Version" 0 0 "$_ver1" 3>&1 1>&2 2>&3 )"
 
 	exitstatus=$?
 	if [ $exitstatus != 0 ] || [ "$_ver1" = "$_ver2" ]; then
 		exit 0
 	fi
 
-	fyi success "Setting plugin version to $_ver2."
+	fyi success "Setting version to $_ver2."
 
 	# Set the release version!
-	toml set "{{ justfile_directory() }}/fyi_core/Cargo.toml" \
+	toml set "{{ pkg_dir1 }}/Cargo.toml" \
 		package.version \
 		"$_ver2" > /tmp/Cargo.toml
-	mv "/tmp/Cargo.toml" "{{ justfile_directory() }}/fyi_core/Cargo.toml"
-	just _fix-chown "{{ justfile_directory() }}/fyi_core/Cargo.toml"
+	mv "/tmp/Cargo.toml" "{{ pkg_dir1 }}/Cargo.toml"
+	just _fix-chown "{{ pkg_dir1 }}/Cargo.toml"
 
-	toml set "{{ justfile_directory() }}/fyi/Cargo.toml" \
+	toml set "{{ pkg_dir2 }}/Cargo.toml" \
 		package.version \
 		"$_ver2" > /tmp/Cargo.toml
-	mv "/tmp/Cargo.toml" "{{ justfile_directory() }}/fyi/Cargo.toml"
-	just _fix-chown "{{ justfile_directory() }}/fyi/Cargo.toml"
+	mv "/tmp/Cargo.toml" "{{ pkg_dir2 }}/Cargo.toml"
+	just _fix-chown "{{ pkg_dir2 }}/Cargo.toml"
 
 
 # Init dependencies.
 @_init:
 	[ ! -f "{{ justfile_directory() }}/Cargo.lock" ] || rm "{{ justfile_directory() }}/Cargo.lock"
 	cargo update
+
 
 # Fix file/directory permissions.
 @_fix-chmod PATH:
