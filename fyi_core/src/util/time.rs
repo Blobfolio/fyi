@@ -26,10 +26,10 @@ use std::{
 /// 2 minutes, and 13 seconds".
 pub fn human_elapsed<N> (elapsed: N, flags: u8) -> Cow<'static, str>
 where N: ToPrimitive {
-	let elapsed = elapsed.to_usize().unwrap_or(0);
+	let elapsed: usize = elapsed.to_usize().unwrap_or(0);
 	let compact: bool = 0 != (crate::PRINT_COMPACT & flags);
 
-	if elapsed <= 0 {
+	if elapsed == 0 {
 		return match compact {
 			true => Cow::Borrowed("00:00:00"),
 			false => Cow::Borrowed("0 seconds"),
