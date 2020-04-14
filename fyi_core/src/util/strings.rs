@@ -86,10 +86,10 @@ where N: ToPrimitive {
 	if 0 == count {
 		Cow::Borrowed("")
 	}
-	else if count > 100 {
-		Cow::Owned(String::from_utf8(vec![b' '; count]).unwrap())
+	else if count <= 100 {
+		Cow::Borrowed(&WHITE[0..count])
 	}
 	else {
-		Cow::Borrowed(&WHITE[0..count])
+		Cow::Owned(String::from_utf8(vec![b' '; count]).unwrap())
 	}
 }
