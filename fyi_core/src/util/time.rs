@@ -15,60 +15,115 @@ use std::{
 
 
 
-/// Human-Readable Elapsed Time.
+/// Chunked Time.
 ///
-/// The short format will return a string in "HH:MM:SS" format, unless
-/// your duration has crossed into days, in which case it will be in
-/// "DD:HH:MM:SS" format.
+/// Split seconds into days, hours, minutes, seconds.
+pub fn chunked(mut s: usize) -> [usize; 4] {
+	let mut m = 0;
+	let mut h = 0;
+	let mut d = 0;
+
+	if s >= 60 {
+		m = s / 60;
+		s -= m * 60;
+
+		if m >= 60 {
+			h = m / 60;
+			m -= h * 60;
+
+			if h >= 24 {
+				d = h / 24;
+				h -= d * 24;
+			}
+		}
+	}
+
+	[d, h, m, s]
+}
+
+/// Elapsed Time (Compact)
 ///
-/// The long format will be a list of the non-empty bits in English,
-/// like "15 seconds" or "3 hours and 2 seconds" or "4 days, 3 hours,
-/// 2 minutes, and 13 seconds".
-pub fn human_elapsed<N> (elapsed: N, flags: u8) -> Cow<'static, str>
+/// This turns seconds into a 00:00:00-style display. Days are included
+/// only if positive.
+pub fn elapsed_short<N> (elapsed: N) -> Cow<'static, str>
 where N: ToPrimitive {
 	let elapsed: usize = elapsed.to_usize().unwrap_or(0);
-	let compact: bool = 0 != (crate::PRINT_COMPACT & flags);
+	if 0 == elapsed {
+		Cow::Borrowed("00:00:00")
+	}
+	else {
+		let c = chunked(elapsed);
+		if 0 != c[0] {
+			Cow::Owned(format!(
+				"{:02}:{:02}:{:02}:{:02}",
+				c[0], c[1], c[2], c[3]
+			))
+		}
+		else {
+			Cow::Owned(format!(
+				"{:02}:{:02}:{:02}",
+				c[1], c[2], c[3]
+			))
+		}
+	}
+}
 
-	if elapsed == 0 {
-		return match compact {
-			true => Cow::Borrowed("00:00:00"),
-			false => Cow::Borrowed("0 seconds"),
+/// Human-Readable Elapsed Time
+///
+/// This turns seconds into a human list like 1 hour and 2 seconds.
+pub fn elapsed<N> (elapsed: N) -> Cow<'static, str>
+where N: ToPrimitive {
+	let elapsed: usize = elapsed.to_usize().unwrap_or(0);
+	if 0 == elapsed {
+		Cow::Borrowed("0 seconds")
+	}
+	else if elapsed == 1 {
+		Cow::Borrowed("1 second")
+	}
+	else if elapsed < 60 {
+		Cow::Owned([&elapsed.to_string(), " seconds"].concat())
+	}
+	else {
+		// This is ugly but relatively fast.
+		let parts: Vec<String> = {
+			let mut out: Vec<String> = Vec::with_capacity(4);
+			let c = chunked(elapsed);
+
+			if c[0] == 1 {
+				out.push("1 day".to_string());
+			}
+			else if c[0] > 1 {
+				out.push([&c[0].to_string(), " days"].concat());
+			}
+
+			if c[1] == 1 {
+				out.push("1 hour".to_string());
+			}
+			else if c[1] > 1 {
+				out.push([&c[1].to_string(), " hours"].concat());
+			}
+
+			if c[2] == 1 {
+				out.push("1 minute".to_string());
+			}
+			else if c[2] > 1 {
+				out.push([&c[2].to_string(), " minutes"].concat());
+			}
+
+			if c[3] == 1 {
+				out.push("1 second".to_string());
+			}
+			else if c[3] > 1 {
+				out.push([&c[3].to_string(), " seconds"].concat());
+			}
+
+			out
 		};
-	}
 
-	// Break down the time.
-	let bits: Vec<(usize, &str, &str)> = vec![
-		(elapsed / 86400, "day", "days"),
-		((elapsed % 86400) / 3600, "hour", "hours"),
-		((elapsed % 86400 % 3600) / 60, "minute", "minutes"),
-		(elapsed % 86400 % 3600 % 60, "second", "seconds"),
-	];
-
-	// Return a shortened version.
-	if true == compact {
-		return Cow::Owned(
-			bits.iter()
-				.filter_map(|(num, singular, _)| match (*num > 0) | (&"day" != singular) {
-					true => Some(format!("{:02}", num)),
-					false => None,
-				})
-				.collect::<Vec<String>>()
-				.join(":")
-		);
-	}
-
-	// A longer version.
-	let out = bits.iter()
-		.filter_map(|(num, singular, plural)| match *num {
-			0 => None,
-			_ => Some(strings::inflect(*num, *singular, *plural).to_string()),
-		})
-		.collect::<Vec<String>>();
-
-	// Let's grammar-up the response with Oxford joins.
-	match out.is_empty() {
-		true => Cow::Borrowed("0 seconds"),
-		false => strings::oxford_join(out, " and "),
+		strings::oxford_join(
+			&parts,
+			" and "
+		)
 	}
 }
 

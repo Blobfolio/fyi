@@ -6,7 +6,6 @@ This is a very simple thread-capable CLI progress indicator.
 
 use crate::{
 	Msg,
-	PRINT_COMPACT,
 	PRINT_NEWLINE,
 	PRINT_STDERR,
 	PROGRESSING,
@@ -389,10 +388,7 @@ impl<'pi> ProgressInner<'pi> {
 	fn part_elapsed(&self) -> Cow<'_, str> {
 		Cow::Owned([
 			"\x1B[2m[\x1B[0m\x1B[1m",
-			&time::human_elapsed(
-				self.time.elapsed().as_secs() as usize,
-				PRINT_COMPACT
-			),
+			&time::elapsed_short(self.time.elapsed().as_secs() as usize),
 			"\x1B[0m\x1B[2m]\x1B[0m",
 		].concat())
 	}
@@ -415,10 +411,7 @@ impl<'pi> ProgressInner<'pi> {
 		let s_per: f64 = elapsed / self.done as f64;
 		Cow::Owned([
 			"\x1B[35mETA: \x1B[0m\x1B[95;1m",
-			&time::human_elapsed(
-				f64::ceil(s_per * (self.total - self.done) as f64) as usize,
-				PRINT_COMPACT
-			),
+			&time::elapsed_short(f64::ceil(s_per * (self.total - self.done) as f64) as usize),
 			"\x1B[0m",
 		].concat())
 	}

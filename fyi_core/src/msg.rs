@@ -231,7 +231,7 @@ impl<'m> Msg<'m> {
 
 	/// Template: Crunched In X.
 	pub fn crunched_in(num: u64, time: Instant, du: Option<(u64, u64)>) -> Self {
-		let elapsed = time::human_elapsed(time.elapsed().as_secs() as usize, 0);
+		let elapsed = time::elapsed(time.elapsed().as_secs() as usize);
 
 		Msg::new(Cow::Owned(match du {
 			Some((before, after)) => [
@@ -263,7 +263,7 @@ impl<'m> Msg<'m> {
 	pub fn finished_in(time: Instant) -> Self {
 		Msg::new(Cow::Owned([
 			"Finished in ",
-			&time::human_elapsed(time.elapsed().as_secs() as usize, 0),
+			&time::elapsed(time.elapsed().as_secs() as usize),
 			".",
 		].concat()))
 			.with_prefix(Prefix::Custom(Cow::Borrowed("Crunched"), 2))
