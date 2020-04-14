@@ -343,7 +343,7 @@ impl<'pi> ProgressInner<'pi> {
 		lazy_static::lazy_static! {
 			// Precompute each bar to its maximum possible length (58);
 			// it is cheaper to shrink than to grow.
-			static ref DONE: Cow<'static, str> = Cow::Owned("◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼".to_string());
+			static ref DONE: Cow<'static, str> = Cow::Owned("==========================================================".to_string());
 			static ref UNDONE: Cow<'static, str> = Cow::Owned("----------------------------------------------------------".to_string());
 		}
 
@@ -356,7 +356,7 @@ impl<'pi> ProgressInner<'pi> {
 		width -= 2;
 
 		let done_len: usize = f64::floor(self.percent() * width as f64) as usize;
-		// If we have nothing done, we're just returning undone.
+		// No progress.
 		if 0 == done_len {
 			Cow::Owned([
 				"\x1B[2m[\x1B[0m\x1B[36m",
@@ -364,7 +364,7 @@ impl<'pi> ProgressInner<'pi> {
 				"\x1B[0m\x1B[2m]\x1B[0m",
 			].concat())
 		}
-		// Conversely if we're totally done, just return that.
+		// Total progress.
 		else if done_len == width {
 			Cow::Owned([
 				"\x1B[2m[\x1B[0m\x1B[96;1m",
@@ -372,12 +372,9 @@ impl<'pi> ProgressInner<'pi> {
 				"\x1B[0m\x1B[2m]\x1B[0m",
 			].concat())
 		}
-		// Smoosh 'em together.
+		// Mixed progress.
 		else {
 			let undone_len: usize = width - done_len;
-			// The character we're using is 3 bytes.
-			let done_len = done_len * 3;
-
 			Cow::Owned([
 				"\x1B[2m[\x1B[0m\x1B[96;1m",
 				&DONE[0..done_len],
