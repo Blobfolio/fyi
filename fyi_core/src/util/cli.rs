@@ -3,6 +3,7 @@
 */
 
 use crate::traits::str::FYIStringFormat;
+use std::borrow::Cow;
 use std::io::{
 	stderr,
 	stdout,
@@ -12,18 +13,19 @@ use std::io::{
 
 
 /// Print.
-pub fn print<S> (msg: S, flags: u8) -> bool
-where S: Into<String> {
-	let mut msg: String = msg.into();
-
-	// Strip colors.
-	if 0 != (crate::PRINT_NO_COLOR & flags) {
-		msg = msg.fyi_strip_ansi().to_string();
-	}
+pub fn print<'a, S> (msg: S, flags: u8) -> bool
+where S: Into<Cow<'a, str>> {
+	let mut msg = msg.into().to_owned();
 
 	// Add a new line to the end.
 	if 0 != (crate::PRINT_NEWLINE & flags) {
-		msg.push_str("\n");
+		msg.to_mut().push_str("\n");
+	}
+
+	// Strip colors.
+	if 0 != (crate::PRINT_NO_COLOR & flags) {
+		let tmp = msg.fyi_strip_ansi().to_string();
+		msg = Cow::Owned(tmp);
 	}
 
 	// Print it!
