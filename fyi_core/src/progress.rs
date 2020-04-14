@@ -179,7 +179,7 @@ impl<'pi> ProgressInner<'pi> {
 				"\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K",
 			];
 
-			static ref EXTRA: String = "\x1B[1A\x1B[1000D\x1B[K".to_string();
+			static ref CLEAR_MORE: Cow<'static, str> = Cow::Borrowed("\x1B[1A\x1B[1000D\x1B[K");
 		}
 
 		// No change.
@@ -198,15 +198,15 @@ impl<'pi> ProgressInner<'pi> {
 			else {
 				cli::print([
 					CLEAR[9],
-					EXTRA.repeat(lines - 9).as_str(),
+					CLEAR_MORE.repeat(lines - 9).as_str(),
 				].concat(), PRINT_STDERR);
 			}
-		}
 
-		// Anything doing?
-		if msg.is_empty() {
-			self.last = Cow::Borrowed("");
-			return;
+			// If there's no next message, replace last and leave.
+			if msg.is_empty() {
+				self.last = Cow::Borrowed("");
+				return;
+			}
 		}
 
 		self.last = msg.clone();
