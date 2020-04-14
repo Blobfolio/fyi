@@ -53,20 +53,20 @@ where
 /// there is one item, that item is returned. If there are two, they
 /// are joined with the operator. Three or more entries will use
 /// the Oxford Comma.
-pub fn oxford_join<'a, S> (mut list: Vec<String>, glue: S) -> Cow<'static, str>
+pub fn oxford_join<'a, S> (list: &[String], glue: S) -> Cow<'static, str>
 where S: Into<Cow<'a, str>> {
 	match list.len() {
 		0 => Cow::Borrowed(""),
 		1 => Cow::Owned(list[0].to_string()),
 		2 => Cow::Owned(list.join(&[" ", glue.into().trim(), " "].concat())),
-		_ => {
-			let last = list.pop().unwrap();
+		x => {
+			let len = x - 1;
 			Cow::Owned([
-				&list.join(", "),
+				&list[0..len].join(", "),
 				", ",
 				glue.into().trim(),
 				" ",
-				&last
+				&list[len]
 			].concat())
 		}
 	}
