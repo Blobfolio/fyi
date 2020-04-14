@@ -77,11 +77,19 @@ where S: Into<Cow<'a, str>> {
 /// Generate a string consisting of X spaces.
 pub fn whitespace<N> (count: N) -> Cow<'static, str>
 where N: ToPrimitive {
-	match count.to_usize().unwrap_or(0) {
-		0 => Cow::Borrowed(""),
-		x => match String::from_utf8(vec![b' '; x]) {
-			Ok(y) => Cow::Owned(y),
-			_ => Cow::Borrowed(""),
-		},
+	lazy_static::lazy_static! {
+		// Precompute 100 spaces; it is cheaper to shrink than to grow.
+		static ref WHITE: Cow<'static, str> = Cow::Owned("                                                                                                    ".to_string());
+	}
+
+	let count = count.to_usize().unwrap_or(0);
+	if 0 == count {
+		Cow::Borrowed("")
+	}
+	else if count > 100 {
+		Cow::Owned(String::from_utf8(vec![b' '; count]).unwrap())
+	}
+	else {
+		Cow::Borrowed(&WHITE[0..count])
 	}
 }

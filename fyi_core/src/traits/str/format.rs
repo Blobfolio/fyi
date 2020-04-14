@@ -205,6 +205,7 @@ where T: AsRef<str> {
 	/// This approach courtesy of "console"!
 	fn fyi_strip_ansi(&self) -> Cow<'_, str> {
 		lazy_static::lazy_static! {
+			// Regex is expensive. Do this once.
 			static ref STRIP_ANSI_RE: Regex =
 				Regex::new(r"[\x1b\x9b][\[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-PRZcf-nqry=><]")
 					.unwrap();

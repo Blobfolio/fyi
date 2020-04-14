@@ -164,23 +164,42 @@ impl<'pi> ProgressInner<'pi> {
 
 	/// Print Whatever.
 	pub fn print(&mut self, msg: Cow<'pi, str>) {
+		lazy_static::lazy_static! {
+			// Pre-compute line clearings. Ten'll do for most 2020 use cases.
+			static ref CLEAR: [&'static str; 10] = [
+				"\x1B[1000D\x1B[K",
+				"\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K",
+				"\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K",
+				"\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K",
+				"\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K",
+				"\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K",
+				"\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K",
+				"\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K",
+				"\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K",
+				"\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K",
+			];
+
+			static ref EXTRA: String = "\x1B[1A\x1B[1000D\x1B[K".to_string();
+		}
+
 		// No change.
 		if self.last == msg {
 			return;
 		}
 
 		// We might need to clear the previous entry.
-		let lines = self.last.fyi_lines_len() + 1;
-		if 1 < lines {
-			for i in 0..lines {
-				if i > 0 {
-					// Move the cursor up, left, and clear to end of line.
-					cli::print("\x1B[1A\x1B[1000D\x1B[K", PRINT_STDERR);
-				}
-				else {
-					// Move the cursor left and clear to end of line.
-					cli::print("\x1B[1000D\x1B[K", PRINT_STDERR);
-				}
+		if false == self.last.is_empty() {
+			let lines = self.last.fyi_lines_len();
+
+			// The count starts at zero for the purposes of CLEAR.
+			if lines <= 9 {
+				cli::print(CLEAR[lines], PRINT_STDERR);
+			}
+			else {
+				cli::print([
+					CLEAR[9],
+					EXTRA.repeat(lines - 9).as_str(),
+				].concat(), PRINT_STDERR);
 			}
 		}
 
@@ -225,6 +244,7 @@ impl<'pi> ProgressInner<'pi> {
 		let mut p_eta = self.part_eta();
 		let p_bar_len: usize = {
 			let mut size = width - p_space;
+			// Nobody needs a gigantic status bar.
 			if size > 60 {
 				size = 60;
 			}
@@ -320,6 +340,13 @@ impl<'pi> ProgressInner<'pi> {
 
 	/// Bar!
 	fn part_bar(&self, mut width: usize) -> Cow<'_, str> {
+		lazy_static::lazy_static! {
+			// Precompute each bar to its maximum possible length (58);
+			// it is cheaper to shrink than to grow.
+			static ref DONE: Cow<'static, str> = Cow::Owned("◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼◼".to_string());
+			static ref UNDONE: Cow<'static, str> = Cow::Owned("----------------------------------------------------------".to_string());
+		}
+
 		// We need at least 10 chars.
 		if width < 10 {
 			return Cow::Borrowed("");
@@ -329,24 +356,36 @@ impl<'pi> ProgressInner<'pi> {
 		width -= 2;
 
 		let done_len: usize = f64::floor(self.percent() * width as f64) as usize;
-		let undone_len: usize = width - done_len;
+		// If we have nothing done, we're just returning undone.
+		if 0 == done_len {
+			Cow::Owned([
+				"\x1B[2m[\x1B[0m\x1B[36m",
+				&UNDONE[0..width],
+				"\x1B[0m\x1B[2m]\x1B[0m",
+			].concat())
+		}
+		// Conversely if we're totally done, just return that.
+		else if done_len == width {
+			Cow::Owned([
+				"\x1B[2m[\x1B[0m\x1B[96;1m",
+				&DONE[0..width],
+				"\x1B[0m\x1B[2m]\x1B[0m",
+			].concat())
+		}
+		// Smoosh 'em together.
+		else {
+			let undone_len: usize = width - done_len;
+			// The character we're using is 3 bytes.
+			let done_len = done_len * 3;
 
-		let done: String = match done_len {
-			0 => "".to_string(),
-			x => "◼".to_string().repeat(x),
-		};
-		let undone: String = match undone_len {
-			0 => "".to_string(),
-			x => String::from_utf8(vec![b'-'; x]).unwrap(),
-		};
-
-		Cow::Owned([
-			"\x1B[2m[\x1B[0m\x1B[96;1m",
-			&done,
-			"\x1B[0m\x1B[36m",
-			&undone,
-			"\x1B[0m\x1B[2m]\x1B[0m",
-		].concat())
+			Cow::Owned([
+				"\x1B[2m[\x1B[0m\x1B[96;1m",
+				&DONE[0..done_len],
+				"\x1B[0m\x1B[36m",
+				&UNDONE[0..undone_len],
+				"\x1B[0m\x1B[2m]\x1B[0m",
+			].concat())
+		}
 	}
 
 	/// Elapsed.
