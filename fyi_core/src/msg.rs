@@ -196,8 +196,7 @@ impl<'m> Msg<'m> {
 
 	/// Timestamp.
 	pub fn timestamp(&self) -> Cow<'_, str> {
-		use chrono::prelude::*;
-		Cow::Owned(Local::now().format("%F %T").to_string())
+		Cow::Owned(chrono::Local::now().format("%F %T").to_string())
 	}
 
 
