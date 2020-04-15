@@ -57,6 +57,11 @@ pub enum Error {
 	#[error("Failed to write: {0}.")]
 	/// Write failed.
 	PathWrite(PathBuf),
+
+	#[cfg(feature = "witcher")]
+	#[error(transparent)]
+	/// Passthru IO.
+	TempFile(#[from] tempfile::PathPersistError),
 }
 
 impl fmt::Debug for Error {
