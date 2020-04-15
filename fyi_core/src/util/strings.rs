@@ -53,20 +53,20 @@ where
 /// there is one item, that item is returned. If there are two, they
 /// are joined with the operator. Three or more entries will use
 /// the Oxford Comma.
-pub fn oxford_join<'a, S> (mut list: Vec<String>, glue: S) -> Cow<'static, str>
+pub fn oxford_join<'a, S> (list: &[String], glue: S) -> Cow<'static, str>
 where S: Into<Cow<'a, str>> {
 	match list.len() {
 		0 => Cow::Borrowed(""),
 		1 => Cow::Owned(list[0].to_string()),
 		2 => Cow::Owned(list.join(&[" ", glue.into().trim(), " "].concat())),
-		_ => {
-			let last = list.pop().unwrap();
+		x => {
+			let len = x - 1;
 			Cow::Owned([
-				&list.join(", "),
+				&list[0..len].join(", "),
 				", ",
 				glue.into().trim(),
 				" ",
-				&last
+				&list[len]
 			].concat())
 		}
 	}
@@ -77,11 +77,19 @@ where S: Into<Cow<'a, str>> {
 /// Generate a string consisting of X spaces.
 pub fn whitespace<N> (count: N) -> Cow<'static, str>
 where N: ToPrimitive {
-	match count.to_usize().unwrap_or(0) {
-		0 => Cow::Borrowed(""),
-		x => match String::from_utf8(vec![b' '; x]) {
-			Ok(y) => Cow::Owned(y),
-			_ => Cow::Borrowed(""),
-		},
+	lazy_static::lazy_static! {
+		// Precompute 100 spaces; it is cheaper to shrink than to grow.
+		static ref WHITE: Cow<'static, str> = Cow::Owned("                                                                                                    ".to_string());
+	}
+
+	let count = count.to_usize().unwrap_or(0);
+	if 0 == count {
+		Cow::Borrowed("")
+	}
+	else if count <= 100 {
+		Cow::Borrowed(&WHITE[0..count])
+	}
+	else {
+		Cow::Owned(String::from_utf8(vec![b' '; count]).unwrap())
 	}
 }

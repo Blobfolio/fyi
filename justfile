@@ -20,8 +20,9 @@ release_dir := justfile_directory() + "/release"
 # Build Release!
 @bench:
 	# First let's build the Rust bit.
-	cd "{{ pkg_dir1 }}" && cargo bench \
-		--features progress,witcher \
+	cargo bench \
+		-p fyi_core \
+		--all-features \
 		--target-dir "{{ cargo_dir }}"
 
 
@@ -35,8 +36,6 @@ release_dir := justfile_directory() + "/release"
 
 # Build Debian package!
 @build-deb: build-man
-	[ $( command -v cargo-deb ) ] || cargo install cargo-deb
-
 	# cargo-deb doesn't support target_dir flags yet.
 	[ ! -d "{{ justfile_directory() }}/target" ] || rm -rf "{{ justfile_directory() }}/target"
 	mv "{{ cargo_dir }}" "{{ justfile_directory() }}/target"

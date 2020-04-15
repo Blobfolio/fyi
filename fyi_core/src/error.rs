@@ -26,6 +26,10 @@ pub enum Error {
 	/// Miscellaneous.
 	Other(String),
 
+	#[error("No {0} were found.")]
+	/// No paths.
+	NoPaths(String),
+
 	#[error("Failed to copy: {0}.")]
 	/// Copy failed.
 	PathCopy(PathBuf),
@@ -53,6 +57,16 @@ pub enum Error {
 	#[error("Failed to write: {0}.")]
 	/// Write failed.
 	PathWrite(PathBuf),
+
+	#[cfg(feature = "witcher")]
+	#[error(transparent)]
+	/// Passthru IO.
+	TempfilePathPersist(#[from] tempfile::PathPersistError),
+
+	#[cfg(feature = "witcher")]
+	#[error(transparent)]
+	/// Passthru IO.
+	TempfilePersist(#[from] tempfile::PersistError),
 }
 
 impl fmt::Debug for Error {

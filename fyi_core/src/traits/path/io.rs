@@ -5,24 +5,14 @@
 use crate::{
 	Error,
 	Result,
-	traits::path::{
-		FYIPath,
-		FYIPathFormat,
-	},
 };
 use std::{
-	env,
-	fs::{
-		self,
-		File,
-	},
+	fs,
 	io::prelude::*,
 	os::unix::fs::MetadataExt,
-	path::{
-		Path,
-		PathBuf,
-	},
+	path::Path,
 };
+use tempfile::NamedTempFile;
 
 
 
@@ -33,7 +23,7 @@ pub trait FYIPathIO {
 	where P: AsRef<Path>;
 
 	/// Copy To Temporary Location.
-	fn fyi_copy_tmp(&self) -> Result<PathBuf>;
+	fn fyi_copy_tmp(&self) -> Result<NamedTempFile>;
 
 	/// Delete.
 	fn fyi_delete(&self) -> Result<()>;
@@ -45,10 +35,6 @@ pub trait FYIPathIO {
 	/// Read Bytes.
 	fn fyi_read(&self) -> Result<Vec<u8>>;
 
-	/// Clone permissions and ownership from a path.
-	fn fyi_reference<P> (&self, src: P) -> Result<()>
-	where P: AsRef<Path>;
-
 	/// Write Bytes.
 	fn fyi_write(&self, data: &[u8]) -> Result<()>;
 }
@@ -58,9 +44,8 @@ impl FYIPathIO for Path {
 	fn fyi_copy<P> (&self, to: P) -> Result<()>
 	where P: AsRef<Path> {
 		if self.is_file() {
-			let data: Vec<u8> = self.fyi_read()?;
 			let to = to.as_ref().to_path_buf();
-			to.fyi_write(&data)?;
+			to.fyi_write(&self.fyi_read()?)?;
 
 			Ok(())
 		}
@@ -70,13 +55,29 @@ impl FYIPathIO for Path {
 	}
 
 	/// Copy To Temporary Location.
-	fn fyi_copy_tmp(&self) -> Result<PathBuf> {
-		let mut to: PathBuf = env::temp_dir();
-		to.push(&self.fyi_file_name());
-		to = to.fyi_to_path_buf_unique()?;
-		self.fyi_copy(&to)?;
+	fn fyi_copy_tmp(&self) -> Result<NamedTempFile> {
+		use nix::unistd::{self, Uid, Gid};
 
-		Ok(to)
+		let meta = self.metadata()?;
+		if meta.is_file() {
+			let parent = self.parent()
+				.ok_or(Error::PathCopy(self.to_path_buf()))?;
+			let target = NamedTempFile::new_in(parent)?;
+
+			let file = target.as_file();
+			file.set_permissions(meta.permissions())?;
+			unistd::chown(
+				target.path(),
+				Some(Uid::from_raw(meta.uid())),
+				Some(Gid::from_raw(meta.gid()))
+			)?;
+
+			target.path().fyi_write(&self.fyi_read()?)?;
+			Ok(target)
+		}
+		else {
+			Err(Error::PathCopy(self.to_path_buf()))
+		}
 	}
 
 	/// Delete.
@@ -112,42 +113,12 @@ impl FYIPathIO for Path {
 		}
 	}
 
-	/// Clone permissions and ownership from a path.
-	fn fyi_reference<P> (&self, src: P) -> Result<()>
-	where P: AsRef<Path> {
-		if self.is_file() {
-			if let Ok(meta) = src.as_ref().metadata() {
-				if meta.is_file() {
-					use nix::unistd::{self, Uid, Gid};
-
-					// Permissions are easy.
-					fs::set_permissions(&self, meta.permissions())?;
-
-					// Ownership is a little more annoying.
-					unistd::chown(
-						self,
-						Some(Uid::from_raw(meta.uid())),
-						Some(Gid::from_raw(meta.gid()))
-					)?;
-
-					return Ok(());
-				}
-			}
-		}
-
-		Err(Error::PathReference(self.to_path_buf()))
-	}
-
 	/// Write Bytes.
 	fn fyi_write(&self, data: &[u8]) -> Result<()> {
 		if false == self.is_dir() {
-			{
-				let mut output = File::create(&self)?;
-
-				output.set_len(data.len() as u64)?;
-				output.write_all(&data)?;
-				output.flush().unwrap();
-			}
+			let mut tmp = tempfile_fast::Sponge::new_for(&self)?;
+			tmp.write_all(&data)?;
+			tmp.commit()?;
 
 			Ok(())
 		}

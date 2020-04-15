@@ -22,6 +22,12 @@ extern crate nix;
 #[cfg(feature = "witcher")]
 extern crate rayon;
 
+#[cfg(feature = "witcher")]
+extern crate tempfile;
+
+#[cfg(feature = "witcher")]
+extern crate tempfile_fast;
+
 extern crate bytecount;
 extern crate chrono;
 extern crate lazy_static;
@@ -47,20 +53,17 @@ mod witch;
 /// Append a timestamp to the message.
 pub const MSG_TIMESTAMP: u8 = 1;
 
-/// Print compact.
-pub const PRINT_COMPACT: u8 = 2;
-
 /// Message should not print in color.
-pub const PRINT_NO_COLOR: u8 = 4;
+pub const PRINT_NO_COLOR: u8 = 2;
 
 /// Append a new line while printing.
-pub const PRINT_NEWLINE: u8 = 8;
+pub const PRINT_NEWLINE: u8 = 4;
 
 /// Print to STDERR instead of STDOUT.
-pub const PRINT_STDERR: u8 = 16;
+pub const PRINT_STDERR: u8 = 8;
 
 /// Progress Active.
-pub const PROGRESSING: u8 = 32;
+pub const PROGRESSING: u8 = 16;
 
 /// Exports.
 pub use crate::msg::{

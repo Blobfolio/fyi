@@ -6,7 +6,6 @@ This is a very simple thread-capable CLI progress indicator.
 
 use crate::{
 	Msg,
-	PRINT_COMPACT,
 	PRINT_NEWLINE,
 	PRINT_STDERR,
 	PROGRESSING,
@@ -52,11 +51,11 @@ impl<'pi> Default for ProgressInner<'pi> {
 	/// Default.
 	fn default() -> Self {
 		Self {
-			tasks: HashSet::new(),
 			done: 0,
 			flags: 0,
 			last: Cow::Borrowed(""),
 			msg: Cow::Borrowed(""),
+			tasks: HashSet::new(),
 			time: Instant::now(),
 			total: 0,
 		}
@@ -164,30 +163,49 @@ impl<'pi> ProgressInner<'pi> {
 
 	/// Print Whatever.
 	pub fn print(&mut self, msg: Cow<'pi, str>) {
+		lazy_static::lazy_static! {
+			// Pre-compute line clearings. Ten'll do for most 2020 use cases.
+			static ref CLEAR: [&'static str; 10] = [
+				"\x1B[1000D\x1B[K",
+				"\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K",
+				"\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K",
+				"\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K",
+				"\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K",
+				"\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K",
+				"\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K",
+				"\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K",
+				"\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K",
+				"\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K\x1B[1A\x1B[1000D\x1B[K",
+			];
+
+			static ref CLEAR_MORE: Cow<'static, str> = Cow::Borrowed("\x1B[1A\x1B[1000D\x1B[K");
+		}
+
 		// No change.
 		if self.last == msg {
 			return;
 		}
 
 		// We might need to clear the previous entry.
-		let lines = self.last.fyi_lines_len() + 1;
-		if 1 < lines {
-			for i in 0..lines {
-				if i > 0 {
-					// Move the cursor up, left, and clear to end of line.
-					cli::print("\x1B[1A\x1B[1000D\x1B[K", PRINT_STDERR);
-				}
-				else {
-					// Move the cursor left and clear to end of line.
-					cli::print("\x1B[1000D\x1B[K", PRINT_STDERR);
-				}
-			}
-		}
+		if false == self.last.is_empty() {
+			let lines = self.last.fyi_lines_len();
 
-		// Anything doing?
-		if msg.is_empty() {
-			self.last = Cow::Borrowed("");
-			return;
+			// The count starts at zero for the purposes of CLEAR.
+			if lines <= 9 {
+				cli::print(CLEAR[lines], PRINT_STDERR);
+			}
+			else {
+				cli::print([
+					CLEAR[9],
+					CLEAR_MORE.repeat(lines - 9).as_str(),
+				].concat(), PRINT_STDERR);
+			}
+
+			// If there's no next message, replace last and leave.
+			if msg.is_empty() {
+				self.last = Cow::Borrowed("");
+				return;
+			}
 		}
 
 		self.last = msg.clone();
@@ -225,6 +243,7 @@ impl<'pi> ProgressInner<'pi> {
 		let mut p_eta = self.part_eta();
 		let p_bar_len: usize = {
 			let mut size = width - p_space;
+			// Nobody needs a gigantic status bar.
 			if size > 60 {
 				size = 60;
 			}
@@ -320,6 +339,13 @@ impl<'pi> ProgressInner<'pi> {
 
 	/// Bar!
 	fn part_bar(&self, mut width: usize) -> Cow<'_, str> {
+		lazy_static::lazy_static! {
+			// Precompute each bar to its maximum possible length (58);
+			// it is cheaper to shrink than to grow.
+			static ref DONE: Cow<'static, str> = Cow::Owned("==========================================================".to_string());
+			static ref UNDONE: Cow<'static, str> = Cow::Owned("----------------------------------------------------------".to_string());
+		}
+
 		// We need at least 10 chars.
 		if width < 10 {
 			return Cow::Borrowed("");
@@ -329,34 +355,40 @@ impl<'pi> ProgressInner<'pi> {
 		width -= 2;
 
 		let done_len: usize = f64::floor(self.percent() * width as f64) as usize;
-		let undone_len: usize = width - done_len;
-
-		let done: String = match done_len {
-			0 => "".to_string(),
-			x => "◼".to_string().repeat(x),
-		};
-		let undone: String = match undone_len {
-			0 => "".to_string(),
-			x => String::from_utf8(vec![b'-'; x]).unwrap(),
-		};
-
-		Cow::Owned([
-			"\x1B[2m[\x1B[0m\x1B[96;1m",
-			&done,
-			"\x1B[0m\x1B[36m",
-			&undone,
-			"\x1B[0m\x1B[2m]\x1B[0m",
-		].concat())
+		// No progress.
+		if 0 == done_len {
+			Cow::Owned([
+				"\x1B[2m[\x1B[0m\x1B[36m",
+				&UNDONE[0..width],
+				"\x1B[0m\x1B[2m]\x1B[0m",
+			].concat())
+		}
+		// Total progress.
+		else if done_len == width {
+			Cow::Owned([
+				"\x1B[2m[\x1B[0m\x1B[96;1m",
+				&DONE[0..width],
+				"\x1B[0m\x1B[2m]\x1B[0m",
+			].concat())
+		}
+		// Mixed progress.
+		else {
+			let undone_len: usize = width - done_len;
+			Cow::Owned([
+				"\x1B[2m[\x1B[0m\x1B[96;1m",
+				&DONE[0..done_len],
+				"\x1B[0m\x1B[36m",
+				&UNDONE[0..undone_len],
+				"\x1B[0m\x1B[2m]\x1B[0m",
+			].concat())
+		}
 	}
 
 	/// Elapsed.
 	fn part_elapsed(&self) -> Cow<'_, str> {
 		Cow::Owned([
 			"\x1B[2m[\x1B[0m\x1B[1m",
-			&time::human_elapsed(
-				self.time.elapsed().as_secs() as usize,
-				PRINT_COMPACT
-			),
+			&time::elapsed_short(self.time.elapsed().as_secs() as usize),
 			"\x1B[0m\x1B[2m]\x1B[0m",
 		].concat())
 	}
@@ -379,10 +411,7 @@ impl<'pi> ProgressInner<'pi> {
 		let s_per: f64 = elapsed / self.done as f64;
 		Cow::Owned([
 			"\x1B[35mETA: \x1B[0m\x1B[95;1m",
-			&time::human_elapsed(
-				f64::ceil(s_per * (self.total - self.done) as f64) as usize,
-				PRINT_COMPACT
-			),
+			&time::elapsed_short(f64::ceil(s_per * (self.total - self.done) as f64) as usize),
 			"\x1B[0m",
 		].concat())
 	}
