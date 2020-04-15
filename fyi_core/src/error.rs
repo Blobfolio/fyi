@@ -26,6 +26,10 @@ pub enum Error {
 	/// Miscellaneous.
 	Other(String),
 
+	#[error("No {0} were found.")]
+	/// No paths.
+	NoPaths(String),
+
 	#[error("Failed to copy: {0}.")]
 	/// Copy failed.
 	PathCopy(PathBuf),
