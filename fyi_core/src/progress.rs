@@ -51,11 +51,11 @@ impl<'pi> Default for ProgressInner<'pi> {
 	/// Default.
 	fn default() -> Self {
 		Self {
-			tasks: HashSet::new(),
 			done: 0,
 			flags: 0,
 			last: Cow::Borrowed(""),
 			msg: Cow::Borrowed(""),
+			tasks: HashSet::new(),
 			time: Instant::now(),
 			total: 0,
 		}
