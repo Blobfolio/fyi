@@ -20,8 +20,9 @@ release_dir := justfile_directory() + "/release"
 # Build Release!
 @bench:
 	# First let's build the Rust bit.
-	cd "{{ pkg_dir1 }}" && cargo bench \
-		--features progress,witcher \
+	cargo bench \
+		-p fyi_core \
+		--all-features \
 		--target-dir "{{ cargo_dir }}"
 
 
