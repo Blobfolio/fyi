@@ -23,12 +23,6 @@ pub trait FYIStringFormat {
 	/// Remove First X Chars.
 	fn fyi_shorten_reverse(&self, keep: usize) -> Cow<'_, str>;
 
-	/// Stretch a String Filling End With X.
-	fn fyi_stretch(&self, num: usize, filler: u8) -> Cow<'_, str>;
-
-	/// Stretch a String Filling Start With X.
-	fn fyi_stretch_reverse(&self, num: usize, filler: u8) -> Cow<'_, str>;
-
 	/// Strip Formatting.
 	fn fyi_strip_ansi(&self) -> Cow<'_, str>;
 
@@ -151,48 +145,6 @@ where T: AsRef<str> {
 				else {
 					Cow::Borrowed("…")
 				}
-			}
-			else {
-				Cow::Borrowed(&me)
-			}
-		}
-	}
-
-	/// Stretch a String Filling End With X.
-	fn fyi_stretch(&self, num: usize, filler: u8) -> Cow<'_, str> {
-		let me = self.as_ref();
-		let size = me.fyi_chars_len();
-		if num <= size {
-			Cow::Borrowed(&me)
-		}
-		else {
-			let len = num - size;
-			if let Ok(x) = String::from_utf8(vec![filler; len]) {
-				Cow::Owned([
-					&me,
-					x.as_str(),
-				].concat())
-			}
-			else {
-				Cow::Borrowed(&me)
-			}
-		}
-	}
-
-	/// Stretch a String Filling Start With X.
-	fn fyi_stretch_reverse(&self, num: usize, filler: u8) -> Cow<'_, str> {
-		let me = self.as_ref();
-		let size = me.fyi_chars_len();
-		if num <= size {
-			Cow::Borrowed(&me)
-		}
-		else {
-			let len = num - size;
-			if let Ok(x) = String::from_utf8(vec![filler; len]) {
-				Cow::Owned([
-					x.as_str(),
-					&me,
-				].concat())
 			}
 			else {
 				Cow::Borrowed(&me)
