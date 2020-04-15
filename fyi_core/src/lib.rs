@@ -22,6 +22,12 @@ extern crate nix;
 #[cfg(feature = "witcher")]
 extern crate rayon;
 
+#[cfg(feature = "witcher")]
+extern crate tempfile;
+
+#[cfg(feature = "witcher")]
+extern crate tempfile_fast;
+
 extern crate bytecount;
 extern crate chrono;
 extern crate lazy_static;
