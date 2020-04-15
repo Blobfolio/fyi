@@ -7,6 +7,7 @@ use crate::{
 	Result,
 };
 use std::{
+	ffi::OsStr,
 	fs,
 	io::prelude::*,
 	os::unix::fs::MetadataExt,
@@ -23,7 +24,7 @@ pub trait FYIPathIO {
 	where P: AsRef<Path>;
 
 	/// Copy To Temporary Location.
-	fn fyi_copy_tmp(&self) -> Result<NamedTempFile>;
+	fn fyi_copy_tmp(&self, suffix: Option<String>) -> Result<NamedTempFile>;
 
 	/// Delete.
 	fn fyi_delete(&self) -> Result<()>;
@@ -55,14 +56,20 @@ impl FYIPathIO for Path {
 	}
 
 	/// Copy To Temporary Location.
-	fn fyi_copy_tmp(&self) -> Result<NamedTempFile> {
+	fn fyi_copy_tmp(&self, suffix: Option<String>) -> Result<NamedTempFile> {
 		use nix::unistd::{self, Uid, Gid};
 
 		let meta = self.metadata()?;
 		if meta.is_file() {
 			let parent = self.parent()
 				.ok_or(Error::PathCopy(self.to_path_buf()))?;
-			let target = NamedTempFile::new_in(parent)?;
+
+			let target = match suffix {
+				Some(x) => tempfile::Builder::new()
+					.suffix(OsStr::new(x.as_str()))
+					.tempfile_in(parent)?,
+				None => NamedTempFile::new_in(parent)?,
+			};
 
 			let file = target.as_file();
 			file.set_permissions(meta.permissions())?;
