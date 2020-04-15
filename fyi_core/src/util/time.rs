@@ -18,27 +18,28 @@ use std::{
 /// Chunked Time.
 ///
 /// Split seconds into days, hours, minutes, seconds.
-pub fn chunked(mut s: usize) -> [usize; 4] {
-	let mut m = 0;
-	let mut h = 0;
-	let mut d = 0;
+pub fn chunked(s: usize) -> [usize; 4] {
+	let mut out: [usize; 4] = [0, 0, 0, s];
 
-	if s >= 60 {
-		m = s / 60;
-		s -= m * 60;
-
-		if m >= 60 {
-			h = m / 60;
-			m -= h * 60;
-
-			if h >= 24 {
-				d = h / 24;
-				h -= d * 24;
-			}
-		}
+	// Days.
+	if out[3] >= 86400 {
+		out[0] = out[3] / 86400;
+		out[3] -= out[0] * 86400;
 	}
 
-	[d, h, m, s]
+	// Hours.
+	if out[3] >= 3600 {
+		out[1] = out[3] / 3600;
+		out[3] -= out[1] * 3600;
+	}
+
+	// Minutes.
+	if out[3] >= 60 {
+		out[2] = out[3] / 60;
+		out[3] -= out[2] * 60;
+	}
+
+	out
 }
 
 /// Elapsed Time (Compact)
@@ -84,7 +85,7 @@ where N: ToPrimitive {
 		Cow::Owned([&elapsed.to_string(), " seconds"].concat())
 	}
 	else {
-		// This is ugly but relatively fast.
+		// This is ugly but faster than elegant iter() and whatnot.
 		let parts: Vec<String> = {
 			let mut out: Vec<String> = Vec::with_capacity(4);
 			let c = chunked(elapsed);
