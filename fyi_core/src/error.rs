@@ -61,7 +61,12 @@ pub enum Error {
 	#[cfg(feature = "witcher")]
 	#[error(transparent)]
 	/// Passthru IO.
-	TempFile(#[from] tempfile::PathPersistError),
+	TempfilePathPersist(#[from] tempfile::PathPersistError),
+
+	#[cfg(feature = "witcher")]
+	#[error(transparent)]
+	/// Passthru IO.
+	TempfilePersist(#[from] tempfile::PersistError),
 }
 
 impl fmt::Debug for Error {
