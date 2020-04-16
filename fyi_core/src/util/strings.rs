@@ -38,12 +38,22 @@ where
 	N: ToPrimitive + One + PartialEq,
 	S: Into<Cow<'a, str>> {
 	Cow::Owned(match num.is_one() {
-		true => ["1 ", &singular.into()].concat(),
-		false => format!(
-			"{} {}",
-			numbers::human_int(num),
-			&plural.into(),
-		),
+		true => {
+			let singular = singular.into();
+			let mut out: String = String::with_capacity(singular.len() + 2);
+			out.push_str("1 ");
+			out.push_str(&singular);
+			out
+		},
+		false => {
+			let num = numbers::human_int(num);
+			let plural = plural.into();
+			let mut out: String = String::with_capacity(num.len() + plural.len() + 1);
+			out.push_str(&num);
+			out.push(' ');
+			out.push_str(&plural);
+			out
+		},
 	})
 }
 
@@ -58,16 +68,27 @@ where S: Into<Cow<'a, str>> {
 	match list.len() {
 		0 => Cow::Borrowed(""),
 		1 => Cow::Owned(list[0].to_string()),
-		2 => Cow::Owned(list.join(&[" ", glue.into().trim(), " "].concat())),
+		2 => Cow::Owned(list.join(&{
+			let glue = glue.into();
+			let mut out: String = String::with_capacity(glue.len() + 2);
+			out.push(' ');
+			out.push_str(&glue);
+			out.push(' ');
+			out
+		})),
 		x => {
 			let len = x - 1;
-			Cow::Owned([
-				&list[0..len].join(", "),
-				", ",
-				glue.into().trim(),
-				" ",
-				&list[len]
-			].concat())
+			Cow::Owned({
+				let first = &list[0..len].join(", ");
+				let glue = glue.into();
+				let mut out: String = String::with_capacity(first.len() + glue.len() + 3 + list[len].len());
+				out.push_str(&first);
+				out.push_str(", ");
+				out.push_str(&glue);
+				out.push(' ');
+				out.push_str(&list[len]);
+				out
+			})
 		}
 	}
 }
