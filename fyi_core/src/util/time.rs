@@ -123,7 +123,7 @@ where N: ToPrimitive {
 
 		strings::oxford_join(
 			&parts,
-			" and "
+			"and"
 		)
 	}
 }
