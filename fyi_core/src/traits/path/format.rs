@@ -3,8 +3,6 @@
 */
 
 use crate::{
-	Error,
-	Result,
 	traits::path::FYIPath,
 	util::strings,
 };
