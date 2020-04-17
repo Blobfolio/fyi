@@ -13,7 +13,10 @@ use std::{
 		BufReader,
 		BufRead,
 	},
-	path::PathBuf,
+	path::{
+		Path,
+		PathBuf,
+	},
 	sync::Arc,
 };
 
@@ -25,70 +28,83 @@ pub struct Witch(HashSet<PathBuf>);
 
 impl Witch {
 	/// New.
-	pub fn new(paths: &[PathBuf], pattern: Option<String>) -> Self {
+	pub fn new<P>(paths: &[P], pattern: Option<String>) -> Self
+	where P: AsRef<Path> {
+		let paths: Vec<PathBuf> = paths.into_iter()
+			.map(|p| p.as_ref().to_path_buf())
+			.collect();
+
 		match pattern {
 			Some(p) => {
-				let pattern = Regex::new(p.as_str()).expect("Invalid pattern.");
-
-				let mut out: HashSet<PathBuf> = HashSet::with_capacity(1024);
-				for i in paths {
-					out.par_extend(
-						WalkDir::new(i)
-							.follow_links(true)
-							.skip_hidden(false)
-							.into_iter()
-							.filter_map(|e| {
-								if let Ok(path) = e {
-									if path.file_type().is_file() {
-										if let Ok(path) = path.path().canonicalize() {
-											if pattern.is_match(path.to_str().unwrap_or("")) {
-												Some(path)
-											}
-											else { None }
-										}
-										else { None }
-									}
-									else { None }
-								}
-								else { None }
-							})
-							.collect::<HashSet<PathBuf>>()
-					);
-				}
-
-				Witch(out)
+				let pattern = Regex::new(&p)
+					.expect("Invalid pattern.");
+				Witch::new_filtered(&paths, &pattern)
 			},
-			None => {
-				let mut out: HashSet<PathBuf> = HashSet::with_capacity(1024);
-				for i in paths {
-					out.par_extend(
-						WalkDir::new(i)
-							.follow_links(true)
-							.skip_hidden(false)
-							.into_iter()
-							.filter_map(|e| {
-								if let Ok(path) = e {
-									if path.file_type().is_file() {
-										if let Ok(path) = path.path().canonicalize() {
-											Some(path)
-										}
-										else { None }
-									}
-									else { None }
-								}
-								else { None }
-							})
-							.collect::<HashSet<PathBuf>>()
-					);
-				}
-
-				Witch(out)
-			},
+			None => Witch::new_straight(&paths),
 		}
 	}
 
+	/// New.
+	pub fn new_filtered(paths: &[PathBuf], pattern: &Regex) -> Self {
+		Witch(
+			paths.into_iter()
+				.par_bridge()
+				.flat_map(|ref i| WalkDir::new(i)
+					.follow_links(true)
+					.skip_hidden(false)
+					.into_iter()
+					.filter_map(|e| {
+						if let Ok(path) = e {
+							if path.file_type().is_file() {
+								if let Ok(path) = path.path().canonicalize() {
+									if pattern.is_match(path.to_str().unwrap_or("")) {
+										Some(path)
+									}
+									else { None }
+								}
+								else { None }
+							}
+							else { None }
+						}
+						else { None }
+					})
+					.collect::<HashSet<PathBuf>>()
+				)
+				.collect()
+		)
+	}
+
+	/// New.
+	pub fn new_straight(paths: &[PathBuf]) -> Self {
+		Witch(
+			paths.into_iter()
+				.par_bridge()
+				.flat_map(|ref i| WalkDir::new(i)
+					.follow_links(true)
+					.skip_hidden(false)
+					.into_iter()
+					.filter_map(|e| {
+						if let Ok(path) = e {
+							if path.file_type().is_file() {
+								if let Ok(path) = path.path().canonicalize() {
+									Some(path)
+								}
+								else { None }
+							}
+							else { None }
+						}
+						else { None }
+					})
+					.collect::<HashSet<PathBuf>>()
+				)
+				.collect()
+		)
+	}
+
 	/// From File List
-	pub fn from_file(path: &PathBuf, pattern: Option<String>) -> Self {
+	pub fn from_file<P> (path: P, pattern: Option<String>) -> Self
+	where P: AsRef<Path> {
+		let path = path.as_ref().to_path_buf();
 		if false == path.is_file() {
 			return Witch(HashSet::new());
 		}
@@ -96,7 +112,7 @@ impl Witch {
 		let input = File::open(&path).expect("Unable to open file.");
 		let buffered = BufReader::new(input);
 
-		let out: Vec<PathBuf> = buffered.lines()
+		let paths: Vec<PathBuf> = buffered.lines()
 			.filter_map(|x| match x.ok() {
 				Some(x) => {
 					let x = x.trim();
@@ -109,7 +125,14 @@ impl Witch {
 			})
 			.collect();
 
-		Witch::new(&out, pattern)
+		match pattern {
+			Some(p) => {
+				let pattern = Regex::new(&p)
+					.expect("Invalid pattern.");
+				Witch::new_filtered(&paths, &pattern)
+			},
+			None => Witch::new_straight(&paths),
+		}
 	}
 
 	/// Get Disk Size.
