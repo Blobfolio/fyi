@@ -113,8 +113,8 @@ impl Witch {
 		let buffered = BufReader::new(input);
 
 		let paths: Vec<PathBuf> = buffered.lines()
-			.filter_map(|x| match x.ok() {
-				Some(x) => {
+			.filter_map(|x| match x {
+				Ok(x) => {
 					let x = x.trim();
 					match x.is_empty() {
 						true => None,
@@ -181,31 +181,8 @@ impl Witch {
 		S: Into<Cow<'static, str>>,
 		F: Fn(&Arc<PathBuf>) + Send + Sync
 	{
-		use crate::{
-			Msg,
-			Prefix,
-			Progress,
-			traits::path::FYIPathFormat,
-		};
-
-		let bar = Arc::new(Progress::new(
-			Msg::new("Reticulating splines…")
-				.with_prefix(Prefix::new(name, 199))
-				.to_string(),
-			self.0.len() as u64,
-			0
-		));
-
-		// Loop!
-		let handle = Progress::steady_tick(&bar, None);
-		self.0.par_iter().for_each(|x| {
-			let file: String = x.fyi_to_string();
-			bar.clone().add_task(&file);
-			cb(&Arc::new(x.clone()));
-			bar.clone().update(1, None, Some(file));
-		});
-		handle.join().unwrap();
-
+		let bar = self._progress_bar(name.into());
+		self._progress_loop(&bar, cb);
 		bar.crunched_in(None);
 	}
 
@@ -214,22 +191,43 @@ impl Witch {
 	pub fn progress_crunch<S, F> (&self, name: S, cb: F)
 	where
 		S: Into<Cow<'static, str>>,
-		F: Fn(&Arc<PathBuf>) + Send + Sync {
+		F: Fn(&Arc<PathBuf>) + Send + Sync
+	{
+		let bar = self._progress_bar(name.into());
+		let before: u64 = self.du();
+
+		self._progress_loop(&bar, cb);
+
+		let after: u64 = self.du();
+		bar.crunched_in(Some((before, after)));
+	}
+
+	#[cfg(feature = "progress")]
+	#[inline(always)]
+	fn _progress_bar(&self, name: Cow<'_, str>) -> Arc<crate::Progress<'static>> {
 		use crate::{
 			Msg,
 			Prefix,
 			Progress,
-			traits::path::FYIPathFormat,
 		};
 
-		let bar = Arc::new(Progress::new(
+		Arc::new(Progress::new(
 			Msg::new("Reticulating splines…")
 				.with_prefix(Prefix::new(name, 199))
 				.to_string(),
 			self.0.len() as u64,
 			0
-		));
-		let before: u64 = self.du();
+		))
+	}
+
+	#[cfg(feature = "progress")]
+	#[inline(always)]
+	fn _progress_loop<F> (&self, bar: &Arc<crate::Progress<'static>>, cb: F)
+	where F: Fn(&Arc<PathBuf>) + Send + Sync {
+		use crate::{
+			Progress,
+			traits::path::FYIPathFormat,
+		};
 
 		// Loop!
 		let handle = Progress::steady_tick(&bar, None);
@@ -240,8 +238,5 @@ impl Witch {
 			bar.clone().update(1, None, Some(file));
 		});
 		handle.join().unwrap();
-
-		let after: u64 = self.du();
-		bar.crunched_in(Some((before, after)));
 	}
 }
