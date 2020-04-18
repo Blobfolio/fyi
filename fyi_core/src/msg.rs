@@ -148,45 +148,102 @@ impl<'m> Msg<'m> {
 
 	/// Msg.
 	pub fn msg(&self) -> Cow<'_, str> {
-		// The regular message will be needed either way.
-		let msg: Cow<'_, str> = Cow::Owned([
-			&strings::whitespace(self.indent * 4),
-			&self.prefix.prefix(),
-			"\x1B[1m",
-			&self.msg,
-			"\x1B[0m"
-		].concat());
-
-		match 0 != (self.flags & MSG_TIMESTAMP) {
-			// Include a timestamp.
-			true => {
-				// A formatted timestamp.
-				let timestamp: Cow<'_, str> = Cow::Owned([
-					"\x1B[2m[\x1B[34;2m",
-					&self.timestamp(),
-					"\x1B[0m\x1B[1m]\x1B[0m",
-				].concat());
-
-				let msg_len = &msg.fyi_width();
-				let timestamp_len = &timestamp.fyi_width();
-				let width = cli::term_width();
-
-				Cow::Owned(match msg_len + timestamp_len + 1 <= width {
-					true => [
-						&*msg,
-						&strings::whitespace(width - msg_len - timestamp_len),
-						&timestamp,
-					].concat(),
-					false => [
-						&timestamp,
-						"\n",
-						&msg,
-					].concat(),
-				})
-			},
-			// Just the message.
-			false => msg,
+		match self.flags & MSG_TIMESTAMP {
+			0 => self.msg_straight(),
+			_ => self.msg_timestamped(),
 		}
+	}
+
+	/// Straight message.
+	fn msg_straight(&self) -> Cow<'_, str> {
+		Cow::Owned({
+			let prefix = self.prefix.prefix();
+			let indent_len: usize = self.indent as usize * 4;
+
+			let mut p: String = String::with_capacity(
+				indent_len +
+				prefix.len() +
+				self.msg.len() +
+				8
+			);
+			if indent_len > 0 {
+				p.push_str(&strings::whitespace(indent_len));
+			}
+			p.push_str(&prefix);
+			p.push_str("\x1B[1m");
+			p.push_str(&self.msg);
+			p.push_str("\x1B[0m");
+
+			p
+		})
+	}
+
+	/// Message w/ Timestamp.
+	fn msg_timestamped(&self) -> Cow<'_, str> {
+		let prefix = self.prefix.prefix();
+		let ts = self.timestamp();
+
+		let prefix_len: usize = prefix.len();
+		let indent_len: usize = self.indent as usize * 4;
+		let msg_len: usize = indent_len +
+			prefix_len +
+			self.msg.len() +
+			8;
+		let msg_width: usize = indent_len +
+			prefix.fyi_width() +
+			self.msg.fyi_width();
+
+		let ts_width: usize = ts.len() + 2;
+		let ts_len: usize = ts_width + 23;
+
+		let width: usize = cli::term_width();
+		let overflow: bool = msg_width + ts_width + 1 > width;
+		let total_len = match overflow {
+			true => ts_len + 1 + msg_len + indent_len,
+			false => msg_len + (width - msg_width),
+		};
+
+		// A formatted timestamp.
+		Cow::Owned({
+			let mut p: String = String::with_capacity(total_len);
+
+			// Message first?
+			if ! overflow {
+				if indent_len > 0 {
+					p.push_str(&strings::whitespace(indent_len));
+				}
+				if prefix_len > 0 {
+					p.push_str(&prefix);
+				}
+				p.push_str("\x1B[1m");
+				p.push_str(&self.msg);
+				p.push_str("\x1B[0m");
+				p.push_str(&strings::whitespace(width - msg_width - ts_width));
+			}
+			else if indent_len > 0 {
+				p.push_str(&strings::whitespace(indent_len));
+			}
+
+			p.push_str("\x1B[2m[\x1B[34;2m");
+			p.push_str(&ts);
+			p.push_str("\x1B[0m\x1B[1m]\x1B[0m");
+
+			// Message last?
+			if overflow {
+				p.push('\n');
+				if indent_len > 0 {
+					p.push_str(&strings::whitespace(self.indent * 4));
+				}
+				if prefix_len > 0 {
+					p.push_str(&prefix);
+				}
+				p.push_str("\x1B[1m");
+				p.push_str(&self.msg);
+				p.push_str("\x1B[0m");
+			}
+
+			p
+		})
 	}
 
 	/// Prefix.
