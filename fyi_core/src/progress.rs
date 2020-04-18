@@ -18,6 +18,7 @@ use crate::{
 };
 use std::{
 	borrow::Cow,
+	cmp,
 	collections::HashSet,
 	sync::{
 		Arc,
@@ -240,68 +241,52 @@ impl<'pi> ProgressInner<'pi> {
 		}
 
 		// Space the bar can have.
-		let mut p_eta = self.part_eta();
-		let p_bar_len: usize = {
-			let mut size = width - p_space;
-			// Nobody needs a gigantic status bar.
-			if size > 60 {
-				size = 60;
-			}
-
-			// Adjust the ETA maybe.
-			let eta_len = p_eta.fyi_width();
-			if 0 != eta_len && p_space + size + eta_len + 1 <= width {
-				p_eta = Cow::Owned([
-					strings::whitespace(width - eta_len - size - p_space),
-					p_eta,
-				].concat());
-			}
-			else if 0 != eta_len {
-				p_eta = Cow::Borrowed("");
-			}
-
-			size
-		};
+		let p_bar_len: usize = cmp::min(60, width - p_space);
 		let p_bar = self.part_bar(p_bar_len);
 
+		// Gather up the rest.
+		let p_eta = self.part_eta(width - p_bar_len - p_space);
 		let p_tasks = self.part_tasks(width);
-		let has_msg: bool = ! self.msg.is_empty();
-		let has_tasks = ! p_tasks.is_empty();
-		let out = Cow::Owned(if ! has_msg && ! has_tasks {
-			[
-				&p_elapsed,
-				" ",
-				&p_bar,
-				" ",
-				&p_progress,
-				&p_eta,
-			].concat()
-		}
-		else if has_msg && ! has_tasks {
-			[
-				&self.msg,
-				"\n",
-				&p_elapsed,
-				" ",
-				&p_bar,
-				" ",
-				&p_progress,
-				&p_eta,
-			].concat()
-		}
-		else {
-			[
-				&self.msg,
-				"\n",
-				&p_elapsed,
-				" ",
-				&p_bar,
-				" ",
-				&p_progress,
-				&p_eta,
-				"\n",
-				&p_tasks,
-			].concat()
+
+		let out = Cow::Owned({
+			let has_eta: bool = ! p_eta.is_empty();
+			let has_msg: bool = ! self.msg.is_empty();
+			let has_tasks: bool = ! p_tasks.is_empty();
+
+			let mut total_len: usize = p_elapsed.len() + p_bar.len() + p_progress.len() + 2;
+			if has_eta {
+				total_len += p_eta.len();
+			}
+			if has_msg {
+				total_len += self.msg.len() + 1;
+			}
+			if has_tasks {
+				total_len += p_tasks.len() + 1;
+			}
+
+			let mut p: String = String::with_capacity(total_len);
+
+			if has_msg {
+				p.push_str(&self.msg);
+				p.push('\n');
+			}
+
+			p.push_str(&p_elapsed);
+			p.push(' ');
+			p.push_str(&p_bar);
+			p.push(' ');
+			p.push_str(&p_progress);
+
+			if has_eta {
+				p.push_str(&p_eta);
+			}
+
+			if has_tasks {
+				p.push('\n');
+				p.push_str(&p_tasks);
+			}
+
+			p
 		});
 
 		self.print(out);
@@ -393,9 +378,11 @@ impl<'pi> ProgressInner<'pi> {
 	}
 
 	/// ETA.
-	fn part_eta(&self) -> Cow<'_, str> {
-		// Don't bother printing an ETA if we haven't gotten far
-		// enough along to have good math.
+	fn part_eta(&self, width: usize) -> Cow<'_, str> {
+		if width < 16 {
+			return Cow::Borrowed("");
+		}
+
 		let percent: f64 = self.percent();
 		if percent < 0.1 || percent == 1.0 {
 			return Cow::Borrowed("");
@@ -407,12 +394,26 @@ impl<'pi> ProgressInner<'pi> {
 			return Cow::Borrowed("");
 		}
 
-		let s_per: f64 = elapsed / self.done as f64;
-		Cow::Owned([
-			"\x1B[35mETA: \x1B[0m\x1B[95;1m",
-			&time::elapsed_short(f64::ceil(s_per * (self.total - self.done) as f64) as usize),
-			"\x1B[0m",
-		].concat())
+		let eta = time::elapsed_short(f64::ceil(
+			elapsed / self.done as f64 * (self.total - self.done) as f64
+		) as usize);
+		let eta_width: usize = eta.fyi_width() + 5;
+
+		// Last abort check.
+		if eta_width >= width {
+			return Cow::Borrowed("");
+		}
+
+		Cow::Owned({
+			let mut p: String = String::with_capacity(eta.len() + 25 + (width - eta_width));
+
+			p.push_str(&strings::whitespace(width - eta_width));
+			p.push_str("\x1B[35mETA: \x1B[0m\x1B[95;1m");
+			p.push_str(&eta);
+			p.push_str("\x1B[0m");
+
+			p
+		})
 	}
 
 	/// Progress bits (count, percent).
