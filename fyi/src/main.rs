@@ -40,82 +40,80 @@ fn main() {
 		.get_matches();
 
 	// Make the message.
-	if let Some(name) = opts.subcommand_name() {
-		if let Some(opts2) = opts.subcommand_matches(&name) {
-			// Blank lines are easy.
-			if "blank" == name {
-				let mut count: u8 = parse_cli_u8(opts2.value_of("count").unwrap_or("1"));
-				if 1 > count {
-					count = 1;
+	match opts.subcommand() {
+		("blank", Some(o)) => do_blank(o),
+		(name, Some(o)) => do_msg(name, o),
+		_ => {},
+	}
+
+	process::exit(0);
+}
+
+/// Shoot blanks.
+fn do_blank(opts: &ArgMatches) {
+	let mut count: u8 = parse_cli_u8(opts.value_of("count").unwrap_or("1"));
+	if 0 == count {
+		count = 1;
+	}
+
+	let flags: u8 = match opts.is_present("stderr") {
+		true => PRINT_STDERR | PRINT_NEWLINE,
+		false => PRINT_NEWLINE,
+	};
+
+	for _ in 0..count {
+		cli::print("", flags);
+	}
+}
+
+/// Print message.
+fn do_msg(name: &str, opts: &ArgMatches) {
+	// Build and print!
+	let msg: Msg = Msg::new(opts.value_of("msg").unwrap_or(""))
+		.with_prefix(match name {
+			"debug" => Prefix::Debug,
+			"error" => Prefix::Error,
+			"info" => Prefix::Info,
+			"notice" => Prefix::Notice,
+			"prompt" => Prefix::None,
+			"success" => Prefix::Success,
+			"warning" => Prefix::Warning,
+			_ => {
+				match opts.value_of("prefix") {
+					Some(p) => Prefix::Custom(
+						Cow::Borrowed(p),
+						parse_cli_u8(opts.value_of("prefix_color").unwrap_or("199"))
+					),
+					_ => Prefix::None,
 				}
-
-				let flags: u8 = match opts2.is_present("stderr") {
-					true => PRINT_STDERR | PRINT_NEWLINE,
-					false => PRINT_NEWLINE,
-				};
-
-				for _ in 0..count {
-					cli::print("", flags);
-				}
-
-				process::exit(0);
+			},
+		})
+		.with_flags({
+			let mut flags: u8 = 0;
+			if opts.is_present("no_color") {
+				flags |= PRINT_NO_COLOR;
 			}
-
-			// Convert the CLI subcommand into an appropriate prefix.
-			let prefix: Prefix = match name {
-				"debug" => Prefix::Debug,
-				"error" => Prefix::Error,
-				"info" => Prefix::Info,
-				"notice" => Prefix::Notice,
-				"prompt" => Prefix::None,
-				"success" => Prefix::Success,
-				"warning" => Prefix::Warning,
-				_ => {
-					let color: u8 = parse_cli_u8(opts2.value_of("prefix_color").unwrap_or("199"));
-
-					match opts2.value_of("prefix") {
-						Some(p) => Prefix::Custom(Cow::Borrowed(p), color),
-						_ => Prefix::None,
-					}
-				},
-			};
-
-			// Calculate flags.
-			let flags: u8 = {
-				let mut flags: u8 = 0;
-				if opts2.is_present("no_color") {
-					flags |= PRINT_NO_COLOR;
-				}
-				if opts2.is_present("time") {
-					flags |= MSG_TIMESTAMP;
-				}
-				flags
-			};
-
-			// Build and print!
-			let msg: Msg = Msg::new(opts2.value_of("msg").unwrap_or(""))
-				.with_prefix(prefix)
-				.with_flags(flags)
-				.with_indent(parse_cli_u8(opts2.value_of("indent").unwrap_or("0")));
-
-			// Prompt.
-			if "prompt" == name {
-				match msg.prompt() {
-					true => process::exit(0),
-					false => process::exit(1),
-				};
+			if opts.is_present("time") {
+				flags |= MSG_TIMESTAMP;
 			}
-			// Echo.
-			else {
-				msg.print();
-			}
+			flags
+		})
+		.with_indent(parse_cli_u8(opts.value_of("indent").unwrap_or("0")));
 
-			// We might have a custom exit code.
-			let exit: u8 = parse_cli_u8(opts2.value_of("exit").unwrap_or("0"));
-			if 0 != exit {
-				process::exit(exit as i32);
-			}
-		}
+	// Prompt.
+	if "prompt" == name {
+		match msg.prompt() {
+			true => process::exit(0),
+			false => process::exit(1),
+		};
+	}
+
+	msg.print();
+
+	// We might have a custom exit code.
+	let exit: u8 = parse_cli_u8(opts.value_of("exit").unwrap_or("0"));
+	if 0 != exit {
+		process::exit(exit as i32);
 	}
 }
 
