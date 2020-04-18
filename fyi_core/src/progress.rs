@@ -477,7 +477,7 @@ impl<'p> Progress<'p> {
 	}
 
 	/// Increment.
-	pub fn increment<S>(&self, num: u64) {
+	pub fn increment(&self, num: u64) {
 		let mut ptr = self.0.lock().expect("Failed to acquire lock: Progress.0");
 		ptr.increment(num);
 	}
