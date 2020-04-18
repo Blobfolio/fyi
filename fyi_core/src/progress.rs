@@ -279,7 +279,7 @@ impl<'pi> ProgressInner<'pi> {
 		}
 		else if has_msg && ! has_tasks {
 			[
-				&self.msg.clone(),
+				&self.msg,
 				"\n",
 				&p_elapsed,
 				" ",
@@ -291,7 +291,7 @@ impl<'pi> ProgressInner<'pi> {
 		}
 		else {
 			[
-				&self.msg.clone(),
+				&self.msg,
 				"\n",
 				&p_elapsed,
 				" ",
@@ -320,11 +320,10 @@ impl<'pi> ProgressInner<'pi> {
 		}
 		else {
 			let mut out: Vec<String> = self.tasks.iter()
-				.cloned()
 				.map(|ref x| {
 					let out: String = [
 						"    \x1B[35m↳ ",
-						&x,
+						x,
 						"\x1B[0m",
 					].concat();
 
