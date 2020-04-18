@@ -222,7 +222,7 @@ impl<'m> Msg<'m> {
 			flags |= PRINT_STDERR;
 		}
 
-		cli::print(self.to_string(), flags);
+		cli::print(self.msg(), flags);
 	}
 
 	// -------------------------------------------------------------
