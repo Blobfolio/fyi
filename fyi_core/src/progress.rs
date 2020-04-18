@@ -419,9 +419,9 @@ impl<'pi> ProgressInner<'pi> {
 	fn part_progress(&self) -> Cow<'_, str> {
 		Cow::Owned([
 			"\x1B[96;1m",
-			self.done.to_string().as_str(),
+			&self.done.to_string(),
 			"\x1B[0m\x1B[2m/\x1B[0m\x1B[36m",
-			self.total.to_string().as_str(),
+			&self.total.to_string(),
 			"\x1B[0m \x1B[1m",
 			format!("{:>3.*}%", 2, self.percent() * 100.0).as_str(),
 			"\x1B[0m"
