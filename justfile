@@ -18,12 +18,26 @@ release_dir := justfile_directory() + "/release"
 
 
 # Build Release!
-@bench:
-	# First let's build the Rust bit.
-	cargo bench \
-		-p fyi_core \
-		--all-features \
-		--target-dir "{{ cargo_dir }}"
+bench BENCH="" FILTER="":
+	#!/usr/bin/env bash
+
+	clear
+
+	if [ -z "{{ BENCH }}" ]; then
+		cargo bench \
+			-q \
+			--workspace \
+			--all-features \
+			--target-dir "{{ cargo_dir }}" -- "{{ FILTER }}"
+	else
+		cargo bench \
+			-q \
+			--bench "{{ BENCH }}" \
+			--workspace \
+			--all-features \
+			--target-dir "{{ cargo_dir }}" -- "{{ FILTER }}"
+	fi
+	exit 0
 
 
 # Build Release!

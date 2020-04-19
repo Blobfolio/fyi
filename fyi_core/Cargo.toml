@@ -50,5 +50,13 @@ witcher = [ "jwalk", "nix", "rayon", "tempfile", "tempfile-fast" ]
 criterion = "*"
 
 [[bench]]
-name = "scratchpad"
+name = "util_numbers"
+harness = false
+
+[[bench]]
+name = "util_strings"
+harness = false
+
+[[bench]]
+name = "util_time"
 harness = false
