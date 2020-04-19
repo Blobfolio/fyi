@@ -23,17 +23,18 @@ where N: ToPrimitive {
 	let mb: f64 = 1024.0 * 1024.0;
 	let gb: f64 = 1024.0 * 1024.0 * 1024.0;
 
-	let (bytes, unit) = if bytes > gb * 0.9 {
-		(bytes / gb, "GB")
-	} else if bytes > mb * 0.9 {
-		(bytes / mb, "MB")
-	} else if bytes > kb * 0.9 {
-		(bytes / kb, "KB")
-	} else {
-		return Cow::Owned(format!("{}B", bytes));
-	};
-
-	Cow::Owned(format!("{:.*}{}", 2, bytes, unit))
+	if bytes > gb * 0.9 {
+		Cow::Owned(format!("{:.*}GB", 2, bytes / gb))
+	}
+	else if bytes > mb * 0.9 {
+		Cow::Owned(format!("{:.*}MB", 2, bytes / mb))
+	}
+	else if bytes > kb * 0.9 {
+		Cow::Owned(format!("{:.*}KB", 2, bytes / kb))
+	}
+	else {
+		Cow::Owned(format!("{}B", bytes))
+	}
 }
 
 /// Nice Int.
