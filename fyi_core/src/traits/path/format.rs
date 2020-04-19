@@ -2,7 +2,6 @@
 # FYI Core: Miscellany: Path Formatting
 */
 
-use crate::util::strings;
 use std::{
 	borrow::Cow,
 	fs,
@@ -21,6 +20,9 @@ pub trait FYIPathFormat {
 
 	/// To String.
 	fn fyi_to_string(&self) -> Cow<'static, str>;
+
+	/// To String.
+	fn fyi_to_string_abs(&self) -> Cow<'static, str>;
 }
 
 impl FYIPathFormat for Path {
@@ -34,8 +36,11 @@ impl FYIPathFormat for Path {
 
 	/// To String.
 	fn fyi_to_string(&self) -> Cow<'static, str> {
-		Cow::Owned(strings::from_os_string(
-			self.fyi_to_path_buf_abs().into_os_string()
-		))
+		Cow::Owned(self.to_str().unwrap_or("").to_string())
+	}
+
+	/// To String.
+	fn fyi_to_string_abs(&self) -> Cow<'static, str> {
+		self.fyi_to_path_buf_abs().fyi_to_string()
 	}
 }
