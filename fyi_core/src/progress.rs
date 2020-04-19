@@ -87,20 +87,6 @@ impl<'pi> ProgressInner<'pi> {
 	// Setters
 	// -------------------------------------------------------------
 
-	/// Push Active.
-	pub fn add_tasks(&mut self, task: String) {
-		if self.is_running() {
-			self.tasks.insert(task);
-		}
-	}
-
-	/// Remove Active.
-	pub fn remove_tasks(&mut self, task: String) {
-		if self.is_running() {
-			self.tasks.remove(&task);
-		}
-	}
-
 	/// Increment Done.
 	pub fn increment(&mut self, num: u64) {
 		if self.is_running() {
@@ -117,13 +103,6 @@ impl<'pi> ProgressInner<'pi> {
 			else {
 				self.done = done;
 			}
-		}
-	}
-
-	/// Msg.
-	pub fn set_msg(&mut self, msg: Cow<'pi, str>) {
-		if self.is_running() {
-			self.msg = msg;
 		}
 	}
 
