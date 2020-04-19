@@ -42,33 +42,6 @@ pub fn chunked(s: usize) -> [usize; 4] {
 	out
 }
 
-/// Elapsed Time (Compact)
-///
-/// This turns seconds into a 00:00:00-style display. Days are included
-/// only if positive.
-pub fn elapsed_short<N> (elapsed: N) -> Cow<'static, str>
-where N: ToPrimitive {
-	let elapsed: usize = elapsed.to_usize().unwrap_or(0);
-	if 0 == elapsed {
-		Cow::Borrowed("00:00:00")
-	}
-	else {
-		let c = chunked(elapsed);
-		if 0 != c[0] {
-			Cow::Owned(format!(
-				"{:02}:{:02}:{:02}:{:02}",
-				c[0], c[1], c[2], c[3]
-			))
-		}
-		else {
-			Cow::Owned(format!(
-				"{:02}:{:02}:{:02}",
-				c[1], c[2], c[3]
-			))
-		}
-	}
-}
-
 /// Human-Readable Elapsed Time
 ///
 /// This turns seconds into a human list like 1 hour and 2 seconds.
@@ -125,6 +98,33 @@ where N: ToPrimitive {
 			&parts,
 			"and"
 		)
+	}
+}
+
+/// Elapsed Time (Compact)
+///
+/// This turns seconds into a 00:00:00-style display. Days are included
+/// only if positive.
+pub fn elapsed_short<N> (elapsed: N) -> Cow<'static, str>
+where N: ToPrimitive {
+	let elapsed: usize = elapsed.to_usize().unwrap_or(0);
+	if 0 == elapsed {
+		Cow::Borrowed("00:00:00")
+	}
+	else {
+		let c = chunked(elapsed);
+		if 0 != c[0] {
+			Cow::Owned(format!(
+				"{:02}:{:02}:{:02}:{:02}",
+				c[0], c[1], c[2], c[3]
+			))
+		}
+		else {
+			Cow::Owned(format!(
+				"{:02}:{:02}:{:02}",
+				c[1], c[2], c[3]
+			))
+		}
 	}
 }
 
