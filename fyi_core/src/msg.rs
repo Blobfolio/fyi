@@ -59,7 +59,11 @@ impl<'mp> Prefix<'mp> {
 	/// Custom Prefix.
 	pub fn new<S> (msg: S, color: u8) -> Self
 	where S: Into<Cow<'mp, str>> {
-		Self::Custom(msg.into(), color)
+		let msg = msg.into();
+		match msg.is_empty() {
+			true => Self::None,
+			false => Self::Custom(msg.into(), color),
+		}
 	}
 
 	/// Happy or sad?
