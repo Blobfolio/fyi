@@ -17,23 +17,19 @@ use std::borrow::Cow;
 /// given the value.
 pub fn human_bytes<N> (size: N) -> Cow<'static, str>
 where N: ToPrimitive {
-	let bytes:f64 = size.to_f64().unwrap_or(0.0);
+	let mut bytes: f64 = size.to_f64().unwrap_or(0.0);
+	let mut index: usize = 0;
+	while bytes >= 1000.0 && index < 4 {
+		bytes /= 1024.0;
+		index += 1;
+	}
 
-	let kb: f64 = 1024.0;
-	let mb: f64 = 1024.0 * 1024.0;
-	let gb: f64 = 1024.0 * 1024.0 * 1024.0;
-
-	if bytes > gb * 0.9 {
-		Cow::Owned(format!("{:.*}GB", 2, bytes / gb))
-	}
-	else if bytes > mb * 0.9 {
-		Cow::Owned(format!("{:.*}MB", 2, bytes / mb))
-	}
-	else if bytes > kb * 0.9 {
-		Cow::Owned(format!("{:.*}KB", 2, bytes / kb))
-	}
-	else {
-		Cow::Owned(format!("{}B", bytes))
+	match index {
+		0 => Cow::Owned([&bytes.to_string(), "B"].concat()),
+		1 => Cow::Owned(format!("{:.*}KiB", 2, bytes)),
+		2 => Cow::Owned(format!("{:.*}MiB", 2, bytes)),
+		3 => Cow::Owned(format!("{:.*}GiB", 2, bytes)),
+		_ => Cow::Owned(format!("{:.*}TiB", 2, bytes)),
 	}
 }
 
@@ -64,12 +60,12 @@ mod tests {
 
 	#[test]
 	fn human_bytes() {
-		assert_eq!(super::human_bytes(921u64), Cow::Borrowed("921B"));
-		assert_eq!(super::human_bytes(922u64), Cow::Borrowed("0.90KB"));
-		assert_eq!(super::human_bytes(12003u64), Cow::Borrowed("11.72KB"));
-		assert_eq!(super::human_bytes(4887391u64), Cow::Borrowed("4.66MB"));
-		assert_eq!(super::human_bytes(499288372u64), Cow::Borrowed("476.16MB"));
-		assert_eq!(super::human_bytes(99389382145u64), Cow::Borrowed("92.56GB"));
+		assert_eq!(super::human_bytes(999u64), Cow::Borrowed("999B"));
+		assert_eq!(super::human_bytes(1000u64), Cow::Borrowed("0.98KiB"));
+		assert_eq!(super::human_bytes(12003u64), Cow::Borrowed("11.72KiB"));
+		assert_eq!(super::human_bytes(4887391u64), Cow::Borrowed("4.66MiB"));
+		assert_eq!(super::human_bytes(499288372u64), Cow::Borrowed("476.16MiB"));
+		assert_eq!(super::human_bytes(99389382145u64), Cow::Borrowed("92.56GiB"));
 	}
 
 	#[test]
