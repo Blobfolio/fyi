@@ -9,6 +9,7 @@ use crate::{
 	util::strings,
 };
 use std::{
+	borrow::Cow,
 	ffi::OsStr,
 	os::unix::fs::PermissionsExt,
 	path::{
@@ -22,10 +23,10 @@ use std::{
 /// Format/Conversion/Mutation Helpers!
 pub trait FYIPath {
 	/// Extension.
-	fn fyi_file_extension(&self) -> String;
+	fn fyi_file_extension(&self) -> Cow<'static, str>;
 
 	/// File name.
-	fn fyi_file_name(&self) -> String;
+	fn fyi_file_name(&self) -> Cow<'static, str>;
 
 	/// File Size.
 	fn fyi_file_size(&self) -> u64;
@@ -39,27 +40,29 @@ pub trait FYIPath {
 
 impl FYIPath for Path {
 	/// Extension.
-	fn fyi_file_extension(&self) -> String {
+	fn fyi_file_extension(&self) -> Cow<'static, str> {
 		if self.is_dir() {
-			String::new()
+			Cow::Borrowed("")
 		}
 		else {
 			match self.extension() {
-				Some(ext) => strings::from_os_string(ext).to_lowercase(),
-				_ => String::new(),
+				Some(ext) => Cow::Owned(strings::from_os_string(ext).to_lowercase()),
+				_ => Cow::Borrowed(""),
 			}
 		}
 	}
 
 	/// File name.
-	fn fyi_file_name(&self) -> String {
+	fn fyi_file_name(&self) -> Cow<'static, str> {
 		match self.is_dir() {
-			true => String::new(),
-			false => self.file_name()
-				.unwrap_or(OsStr::new(""))
-				.to_str()
-				.unwrap_or("")
-				.to_string(),
+			true => Cow::Borrowed(""),
+			false => Cow::Owned(
+				self.file_name()
+					.unwrap_or(OsStr::new(""))
+					.to_str()
+					.unwrap_or("")
+					.to_string()
+			),
 		}
 	}
 
