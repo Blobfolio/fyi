@@ -153,13 +153,13 @@ impl<'m> Msg<'m> {
 	/// Msg.
 	pub fn msg(&self) -> Cow<'_, str> {
 		match self.flags & MSG_TIMESTAMP {
-			0 => self.msg_straight(),
-			_ => self.msg_timestamped(),
+			0 => self._msg_straight(),
+			_ => self._msg_timestamped(),
 		}
 	}
 
 	/// Straight message.
-	fn msg_straight(&self) -> Cow<'_, str> {
+	fn _msg_straight(&self) -> Cow<'_, str> {
 		Cow::Owned({
 			let prefix = self.prefix.prefix();
 			let indent_len: usize = self.indent as usize * 4;
@@ -183,7 +183,7 @@ impl<'m> Msg<'m> {
 	}
 
 	/// Message w/ Timestamp.
-	fn msg_timestamped(&self) -> Cow<'_, str> {
+	fn _msg_timestamped(&self) -> Cow<'_, str> {
 		let prefix = self.prefix.prefix();
 		let ts = self.timestamp();
 
