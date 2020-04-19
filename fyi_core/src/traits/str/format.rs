@@ -69,20 +69,20 @@ where T: AsRef<str> {
 	}
 
 	/// Number of Chars in String.
-	fn fyi_lines_len(&self) -> usize {
-		let me = self.as_ref();
-		match me.is_empty() {
-			true => 0,
-			false => bytecount::count(me.as_bytes(), b'\n') + 1,
-		}
-	}
-
-	/// Number of Chars in String.
 	fn fyi_chars_len(&self) -> usize {
 		let me = self.as_ref();
 		match me.is_empty() {
 			true => 0,
 			false => bytecount::num_chars(me.as_bytes()),
+		}
+	}
+
+	/// Number of Chars in String.
+	fn fyi_lines_len(&self) -> usize {
+		let me = self.as_ref();
+		match me.is_empty() {
+			true => 0,
+			false => bytecount::count(me.as_bytes(), b'\n') + 1,
 		}
 	}
 
