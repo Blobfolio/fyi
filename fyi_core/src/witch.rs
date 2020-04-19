@@ -224,15 +224,14 @@ impl Witch {
 	#[inline(always)]
 	fn _progress_loop<F> (&self, bar: &Arc<crate::Progress<'static>>, cb: F)
 	where F: Fn(&Arc<PathBuf>) + Send + Sync {
-		use crate::{
-			Progress,
-			traits::path::FYIPathFormat,
-		};
+		use crate::Progress;
 
 		// Loop!
 		let handle = Progress::steady_tick(&bar, None);
 		self.0.par_iter().for_each(|x| {
-			let file: String = x.fyi_to_string();
+			let file: String = x.to_str()
+				.unwrap_or("")
+				.to_string();
 			bar.clone().add_task(&file);
 			cb(&Arc::new(x.clone()));
 			bar.clone().update(1, None, Some(file));
