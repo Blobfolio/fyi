@@ -134,3 +134,130 @@ impl FYIPathIO for Path {
 		}
 	}
 }
+
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::path::PathBuf;
+	use crate::traits::path::FYIPath;
+
+	#[test]
+	fn fyi_copy() {
+		let from: PathBuf = PathBuf::from("tests/assets/file.txt");
+		let to: PathBuf = PathBuf::from("tests/assets/fyi_copy.bak");
+
+		// Make sure the destination is empty before starting.
+		if to.is_file() {
+			to.fyi_delete().expect("Delete, damn it.");
+		}
+
+		assert!(from.is_file());
+		assert!(! to.is_file());
+
+		from.fyi_copy(&to).expect("Copy, damn it.");
+		assert!(to.is_file());
+		assert_eq!(from.fyi_file_size(), to.fyi_file_size());
+
+		// And remove it.
+		to.fyi_delete().expect("Delete, damn it.");
+	}
+
+	#[test]
+	fn fyi_copy_tmp() {
+		let from: PathBuf = PathBuf::from("tests/assets/file.txt");
+		assert!(from.is_file());
+
+		{
+			// First without a suffix.
+			let tmp: NamedTempFile = from.fyi_copy_tmp(None)
+				.expect("Tempfile, damn it.");
+			let path: PathBuf = tmp.path().to_path_buf();
+
+			assert!(path.is_file());
+			assert_eq!(from.fyi_file_size(), path.fyi_file_size());
+
+			drop(tmp);
+			assert!(! path.is_file());
+		}
+
+		{
+			// Now with one.
+			let tmp: NamedTempFile = from.fyi_copy_tmp(Some(".bak".into()))
+				.expect("Tempfile, damn it.");
+			let path: PathBuf = tmp.path().to_path_buf();
+
+			assert!(path.is_file());
+			assert_eq!(&path.fyi_file_extension(), "bak");
+			assert_eq!(from.fyi_file_size(), path.fyi_file_size());
+
+			drop(tmp);
+			assert!(! path.is_file());
+		}
+	}
+
+	// Note: fyi_delete() is covered multiple times by other tests.
+
+	#[test]
+	fn fyi_move() {
+		let src: PathBuf = PathBuf::from("tests/assets/file.txt");
+		let from: PathBuf = PathBuf::from("tests/assets/fyi_move.1");
+		let to: PathBuf = PathBuf::from("tests/assets/fyi_move.2");
+
+		// Copy the original so we don't mess it up.
+		src.fyi_copy(&from).expect("Copy, damn it.");
+
+		// Make sure the destination is empty before starting.
+		if to.is_file() {
+			to.fyi_delete().expect("Delete, damn it.");
+		}
+
+		assert!(from.is_file());
+		assert!(! to.is_file());
+
+		from.fyi_move(&to).expect("Move, damn it.");
+		assert!(! from.is_file());
+		assert!(to.is_file());
+
+		// We can compare it against our original.
+		assert_eq!(src.fyi_file_size(), to.fyi_file_size());
+
+		// And remove it.
+		to.fyi_delete().expect("Delete, damn it.");
+	}
+
+	#[test]
+	fn fyi_read() {
+		let path: PathBuf = PathBuf::from("tests/assets/file.txt");
+		assert!(path.is_file());
+
+		let data: Vec<u8> = path.fyi_read().expect("Read, damn it.");
+		let human: String = String::from_utf8(data).expect("String, damn it.");
+
+		assert_eq!(&human, "This is just a text file.\n");
+	}
+
+	#[test]
+	fn fyi_write() {
+		let data: String = "Hello World".to_string();
+
+		let tmp: NamedTempFile = NamedTempFile::new()
+			.expect("Tempfile, damn it.");
+		let path: PathBuf = tmp.path().to_path_buf();
+
+		assert!(path.is_file());
+		assert_eq!(path.fyi_file_size(), 0);
+
+		// Write it.
+		path.fyi_write(data.as_bytes()).expect("Write, damn it.");
+
+		let data2: Vec<u8> = path.fyi_read().expect("Read, damn it.");
+		let human: String = String::from_utf8(data2).expect("String, damn it.");
+
+		assert_eq!(data, human);
+
+		drop(tmp);
+		assert!(! path.is_file());
+	}
+}

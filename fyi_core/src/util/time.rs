@@ -134,3 +134,51 @@ pub fn unixtime() -> usize {
 		.unwrap_or(Duration::new(5, 0))
 		.as_secs() as usize
 }
+
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn chunked() {
+		assert_eq!(super::chunked(0), [0, 0, 0, 0]);
+		assert_eq!(super::chunked(50), [0, 0, 0, 50]);
+		assert_eq!(super::chunked(100), [0, 0, 1, 40]);
+		assert_eq!(super::chunked(1000), [0, 0, 16, 40]);
+		assert_eq!(super::chunked(10000), [0, 2, 46, 40]);
+		assert_eq!(super::chunked(100000), [1, 3, 46, 40]);
+		assert_eq!(super::chunked(1000000), [11, 13, 46, 40]);
+	}
+
+	#[test]
+	fn elapsed() {
+		assert_eq!(super::elapsed(0), Cow::Borrowed("0 seconds"));
+		assert_eq!(super::elapsed(1), Cow::Borrowed("1 second"));
+		assert_eq!(super::elapsed(50), Cow::Borrowed("50 seconds"));
+		assert_eq!(super::elapsed(100), Cow::Borrowed("1 minute and 40 seconds"));
+		assert_eq!(super::elapsed(1000), Cow::Borrowed("16 minutes and 40 seconds"));
+		assert_eq!(super::elapsed(10000), Cow::Borrowed("2 hours, 46 minutes, and 40 seconds"));
+		assert_eq!(super::elapsed(100000), Cow::Borrowed("1 day, 3 hours, 46 minutes, and 40 seconds"));
+		assert_eq!(super::elapsed(1000000), Cow::Borrowed("11 days, 13 hours, 46 minutes, and 40 seconds"));
+	}
+
+	#[test]
+	fn elapsed_short() {
+		assert_eq!(super::elapsed_short(0), Cow::Borrowed("00:00:00"));
+		assert_eq!(super::elapsed_short(1), Cow::Borrowed("00:00:01"));
+		assert_eq!(super::elapsed_short(50), Cow::Borrowed("00:00:50"));
+		assert_eq!(super::elapsed_short(100), Cow::Borrowed("00:01:40"));
+		assert_eq!(super::elapsed_short(1000), Cow::Borrowed("00:16:40"));
+		assert_eq!(super::elapsed_short(10000), Cow::Borrowed("02:46:40"));
+		assert_eq!(super::elapsed_short(100000), Cow::Borrowed("01:03:46:40"));
+		assert_eq!(super::elapsed_short(1000000), Cow::Borrowed("11:13:46:40"));
+	}
+
+	#[test]
+	fn unixtime() {
+		let tmp: usize = super::unixtime();
+		assert!(tmp > 999999999);
+	}
+}

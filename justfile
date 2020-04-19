@@ -76,6 +76,17 @@ release_dir := justfile_directory() + "/release"
 		--target-dir "{{ cargo_dir }}"
 
 
+# Unit tests!
+@test:
+	RUST_TEST_THREADS=1 cargo test \
+		--tests \
+		--all-features \
+		--release \
+		--workspace \
+		--target-dir "{{ cargo_dir }}" -- \
+			--format terse \
+
+
 # Get/Set version.
 version:
 	#!/usr/bin/env bash

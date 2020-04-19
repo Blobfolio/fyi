@@ -326,3 +326,64 @@ impl<'m> Msg<'m> {
 			.with_prefix(Prefix::Custom(Cow::Borrowed("Crunched"), 2))
 	}
 }
+
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn prefix() {
+		assert_eq!(Prefix::Debug.prefix().fyi_strip_ansi(), "Debug: ");
+		assert_eq!(Prefix::Error.prefix().fyi_strip_ansi(), "Error: ");
+		assert_eq!(Prefix::Info.prefix().fyi_strip_ansi(), "Info: ");
+		assert_eq!(Prefix::None.prefix().fyi_strip_ansi(), "");
+		assert_eq!(Prefix::Notice.prefix().fyi_strip_ansi(), "Notice: ");
+		assert_eq!(Prefix::Success.prefix().fyi_strip_ansi(), "Success: ");
+		assert_eq!(Prefix::Warning.prefix().fyi_strip_ansi(), "Warning: ");
+	}
+
+	#[test]
+	fn prefix_happy() {
+		assert!(Prefix::Debug.happy());
+		assert!(Prefix::Info.happy());
+		assert!(Prefix::None.happy());
+		assert!(Prefix::Notice.happy());
+		assert!(Prefix::Success.happy());
+
+		// These two are sad.
+		assert!(! Prefix::Error.happy());
+		assert!(! Prefix::Warning.happy());
+	}
+
+	#[test]
+	fn prefix_new() {
+		assert_eq!(Prefix::new("", 199), Prefix::None);
+		assert_eq!(Prefix::new("Hello", 199).prefix(), "\x1B[1;38;5;199mHello:\x1B[0m ");
+		assert_eq!(Prefix::new("Hello", 2).prefix(), "\x1B[1;38;5;2mHello:\x1B[0m ");
+	}
+
+	#[test]
+	fn msg_new() {
+		// Just a message.
+		let msg: Msg = Msg::new("Hello World");
+		assert_eq!(msg.msg(), "\x1B[1mHello World\x1B[0m");
+		assert_eq!(msg.prefix(), Prefix::None);
+
+		// With prefix.
+		let msg: Msg = Msg::new("Hello World")
+			.with_prefix(Prefix::Success);
+		assert_eq!(msg.msg(), "\x1B[92;1mSuccess:\x1B[0m \x1B[1mHello World\x1B[0m");
+		assert_eq!(msg.prefix(), Prefix::Success);
+
+		// Indentation. We've tested color enough now; let's strip ANSI
+		// to make this more readable.
+		let msg: Msg = Msg::new("Hello World")
+			.with_indent(1);
+		assert_eq!(msg.msg().fyi_strip_ansi(), "    Hello World");
+		let msg: Msg = Msg::new("Hello World")
+			.with_indent(2);
+		assert_eq!(msg.msg().fyi_strip_ansi(), "        Hello World");
+	}
+}

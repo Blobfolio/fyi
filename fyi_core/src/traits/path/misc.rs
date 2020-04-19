@@ -100,3 +100,77 @@ impl FYIPath for Path {
 		Err(Error::PathInvalid(self.to_path_buf(), "has no parent"))
 	}
 }
+
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn fyi_file_extension() {
+		assert_eq!(&PathBuf::from("foo/bar.JS").fyi_file_extension(), "js");
+		assert_eq!(&PathBuf::from("src/lib.rs").fyi_file_extension(), "rs");
+
+		assert_eq!(&PathBuf::from("foo/bar").fyi_file_extension(), "");
+		assert_eq!(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).fyi_file_extension(), "");
+	}
+
+	#[test]
+	fn fyi_file_name() {
+		assert_eq!(&PathBuf::from("foo/bar.JS").fyi_file_name(), "bar.JS");
+		assert_eq!(&PathBuf::from("src/lib.rs").fyi_file_name(), "lib.rs");
+
+		// Should return "bar" since the path doesn't exist and might be
+		// intended to hold a file at some point.
+		assert_eq!(&PathBuf::from("foo/bar").fyi_file_name(), "bar");
+
+		// This is definitely a directory, though, so shouldn't return
+		// anything.
+		assert_eq!(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).fyi_file_name(), "");
+	}
+
+	#[test]
+	fn fyi_file_size() {
+		// These should come up zero.
+		assert_eq!(PathBuf::from("foo/bar.JS").fyi_file_size(), 0);
+		assert_eq!(PathBuf::from(env!("CARGO_MANIFEST_DIR")).fyi_file_size(), 0);
+
+		// And something we know.
+		assert_eq!(PathBuf::from("tests/assets/file.txt").fyi_file_size(), 26);
+	}
+
+	#[test]
+	fn fyi_is_executable() {
+		// These should come up false.
+		assert_eq!(PathBuf::from("foo/bar.JS").fyi_is_executable(), false);
+		assert_eq!(PathBuf::from("tests/assets/file.txt").fyi_is_executable(), false);
+		assert_eq!(PathBuf::from(env!("CARGO_MANIFEST_DIR")).fyi_is_executable(), false);
+
+		// But this should come up true.
+		assert_eq!(PathBuf::from("tests/assets/is-executable.sh").fyi_is_executable(), true);
+	}
+
+	#[test]
+	fn fyi_parent() {
+		// A known file.
+		let file: PathBuf = PathBuf::from("./src/lib.rs");
+		assert!(file.is_file());
+
+		// The canonical parent.
+		let dir: PathBuf = PathBuf::from("./src")
+			.canonicalize()
+			.expect("Parent, damn it.");
+		assert!(dir.is_dir());
+
+		// The two should match.
+		assert_eq!(file.fyi_parent().unwrap(), dir);
+
+		// This should also work on directories.
+		let dir2: PathBuf = PathBuf::from(".")
+			.canonicalize()
+			.expect("Parent, damn it.");
+		assert!(dir2.is_dir());
+		assert_eq!(dir.fyi_parent().unwrap(), dir2);
+	}
+}

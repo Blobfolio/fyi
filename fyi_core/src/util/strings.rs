@@ -114,3 +114,74 @@ where N: ToPrimitive {
 		Cow::Owned(String::from_utf8(vec![b' '; count]).unwrap())
 	}
 }
+
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn os_string() {
+		let test_str: &OsStr = OsStr::new("Hello World!");
+		let test_string: OsString = test_str.to_os_string();
+
+		assert_eq!(super::from_os_string(&test_str), "Hello World!".to_string());
+		assert_eq!(super::to_os_string("Hello World!"), test_string);
+	}
+
+	#[test]
+	fn inflect() {
+		assert_eq!(super::inflect(0, "book", "books"), Cow::Borrowed("0 books"));
+		assert_eq!(super::inflect(1, "book", "books"), Cow::Borrowed("1 book"));
+		assert_eq!(super::inflect(2, "book", "books"), Cow::Borrowed("2 books"));
+		assert_eq!(super::inflect(5000, "book", "books"), Cow::Borrowed("5,000 books"));
+	}
+
+	#[test]
+	fn oxford_join() {
+		let data: [String; 5] = [
+			"apples".to_string(),
+			"bananas".to_string(),
+			"carrots".to_string(),
+			"dates".to_string(),
+			"eggplants".to_string(),
+		];
+		let expected_and: [&str; 6] = [
+			"",
+			"apples",
+			"apples and bananas",
+			"apples, bananas, and carrots",
+			"apples, bananas, carrots, and dates",
+			"apples, bananas, carrots, dates, and eggplants",
+		];
+		let expected_or: [&str; 6] = [
+			"",
+			"apples",
+			"apples or bananas",
+			"apples, bananas, or carrots",
+			"apples, bananas, carrots, or dates",
+			"apples, bananas, carrots, dates, or eggplants",
+		];
+
+		for i in (0..6).into_iter() {
+			assert_eq!(
+				&super::oxford_join(&data[0..i], "and"),
+				expected_and[i]
+			);
+			assert_eq!(
+				&super::oxford_join(&data[0..i], "or"),
+				expected_or[i]
+			);
+		}
+	}
+
+	#[test]
+	fn whitespace() {
+		for i in (1..111).into_iter() {
+			let tmp: Cow<str> = super::whitespace(i);
+			assert_eq!(tmp.len(), i);
+			assert!(tmp.trim().is_empty());
+		}
+	}
+}

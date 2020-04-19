@@ -104,7 +104,7 @@ impl Witch {
 	/// From File List
 	pub fn from_file<P> (path: P, pattern: Option<String>) -> Self
 	where P: AsRef<Path> {
-		let path = path.as_ref().to_path_buf();
+		let path: PathBuf = path.as_ref().to_path_buf();
 		if false == path.is_file() {
 			return Witch(HashSet::new());
 		}
@@ -237,5 +237,121 @@ impl Witch {
 			bar.clone().update(1, None, Some(file));
 		});
 		handle.join().unwrap();
+	}
+}
+
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::traits::path::FYIPathFormat;
+	use std::io::Write;
+	use tempfile::NamedTempFile;
+
+	#[test]
+	fn witch_new() {
+		let paths: Vec<&str> = vec![
+			"tests",
+			"tests/assets",
+		];
+
+		// Matches will be canonicalized.
+		let canon: Vec<PathBuf> = vec![
+			PathBuf::from("tests/assets/is-executable.sh").fyi_to_path_buf_abs(),
+			PathBuf::from("tests/assets/file.txt").fyi_to_path_buf_abs(),
+		];
+
+		// Casual walk.
+		let walk: Witch = Witch::new(&paths, None);
+		let files: HashSet<PathBuf> = walk.files();
+
+		assert!(! walk.is_empty());
+		assert_eq!(files.len(), 2);
+		assert_eq!(files.len(), walk.len());
+
+		for i in &canon {
+			assert!(files.contains(i));
+		}
+
+		// Check with a file path.
+		let walk: Witch = Witch::new(&canon[..1], None);
+		let files: HashSet<PathBuf> = walk.files();
+
+		assert_eq!(files.len(), 1);
+		assert!(files.contains(&canon[0]));
+
+		// Filtered walk.
+		let walk: Witch = Witch::new(&paths, Some(r"(?i).+\.sh$".into()));
+		let files: HashSet<PathBuf> = walk.files();
+
+		assert_eq!(files.len(), 1);
+		assert!(files.contains(&canon[0]));
+
+		// Sad walk.
+		let walk: Witch = Witch::new(&paths, Some(r"(?i).+\.exe$".into()));
+		let files: HashSet<PathBuf> = walk.files();
+
+		assert!(walk.is_empty());
+		assert_eq!(files.len(), 0);
+	}
+
+	#[test]
+	fn witch_from_file() {
+		// Populate a list real quick.
+		let list: NamedTempFile = NamedTempFile::new()
+			.expect("Tempfile, damn it.");
+		let paths: String = format!(
+			"{}\n{}\n",
+			PathBuf::from("tests").fyi_to_string_abs(),
+			PathBuf::from("tests/assets").fyi_to_string_abs(),
+		);
+		let path: PathBuf = list.path().to_path_buf();
+
+		{
+			let mut file = list.as_file();
+			file.write_all(paths.as_bytes()).expect("Write, damn it.");
+			file.flush().unwrap();
+			drop(file);
+		}
+
+		assert!(path.is_file());
+
+		// Matches will be canonicalized.
+		let canon: Vec<PathBuf> = vec![
+			PathBuf::from("tests/assets/is-executable.sh").fyi_to_path_buf_abs(),
+			PathBuf::from("tests/assets/file.txt").fyi_to_path_buf_abs(),
+		];
+
+		// Casual walk.
+		let walk: Witch = Witch::from_file(&path, None);
+		let files: HashSet<PathBuf> = walk.files();
+
+		assert_eq!(files.len(), 2);
+		for i in &canon {
+			assert!(files.contains(i));
+		}
+
+		// Filtered walk.
+		let walk: Witch = Witch::from_file(&path, Some(r"(?i).+\.sh$".into()));
+		let files: HashSet<PathBuf> = walk.files();
+
+		assert_eq!(files.len(), 1);
+		assert!(files.contains(&canon[0]));
+
+		drop(list);
+		assert!(! path.is_file());
+	}
+
+	// Note: Witch::files(), ::len(), and ::is_empty() are repeatedly
+	// covered by the other tests so are not drawn out separately.
+
+	#[test]
+	fn walk_du() {
+		let walk: Witch = Witch::new(
+			&["tests/assets/file.txt"],
+			Some(r"(?i).+\.txt$".into()),
+		);
+		assert_eq!(walk.du(), 26);
 	}
 }
