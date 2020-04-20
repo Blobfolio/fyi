@@ -2,7 +2,7 @@
 # FYI Core: CLI
 */
 
-use crate::traits::str::FYIStringFormat;
+use crate::util::strings;
 use std::borrow::Cow;
 use std::io::{
 	stderr,
@@ -24,7 +24,7 @@ where S: Into<Cow<'a, str>> {
 
 	// Strip colors.
 	if 0 != (crate::PRINT_NO_COLOR & flags) {
-		let tmp = msg.fyi_strip_ansi().to_string();
+		let tmp: String = strings::strip_ansi(&msg).to_string();
 		msg = Cow::Owned(tmp);
 	}
 

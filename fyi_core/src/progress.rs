@@ -9,7 +9,6 @@ use crate::{
 	PRINT_NEWLINE,
 	PRINT_STDERR,
 	PROGRESSING,
-	traits::str::FYIStringFormat,
 	util::{
 		cli,
 		strings,
@@ -168,7 +167,7 @@ impl<'pi> ProgressInner<'pi> {
 
 		// We might need to clear the previous entry.
 		if false == self.last.is_empty() {
-			let lines = self.last.fyi_lines_len();
+			let lines = strings::lines_len(&self.last);
 
 			// The count starts at zero for the purposes of CLEAR.
 			if lines <= 9 {
@@ -214,7 +213,7 @@ impl<'pi> ProgressInner<'pi> {
 		let p_progress = self.part_progress();
 
 		// Space the bar can't have.
-		let p_space = p_elapsed.fyi_width() + p_progress.fyi_width() + 2;
+		let p_space = strings::width(&p_elapsed) + strings::width(&p_progress) + 2;
 		if width < p_space + 10 {
 			return;
 		}
@@ -291,7 +290,7 @@ impl<'pi> ProgressInner<'pi> {
 						"\x1B[0m",
 					].concat();
 
-					out.fyi_shorten(width).to_string()
+					strings::shorten(&out, width).to_string()
 				})
 				.collect();
 
@@ -376,7 +375,7 @@ impl<'pi> ProgressInner<'pi> {
 		let eta = time::elapsed_short(f64::ceil(
 			elapsed / self.done as f64 * (self.total - self.done) as f64
 		) as usize);
-		let eta_width: usize = eta.fyi_width() + 5;
+		let eta_width: usize = strings::width(&eta) + 5;
 
 		// Last abort check.
 		if eta_width >= width {

@@ -6,7 +6,6 @@ use crate::{
 	MSG_TIMESTAMP,
 	PRINT_NEWLINE,
 	PRINT_STDERR,
-	traits::str::FYIStringFormat,
 	util::{
 		cli,
 		numbers,
@@ -194,8 +193,8 @@ impl<'m> Msg<'m> {
 			self.msg.len() +
 			8;
 		let msg_width: usize = indent_len +
-			prefix.fyi_width() +
-			self.msg.fyi_width();
+			strings::width(&prefix) +
+			strings::width(&self.msg);
 
 		let ts_width: usize = ts.len() + 2;
 		let ts_len: usize = ts_width + 23;
@@ -339,13 +338,13 @@ mod tests {
 
 	#[test]
 	fn prefix() {
-		assert_eq!(Prefix::Debug.prefix().fyi_strip_ansi(), "Debug: ");
-		assert_eq!(Prefix::Error.prefix().fyi_strip_ansi(), "Error: ");
-		assert_eq!(Prefix::Info.prefix().fyi_strip_ansi(), "Info: ");
-		assert_eq!(Prefix::None.prefix().fyi_strip_ansi(), "");
-		assert_eq!(Prefix::Notice.prefix().fyi_strip_ansi(), "Notice: ");
-		assert_eq!(Prefix::Success.prefix().fyi_strip_ansi(), "Success: ");
-		assert_eq!(Prefix::Warning.prefix().fyi_strip_ansi(), "Warning: ");
+		assert_eq!(strings::strip_ansi(&Prefix::Debug.prefix()), "Debug: ");
+		assert_eq!(strings::strip_ansi(&Prefix::Error.prefix()), "Error: ");
+		assert_eq!(strings::strip_ansi(&Prefix::Info.prefix()), "Info: ");
+		assert_eq!(strings::strip_ansi(&Prefix::None.prefix()), "");
+		assert_eq!(strings::strip_ansi(&Prefix::Notice.prefix()), "Notice: ");
+		assert_eq!(strings::strip_ansi(&Prefix::Success.prefix()), "Success: ");
+		assert_eq!(strings::strip_ansi(&Prefix::Warning.prefix()), "Warning: ");
 	}
 
 	#[test]
@@ -385,9 +384,9 @@ mod tests {
 		// to make this more readable.
 		let msg: Msg = Msg::new("Hello World")
 			.with_indent(1);
-		assert_eq!(msg.msg().fyi_strip_ansi(), "    Hello World");
+		assert_eq!(strings::strip_ansi(&msg.msg()), "    Hello World");
 		let msg: Msg = Msg::new("Hello World")
 			.with_indent(2);
-		assert_eq!(msg.msg().fyi_strip_ansi(), "        Hello World");
+		assert_eq!(strings::strip_ansi(&msg.msg()), "        Hello World");
 	}
 }
