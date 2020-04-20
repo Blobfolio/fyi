@@ -8,7 +8,10 @@ use regex::Regex;
 use std::{
 	borrow::Cow,
 	collections::HashSet,
-	fs::File,
+	fs::{
+		self,
+		File,
+	},
 	io::{
 		BufReader,
 		BufRead,
@@ -56,7 +59,7 @@ impl Witch {
 					.filter_map(|e| {
 						if let Ok(path) = e {
 							if path.file_type().is_file() {
-								if let Ok(path) = path.path().canonicalize() {
+								if let Ok(path) = fs::canonicalize(&path.path()) {
 									if pattern.is_match(path.to_str().unwrap_or("")) {
 										Some(path)
 									}
@@ -86,7 +89,7 @@ impl Witch {
 					.filter_map(|e| {
 						if let Ok(path) = e {
 							if path.file_type().is_file() {
-								if let Ok(path) = path.path().canonicalize() {
+								if let Ok(path) = fs::canonicalize(&path.path()) {
 									Some(path)
 								}
 								else { None }
