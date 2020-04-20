@@ -54,6 +54,10 @@ name = "util_numbers"
 harness = false
 
 [[bench]]
+name = "util_paths"
+harness = false
+
+[[bench]]
 name = "util_strings"
 harness = false
 

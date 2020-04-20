@@ -39,8 +39,11 @@ extern crate thiserror;
 
 mod error;
 mod msg;
+
+#[cfg(feature = "witcher")]
 /// Traits.
 pub mod traits;
+
 /// Utilities.
 pub mod util;
 

@@ -245,7 +245,7 @@ impl Witch {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::traits::path::FYIPathFormat;
+	use crate::util::paths;
 	use std::io::Write;
 	use tempfile::NamedTempFile;
 
@@ -258,8 +258,8 @@ mod tests {
 
 		// Matches will be canonicalized.
 		let canon: Vec<PathBuf> = vec![
-			PathBuf::from("tests/assets/is-executable.sh").fyi_to_path_buf_abs(),
-			PathBuf::from("tests/assets/file.txt").fyi_to_path_buf_abs(),
+			paths::to_path_buf_abs("tests/assets/is-executable.sh"),
+			paths::to_path_buf_abs("tests/assets/file.txt"),
 		];
 
 		// Casual walk.
@@ -303,8 +303,8 @@ mod tests {
 			.expect("Tempfile, damn it.");
 		let paths: String = format!(
 			"{}\n{}\n",
-			PathBuf::from("tests").fyi_to_string_abs(),
-			PathBuf::from("tests/assets").fyi_to_string_abs(),
+			paths::to_string_abs(&PathBuf::from("tests")),
+			paths::to_string_abs(&PathBuf::from("tests/assets")),
 		);
 		let path: PathBuf = list.path().to_path_buf();
 
@@ -319,8 +319,8 @@ mod tests {
 
 		// Matches will be canonicalized.
 		let canon: Vec<PathBuf> = vec![
-			PathBuf::from("tests/assets/is-executable.sh").fyi_to_path_buf_abs(),
-			PathBuf::from("tests/assets/file.txt").fyi_to_path_buf_abs(),
+			paths::to_path_buf_abs("tests/assets/is-executable.sh"),
+			paths::to_path_buf_abs("tests/assets/file.txt"),
 		];
 
 		// Casual walk.
