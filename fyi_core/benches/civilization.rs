@@ -104,6 +104,22 @@ fn ansi_bitsy_width(c: &mut Criterion) {
 	group.finish();
 }
 
+fn elapsed_elapsed_chunks(c: &mut Criterion) {
+	let mut group = c.benchmark_group("traits::spacetime::Elapsed::elapsed_chunks");
+	for size in [0, 50, 100, 10000, 1000000].iter() {
+		group.bench_with_input(
+			BenchmarkId::from_parameter(size),
+			size,
+			|b, &size| {
+				b.iter(||
+					size.elapsed_chunks()
+				);
+			}
+		);
+	}
+	group.finish();
+}
+
 fn elapsed_elapsed(c: &mut Criterion) {
 	let mut group = c.benchmark_group("traits::spacetime::Elapsed::elapsed");
 	for size in [0, 50, 100, 10000, 1000000].iter() {
@@ -279,6 +295,7 @@ criterion_group!(
 	ansi_bitsy_strip_ansi,
 	ansi_bitsy_width,
 	elapsed_elapsed,
+	elapsed_elapsed_chunks,
 	elapsed_elapsed_short,
 	inflect,
 	mebi_saved,
