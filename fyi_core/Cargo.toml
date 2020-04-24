@@ -56,6 +56,10 @@ name = "civilization"
 harness = false
 
 [[bench]]
+name = "msg"
+harness = false
+
+[[bench]]
 name = "scratchpad"
 harness = false
 
