@@ -15,12 +15,15 @@ use crate::{
 		Elapsed,
 		Inflection,
 		MebiSaved,
-		Thousands,
 	},
 	util::{
 		cli,
 		strings,
 	},
+};
+use num_format::{
+	Locale,
+	ToFormattedString,
 };
 use std::{
 	borrow::Cow,
@@ -317,7 +320,7 @@ impl<'m> Msg<'m> {
 					0 => ", but no dice".to_string(),
 					x => format!(
 						", saving {} bytes ({:3.*}%)",
-						x.thousands(),
+						x.to_formatted_string(&Locale::en),
 						2,
 						(1.0 - (after as f64 / before as f64)) * 100.0
 					),

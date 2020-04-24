@@ -1,4 +1,7 @@
-use crate::traits::Thousands;
+use num_format::{
+	Locale,
+	WriteFormatted,
+};
 use std::borrow::{
 	Borrow,
 	Cow,
@@ -47,10 +50,9 @@ macro_rules! impl_int_inflection {
 					}
 				}
 				else {
-					let num = self.thousands();
 					let noun = two.borrow();
-					let mut out: String = String::with_capacity(num.len() + noun.len() + 1);
-					out.push_str(&num);
+					let mut out: String = String::with_capacity(noun.len() + 20);
+					out.write_formatted(self, &Locale::en).expect("Fucked up number.");
 					out.push(' ');
 					out.push_str(noun);
 					out.into()
@@ -77,13 +79,17 @@ macro_rules! impl_smallint_inflection {
 					out.into()
 				}
 				else {
-					let num = self.thousands();
+					let mut cache = [0u8; 20];
+					let n = itoa::write(&mut cache[..], *self).unwrap();
 					let noun = two.borrow();
-					let mut out: String = String::with_capacity(num.len() + noun.len() + 1);
-					out.push_str(&num);
-					out.push(' ');
-					out.push_str(noun);
-					out.into()
+
+					unsafe {
+						let mut out: String = String::from_utf8_unchecked(cache[0..n].to_vec());
+						out.reserve_exact(1 + noun.len());
+						out.push(' ');
+						out.push_str(noun);
+						out.into()
+					}
 				}
 			}
 		}

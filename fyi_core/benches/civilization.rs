@@ -15,7 +15,6 @@ use fyi_core::traits::{
 	OxfordGlue,
 	OxfordJoin,
 	Shorty,
-	Thousands,
 	ToMebi,
 };
 
@@ -271,22 +270,6 @@ fn shorty_shorten_reverse(c: &mut Criterion) {
 	group.finish();
 }
 
-fn thousands(c: &mut Criterion) {
-	let mut group = c.benchmark_group("traits::Thousands::thousands");
-	for size in [500u64, 5000u64, 5000000u64].iter() {
-		group.bench_with_input(
-			BenchmarkId::from_parameter(size),
-			size,
-			|b, &size| {
-				b.iter(||
-					size.thousands()
-				);
-			}
-		);
-	}
-	group.finish();
-}
-
 
 
 criterion_group!(
@@ -303,6 +286,5 @@ criterion_group!(
 	oxford_join,
 	shorty_shorten,
 	shorty_shorten_reverse,
-	thousands,
 );
 criterion_main!(benches);

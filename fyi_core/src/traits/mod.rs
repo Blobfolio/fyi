@@ -4,7 +4,6 @@ mod mebi;
 mod oxford_join;
 mod shorty;
 mod spacetime;
-mod thousands;
 
 #[cfg(feature = "witcher")]
 mod io;
@@ -25,8 +24,6 @@ pub use self::spacetime::{
 	Elapsed,
 	PathProps,
 };
-/// Numbers with thousands separation.
-pub use self::thousands::Thousands;
 
 #[cfg(feature = "witcher")]
 /// IO traits.
