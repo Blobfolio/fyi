@@ -2,6 +2,10 @@
 # FYI Core: Msg
 */
 
+use bytes::{
+	BytesMut,
+	BufMut
+};
 use crate::{
 	MSG_TIMESTAMP,
 	PRINT_NEWLINE,
@@ -24,11 +28,13 @@ use std::{
 	time::Instant,
 };
 
+
+
 #[derive(Debug, Clone, PartialEq)]
 /// Generic message.
 pub enum Prefix<'mp> {
 	/// Custom.
-	Custom(Cow<'mp, str>, u8),
+	Custom(Cow<'mp, str>),
 	/// Debug.
 	Debug,
 	/// Error.
@@ -66,7 +72,20 @@ impl<'mp> Prefix<'mp> {
 		let msg = msg.into();
 		match msg.is_empty() {
 			true => Self::None,
-			false => Self::Custom(msg.into(), color),
+			false => {
+				// Conver the number.
+				let mut cache = [0u8; 20];
+				let n = itoa::write(&mut cache[..], color).unwrap();
+
+				let mut buf = BytesMut::with_capacity(n + msg.len() + 16);
+				buf.put("\x1B[1;38;5;".as_bytes());
+				buf.put(&cache[0..n]);
+				buf.put_u8(b'm');
+				buf.put(msg.as_bytes());
+				buf.put(":\x1B[0m ".as_bytes());
+
+				Self::Custom(unsafe { String::from_utf8_unchecked(buf.to_vec()).into() })
+			},
 		}
 	}
 
@@ -79,25 +98,16 @@ impl<'mp> Prefix<'mp> {
 	}
 
 	/// Print the prefix!
-	pub fn prefix(&self) -> Cow<'_, str> {
+	pub fn prefix(&'mp self) -> Cow<'mp, str> {
 		match *self {
-			Self::Custom(ref p, c) => match p.is_empty() {
-				true => Cow::Borrowed(""),
-				false => Cow::Owned([
-					"\x1B[1;38;5;",
-					c.to_string().as_str(),
-					"m",
-					p,
-					":\x1B[0m ",
-				].concat()),
-			},
-			Self::Debug => Cow::Borrowed("\x1B[96;1mDebug:\x1B[0m "),
-			Self::Error => Cow::Borrowed("\x1B[91;1mError:\x1B[0m "),
-			Self::Info => Cow::Borrowed("\x1B[96;1mInfo:\x1B[0m "),
-			Self::Notice => Cow::Borrowed("\x1B[95;1mNotice:\x1B[0m "),
-			Self::Success => Cow::Borrowed("\x1B[92;1mSuccess:\x1B[0m "),
-			Self::Warning => Cow::Borrowed("\x1B[93;1mWarning:\x1B[0m "),
-			_ => Cow::Borrowed(""),
+			Self::Custom(ref p) => Cow::Borrowed(p),
+			Self::Debug => "\x1B[96;1mDebug:\x1B[0m ".into(),
+			Self::Error => "\x1B[91;1mError:\x1B[0m ".into(),
+			Self::Info => "\x1B[96;1mInfo:\x1B[0m ".into(),
+			Self::Notice => "\x1B[95;1mNotice:\x1B[0m ".into(),
+			Self::Success => "\x1B[92;1mSuccess:\x1B[0m ".into(),
+			Self::Warning => "\x1B[93;1mWarning:\x1B[0m ".into(),
+			_ => "".into(),
 		}
 	}
 }
@@ -321,7 +331,7 @@ impl<'m> Msg<'m> {
 				".",
 			].concat(),
 		}))
-			.with_prefix(Prefix::Custom(Cow::Borrowed("Crunched"), 2))
+			.with_prefix(Prefix::new("Crunched", 2))
 	}
 
 	/// Template: Finished In X.
@@ -331,7 +341,7 @@ impl<'m> Msg<'m> {
 			&time.elapsed().as_secs().elapsed(),
 			".",
 		].concat()))
-			.with_prefix(Prefix::Custom(Cow::Borrowed("Crunched"), 2))
+			.with_prefix(Prefix::new("Crunched", 2))
 	}
 }
 

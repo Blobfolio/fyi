@@ -25,10 +25,7 @@ use fyi_core::{
 	PRINT_STDERR,
 	util::cli,
 };
-use std::{
-	borrow::Cow,
-	process,
-};
+use std::process;
 
 mod menu;
 
@@ -80,8 +77,8 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 			"warning" => Prefix::Warning,
 			_ => {
 				match opts.value_of("prefix") {
-					Some(p) => Prefix::Custom(
-						Cow::Borrowed(p),
+					Some(p) => Prefix::new(
+						p,
 						parse_cli_u8(opts.value_of("prefix_color").unwrap_or("199"))
 					),
 					_ => Prefix::None,
