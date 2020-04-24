@@ -104,6 +104,42 @@ impl<'mp> Prefix<'mp> {
 			_ => "".into(),
 		}
 	}
+
+	/// Prefix length.
+	pub fn is_empty(&'mp self) -> bool {
+		match *self {
+			Self::None => true,
+			_ => false,
+		}
+	}
+
+	/// Prefix length.
+	pub fn len(&'mp self) -> usize {
+		match *self {
+			Self::Custom(ref p) => p.len(),
+			Self::Debug => 18,
+			Self::Error => 18,
+			Self::Info => 17,
+			Self::Notice => 19,
+			Self::Success => 20,
+			Self::Warning => 20,
+			_ => 0,
+		}
+	}
+
+	/// Prefix width.
+	pub fn width(&'mp self) -> usize {
+		match *self {
+			Self::Custom(ref p) => p.width(),
+			Self::Debug => 7,
+			Self::Error => 7,
+			Self::Info => 6,
+			Self::Notice => 8,
+			Self::Success => 9,
+			Self::Warning => 9,
+			_ => 0,
+		}
+	}
 }
 
 
@@ -169,19 +205,20 @@ impl<'m> Msg<'m> {
 	/// Straight message.
 	fn _msg_straight(&self) -> Cow<'_, str> {
 		Cow::Owned({
-			let prefix = self.prefix.prefix();
 			let indent_len: usize = self.indent as usize * 4;
 
 			let mut p: String = String::with_capacity(
 				indent_len +
-				prefix.len() +
+				self.prefix.len() +
 				self.msg.len() +
 				8
 			);
 			if indent_len > 0 {
 				p.push_str(&strings::whitespace(indent_len));
 			}
-			p.push_str(&prefix);
+			if ! self.prefix.is_empty() {
+				p.push_str(&self.prefix.prefix());
+			}
 			p.push_str("\x1B[1m");
 			p.push_str(&self.msg);
 			p.push_str("\x1B[0m");
@@ -198,11 +235,11 @@ impl<'m> Msg<'m> {
 		let prefix_len: usize = prefix.len();
 		let indent_len: usize = self.indent as usize * 4;
 		let msg_len: usize = indent_len +
-			prefix_len +
+			self.prefix.len() +
 			self.msg.len() +
 			8;
 		let msg_width: usize = indent_len +
-			prefix.width() +
+			self.prefix.width() +
 			self.msg.width();
 
 		let ts_width: usize = ts.len() + 2;
@@ -224,8 +261,8 @@ impl<'m> Msg<'m> {
 				if indent_len > 0 {
 					p.push_str(&strings::whitespace(indent_len));
 				}
-				if prefix_len > 0 {
-					p.push_str(&prefix);
+				if ! self.prefix.is_empty() {
+					p.push_str(&self.prefix.prefix());
 				}
 				p.push_str("\x1B[1m");
 				p.push_str(&self.msg);
@@ -246,8 +283,8 @@ impl<'m> Msg<'m> {
 				if indent_len > 0 {
 					p.push_str(&strings::whitespace(self.indent * 4));
 				}
-				if prefix_len > 0 {
-					p.push_str(&prefix);
+				if ! self.prefix.is_empty() {
+					p.push_str(&self.prefix.prefix());
 				}
 				p.push_str("\x1B[1m");
 				p.push_str(&self.msg);
