@@ -247,7 +247,7 @@ impl<'m> Msg<'m> {
 		let overflow: bool = msg_width + ts_width + 1 > width;
 		let total_len = match overflow {
 			true => ts_len + 1 + msg_len + indent_len,
-			false => msg_len + (width - msg_width),
+			false => msg_len + (width - msg_width) + 23,
 		};
 
 		// A formatted timestamp.
