@@ -60,7 +60,7 @@ impl Default for Prefix<'_> {
 impl fmt::Display for Prefix<'_> {
 	/// Display.
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str(&self.prefix())
+		f.write_str(self.as_ref())
 	}
 }
 
@@ -142,6 +142,22 @@ impl<'mp> Prefix<'mp> {
 	}
 }
 
+impl AsRef<str> for Prefix<'_> {
+	/// As Ref String.
+	fn as_ref(&self) -> &str {
+		match *self {
+			Self::Custom(ref p) => p,
+			Self::Debug => "\x1B[96;1mDebug:\x1B[0m ",
+			Self::Error => "\x1B[91;1mError:\x1B[0m ",
+			Self::Info => "\x1B[96;1mInfo:\x1B[0m ",
+			Self::Notice => "\x1B[95;1mNotice:\x1B[0m ",
+			Self::Success => "\x1B[92;1mSuccess:\x1B[0m ",
+			Self::Warning => "\x1B[93;1mWarning:\x1B[0m ",
+			_ => "",
+		}
+	}
+}
+
 
 
 #[derive(Debug, Default, Clone)]
@@ -217,7 +233,7 @@ impl<'m> Msg<'m> {
 				p.push_str(&strings::whitespace(indent_len));
 			}
 			if ! self.prefix.is_empty() {
-				p.push_str(&self.prefix.prefix());
+				p.push_str(self.prefix.as_ref());
 			}
 			p.push_str("\x1B[1m");
 			p.push_str(&self.msg);
@@ -250,7 +266,7 @@ impl<'m> Msg<'m> {
 			false => msg_len + (width - msg_width) + 23,
 		};
 
-		// A formatted timestamp.
+		// Put it all together!
 		Cow::Owned({
 			let mut p: String = String::with_capacity(total_len);
 
@@ -260,7 +276,7 @@ impl<'m> Msg<'m> {
 					p.push_str(&strings::whitespace(indent_len));
 				}
 				if ! self.prefix.is_empty() {
-					p.push_str(&self.prefix.prefix());
+					p.push_str(self.prefix.as_ref());
 				}
 				p.push_str("\x1B[1m");
 				p.push_str(&self.msg);
@@ -282,7 +298,7 @@ impl<'m> Msg<'m> {
 					p.push_str(&strings::whitespace(indent_len));
 				}
 				if ! self.prefix.is_empty() {
-					p.push_str(&self.prefix.prefix());
+					p.push_str(self.prefix.as_ref());
 				}
 				p.push_str("\x1B[1m");
 				p.push_str(&self.msg);
