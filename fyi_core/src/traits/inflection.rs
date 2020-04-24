@@ -37,17 +37,12 @@ macro_rules! impl_int_inflection {
 					out.into()
 				}
 				else if *self < 1000 {
-					let mut cache = [0u8; 20];
-					let n = itoa::write(&mut cache[..], *self).unwrap();
 					let noun = two.borrow();
-
-					unsafe {
-						let mut out: String = String::from_utf8_unchecked(cache[0..n].to_vec());
-						out.reserve_exact(1 + noun.len());
-						out.push(' ');
-						out.push_str(noun);
-						out.into()
-					}
+					let mut out = String::with_capacity(noun.len() + 20);
+					itoa::fmt(&mut out, *self).expect("Fucked up number.");
+					out.push(' ');
+					out.push_str(noun);
+					out.into()
 				}
 				else {
 					let noun = two.borrow();
@@ -79,17 +74,12 @@ macro_rules! impl_smallint_inflection {
 					out.into()
 				}
 				else {
-					let mut cache = [0u8; 20];
-					let n = itoa::write(&mut cache[..], *self).unwrap();
 					let noun = two.borrow();
-
-					unsafe {
-						let mut out: String = String::from_utf8_unchecked(cache[0..n].to_vec());
-						out.reserve_exact(1 + noun.len());
-						out.push(' ');
-						out.push_str(noun);
-						out.into()
-					}
+					let mut out = String::with_capacity(noun.len() + 20);
+					itoa::fmt(&mut out, *self).expect("Fucked up number.");
+					out.push(' ');
+					out.push_str(noun);
+					out.into()
 				}
 			}
 		}

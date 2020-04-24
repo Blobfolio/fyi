@@ -19,17 +19,17 @@ use std::{
 
 
 lazy_static::lazy_static! {
-	static ref ELAPSED_ONE: [&'static [u8]; 4] = [
-		" day".as_bytes(),
-		" hour".as_bytes(),
-		" minute".as_bytes(),
-		" second".as_bytes(),
+	static ref ELAPSED_ONE: [&'static str; 4] = [
+		" day",
+		" hour",
+		" minute",
+		" second",
 	];
-	static ref ELAPSED_MANY: [&'static [u8]; 4] = [
-		" days".as_bytes(),
-		" hours".as_bytes(),
-		" minutes".as_bytes(),
-		" seconds".as_bytes(),
+	static ref ELAPSED_MANY: [&'static str; 4] = [
+		" days",
+		" hours",
+		" minutes",
+		" seconds",
 	];
 }
 
@@ -137,12 +137,10 @@ macro_rules! impl_elapsed {
 					"1 second".into()
 				}
 				else if *self < 60 {
-					let mut buf = BytesMut::with_capacity(32);
-					let mut cache = [0u8; 20];
-					let n = itoa::write(&mut cache[..], *self).unwrap();
-					buf.put(&cache[0..n]);
-					buf.put(ELAPSED_MANY[3].as_ref());
-					unsafe { String::from_utf8_unchecked(buf.to_vec()).into() }
+					let mut out: String = String::with_capacity(ELAPSED_MANY[3].len() + 2);
+					itoa::fmt(&mut out, *self).unwrap();
+					out.push_str(ELAPSED_MANY[3]);
+					out.into()
 				}
 				else {
 					let c = self.elapsed_chunks();
@@ -151,7 +149,7 @@ macro_rules! impl_elapsed {
 
 					let comma = ", ".as_bytes();
 					let mut buf = BytesMut::with_capacity(32);
-					let mut cache = [0u8; 20];
+					// let mut cache = [0u8; 20];
 					let mut i: usize = 0;
 					let mut j: usize = 0;
 					loop {
@@ -161,11 +159,10 @@ macro_rules! impl_elapsed {
 							continue;
 						}
 
-						let n = itoa::write(&mut cache[..], c[i]).unwrap();
-						buf.put(&cache[0..n]);
+						itoa::fmt(&mut buf, c[i]).unwrap();
 						match c[i] {
-							1 => buf.put(ELAPSED_ONE[i].as_ref()),
-							_ => buf.put(ELAPSED_MANY[i].as_ref()),
+							1 => buf.put(ELAPSED_ONE[i].as_bytes()),
+							_ => buf.put(ELAPSED_MANY[i].as_bytes()),
 						}
 
 						i += 1;

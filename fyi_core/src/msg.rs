@@ -2,10 +2,6 @@
 # FYI Core: Msg
 */
 
-use bytes::{
-	BytesMut,
-	BufMut
-};
 use crate::{
 	MSG_TIMESTAMP,
 	PRINT_NEWLINE,
@@ -76,18 +72,13 @@ impl<'mp> Prefix<'mp> {
 		match msg.is_empty() {
 			true => Self::None,
 			false => {
-				// Conver the number.
-				let mut cache = [0u8; 20];
-				let n = itoa::write(&mut cache[..], color).unwrap();
-
-				let mut buf = BytesMut::with_capacity(n + msg.len() + 16);
-				buf.put("\x1B[1;38;5;".as_bytes());
-				buf.put(&cache[0..n]);
-				buf.put_u8(b'm');
-				buf.put(msg.as_bytes());
-				buf.put(":\x1B[0m ".as_bytes());
-
-				Self::Custom(unsafe { String::from_utf8_unchecked(buf.to_vec()).into() })
+				let mut out: String = String::with_capacity(msg.len() + 19);
+				out.push_str("\x1B[1;38;5;");
+				itoa::fmt(&mut out, color).unwrap();
+				out.push('m');
+				out.push_str(&msg);
+				out.push_str(":\x1B[0m ");
+				Self::Custom(out.into())
 			},
 		}
 	}

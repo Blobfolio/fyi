@@ -1,7 +1,3 @@
-use bytes::{
-	BytesMut,
-	BufMut
-};
 use num_traits::cast::AsPrimitive;
 use std::borrow::Cow;
 
@@ -47,12 +43,10 @@ where T: AsPrimitive<f64> {
 
 		match index {
 			0 => {
-				let mut buf = BytesMut::with_capacity(4);
-				let mut cache = [0u8; 4];
-				let n = itoa::write(&mut cache[..], bytes as usize).unwrap();
-				buf.put(&cache[0..n]);
-				buf.put_u8(b'B');
-				unsafe { String::from_utf8_unchecked(buf.to_vec()).into() }
+				let mut out: String = String::with_capacity(4);
+				itoa::fmt(&mut out, bytes as usize).expect("Fucked up number.");
+				out.push('B');
+				out.into()
 			},
 			1 => format!("{:.*}KiB", 2, bytes).into(),
 			2 => format!("{:.*}MiB", 2, bytes).into(),
