@@ -229,10 +229,8 @@ impl<'m> Msg<'m> {
 
 	/// Message w/ Timestamp.
 	fn _msg_timestamped(&self) -> Cow<'_, str> {
-		let prefix = self.prefix.prefix();
-		let ts = self.timestamp();
+		let ts: String = chrono::Local::now().format("%F %T").to_string();
 
-		let prefix_len: usize = prefix.len();
 		let indent_len: usize = self.indent as usize * 4;
 		let msg_len: usize = indent_len +
 			self.prefix.len() +
@@ -298,11 +296,6 @@ impl<'m> Msg<'m> {
 	/// Prefix.
 	pub fn prefix(&self) -> Prefix {
 		self.prefix.clone()
-	}
-
-	/// Timestamp.
-	pub fn timestamp(&self) -> Cow<'_, str> {
-		Cow::Owned(chrono::Local::now().format("%F %T").to_string())
 	}
 
 
