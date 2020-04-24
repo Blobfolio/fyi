@@ -28,13 +28,13 @@ extern crate tempfile;
 #[cfg(feature = "witcher")]
 extern crate tempfile_fast;
 
-extern crate bytes;
 extern crate bytecount;
+extern crate bytes;
 extern crate chrono;
 extern crate itoa;
 extern crate lazy_static;
-extern crate num_traits;
 extern crate num_format;
+extern crate num_traits;
 extern crate regex;
 extern crate term_size;
 extern crate thiserror;
