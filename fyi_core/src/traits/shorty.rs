@@ -50,11 +50,10 @@ where T: Borrow<str> {
 
 			if end != len {
 				if let Some(x) = text.get(0..end) {
-					[
-						x,
-						"…"
-					].concat()
-					.into()
+					let mut out: String = String::with_capacity(end + 3);
+					out.push_str(x);
+					out.push_str("…");
+					out.into()
 				}
 				else {
 					"…".into()
@@ -92,11 +91,10 @@ where T: Borrow<str> {
 
 			if end != len {
 				if let Some(x) = text.get(end..) {
-					[
-						"…",
-						x,
-					].concat()
-					.into()
+					let mut out: String = String::with_capacity(end + 3);
+					out.push_str("…");
+					out.push_str(x);
+					out.into()
 				}
 				else {
 					"…".into()
