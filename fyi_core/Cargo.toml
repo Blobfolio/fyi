@@ -7,8 +7,10 @@ description = "FYI is a dead-simple status message printer for CLI use applicati
 publish = false
 
 [dependencies]
+bytes = "0.5.*"
 bytecount = "0.6.*"
 chrono = "0.4.*"
+itoa = "0.4.*"
 lazy_static = "1.4.*"
 num-traits = "0.2.*"
 num-format = "0.4.*"
@@ -50,17 +52,13 @@ witcher = [ "jwalk", "nix", "rayon", "tempfile", "tempfile-fast" ]
 criterion = "*"
 
 [[bench]]
-name = "util_numbers"
+name = "civilization"
 harness = false
 
 [[bench]]
-name = "util_paths"
+name = "scratchpad"
 harness = false
 
 [[bench]]
-name = "util_strings"
-harness = false
-
-[[bench]]
-name = "util_time"
+name = "util"
 harness = false

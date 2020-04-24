@@ -140,7 +140,7 @@ impl FYIPathIO for Path {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::util::paths;
+	use crate::traits::PathProps;
 	use std::path::PathBuf;
 
 	#[test]
@@ -158,7 +158,7 @@ mod tests {
 
 		from.fyi_copy(&to).expect("Copy, damn it.");
 		assert!(to.is_file());
-		assert_eq!(paths::file_size(&from), paths::file_size(&to));
+		assert_eq!(from.file_size(), to.file_size());
 
 		// And remove it.
 		to.fyi_delete().expect("Delete, damn it.");
@@ -176,7 +176,7 @@ mod tests {
 			let path: PathBuf = tmp.path().to_path_buf();
 
 			assert!(path.is_file());
-			assert_eq!(paths::file_size(&from), paths::file_size(&path));
+			assert_eq!(from.file_size(), path.file_size());
 
 			drop(tmp);
 			assert!(! path.is_file());
@@ -189,8 +189,8 @@ mod tests {
 			let path: PathBuf = tmp.path().to_path_buf();
 
 			assert!(path.is_file());
-			assert_eq!(paths::file_extension(&path), "bak");
-			assert_eq!(paths::file_size(&from), paths::file_size(&path));
+			assert_eq!(path.file_extension(), "bak");
+			assert_eq!(from.file_size(), path.file_size());
 
 			drop(tmp);
 			assert!(! path.is_file());
@@ -221,7 +221,7 @@ mod tests {
 		assert!(to.is_file());
 
 		// We can compare it against our original.
-		assert_eq!(paths::file_size(&src), paths::file_size(&to));
+		assert_eq!(src.file_size(), to.file_size());
 
 		// And remove it.
 		to.fyi_delete().expect("Delete, damn it.");
@@ -247,7 +247,7 @@ mod tests {
 		let path: PathBuf = tmp.path().to_path_buf();
 
 		assert!(path.is_file());
-		assert_eq!(paths::file_size(&path), 0);
+		assert_eq!(path.file_size(), 0);
 
 		// Write it.
 		path.fyi_write(data.as_bytes()).expect("Write, damn it.");

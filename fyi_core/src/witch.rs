@@ -249,6 +249,7 @@ impl Witch {
 mod tests {
 	use super::*;
 	use crate::util::paths;
+	use crate::traits::AbsPath;
 	use std::io::Write;
 	use tempfile::NamedTempFile;
 
@@ -261,8 +262,8 @@ mod tests {
 
 		// Matches will be canonicalized.
 		let canon: Vec<PathBuf> = vec![
-			paths::to_path_buf_abs("tests/assets/is-executable.sh"),
-			paths::to_path_buf_abs("tests/assets/file.txt"),
+			"tests/assets/is-executable.sh".to_path_buf_abs(),
+			"tests/assets/file.txt".to_path_buf_abs(),
 		];
 
 		// Casual walk.
@@ -322,8 +323,8 @@ mod tests {
 
 		// Matches will be canonicalized.
 		let canon: Vec<PathBuf> = vec![
-			paths::to_path_buf_abs("tests/assets/is-executable.sh"),
-			paths::to_path_buf_abs("tests/assets/file.txt"),
+			"tests/assets/is-executable.sh".to_path_buf_abs(),
+			"tests/assets/file.txt".to_path_buf_abs(),
 		];
 
 		// Casual walk.

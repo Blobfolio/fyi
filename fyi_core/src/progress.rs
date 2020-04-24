@@ -9,10 +9,14 @@ use crate::{
 	PRINT_NEWLINE,
 	PRINT_STDERR,
 	PROGRESSING,
+	traits::{
+		AnsiBitsy,
+		Elapsed,
+		Shorty,
+	},
 	util::{
 		cli,
 		strings,
-		time,
 	},
 };
 use std::{
@@ -167,7 +171,7 @@ impl<'pi> ProgressInner<'pi> {
 
 		// We might need to clear the previous entry.
 		if false == self.last.is_empty() {
-			let lines = strings::lines_len(&self.last);
+			let lines = self.last.lines_len();
 
 			// The count starts at zero for the purposes of CLEAR.
 			if lines <= 9 {
@@ -213,7 +217,7 @@ impl<'pi> ProgressInner<'pi> {
 		let p_progress = self.part_progress();
 
 		// Space the bar can't have.
-		let p_space = strings::width(&p_elapsed) + strings::width(&p_progress) + 2;
+		let p_space = p_elapsed.width() + p_progress.width() + 2;
 		if width < p_space + 10 {
 			return;
 		}
@@ -284,13 +288,13 @@ impl<'pi> ProgressInner<'pi> {
 		else {
 			let mut out: Vec<String> = self.tasks.iter()
 				.map(|ref x| {
-					let out: String = [
+					[
 						"    \x1B[35m↳ ",
 						x,
 						"\x1B[0m",
-					].concat();
-
-					strings::shorten(&out, width).to_string()
+					].concat()
+					.shorten(width)
+					.to_string()
 				})
 				.collect();
 
@@ -350,7 +354,7 @@ impl<'pi> ProgressInner<'pi> {
 	fn part_elapsed(&self) -> Cow<'_, str> {
 		Cow::Owned([
 			"\x1B[2m[\x1B[0m\x1B[1m",
-			&time::elapsed_short(self.time.elapsed().as_secs() as usize),
+			&self.time.elapsed().as_secs().elapsed_short(),
 			"\x1B[0m\x1B[2m]\x1B[0m",
 		].concat())
 	}
@@ -372,10 +376,10 @@ impl<'pi> ProgressInner<'pi> {
 			return Cow::Borrowed("");
 		}
 
-		let eta = time::elapsed_short(f64::ceil(
+		let eta = (f64::ceil(
 			elapsed / self.done as f64 * (self.total - self.done) as f64
-		) as usize);
-		let eta_width: usize = strings::width(&eta) + 5;
+		) as usize).elapsed_short();
+		let eta_width: usize = eta.width() + 5;
 
 		// Last abort check.
 		if eta_width >= width {

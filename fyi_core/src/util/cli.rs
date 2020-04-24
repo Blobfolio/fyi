@@ -2,30 +2,36 @@
 # FYI Core: CLI
 */
 
-use crate::util::strings;
-use std::borrow::Cow;
-use std::io::{
-	stderr,
-	stdout,
-	Write
+use bytes::{
+	BytesMut,
+	BufMut
+};
+use crate::traits::AnsiBitsy;
+use std::{
+	borrow::Borrow,
+	io::{
+		stderr,
+		stdout,
+		Write,
+	},
 };
 
 
 
 /// Print.
-pub fn print<'a, S> (msg: S, flags: u8) -> bool
-where S: Into<Cow<'a, str>> {
-	let mut msg = msg.into().to_owned();
+pub fn print<S> (msg: S, flags: u8) -> bool
+where S: Borrow<str> {
+	let mut buf = BytesMut::with_capacity(256);
+	if 0 != (crate::PRINT_NO_COLOR & flags) {
+		buf.put(msg.borrow().strip_ansi().as_bytes());
+	}
+	else {
+		buf.put(msg.borrow().as_bytes());
+	}
 
 	// Add a new line to the end.
 	if 0 != (crate::PRINT_NEWLINE & flags) {
-		msg.to_mut().push_str("\n");
-	}
-
-	// Strip colors.
-	if 0 != (crate::PRINT_NO_COLOR & flags) {
-		let tmp: String = strings::strip_ansi(&msg).to_string();
-		msg = Cow::Owned(tmp);
+		buf.put_u8(b'\n');
 	}
 
 	// Print it!
@@ -33,7 +39,7 @@ where S: Into<Cow<'a, str>> {
 		true => {
 			let writer = stdout();
 			let mut handle = writer.lock();
-			match handle.write_all(&msg.as_bytes()).is_ok() {
+			match handle.write_all(&buf.to_vec()).is_ok() {
 				true => handle.flush().is_ok(),
 				false => false,
 			}
@@ -41,7 +47,7 @@ where S: Into<Cow<'a, str>> {
 		false => {
 			let writer = stderr();
 			let mut handle = writer.lock();
-			match handle.write_all(&msg.as_bytes()).is_ok() {
+			match handle.write_all(&buf.to_vec()).is_ok() {
 				true => handle.flush().is_ok(),
 				false => false,
 			}

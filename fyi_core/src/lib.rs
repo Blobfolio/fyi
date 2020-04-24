@@ -28,8 +28,10 @@ extern crate tempfile;
 #[cfg(feature = "witcher")]
 extern crate tempfile_fast;
 
+extern crate bytes;
 extern crate bytecount;
 extern crate chrono;
+extern crate itoa;
 extern crate lazy_static;
 extern crate num_traits;
 extern crate num_format;
@@ -40,7 +42,6 @@ extern crate thiserror;
 mod error;
 mod msg;
 
-#[cfg(feature = "witcher")]
 /// Traits.
 pub mod traits;
 

@@ -6,11 +6,16 @@ use crate::{
 	MSG_TIMESTAMP,
 	PRINT_NEWLINE,
 	PRINT_STDERR,
+	traits::{
+		AnsiBitsy,
+		Elapsed,
+		Inflection,
+		MebiSaved,
+		Thousands,
+	},
 	util::{
 		cli,
-		numbers,
 		strings,
-		time,
 	},
 };
 use std::{
@@ -193,8 +198,8 @@ impl<'m> Msg<'m> {
 			self.msg.len() +
 			8;
 		let msg_width: usize = indent_len +
-			strings::width(&prefix) +
-			strings::width(&self.msg);
+			prefix.width() +
+			self.msg.width();
 
 		let ts_width: usize = ts.len() + 2;
 		let ts_len: usize = ts_width + 23;
@@ -291,18 +296,18 @@ impl<'m> Msg<'m> {
 
 	/// Template: Crunched In X.
 	pub fn crunched_in(num: u64, time: Instant, du: Option<(u64, u64)>) -> Self {
-		let elapsed = time::elapsed(time.elapsed().as_secs() as usize);
+		let elapsed = time.elapsed().as_secs().elapsed();
 
 		Msg::new(Cow::Owned(match du {
 			Some((before, after)) => [
-				strings::inflect(num as usize, "file", "files").as_ref(),
+				num.inflect("file", "files").as_ref(),
 				" in ",
 				&elapsed,
-				&match numbers::saved(before, after) {
+				&match before.saved(after) {
 					0 => ", but no dice".to_string(),
 					x => format!(
 						", saving {} bytes ({:3.*}%)",
-						numbers::human_int(x),
+						x.thousands(),
 						2,
 						(1.0 - (after as f64 / before as f64)) * 100.0
 					),
@@ -310,7 +315,7 @@ impl<'m> Msg<'m> {
 				".",
 			].concat(),
 			None => [
-				&strings::inflect(num as usize, "file", "files"),
+				num.inflect("file", "files").as_ref(),
 				" in ",
 				&elapsed,
 				".",
@@ -323,7 +328,7 @@ impl<'m> Msg<'m> {
 	pub fn finished_in(time: Instant) -> Self {
 		Msg::new(Cow::Owned([
 			"Finished in ",
-			&time::elapsed(time.elapsed().as_secs() as usize),
+			&time.elapsed().as_secs().elapsed(),
 			".",
 		].concat()))
 			.with_prefix(Prefix::Custom(Cow::Borrowed("Crunched"), 2))
@@ -338,13 +343,13 @@ mod tests {
 
 	#[test]
 	fn prefix() {
-		assert_eq!(strings::strip_ansi(&Prefix::Debug.prefix()), "Debug: ");
-		assert_eq!(strings::strip_ansi(&Prefix::Error.prefix()), "Error: ");
-		assert_eq!(strings::strip_ansi(&Prefix::Info.prefix()), "Info: ");
-		assert_eq!(strings::strip_ansi(&Prefix::None.prefix()), "");
-		assert_eq!(strings::strip_ansi(&Prefix::Notice.prefix()), "Notice: ");
-		assert_eq!(strings::strip_ansi(&Prefix::Success.prefix()), "Success: ");
-		assert_eq!(strings::strip_ansi(&Prefix::Warning.prefix()), "Warning: ");
+		assert_eq!(Prefix::Debug.prefix().strip_ansi(), "Debug: ");
+		assert_eq!(Prefix::Error.prefix().strip_ansi(), "Error: ");
+		assert_eq!(Prefix::Info.prefix().strip_ansi(), "Info: ");
+		assert_eq!(Prefix::None.prefix().strip_ansi(), "");
+		assert_eq!(Prefix::Notice.prefix().strip_ansi(), "Notice: ");
+		assert_eq!(Prefix::Success.prefix().strip_ansi(), "Success: ");
+		assert_eq!(Prefix::Warning.prefix().strip_ansi(), "Warning: ");
 	}
 
 	#[test]
@@ -384,9 +389,9 @@ mod tests {
 		// to make this more readable.
 		let msg: Msg = Msg::new("Hello World")
 			.with_indent(1);
-		assert_eq!(strings::strip_ansi(&msg.msg()), "    Hello World");
+		assert_eq!(msg.msg().strip_ansi(), "    Hello World");
 		let msg: Msg = Msg::new("Hello World")
 			.with_indent(2);
-		assert_eq!(strings::strip_ansi(&msg.msg()), "        Hello World");
+		assert_eq!(msg.msg().strip_ansi(), "        Hello World");
 	}
 }

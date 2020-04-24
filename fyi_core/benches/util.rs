@@ -1,6 +1,7 @@
 extern crate criterion;
 
 use criterion::{
+	black_box,
 	BenchmarkId,
 	Criterion,
 	criterion_group,
@@ -169,6 +170,37 @@ fn paths_to_string_abs(c: &mut Criterion) {
 	group.finish();
 }
 
+fn strings_whitespace(c: &mut Criterion) {
+	let mut group = c.benchmark_group("util::strings::whitespace");
+	for size in [0, 50, 100, 200].iter() {
+		group.bench_with_input(
+			BenchmarkId::from_parameter(size),
+			size,
+			|b, &size| {
+				b.iter(||
+					fyi_core::util::strings::whitespace(size)
+				);
+			}
+		);
+	}
+	group.finish();
+}
+
+fn time_chunked(c: &mut Criterion) {
+	let mut group = c.benchmark_group("util::time::chunked");
+	for size in [0, 50, 100, 10000, 1000000].iter() {
+		group.bench_with_input(
+			BenchmarkId::from_parameter(size),
+			size,
+			|b, &size| {
+				b.iter(||
+					fyi_core::util::time::chunked(size)
+				);
+			}
+		);
+	}
+	group.finish();
+}
 
 
 criterion_group!(
@@ -181,5 +213,7 @@ criterion_group!(
 	paths_to_path_buf_abs,
 	paths_to_string,
 	paths_to_string_abs,
+	strings_whitespace,
+	time_chunked,
 );
 criterion_main!(benches);
