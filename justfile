@@ -87,6 +87,7 @@ bench BENCH="" FILTER="":
 	# First let's build the Rust bit.
 	RUSTFLAGS="-C link-arg=-s" cargo check \
 		--release \
+		--all-features \
 		--target-dir "{{ cargo_dir }}"
 
 
