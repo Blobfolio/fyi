@@ -279,7 +279,7 @@ impl<'m> Msg<'m> {
 			if overflow {
 				p.push('\n');
 				if indent_len > 0 {
-					p.push_str(&strings::whitespace(self.indent * 4));
+					p.push_str(&strings::whitespace(indent_len));
 				}
 				if ! self.prefix.is_empty() {
 					p.push_str(&self.prefix.prefix());
