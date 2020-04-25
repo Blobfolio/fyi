@@ -71,8 +71,8 @@ fn msg_new(c: &mut Criterion) {
 }
 
 fn msg_msg_straight(c: &mut Criterion) {
-	let mut group = c.benchmark_group("Msg::msg (straight)");
-	for msg in [
+	let mut group = c.benchmark_group("Msg::msg");
+	for (k, msg) in [
 		fyi_core::Msg::new("No prefix."),
 		fyi_core::Msg::new("Standard prefix.")
 			.with_prefix(fyi_core::Prefix::Success),
@@ -81,9 +81,11 @@ fn msg_msg_straight(c: &mut Criterion) {
 		fyi_core::Msg::new("Indented.")
 			.with_prefix(fyi_core::Prefix::Success)
 			.with_indent(1),
-	].iter() {
+	].iter().enumerate() {
+		println!("{}", msg);
+
 		group.bench_with_input(
-			BenchmarkId::from_parameter(&msg.to_string()),
+			BenchmarkId::from_parameter(format!("{}", k)),
 			msg,
 			|b, msg| {
 				b.iter(||
@@ -97,7 +99,7 @@ fn msg_msg_straight(c: &mut Criterion) {
 
 fn msg_msg_timestamped(c: &mut Criterion) {
 	let mut group = c.benchmark_group("Msg::msg (timestamped)");
-	for msg in [
+	for (k, msg) in [
 		fyi_core::Msg::new("No prefix.")
 			.with_flags(fyi_core::MSG_TIMESTAMP),
 		fyi_core::Msg::new("Standard prefix.")
@@ -110,9 +112,11 @@ fn msg_msg_timestamped(c: &mut Criterion) {
 			.with_prefix(fyi_core::Prefix::Success)
 			.with_indent(1)
 			.with_flags(fyi_core::MSG_TIMESTAMP),
-	].iter() {
+	].iter().enumerate() {
+		println!("{}", msg);
+
 		group.bench_with_input(
-			BenchmarkId::from_parameter(&msg.to_string()),
+			BenchmarkId::from_parameter(format!("{}", k)),
 			msg,
 			|b, msg| {
 				b.iter(||

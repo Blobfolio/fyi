@@ -149,7 +149,6 @@ macro_rules! impl_elapsed {
 
 					let comma = ", ".as_bytes();
 					let mut buf = BytesMut::with_capacity(32);
-					// let mut cache = [0u8; 20];
 					let mut i: usize = 0;
 					let mut j: usize = 0;
 					loop {
@@ -173,10 +172,10 @@ macro_rules! impl_elapsed {
 						}
 						else if len - j == 1 {
 							if len > 2 {
-								buf.put(", and ".as_bytes());
+								buf.extend_from_slice(b", and ");
 							}
 							else {
-								buf.put(" and ".as_bytes());
+								buf.extend_from_slice(b" and ");
 							}
 						}
 						else {

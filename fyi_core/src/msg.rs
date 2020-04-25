@@ -2,6 +2,10 @@
 # FYI Core: Msg
 */
 
+use bytes::{
+	BytesMut,
+	BufMut
+};
 use crate::{
 	MSG_TIMESTAMP,
 	PRINT_NEWLINE,
@@ -88,6 +92,20 @@ impl<'mp> Prefix<'mp> {
 		match *self {
 			Self::Error | Self::Warning => false,
 			_ => true,
+		}
+	}
+
+	/// Print the prefix!
+	pub fn as_bytes(&'mp self) -> &'mp [u8] {
+		match *self {
+			Self::Custom(ref p) => p.as_bytes(),
+			Self::Debug => "\x1B[96;1mDebug:\x1B[0m ".as_bytes(),
+			Self::Error => "\x1B[91;1mError:\x1B[0m ".as_bytes(),
+			Self::Info => "\x1B[96;1mInfo:\x1B[0m ".as_bytes(),
+			Self::Notice => "\x1B[95;1mNotice:\x1B[0m ".as_bytes(),
+			Self::Success => "\x1B[92;1mSuccess:\x1B[0m ".as_bytes(),
+			Self::Warning => "\x1B[93;1mWarning:\x1B[0m ".as_bytes(),
+			_ => "".as_bytes(),
 		}
 	}
 
@@ -212,101 +230,71 @@ impl<'m> Msg<'m> {
 
 	/// Msg.
 	pub fn msg(&self) -> Cow<'_, str> {
-		match self.flags & MSG_TIMESTAMP {
-			0 => self._msg_straight(),
-			_ => self._msg_timestamped(),
+		let mut buf: BytesMut = BytesMut::with_capacity(256);
+		let mut width: usize = 0;
+
+		if 0 != self.indent {
+			width += self._msg_put_indent(&mut buf);
 		}
+		if ! self.prefix.is_empty() {
+			width += self._msg_put_prefix(&mut buf);
+		}
+		if ! self.msg.is_empty() {
+			width += self._msg_put_msg(&mut buf);
+		}
+		if 0 != (MSG_TIMESTAMP & self.flags) {
+			self._msg_put_timestamp(&mut buf, width);
+		}
+
+		Cow::Owned(unsafe { String::from_utf8_unchecked(buf.to_vec()) })
 	}
 
-	/// Straight message.
-	fn _msg_straight(&self) -> Cow<'_, str> {
-		Cow::Owned({
-			let indent_len: usize = self.indent as usize * 4;
-
-			let mut p: String = String::with_capacity(
-				indent_len +
-				self.prefix.len() +
-				self.msg.len() +
-				8
-			);
-			if indent_len > 0 {
-				p.push_str(&strings::whitespace(indent_len));
-			}
-			if ! self.prefix.is_empty() {
-				p.push_str(self.prefix.as_ref());
-			}
-			p.push_str("\x1B[1m");
-			p.push_str(&self.msg);
-			p.push_str("\x1B[0m");
-
-			p
-		})
+	/// Msg indent.
+	fn _msg_put_indent(&self, buf: &mut BytesMut) -> usize {
+		let indent: usize = self.indent as usize * 4;
+		buf.put(strings::whitespace(indent).as_bytes());
+		indent
 	}
 
-	/// Message w/ Timestamp.
-	fn _msg_timestamped(&self) -> Cow<'_, str> {
-		let ts: String = chrono::Local::now().format("%F %T").to_string();
+	/// Msg prefix.
+	fn _msg_put_prefix(&self, buf: &mut BytesMut) -> usize {
+		buf.put(self.prefix.as_bytes());
+		self.prefix.width()
+	}
 
-		let indent_len: usize = self.indent as usize * 4;
-		let msg_len: usize = indent_len +
-			self.prefix.len() +
-			self.msg.len() +
-			8;
-		let msg_width: usize = indent_len +
-			self.prefix.width() +
-			self.msg.width();
+	/// Msg.
+	fn _msg_put_msg(&self, buf: &mut BytesMut) -> usize {
+		buf.extend_from_slice(b"\x1B[1m");
+		buf.put(self.msg.as_bytes());
+		buf.extend_from_slice(b"\x1B[0m");
+		self.msg.width() + 8
+	}
 
-		let ts_width: usize = ts.len() + 2;
-		let ts_len: usize = ts_width + 23;
-
+	/// Timestamp.
+	fn _msg_put_timestamp(&self, buf: &mut BytesMut, old_width: usize) {
 		let width: usize = cli::term_width();
-		let overflow: bool = msg_width + ts_width + 1 > width;
-		let total_len = match overflow {
-			true => ts_len + 1 + msg_len + indent_len,
-			false => msg_len + (width - msg_width) + 23,
-		};
+		let ts: String = chrono::Local::now().format("%F %T").to_string();
+		let ts_width: usize = ts.len() + 25;
 
-		// Put it all together!
-		Cow::Owned({
-			let mut p: String = String::with_capacity(total_len);
+		// Can it fit on one line?
+		if width >= old_width + ts_width + 1 {
+			buf.put(strings::whitespace(width - ts_width - old_width).as_bytes());
 
-			// Message first?
-			if ! overflow {
-				if indent_len > 0 {
-					p.push_str(&strings::whitespace(indent_len));
-				}
-				if ! self.prefix.is_empty() {
-					p.push_str(self.prefix.as_ref());
-				}
-				p.push_str("\x1B[1m");
-				p.push_str(&self.msg);
-				p.push_str("\x1B[0m");
-				p.push_str(&strings::whitespace(width - msg_width - ts_width));
+			buf.extend_from_slice(b"\x1B[2m[\x1B[34;2m");
+			buf.put(ts.as_bytes());
+			buf.extend_from_slice(b"\x1B[0m\x1B[2m]\x1B[0m");
+		}
+		// Well shit.
+		else {
+			let b = buf.split();
+			if 0 != self.indent {
+				self._msg_put_indent(buf);
 			}
-			else if indent_len > 0 {
-				p.push_str(&strings::whitespace(indent_len));
-			}
-
-			p.push_str("\x1B[2m[\x1B[34;2m");
-			p.push_str(&ts);
-			p.push_str("\x1B[0m\x1B[1m]\x1B[0m");
-
-			// Message last?
-			if overflow {
-				p.push('\n');
-				if indent_len > 0 {
-					p.push_str(&strings::whitespace(indent_len));
-				}
-				if ! self.prefix.is_empty() {
-					p.push_str(self.prefix.as_ref());
-				}
-				p.push_str("\x1B[1m");
-				p.push_str(&self.msg);
-				p.push_str("\x1B[0m");
-			}
-
-			p
-		})
+			buf.extend_from_slice(b"\x1B[2m[\x1B[34;2m");
+			buf.put(ts.as_bytes());
+			buf.extend_from_slice(b"\x1B[0m\x1B[2m]\x1B[0m\n");
+			buf.unsplit(b);
+		}
 	}
 
 	/// Prefix.
