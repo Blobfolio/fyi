@@ -42,10 +42,6 @@ harness = false
 name = "progress"
 harness = false
 
-#[[bench]]
-#name = "scratchpad"
-#harness = false
-
 [[bench]]
 name = "util"
 harness = false
