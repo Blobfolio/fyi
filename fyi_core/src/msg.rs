@@ -28,6 +28,7 @@ use num_format::{
 use std::{
 	borrow::Cow,
 	fmt,
+	ops::Deref,
 	time::Instant,
 };
 
@@ -54,10 +55,35 @@ pub enum Prefix<'mp> {
 	None,
 }
 
+impl AsRef<str> for Prefix<'_> {
+	/// As Ref String.
+	fn as_ref(&self) -> &str {
+		&**self
+	}
+}
+
 impl Default for Prefix<'_> {
 	/// Default.
 	fn default() -> Self {
 		Prefix::None
+	}
+}
+
+impl Deref for Prefix<'_> {
+	type Target = str;
+
+	/// Deref.
+	fn deref(&self) -> &Self::Target {
+		match *self {
+			Self::Custom(ref p) => p,
+			Self::Debug => "\x1B[96;1mDebug:\x1B[0m ",
+			Self::Error => "\x1B[91;1mError:\x1B[0m ",
+			Self::Info => "\x1B[96;1mInfo:\x1B[0m ",
+			Self::Notice => "\x1B[95;1mNotice:\x1B[0m ",
+			Self::Success => "\x1B[92;1mSuccess:\x1B[0m ",
+			Self::Warning => "\x1B[93;1mWarning:\x1B[0m ",
+			_ => "",
+		}
 	}
 }
 
@@ -97,30 +123,12 @@ impl<'mp> Prefix<'mp> {
 
 	/// Print the prefix!
 	pub fn as_bytes(&'mp self) -> &'mp [u8] {
-		match *self {
-			Self::Custom(ref p) => p.as_bytes(),
-			Self::Debug => "\x1B[96;1mDebug:\x1B[0m ".as_bytes(),
-			Self::Error => "\x1B[91;1mError:\x1B[0m ".as_bytes(),
-			Self::Info => "\x1B[96;1mInfo:\x1B[0m ".as_bytes(),
-			Self::Notice => "\x1B[95;1mNotice:\x1B[0m ".as_bytes(),
-			Self::Success => "\x1B[92;1mSuccess:\x1B[0m ".as_bytes(),
-			Self::Warning => "\x1B[93;1mWarning:\x1B[0m ".as_bytes(),
-			_ => "".as_bytes(),
-		}
+		(&**self).as_bytes()
 	}
 
 	/// Print the prefix!
 	pub fn prefix(&'mp self) -> Cow<'mp, str> {
-		match *self {
-			Self::Custom(ref p) => Cow::Borrowed(p),
-			Self::Debug => "\x1B[96;1mDebug:\x1B[0m ".into(),
-			Self::Error => "\x1B[91;1mError:\x1B[0m ".into(),
-			Self::Info => "\x1B[96;1mInfo:\x1B[0m ".into(),
-			Self::Notice => "\x1B[95;1mNotice:\x1B[0m ".into(),
-			Self::Success => "\x1B[92;1mSuccess:\x1B[0m ".into(),
-			Self::Warning => "\x1B[93;1mWarning:\x1B[0m ".into(),
-			_ => "".into(),
-		}
+		(&**self).into()
 	}
 
 	/// Prefix length.
@@ -156,22 +164,6 @@ impl<'mp> Prefix<'mp> {
 			Self::Success => 9,
 			Self::Warning => 9,
 			_ => 0,
-		}
-	}
-}
-
-impl AsRef<str> for Prefix<'_> {
-	/// As Ref String.
-	fn as_ref(&self) -> &str {
-		match *self {
-			Self::Custom(ref p) => p,
-			Self::Debug => "\x1B[96;1mDebug:\x1B[0m ",
-			Self::Error => "\x1B[91;1mError:\x1B[0m ",
-			Self::Info => "\x1B[96;1mInfo:\x1B[0m ",
-			Self::Notice => "\x1B[95;1mNotice:\x1B[0m ",
-			Self::Success => "\x1B[92;1mSuccess:\x1B[0m ",
-			Self::Warning => "\x1B[93;1mWarning:\x1B[0m ",
-			_ => "",
 		}
 	}
 }
