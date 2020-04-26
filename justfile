@@ -11,6 +11,7 @@ pkg_id      := "fyi"
 pkg_name    := "FYI"
 pkg_dir1    := justfile_directory() + "/fyi_core"
 pkg_dir2    := justfile_directory() + "/fyi"
+pkg_dir3    := justfile_directory() + "/fyi_witch"
 
 cargo_dir   := "/tmp/" + pkg_id + "-cargo"
 release_dir := justfile_directory() + "/release"
@@ -160,6 +161,12 @@ version:
 		"$_ver2" > /tmp/Cargo.toml
 	mv "/tmp/Cargo.toml" "{{ pkg_dir2 }}/Cargo.toml"
 	just _fix-chown "{{ pkg_dir2 }}/Cargo.toml"
+
+	toml set "{{ pkg_dir3 }}/Cargo.toml" \
+		package.version \
+		"$_ver2" > /tmp/Cargo.toml
+	mv "/tmp/Cargo.toml" "{{ pkg_dir3 }}/Cargo.toml"
+	just _fix-chown "{{ pkg_dir3 }}/Cargo.toml"
 
 
 # Init dependencies.

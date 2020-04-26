@@ -1,6 +1,6 @@
 [package]
 name = "fyi_core"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2018"
 description = "FYI is a dead-simple status message printer for CLI use applications."
