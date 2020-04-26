@@ -38,7 +38,7 @@ pub trait AnsiBitsy<'ab> {
 	fn strip_ansi(&'ab self) -> Self::AnsiReturn;
 
 	/// Display Width.
-	fn width<'w> (&'w self) -> usize;
+	fn width(&self) -> usize;
 }
 
 
@@ -78,7 +78,7 @@ where T: Borrow<str> {
 
 	#[inline]
 	/// Display Width.
-	fn width<'w> (&'w self) -> usize {
+	fn width(&self) -> usize {
 		bytecount::num_chars(&RE_ANSI_BYTES.replace_all(
 			self.borrow().as_bytes(),
 			regex::bytes::NoExpand(b"")
@@ -120,7 +120,7 @@ impl<'ab> AnsiBitsy<'ab> for [u8] {
 
 	#[inline]
 	/// Display Width.
-	fn width<'w> (&'w self) -> usize {
+	fn width(&self) -> usize {
 		bytecount::num_chars(&RE_ANSI_BYTES.replace_all(
 			self,
 			regex::bytes::NoExpand(b"")
@@ -168,7 +168,7 @@ impl<'ab> AnsiBitsy<'ab> for dyn AsRef<BytesMut> {
 
 	#[inline]
 	/// Display Width.
-	fn width<'w> (&'w self) -> usize {
+	fn width(&self) -> usize {
 		let tmp = self.as_ref();
 		let len = tmp.len();
 		bytecount::num_chars(&RE_ANSI_BYTES.replace_all(
