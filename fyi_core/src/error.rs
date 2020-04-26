@@ -5,6 +5,7 @@
 use std::{
 	error,
 	fmt,
+	io,
 };
 
 
@@ -19,11 +20,17 @@ impl fmt::Display for Error {
 	}
 }
 
-impl<X> From<X> for Error
-where X: Into<String> {
+impl From<String> for Error {
 	/// Do it.
-	fn from(thing: X) -> Error {
-		Error(thing.into())
+	fn from(thing: String) -> Error {
+		Error(thing)
+	}
+}
+
+impl From<io::Error> for Error {
+	/// Do it.
+	fn from(thing: io::Error) -> Error {
+		Error(format!("{}", thing))
 	}
 }
 
