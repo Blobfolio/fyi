@@ -18,6 +18,7 @@ extern crate tempfile;
 extern crate tempfile_fast;
 
 mod witch;
+pub mod traits;
 
 /// The Witch!
 pub use witch::Witch;

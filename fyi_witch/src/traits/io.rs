@@ -5,7 +5,9 @@
 use fyi_core::{
 	Error,
 	Result,
+	traits::PathProps,
 };
+use nix::unistd::{self, Uid, Gid};
 use std::{
 	ffi::OsStr,
 	fs,
@@ -18,52 +20,62 @@ use tempfile::NamedTempFile;
 
 
 /// Format/Conversion/Mutation Helpers!
-pub trait FYIPathIO {
+pub trait WitchIO {
 	/// Byte for Byte Copy.
-	fn fyi_copy<P> (&self, to: P) -> Result<()>
+	fn witch_copy<P> (&self, to: P) -> Result<()>
 	where P: AsRef<Path>;
 
 	/// Copy To Temporary Location.
-	fn fyi_copy_tmp(&self, suffix: Option<String>) -> Result<NamedTempFile>;
+	fn witch_copy_tmp(&self, suffix: Option<String>) -> Result<NamedTempFile>;
 
 	/// Delete.
-	fn fyi_delete(&self) -> Result<()>;
+	fn witch_delete(&self) -> Result<()>;
 
 	/// Move.
-	fn fyi_move<P> (&self, to: P) -> Result<()>
+	fn witch_move<P> (&self, to: P) -> Result<()>
 	where P: AsRef<Path>;
 
 	/// Read Bytes.
-	fn fyi_read(&self) -> Result<Vec<u8>>;
+	fn witch_read(&self) -> Result<Vec<u8>>;
+
+	/// Chown/Chmod to Reference.
+	fn witch_reference_from<P> (&self, from: P) -> Result<(bool, bool)>
+	where P: AsRef<Path>;
 
 	/// Write Bytes.
-	fn fyi_write(&self, data: &[u8]) -> Result<()>;
+	fn witch_write(&self, data: &[u8]) -> Result<()>;
 }
 
-impl FYIPathIO for Path {
+impl WitchIO for Path {
 	/// Byte for Byte Copy.
-	fn fyi_copy<P> (&self, to: P) -> Result<()>
+	fn witch_copy<P> (&self, to: P) -> Result<()>
 	where P: AsRef<Path> {
 		if self.is_file() {
 			let to = to.as_ref().to_path_buf();
-			to.fyi_write(&self.fyi_read()?)?;
+			to.witch_write(&self.witch_read()?)?;
 
 			Ok(())
 		}
 		else {
-			Err(Error::PathCopy(self.to_path_buf()))
+			Err(Error::new(format!(
+				"Unable to copy {:?} to {:?}.",
+				self,
+				to.as_ref(),
+			)))
 		}
 	}
 
 	/// Copy To Temporary Location.
-	fn fyi_copy_tmp(&self, suffix: Option<String>) -> Result<NamedTempFile> {
-		use nix::unistd::{self, Uid, Gid};
-
+	fn witch_copy_tmp(&self, suffix: Option<String>) -> Result<NamedTempFile> {
 		let meta = self.metadata()?;
 		if meta.is_file() {
 			let parent = self.parent()
-				.ok_or(Error::PathCopy(self.to_path_buf()))?;
+				.ok_or(Error::new(format!(
+					"Unable to copy {:?} to tmpfile.",
+					self,
+				)))?;
 
+			// Allocate a tempfile.
 			let target = match suffix {
 				Some(x) => tempfile::Builder::new()
 					.suffix(OsStr::new(x.as_str()))
@@ -71,57 +83,89 @@ impl FYIPathIO for Path {
 				None => NamedTempFile::new_in(parent)?,
 			};
 
-			let file = target.as_file();
-			file.set_permissions(meta.permissions())?;
-			unistd::chown(
-				target.path(),
-				Some(Uid::from_raw(meta.uid())),
-				Some(Gid::from_raw(meta.gid()))
-			)?;
+			// Copy references.
+			target.path().witch_reference_from(&self)?;
 
-			target.path().fyi_write(&self.fyi_read()?)?;
+			// Write data.
+			let mut file = target.as_file();
+			let data: Vec<u8> = fs::read(&self)?;
+			file.write_all(&data)?;
+			file.flush().unwrap();
+
 			Ok(target)
 		}
 		else {
-			Err(Error::PathCopy(self.to_path_buf()))
+			Err(Error::new(format!(
+				"Unable to copy {:?} to tmpfile.",
+				self,
+			)))
 		}
 	}
 
 	/// Delete.
-	fn fyi_delete(&self) -> Result<()> {
+	fn witch_delete(&self) -> Result<()> {
 		if self.is_file() {
-			let _ = fs::remove_file(&self)?;
+			fs::remove_file(&self)?;
 			Ok(())
 		}
 		else if false == self.exists() {
 			Ok(())
 		}
 		else {
-			Err(Error::PathDelete(self.to_path_buf()))
+			Err(Error::new(format!(
+				"Unable to delete {:?}.",
+				self,
+			)))
 		}
 	}
 
 	/// Move.
-	fn fyi_move<P> (&self, to: P) -> Result<()>
+	fn witch_move<P> (&self, to: P) -> Result<()>
 	where P: AsRef<Path> {
-		self.fyi_copy(&to)?;
-		self.fyi_delete()?;
+		self.witch_copy(&to)?;
+		self.witch_delete()?;
 
 		Ok(())
 	}
 
 	/// Read Bytes.
-	fn fyi_read(&self) -> Result<Vec<u8>> {
+	fn witch_read(&self) -> Result<Vec<u8>> {
 		if self.is_file() {
 			Ok(fs::read(&self)?)
 		}
 		else {
-			Err(Error::PathRead(self.to_path_buf()))
+			Err(Error::new(format!(
+				"Unable to read {:?}.",
+				self,
+			)))
+		}
+	}
+
+	/// Chown/Chmod to Reference.
+	fn witch_reference_from<P> (&self, from: P) -> Result<(bool, bool)>
+	where P: AsRef<Path> {
+		let meta = from.as_ref().metadata()?;
+		if meta.is_file() && self.is_file() {
+			Ok((
+				fs::set_permissions(&self, meta.permissions()).is_ok(),
+				unistd::chown(
+					self,
+					Some(Uid::from_raw(meta.uid())),
+					Some(Gid::from_raw(meta.gid()))
+				).is_ok()
+			))
+		}
+		else {
+			Err(Error::new(format!(
+				"Unable to set owner/perms for {:?} using {:?}.",
+				self,
+				from.as_ref(),
+			)))
 		}
 	}
 
 	/// Write Bytes.
-	fn fyi_write(&self, data: &[u8]) -> Result<()> {
+	fn witch_write(&self, data: &[u8]) -> Result<()> {
 		if false == self.is_dir() {
 			let mut tmp = tempfile_fast::Sponge::new_for(&self)?;
 			tmp.write_all(&data)?;
@@ -130,7 +174,10 @@ impl FYIPathIO for Path {
 			Ok(())
 		}
 		else {
-			Err(Error::PathWrite(self.to_path_buf()))
+			Err(Error::new(format!(
+				"Unable to write to {:?}.",
+				self,
+			)))
 		}
 	}
 }
@@ -140,38 +187,37 @@ impl FYIPathIO for Path {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::traits::PathProps;
 	use std::path::PathBuf;
 
 	#[test]
-	fn fyi_copy() {
+	fn witch_copy() {
 		let from: PathBuf = PathBuf::from("tests/assets/file.txt");
-		let to: PathBuf = PathBuf::from("tests/assets/fyi_copy.bak");
+		let to: PathBuf = PathBuf::from("tests/assets/witch_copy.bak");
 
 		// Make sure the destination is empty before starting.
 		if to.is_file() {
-			to.fyi_delete().unwrap();
+			to.witch_delete().unwrap();
 		}
 
 		assert!(from.is_file());
 		assert!(! to.is_file());
 
-		from.fyi_copy(&to).unwrap();
+		from.witch_copy(&to).unwrap();
 		assert!(to.is_file());
 		assert_eq!(from.file_size(), to.file_size());
 
 		// And remove it.
-		to.fyi_delete().unwrap();
+		to.witch_delete().unwrap();
 	}
 
 	#[test]
-	fn fyi_copy_tmp() {
+	fn witch_copy_tmp() {
 		let from: PathBuf = PathBuf::from("tests/assets/file.txt");
 		assert!(from.is_file());
 
 		{
 			// First without a suffix.
-			let tmp: NamedTempFile = from.fyi_copy_tmp(None).unwrap();
+			let tmp: NamedTempFile = from.witch_copy_tmp(None).unwrap();
 			let path: PathBuf = tmp.path().to_path_buf();
 
 			assert!(path.is_file());
@@ -183,7 +229,7 @@ mod tests {
 
 		{
 			// Now with one.
-			let tmp: NamedTempFile = from.fyi_copy_tmp(Some(".bak".into()))
+			let tmp: NamedTempFile = from.witch_copy_tmp(Some(".bak".into()))
 				.unwrap();
 			let path: PathBuf = tmp.path().to_path_buf();
 
@@ -196,26 +242,26 @@ mod tests {
 		}
 	}
 
-	// Note: fyi_delete() is covered multiple times by other tests.
+	// Note: witch_delete() is covered multiple times by other tests.
 
 	#[test]
-	fn fyi_move() {
+	fn witch_move() {
 		let src: PathBuf = PathBuf::from("tests/assets/file.txt");
-		let from: PathBuf = PathBuf::from("tests/assets/fyi_move.1");
-		let to: PathBuf = PathBuf::from("tests/assets/fyi_move.2");
+		let from: PathBuf = PathBuf::from("tests/assets/witch_move.1");
+		let to: PathBuf = PathBuf::from("tests/assets/witch_move.2");
 
 		// Copy the original so we don't mess it up.
-		src.fyi_copy(&from).unwrap();
+		src.witch_copy(&from).unwrap();
 
 		// Make sure the destination is empty before starting.
 		if to.is_file() {
-			to.fyi_delete().unwrap();
+			to.witch_delete().unwrap();
 		}
 
 		assert!(from.is_file());
 		assert!(! to.is_file());
 
-		from.fyi_move(&to).unwrap();
+		from.witch_move(&to).unwrap();
 		assert!(! from.is_file());
 		assert!(to.is_file());
 
@@ -223,34 +269,34 @@ mod tests {
 		assert_eq!(src.file_size(), to.file_size());
 
 		// And remove it.
-		to.fyi_delete().unwrap();
+		to.witch_delete().unwrap();
 	}
 
 	#[test]
-	fn fyi_read() {
+	fn witch_read() {
 		let path: PathBuf = PathBuf::from("tests/assets/file.txt");
 		assert!(path.is_file());
 
-		let data: Vec<u8> = path.fyi_read().unwrap();
+		let data: Vec<u8> = path.witch_read().unwrap();
 		let human: String = String::from_utf8(data).unwrap();
 
 		assert_eq!(&human, "This is just a text file.\n");
 	}
 
 	#[test]
-	fn fyi_write() {
+	fn witch_write() {
 		let data: String = "Hello World".to_string();
 
-		let tmp: NamedTempFile = NamedTempFile::new().unrwap();
+		let tmp: NamedTempFile = NamedTempFile::new().unwrap();
 		let path: PathBuf = tmp.path().to_path_buf();
 
 		assert!(path.is_file());
 		assert_eq!(path.file_size(), 0);
 
 		// Write it.
-		path.fyi_write(data.as_bytes()).unwrap();
+		path.witch_write(data.as_bytes()).unwrap();
 
-		let data2: Vec<u8> = path.fyi_read().unwrap();
+		let data2: Vec<u8> = path.witch_read().unwrap();
 		let human: String = String::from_utf8(data2).unwrap();
 
 		assert_eq!(data, human);
