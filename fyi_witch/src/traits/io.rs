@@ -5,7 +5,6 @@
 use fyi_core::{
 	Error,
 	Result,
-	traits::PathProps,
 };
 use nix::unistd::{self, Uid, Gid};
 use std::{
@@ -187,6 +186,7 @@ impl WitchIO for Path {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use fyi_core::traits::PathProps;
 	use std::path::PathBuf;
 
 	#[test]
