@@ -21,6 +21,10 @@ use std::{
 		BufReader,
 		BufRead,
 	},
+	ops::{
+		Deref,
+		DerefMut,
+	},
 	path::{
 		Path,
 		PathBuf,
@@ -33,6 +37,22 @@ use std::{
 #[derive(Debug, Clone)]
 /// The Witch!
 pub struct Witch(HashSet<PathBuf>);
+
+impl Deref for Witch {
+	type Target = HashSet<PathBuf>;
+
+	/// Deref.
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+impl DerefMut for Witch {
+	/// Deref.
+	fn deref_mut(&mut self) -> &mut HashSet<PathBuf> {
+		&mut self.0
+	}
+}
 
 impl Witch {
 	/// New.
@@ -151,11 +171,6 @@ impl Witch {
 			.sum()
 	}
 
-	/// Files.
-	pub fn files(&self) -> HashSet<PathBuf> {
-		self.0.clone()
-	}
-
 	/// Is Empty.
 	pub fn is_empty(&self) -> bool {
 		self.0.is_empty()
@@ -259,36 +274,32 @@ mod tests {
 
 		// Casual walk.
 		let walk: Witch = Witch::new(&paths, None);
-		let files: HashSet<PathBuf> = walk.files();
 
 		assert!(! walk.is_empty());
-		assert_eq!(files.len(), 2);
-		assert_eq!(files.len(), walk.len());
+		assert_eq!((*walk).len(), 2);
+		assert_eq!((*walk).len(), walk.len());
 
 		for i in &canon {
-			assert!(files.contains(i));
+			assert!((*walk).contains(i));
 		}
 
 		// Check with a file path.
 		let walk: Witch = Witch::new(&canon[..1], None);
-		let files: HashSet<PathBuf> = walk.files();
 
-		assert_eq!(files.len(), 1);
-		assert!(files.contains(&canon[0]));
+		assert_eq!((*walk).len(), 1);
+		assert!((*walk).contains(&canon[0]));
 
 		// Filtered walk.
 		let walk: Witch = Witch::new(&paths, Some(r"(?i).+\.sh$".into()));
-		let files: HashSet<PathBuf> = walk.files();
 
-		assert_eq!(files.len(), 1);
-		assert!(files.contains(&canon[0]));
+		assert_eq!((*walk).len(), 1);
+		assert!((*walk).contains(&canon[0]));
 
 		// Sad walk.
 		let walk: Witch = Witch::new(&paths, Some(r"(?i).+\.exe$".into()));
-		let files: HashSet<PathBuf> = walk.files();
 
 		assert!(walk.is_empty());
-		assert_eq!(files.len(), 0);
+		assert_eq!((*walk).len(), 0);
 	}
 
 	#[test]
@@ -319,25 +330,23 @@ mod tests {
 
 		// Casual walk.
 		let walk: Witch = Witch::from_file(&path, None);
-		let files: HashSet<PathBuf> = walk.files();
 
-		assert_eq!(files.len(), 2);
+		assert_eq!((*walk).len(), 2);
 		for i in &canon {
-			assert!(files.contains(i));
+			assert!((*walk).contains(i));
 		}
 
 		// Filtered walk.
 		let walk: Witch = Witch::from_file(&path, Some(r"(?i).+\.sh$".into()));
-		let files: HashSet<PathBuf> = walk.files();
 
-		assert_eq!(files.len(), 1);
-		assert!(files.contains(&canon[0]));
+		assert_eq!((*walk).len(), 1);
+		assert!((*walk).contains(&canon[0]));
 
 		drop(list);
 		assert!(! path.is_file());
 	}
 
-	// Note: Witch::files(), ::len(), and ::is_empty() are repeatedly
+	// Note: ::len(), and ::is_empty() are repeatedly
 	// covered by the other tests so are not drawn out separately.
 
 	#[test]
