@@ -121,13 +121,13 @@ impl<'pi> ProgressInner<'pi> {
 		// Add an ASCII bar if we have the room. The magic numbers break
 		// down as follows:
 		//   14: 10 bar, 2[], 2 spaces (the minimum we want for display)
-		//   27: the width of an ETA.
+		//   15: the width of an ETA with one space.
 		// We want the bar to fill all available space (up to a max of
 		// 62 chars with spaces and brackets), but if it needs to be a
 		// bit smaller to fit the ETA, we'll go with that.
 		let cur_width: usize = buf[start..].width() + buf2.width();
-		if width >= cur_width + 14 + 27 {
-			self._msg_put_bar(&mut buf, width - cur_width - 27);
+		if width >= cur_width + 14 + 15 {
+			self._msg_put_bar(&mut buf, width - cur_width - 15);
 		}
 		else if width >= cur_width + 14 {
 			self._msg_put_bar(&mut buf, width - cur_width);
@@ -138,7 +138,7 @@ impl<'pi> ProgressInner<'pi> {
 
 		// Tack on an ETA.
 		let cur_width: usize = buf[start..].width();
-		if width >= cur_width + 27 {
+		if width >= cur_width + 15 {
 			self._msg_put_eta(&mut buf, width - cur_width);
 		}
 
@@ -227,7 +227,7 @@ impl<'pi> ProgressInner<'pi> {
 			elapsed / self.done as f64 * (self.total - self.done) as f64
 		) as usize).elapsed_short();
 
-		buf.put(strings::whitespace_bytes(width - 26).as_ref());
+		buf.put(strings::whitespace_bytes(width - 14).as_ref());
 		buf.extend_from_slice(b"\x1B[35mETA: \x1B[0m\x1B[95;1m");
 		buf.put(eta.as_bytes());
 		buf.extend_from_slice(b"\x1B[0m");
