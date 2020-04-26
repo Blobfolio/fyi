@@ -44,6 +44,7 @@ bench BENCH="" FILTER="":
 @build:
 	# First let's build the Rust bit.
 	RUSTFLAGS="-C link-arg=-s" cargo build \
+		--bin fyi \
 		--release \
 		--target-dir "{{ cargo_dir }}"
 
@@ -87,6 +88,33 @@ bench BENCH="" FILTER="":
 	# First let's build the Rust bit.
 	RUSTFLAGS="-C link-arg=-s" cargo check \
 		--release \
+		--all-features \
+		--target-dir "{{ cargo_dir }}"
+
+
+# Clean Cargo crap.
+@clean:
+	# Most things go here.
+	[ ! -d "{{ cargo_dir }}" ] || rm -rf "{{ cargo_dir }}"
+
+	# But some Cargo apps place shit in subdirectories even if
+	# they place *other* shit in the designated target dir. Haha.
+	[ ! -d "{{ justfile_directory() }}/target" ] || rm -rf "{{ justfile_directory() }}/target"
+	[ ! -d "{{ justfile_directory() }}/fyi/target" ] || rm -rf "{{ justfile_directory() }}/fyi/target"
+	[ ! -d "{{ justfile_directory() }}/fyi_core/target" ] || rm -rf "{{ justfile_directory() }}/fyi_core/target"
+	[ ! -d "{{ justfile_directory() }}/fyi_witch/target" ] || rm -rf "{{ justfile_directory() }}/fyi_witch/target"
+
+
+# Build Release!
+demo-progress:
+	#!/usr/bin/env bash
+
+	clear
+
+	cargo run \
+		-q \
+		-p fyi_core \
+		--example progress \
 		--all-features \
 		--target-dir "{{ cargo_dir }}"
 

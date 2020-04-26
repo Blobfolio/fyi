@@ -4,6 +4,10 @@
 This is a very simple thread-capable CLI progress indicator.
 */
 
+use bytes::{
+	BytesMut,
+	BufMut
+};
 use crate::{
 	Msg,
 	PRINT_NEWLINE,
@@ -44,7 +48,7 @@ use std::{
 pub struct ProgressInner<'pi> {
 	done: u64,
 	flags: u8,
-	last: Cow<'pi, str>,
+	last: BytesMut,
 	msg: Cow<'pi, str>,
 	tasks: HashSet<String>,
 	time: Instant,
@@ -56,8 +60,8 @@ impl<'pi> Default for ProgressInner<'pi> {
 	fn default() -> Self {
 		Self {
 			done: 0,
-			flags: 0,
-			last: Cow::Borrowed(""),
+			flags: PRINT_STDERR,
+			last: BytesMut::with_capacity(0),
 			msg: Cow::Borrowed(""),
 			tasks: HashSet::new(),
 			time: Instant::now(),
@@ -67,9 +71,182 @@ impl<'pi> Default for ProgressInner<'pi> {
 }
 
 impl<'pi> ProgressInner<'pi> {
-	// -------------------------------------------------------------
+	// -----------------------------------------------------------------
+	// Status
+	// -----------------------------------------------------------------
+
+	/// Is Running?
+	pub fn is_running(&self) -> bool {
+		(self.flags & PROGRESSING) != 0
+	}
+
+	/// Wrap it up.
+	pub fn stop(&mut self) {
+		if self.is_running() {
+			self.done = self.total;
+			self.flags &= !PROGRESSING;
+			self.tasks.clear();
+			self.msg = Cow::Borrowed("");
+			self.print(BytesMut::default());
+		}
+	}
+
+	/// Tick.
+	pub fn tick(&mut self) {
+		if ! self.is_running() {
+			return;
+		}
+
+		let width: usize = cli::term_width();
+		let mut buf: BytesMut = BytesMut::with_capacity(256);
+
+		// If we have a message to add, we need to record the length
+		// afterwards so we can ignore the slice when building the bar
+		// line.
+		let start: usize = if ! self.msg.is_empty() {
+			self._msg_put_msg(&mut buf, width);
+			buf.len()
+		} else {
+			0
+		};
+
+		// These always happen.
+		self._msg_put_elapsed(&mut buf);
+
+		// Switch to a different buffer for the second part of the line,
+		// which we always want.
+		let mut buf2: BytesMut = BytesMut::with_capacity(64);
+		self._msg_put_label(&mut buf2);
+
+		// Add an ASCII bar if we have the room. The magic numbers break
+		// down as follows:
+		//   14: 10 bar, 2[], 2 spaces (the minimum we want for display)
+		//   27: the width of an ETA.
+		// We want the bar to fill all available space (up to a max of
+		// 62 chars with spaces and brackets), but if it needs to be a
+		// bit smaller to fit the ETA, we'll go with that.
+		let cur_width: usize = buf[start..].width() + buf2.width();
+		if width >= cur_width + 14 + 27 {
+			self._msg_put_bar(&mut buf, width - cur_width - 27);
+		}
+		else if width >= cur_width + 14 {
+			self._msg_put_bar(&mut buf, width - cur_width);
+		}
+
+		// Attach the label to our main buffer.
+		buf.put(buf2);
+
+		// Tack on an ETA.
+		let cur_width: usize = buf[start..].width();
+		if width >= cur_width + 27 {
+			self._msg_put_eta(&mut buf, width - cur_width);
+		}
+
+		// And lastly, the tasks, if any.
+		if ! self.tasks.is_empty() {
+			self._msg_put_tasks(&mut buf, width);
+		}
+
+		self.print(buf);
+	}
+
+	/// Msg.
+	fn _msg_put_msg(&self, buf: &mut BytesMut, width: usize) {
+		buf.put(self.msg.shorten(width).as_bytes());
+		buf.put_u8(b'\n');
+	}
+
+	/// Elapsed.
+	fn _msg_put_elapsed(&self, buf: &mut BytesMut) {
+		buf.extend_from_slice(b"\x1B[2m[\x1B[0m\x1B[1m");
+		buf.put(self.time.elapsed().as_secs().elapsed_short().as_bytes());
+		buf.extend_from_slice(b"\x1B[0m\x1B[2m]\x1B[0m  ");
+	}
+
+	/// Bar label (X/Y Z%).
+	fn _msg_put_label(&self, buf: &mut BytesMut) {
+		buf.extend_from_slice(b"\x1B[96;1m");
+		itoa::fmt(&mut *buf, self.done).unwrap();
+		buf.extend_from_slice(b"\x1B[0m\x1B[2m/\x1B[0m\x1B[36m");
+		itoa::fmt(&mut *buf, self.total).unwrap();
+		buf.extend_from_slice(b"\x1B[0m \x1B[1m");
+		buf.put(format!("{:>3.*}%", 2, self.percent() * 100.0).as_bytes());
+		buf.extend_from_slice(b"\x1B[0m");
+	}
+
+	/// The Bar.
+	fn _msg_put_bar(&self, buf: &mut BytesMut, width: usize) {
+		lazy_static::lazy_static! {
+			// Precompute each bar to its maximum possible length (58);
+			// it is cheaper to shrink than to grow.
+			static ref DONE: Cow<'static, [u8]> = Cow::Owned(vec![b'='; 58]);
+			static ref UNDONE: Cow<'static, [u8]> = Cow::Owned(vec![b'-'; 58]);
+		}
+
+		buf.extend_from_slice(b"\x1B[2m[\x1B[0m\x1B[96;1m");
+
+		// Reserve two chars for the brackets and two for spaces.
+		let width: usize = cmp::min(60, width) - 4;
+
+		let done_len: usize = f64::floor(self.percent() * width as f64) as usize;
+		// No progress.
+		if 0 == done_len {
+			buf.put(&UNDONE[0..width]);
+		}
+		// Only progress.
+		else if done_len == width {
+			buf.put(&DONE[0..width]);
+		}
+		// A mixture.
+		else {
+			let undone_len: usize = width - done_len;
+			buf.put(&DONE[0..done_len]);
+			buf.extend_from_slice(b"\x1B[0m\x1B[36m");
+			buf.put(&UNDONE[0..undone_len]);
+		}
+
+		buf.extend_from_slice(b"\x1B[0m\x1B[2m]\x1B[0m  ");
+	}
+
+	/// The ETA.
+	fn _msg_put_eta(&self, buf: &mut BytesMut, width: usize) {
+		// To make a worthwhile estimate, we need to be somewhere in the
+		// middle.
+		let percent: f64 = self.percent();
+		if percent < 0.1 || percent == 1.0 {
+			return;
+		}
+
+		// We also need some amount of time to have elapsed.
+		let elapsed: f64 = self.time.elapsed().as_secs_f64();
+		if elapsed < 10.0 {
+			return;
+		}
+
+		let eta = (f64::ceil(
+			elapsed / self.done as f64 * (self.total - self.done) as f64
+		) as usize).elapsed_short();
+
+		buf.put(strings::whitespace_bytes(width - 26).as_ref());
+		buf.extend_from_slice(b"\x1B[35mETA: \x1B[0m\x1B[95;1m");
+		buf.put(eta.as_bytes());
+		buf.extend_from_slice(b"\x1B[0m");
+	}
+
+	/// The tasks.
+	fn _msg_put_tasks(&self, buf: &mut BytesMut, width: usize) {
+		for i in &self.tasks {
+			buf.put("\n    \x1B[35m↳ ".as_bytes());
+			buf.put(i.shorten(width).as_bytes());
+			buf.extend_from_slice(b"\x1B[0m");
+		}
+	}
+
+
+
+	// -----------------------------------------------------------------
 	// Getters
-	// -------------------------------------------------------------
+	// -----------------------------------------------------------------
 
 	/// Percent done.
 	pub fn percent(&self) -> f64 {
@@ -86,18 +263,16 @@ impl<'pi> ProgressInner<'pi> {
 
 
 
-	// -------------------------------------------------------------
+	// -----------------------------------------------------------------
 	// Setters
-	// -------------------------------------------------------------
+	// -----------------------------------------------------------------
 
 	/// Increment Done.
 	pub fn increment(&mut self, num: u64) {
-		if self.is_running() {
-			self.set_done(self.done + num);
-		}
+		self.set_done(self.done + num);
 	}
 
-	/// Finished.
+	/// Set Done.
 	pub fn set_done(&mut self, done: u64) {
 		if self.is_running() {
 			if done >= self.total {
@@ -112,14 +287,14 @@ impl<'pi> ProgressInner<'pi> {
 
 
 	// -------------------------------------------------------------
-	// Summaries
+	// Display
 	// -------------------------------------------------------------
 
 	/// Crunched in X.
 	pub fn crunched_in(&mut self, saved: Option<(u64, u64)>) {
 		if ! self.is_running() {
-			self.print(Cow::Owned(
-				Msg::crunched_in(self.total, self.time, saved).to_string()
+			self.print(BytesMut::from(
+				Msg::crunched_in(self.total, self.time, saved).to_string().as_bytes()
 			));
 		}
 	}
@@ -127,25 +302,14 @@ impl<'pi> ProgressInner<'pi> {
 	/// Finished in X.
 	pub fn finished_in(&mut self) {
 		if ! self.is_running() {
-			self.print(Cow::Owned(
-				Msg::finished_in(self.time).to_string()
+			self.print(BytesMut::from(
+				Msg::finished_in(self.time).to_string().as_bytes()
 			));
 		}
 	}
 
-
-
-	// -------------------------------------------------------------
-	// Misc Operations
-	// -------------------------------------------------------------
-
-	/// Is Running?
-	pub fn is_running(&self) -> bool {
-		(self.flags & PROGRESSING) != 0
-	}
-
 	/// Print Whatever.
-	pub fn print(&mut self, msg: Cow<'pi, str>) {
+	pub fn print(&mut self, msg: BytesMut) {
 		lazy_static::lazy_static! {
 			// Pre-compute line clearings. Ten'll do for most 2020 use cases.
 			static ref CLEAR: [&'static str; 10] = [
@@ -175,240 +339,28 @@ impl<'pi> ProgressInner<'pi> {
 
 			// The count starts at zero for the purposes of CLEAR.
 			if lines <= 9 {
-				cli::print(CLEAR[lines], PRINT_STDERR);
+				cli::print(CLEAR[lines], self.flags);
 			}
 			else {
 				cli::print([
 					CLEAR[9],
 					CLEAR_MORE.repeat(lines - 9).as_str(),
-				].concat(), PRINT_STDERR);
+				].concat(), self.flags);
 			}
 
 			// If there's no next message, replace last and leave.
 			if msg.is_empty() {
-				self.last = Cow::Borrowed("");
+				self.last.clear();
 				return;
 			}
 		}
 
-		self.last = msg.clone();
-		cli::print(msg, PRINT_NEWLINE | PRINT_STDERR | self.flags);
-	}
-
-	/// Wrap it up.
-	pub fn stop(&mut self) {
-		if self.is_running() {
-			self.done = self.total;
-			self.flags &= !PROGRESSING;
-			self.tasks.clear();
-			self.msg = Cow::Borrowed("");
-			self.print(Cow::Borrowed(""));
-		}
-	}
-
-	/// Tick.
-	pub fn tick(&mut self) {
-		if ! self.is_running() {
-			return;
-		}
-
-		let width: usize = cli::term_width();
-		let p_elapsed = self.part_elapsed();
-		let p_progress = self.part_progress();
-
-		// Space the bar can't have.
-		let p_space = p_elapsed.width() + p_progress.width() + 2;
-		if width < p_space + 10 {
-			return;
-		}
-
-		// Space the bar can have.
-		let p_bar_len: usize = cmp::min(60, width - p_space);
-		let p_bar = self.part_bar(p_bar_len);
-
-		// Gather up the rest.
-		let p_eta = self.part_eta(width - p_bar_len - p_space);
-		let p_tasks = self.part_tasks(width);
-
-		let out = Cow::Owned({
-			let has_eta: bool = ! p_eta.is_empty();
-			let has_msg: bool = ! self.msg.is_empty();
-			let has_tasks: bool = ! p_tasks.is_empty();
-
-			let mut total_len: usize = p_elapsed.len() + p_bar.len() + p_progress.len() + 2;
-			if has_eta {
-				total_len += p_eta.len();
-			}
-			if has_msg {
-				total_len += self.msg.len() + 1;
-			}
-			if has_tasks {
-				total_len += p_tasks.len() + 1;
-			}
-
-			let mut p: String = String::with_capacity(total_len);
-
-			if has_msg {
-				p.push_str(&self.msg);
-				p.push('\n');
-			}
-
-			p.push_str(&p_elapsed);
-			p.push(' ');
-			p.push_str(&p_bar);
-			p.push(' ');
-			p.push_str(&p_progress);
-
-			if has_eta {
-				p.push_str(&p_eta);
-			}
-
-			if has_tasks {
-				p.push('\n');
-				p.push_str(&p_tasks);
-			}
-
-			p
-		});
-
-		self.print(out);
-	}
-
-
-
-	// -------------------------------------------------------------
-	// Build-a-Bar
-	// -------------------------------------------------------------
-
-	/// Active paths!
-	fn part_tasks(&self, width: usize) -> Cow<'_, str> {
-		if self.tasks.is_empty() {
-			Cow::Borrowed("")
-		}
-		else {
-			let mut out: Vec<String> = self.tasks.iter()
-				.map(|ref x| {
-					[
-						"    \x1B[35m↳ ",
-						x,
-						"\x1B[0m",
-					].concat()
-					.shorten(width)
-					.to_string()
-				})
-				.collect();
-
-			out.sort();
-			Cow::Owned(out.join("\n"))
-		}
-	}
-
-	/// Bar!
-	fn part_bar(&self, mut width: usize) -> Cow<'_, str> {
-		lazy_static::lazy_static! {
-			// Precompute each bar to its maximum possible length (58);
-			// it is cheaper to shrink than to grow.
-			static ref DONE: Cow<'static, str> = Cow::Owned("==========================================================".to_string());
-			static ref UNDONE: Cow<'static, str> = Cow::Owned("----------------------------------------------------------".to_string());
-		}
-
-		// We need at least 10 chars.
-		if width < 10 {
-			return Cow::Borrowed("");
-		}
-
-		// Reserve two characters for brackets.
-		width -= 2;
-
-		let done_len: usize = f64::floor(self.percent() * width as f64) as usize;
-		// No progress.
-		if 0 == done_len {
-			Cow::Owned([
-				"\x1B[2m[\x1B[0m\x1B[36m",
-				&UNDONE[0..width],
-				"\x1B[0m\x1B[2m]\x1B[0m",
-			].concat())
-		}
-		// Total progress.
-		else if done_len == width {
-			Cow::Owned([
-				"\x1B[2m[\x1B[0m\x1B[96;1m",
-				&DONE[0..width],
-				"\x1B[0m\x1B[2m]\x1B[0m",
-			].concat())
-		}
-		// Mixed progress.
-		else {
-			let undone_len: usize = width - done_len;
-			Cow::Owned([
-				"\x1B[2m[\x1B[0m\x1B[96;1m",
-				&DONE[0..done_len],
-				"\x1B[0m\x1B[36m",
-				&UNDONE[0..undone_len],
-				"\x1B[0m\x1B[2m]\x1B[0m",
-			].concat())
-		}
-	}
-
-	/// Elapsed.
-	fn part_elapsed(&self) -> Cow<'_, str> {
-		Cow::Owned([
-			"\x1B[2m[\x1B[0m\x1B[1m",
-			&self.time.elapsed().as_secs().elapsed_short(),
-			"\x1B[0m\x1B[2m]\x1B[0m",
-		].concat())
-	}
-
-	/// ETA.
-	fn part_eta(&self, width: usize) -> Cow<'_, str> {
-		if width < 16 {
-			return Cow::Borrowed("");
-		}
-
-		let percent: f64 = self.percent();
-		if percent < 0.1 || percent == 1.0 {
-			return Cow::Borrowed("");
-		}
-
-		// And abort if we haven't been at it for at least 10s.
-		let elapsed: f64 = self.time.elapsed().as_secs_f64();
-		if elapsed < 10.0 {
-			return Cow::Borrowed("");
-		}
-
-		let eta = (f64::ceil(
-			elapsed / self.done as f64 * (self.total - self.done) as f64
-		) as usize).elapsed_short();
-		let eta_width: usize = eta.width() + 5;
-
-		// Last abort check.
-		if eta_width >= width {
-			return Cow::Borrowed("");
-		}
-
-		Cow::Owned({
-			let mut p: String = String::with_capacity(eta.len() + 25 + (width - eta_width));
-
-			p.push_str(&strings::whitespace(width - eta_width));
-			p.push_str("\x1B[35mETA: \x1B[0m\x1B[95;1m");
-			p.push_str(&eta);
-			p.push_str("\x1B[0m");
-
-			p
-		})
-	}
-
-	/// Progress bits (count, percent).
-	fn part_progress(&self) -> Cow<'_, str> {
-		Cow::Owned([
-			"\x1B[96;1m",
-			&self.done.to_string(),
-			"\x1B[0m\x1B[2m/\x1B[0m\x1B[36m",
-			&self.total.to_string(),
-			"\x1B[0m \x1B[1m",
-			format!("{:>3.*}%", 2, self.percent() * 100.0).as_str(),
-			"\x1B[0m"
-		].concat())
+		self.last.clear();
+		self.last.put(msg);
+		cli::print(
+			unsafe { String::from_utf8_unchecked(self.last.to_vec()) },
+			PRINT_NEWLINE | self.flags
+		);
 	}
 }
 
@@ -425,6 +377,8 @@ impl<'p> Progress<'p> {
 		if total > 0 {
 			flags |= PROGRESSING;
 		}
+		flags |= PRINT_STDERR;
+		flags &= !PRINT_NEWLINE;
 
 		Self(Mutex::new(ProgressInner{
 			msg: msg.into(),
@@ -437,45 +391,51 @@ impl<'p> Progress<'p> {
 	/// Add Task.
 	pub fn add_task<S>(&self, task: S)
 	where S: Into<String> {
-		let mut ptr = self.0.lock().expect("Failed to acquire lock: Progress.0");
+		let mut ptr = self.0.lock().unwrap();
 		ptr.tasks.insert(task.into());
 	}
 
 	/// Crunched in X.
 	pub fn crunched_in(&self, saved: Option<(u64, u64)>) {
-		let mut ptr = self.0.lock().expect("Failed to acquire lock: Progress.0");
+		let mut ptr = self.0.lock().unwrap();
 		ptr.crunched_in(saved);
 	}
 
 	/// Finished in X.
 	pub fn finished_in(&self) {
-		let mut ptr = self.0.lock().expect("Failed to acquire lock: Progress.0");
+		let mut ptr = self.0.lock().unwrap();
 		ptr.finished_in();
 	}
 
 	/// Is Running?
 	pub fn is_running(&self) -> bool {
-		let ptr = self.0.lock().expect("Failed to acquire lock: Progress.0");
+		let ptr = self.0.lock().unwrap();
 		ptr.is_running()
 	}
 
 	/// Increment.
 	pub fn increment(&self, num: u64) {
-		let mut ptr = self.0.lock().expect("Failed to acquire lock: Progress.0");
+		let mut ptr = self.0.lock().unwrap();
 		ptr.increment(num);
+	}
+
+	/// Percent done.
+	pub fn percent(&self) -> f64 {
+		let ptr = self.0.lock().unwrap();
+		ptr.percent()
 	}
 
 	/// Add Task.
 	pub fn remove_task<S>(&self, task: S)
 	where S: Into<String> {
-		let mut ptr = self.0.lock().expect("Failed to acquire lock: Progress.0");
+		let mut ptr = self.0.lock().unwrap();
 		ptr.tasks.remove(&task.into());
 	}
 
 	/// Set Message.
 	pub fn set_msg<S>(&self, msg: S)
 	where S: Into<Cow<'static, str>> {
-		let mut ptr = self.0.lock().expect("Failed to acquire lock: Progress.0");
+		let mut ptr = self.0.lock().unwrap();
 		ptr.msg = msg.into();
 	}
 
@@ -502,19 +462,19 @@ impl<'p> Progress<'p> {
 
 	/// Stop.
 	pub fn stop(&self) {
-		let mut ptr = self.0.lock().expect("Failed to acquire lock: Progress.0");
+		let mut ptr = self.0.lock().unwrap();
 		ptr.stop();
 	}
 
 	/// Tick.
 	pub fn tick(&self) {
-		let mut ptr = self.0.lock().expect("Failed to acquire lock: Progress.0");
+		let mut ptr = self.0.lock().unwrap();
 		ptr.tick();
 	}
 
 	/// Update one-liner.
 	pub fn update(&self, increment: u64, msg: Option<String>, task: Option<String>) {
-		let mut ptr = self.0.lock().expect("Failed to acquire lock: Progress.0");
+		let mut ptr = self.0.lock().unwrap();
 		if increment > 0 {
 			ptr.increment(increment);
 		}

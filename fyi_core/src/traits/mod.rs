@@ -5,9 +5,6 @@ mod oxford_join;
 mod shorty;
 mod spacetime;
 
-#[cfg(feature = "witcher")]
-mod io;
-
 /// ANSI and display.
 pub use self::ansi_bitsy::AnsiBitsy;
 /// Mebibyte love.
@@ -24,7 +21,3 @@ pub use self::spacetime::{
 	Elapsed,
 	PathProps,
 };
-
-#[cfg(feature = "witcher")]
-/// IO traits.
-pub use self::io::FYIPathIO;

@@ -2,10 +2,7 @@ use bytes::{
 	BytesMut,
 	BufMut
 };
-use crate::{
-	Error,
-	Result,
-};
+use crate::Result;
 use std::{
 	borrow::Cow,
 	fs,
@@ -54,7 +51,7 @@ where T: AsRef<Path> {
 			}
 		}
 
-		Err(Error::PathInvalid(self.as_ref().to_path_buf(), "has no parent"))
+		Err(format!("{:?} has no parent.", self.as_ref()).into())
 	}
 
 	/// Absolute PathBuf.

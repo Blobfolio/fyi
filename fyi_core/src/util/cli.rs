@@ -21,12 +21,15 @@ use std::{
 /// Print.
 pub fn print<S> (msg: S, flags: u8) -> bool
 where S: Borrow<str> {
-	let mut buf = BytesMut::with_capacity(256);
-	if 0 != (crate::PRINT_NO_COLOR & flags) {
-		buf.put(msg.borrow().strip_ansi().as_bytes());
+	// Easy abort.
+	if 0 != (crate::PRINT_NOTHING & flags) {
+		return false;
 	}
-	else {
-		buf.put(msg.borrow().as_bytes());
+
+	let mut buf = BytesMut::from(msg.borrow());
+	if 0 != (crate::PRINT_NO_COLOR & flags) {
+		buf.clear();
+		buf.put(msg.borrow().strip_ansi().as_bytes());
 	}
 
 	// Add a new line to the end.

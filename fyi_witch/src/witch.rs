@@ -2,6 +2,11 @@
 # FYI Core: Witch
 */
 
+use fyi_core::{
+	Msg,
+	Prefix,
+	Progress,
+};
 use jwalk::WalkDir;
 use rayon::prelude::*;
 use regex::Regex;
@@ -39,8 +44,7 @@ impl Witch {
 
 		match pattern {
 			Some(p) => {
-				let pattern = Regex::new(&p)
-					.expect("Invalid pattern.");
+				let pattern = Regex::new(&p).expect("Malformed regex.");
 				Witch::new_filtered(&paths, &pattern)
 			},
 			None => Witch::new_straight(&paths),
@@ -112,7 +116,7 @@ impl Witch {
 			return Witch(HashSet::new());
 		}
 
-		let input = File::open(&path).expect("Unable to open file.");
+		let input = File::open(&path).unwrap();
 		let buffered = BufReader::new(input);
 
 		let paths: Vec<PathBuf> = buffered.lines()
@@ -130,8 +134,7 @@ impl Witch {
 
 		match pattern {
 			Some(p) => {
-				let pattern = Regex::new(&p)
-					.expect("Invalid pattern.");
+				let pattern = Regex::new(&p).unwrap();
 				Witch::new_filtered(&paths, &pattern)
 			},
 			None => Witch::new_straight(&paths),
@@ -140,8 +143,6 @@ impl Witch {
 
 	/// Get Disk Size.
 	pub fn du(&self) -> u64 {
-		use rayon::prelude::*;
-
 		self.0.par_iter()
 			.map(|ref x| match x.metadata() {
 				Ok(meta) => meta.len(),
@@ -177,7 +178,6 @@ impl Witch {
 		self.0.par_iter().for_each(cb);
 	}
 
-	#[cfg(feature = "progress")]
 	/// Parallel Loop w/ Progress.
 	pub fn progress<S, F> (&self, name: S, cb: F)
 	where
@@ -189,7 +189,6 @@ impl Witch {
 		bar.crunched_in(None);
 	}
 
-	#[cfg(feature = "progress")]
 	/// Parallel Loop w/ Progress and Size Comparison.
 	pub fn progress_crunch<S, F> (&self, name: S, cb: F)
 	where
@@ -205,15 +204,8 @@ impl Witch {
 		bar.crunched_in(Some((before, after)));
 	}
 
-	#[cfg(feature = "progress")]
 	#[inline(always)]
-	fn _progress_bar(&self, name: Cow<'_, str>) -> Arc<crate::Progress<'static>> {
-		use crate::{
-			Msg,
-			Prefix,
-			Progress,
-		};
-
+	fn _progress_bar(&self, name: Cow<'_, str>) -> Arc<Progress<'static>> {
 		Arc::new(Progress::new(
 			Msg::new("Reticulating splines…")
 				.with_prefix(Prefix::new(name, 199))
@@ -223,12 +215,9 @@ impl Witch {
 		))
 	}
 
-	#[cfg(feature = "progress")]
 	#[inline(always)]
-	fn _progress_loop<F> (&self, bar: &Arc<crate::Progress<'static>>, cb: F)
+	fn _progress_loop<F> (&self, bar: &Arc<Progress<'static>>, cb: F)
 	where F: Fn(&Arc<PathBuf>) + Send + Sync {
-		use crate::Progress;
-
 		// Loop!
 		let handle = Progress::steady_tick(&bar, None);
 		self.0.par_iter().for_each(|x| {
@@ -248,10 +237,12 @@ impl Witch {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::util::paths;
-	use crate::traits::AbsPath;
+	use fyi_core::traits::AbsPath;
+	use fyi_core::util::paths;
 	use std::io::Write;
 	use tempfile::NamedTempFile;
+
+
 
 	#[test]
 	fn witch_new() {
@@ -303,8 +294,7 @@ mod tests {
 	#[test]
 	fn witch_from_file() {
 		// Populate a list real quick.
-		let list: NamedTempFile = NamedTempFile::new()
-			.expect("Tempfile, damn it.");
+		let list: NamedTempFile = NamedTempFile::new().unwrap();
 		let paths: String = format!(
 			"{}\n{}\n",
 			paths::to_string_abs(&PathBuf::from("tests")),
@@ -314,7 +304,7 @@ mod tests {
 
 		{
 			let mut file = list.as_file();
-			file.write_all(paths.as_bytes()).expect("Write, damn it.");
+			file.write_all(paths.as_bytes()).unwrap();
 			file.flush().unwrap();
 			drop(file);
 		}

@@ -231,57 +231,52 @@ impl<'m> Msg<'m> {
 	/// Msg.
 	pub fn msg(&self) -> Cow<'_, str> {
 		let mut buf: BytesMut = BytesMut::with_capacity(256);
-		let mut width: usize = 0;
 
 		if 0 != self.indent {
-			width += self._msg_put_indent(&mut buf);
+			self._msg_put_indent(&mut buf);
 		}
 		if ! self.prefix.is_empty() {
-			width += self._msg_put_prefix(&mut buf);
+			self._msg_put_prefix(&mut buf);
 		}
 		if ! self.msg.is_empty() {
-			width += self._msg_put_msg(&mut buf);
+			self._msg_put_msg(&mut buf);
 		}
 		if 0 != (MSG_TIMESTAMP & self.flags) {
-			self._msg_put_timestamp(&mut buf, width);
+			self._msg_put_timestamp(&mut buf);
 		}
 
 		Cow::Owned(unsafe { String::from_utf8_unchecked(buf.to_vec()) })
 	}
 
 	/// Msg indent.
-	fn _msg_put_indent(&self, buf: &mut BytesMut) -> usize {
+	fn _msg_put_indent(&self, buf: &mut BytesMut) {
 		let indent: usize = self.indent as usize * 4;
-		buf.put(strings::whitespace(indent).as_bytes());
-		indent
+		buf.put(strings::whitespace_bytes(indent).as_ref());
 	}
 
 	/// Msg prefix.
-	fn _msg_put_prefix(&self, buf: &mut BytesMut) -> usize {
+	fn _msg_put_prefix(&self, buf: &mut BytesMut) {
 		buf.put(self.prefix.as_bytes());
-		self.prefix.width()
 	}
 
 	/// Msg.
-	fn _msg_put_msg(&self, buf: &mut BytesMut) -> usize {
+	fn _msg_put_msg(&self, buf: &mut BytesMut) {
 		buf.extend_from_slice(b"\x1B[1m");
 		buf.put(self.msg.as_bytes());
 		buf.extend_from_slice(b"\x1B[0m");
-		self.msg.width() + 8
 	}
 
 	/// Timestamp.
-	fn _msg_put_timestamp(&self, buf: &mut BytesMut, old_width: usize) {
+	fn _msg_put_timestamp(&self, buf: &mut BytesMut) {
 		let width: usize = cli::term_width();
-		let ts: String = chrono::Local::now().format("%F %T").to_string();
-		let ts_width: usize = ts.len() + 25;
+		let old_width: usize = buf.width();
 
 		// Can it fit on one line?
-		if width >= old_width + ts_width + 1 {
-			buf.put(strings::whitespace(width - ts_width - old_width).as_bytes());
+		if width >= old_width + 21 + 1 {
+			buf.put(strings::whitespace_bytes(width - 21 - old_width).as_ref());
 
 			buf.extend_from_slice(b"\x1B[2m[\x1B[34;2m");
-			buf.put(ts.as_bytes());
+			buf.put(chrono::Local::now().format("%F %T").to_string().as_bytes());
 			buf.extend_from_slice(b"\x1B[0m\x1B[2m]\x1B[0m");
 		}
 		// Well shit.
@@ -291,7 +286,7 @@ impl<'m> Msg<'m> {
 				self._msg_put_indent(buf);
 			}
 			buf.extend_from_slice(b"\x1B[2m[\x1B[34;2m");
-			buf.put(ts.as_bytes());
+			buf.put(chrono::Local::now().format("%F %T").to_string().as_bytes());
 			buf.extend_from_slice(b"\x1B[0m\x1B[2m]\x1B[0m\n");
 			buf.unsplit(b);
 		}

@@ -2,7 +2,7 @@
 # FYI Core: Miscellany: Operations
 */
 
-use crate::{
+use fyi_core::{
 	Error,
 	Result,
 };
@@ -150,18 +150,18 @@ mod tests {
 
 		// Make sure the destination is empty before starting.
 		if to.is_file() {
-			to.fyi_delete().expect("Delete, damn it.");
+			to.fyi_delete().unwrap();
 		}
 
 		assert!(from.is_file());
 		assert!(! to.is_file());
 
-		from.fyi_copy(&to).expect("Copy, damn it.");
+		from.fyi_copy(&to).unwrap();
 		assert!(to.is_file());
 		assert_eq!(from.file_size(), to.file_size());
 
 		// And remove it.
-		to.fyi_delete().expect("Delete, damn it.");
+		to.fyi_delete().unwrap();
 	}
 
 	#[test]
@@ -171,8 +171,7 @@ mod tests {
 
 		{
 			// First without a suffix.
-			let tmp: NamedTempFile = from.fyi_copy_tmp(None)
-				.expect("Tempfile, damn it.");
+			let tmp: NamedTempFile = from.fyi_copy_tmp(None).unwrap();
 			let path: PathBuf = tmp.path().to_path_buf();
 
 			assert!(path.is_file());
@@ -185,7 +184,7 @@ mod tests {
 		{
 			// Now with one.
 			let tmp: NamedTempFile = from.fyi_copy_tmp(Some(".bak".into()))
-				.expect("Tempfile, damn it.");
+				.unwrap();
 			let path: PathBuf = tmp.path().to_path_buf();
 
 			assert!(path.is_file());
@@ -206,17 +205,17 @@ mod tests {
 		let to: PathBuf = PathBuf::from("tests/assets/fyi_move.2");
 
 		// Copy the original so we don't mess it up.
-		src.fyi_copy(&from).expect("Copy, damn it.");
+		src.fyi_copy(&from).unwrap();
 
 		// Make sure the destination is empty before starting.
 		if to.is_file() {
-			to.fyi_delete().expect("Delete, damn it.");
+			to.fyi_delete().unwrap();
 		}
 
 		assert!(from.is_file());
 		assert!(! to.is_file());
 
-		from.fyi_move(&to).expect("Move, damn it.");
+		from.fyi_move(&to).unwrap();
 		assert!(! from.is_file());
 		assert!(to.is_file());
 
@@ -224,7 +223,7 @@ mod tests {
 		assert_eq!(src.file_size(), to.file_size());
 
 		// And remove it.
-		to.fyi_delete().expect("Delete, damn it.");
+		to.fyi_delete().unwrap();
 	}
 
 	#[test]
@@ -232,8 +231,8 @@ mod tests {
 		let path: PathBuf = PathBuf::from("tests/assets/file.txt");
 		assert!(path.is_file());
 
-		let data: Vec<u8> = path.fyi_read().expect("Read, damn it.");
-		let human: String = String::from_utf8(data).expect("String, damn it.");
+		let data: Vec<u8> = path.fyi_read().unwrap();
+		let human: String = String::from_utf8(data).unwrap();
 
 		assert_eq!(&human, "This is just a text file.\n");
 	}
@@ -242,18 +241,17 @@ mod tests {
 	fn fyi_write() {
 		let data: String = "Hello World".to_string();
 
-		let tmp: NamedTempFile = NamedTempFile::new()
-			.expect("Tempfile, damn it.");
+		let tmp: NamedTempFile = NamedTempFile::new().unrwap();
 		let path: PathBuf = tmp.path().to_path_buf();
 
 		assert!(path.is_file());
 		assert_eq!(path.file_size(), 0);
 
 		// Write it.
-		path.fyi_write(data.as_bytes()).expect("Write, damn it.");
+		path.fyi_write(data.as_bytes()).unwrap();
 
-		let data2: Vec<u8> = path.fyi_read().expect("Read, damn it.");
-		let human: String = String::from_utf8(data2).expect("String, damn it.");
+		let data2: Vec<u8> = path.fyi_read().unwrap();
+		let human: String = String::from_utf8(data2).unwrap();
 
 		assert_eq!(data, human);
 

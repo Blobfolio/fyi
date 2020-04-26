@@ -49,6 +49,28 @@ where N: AsPrimitive<usize> {
 	}
 }
 
+/// Make whitespace.
+///
+/// Generate a string consisting of X spaces.
+pub fn whitespace_bytes<N> (count: N) -> Cow<'static, [u8]>
+where N: AsPrimitive<usize> {
+	lazy_static::lazy_static! {
+		// Precompute 100 spaces; it is cheaper to shrink than to grow.
+		static ref WHITE: Cow<'static, [u8]> = Cow::Owned(vec![b' '; 100]);
+	}
+
+	let count: usize = count.as_();
+	if 0 == count {
+		vec![].into()
+	}
+	else if count <= 100 {
+		WHITE[0..count].into()
+	}
+	else {
+		vec![b' '; count].into()
+	}
+}
+
 
 
 #[cfg(test)]
