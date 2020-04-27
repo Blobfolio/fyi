@@ -171,6 +171,12 @@ impl Witch {
 			.sum()
 	}
 
+	/// Get files.
+	pub fn files(&self) -> HashSet<PathBuf> {
+		self.0.clone()
+	}
+
+
 	/// Is Empty.
 	pub fn is_empty(&self) -> bool {
 		self.0.is_empty()
