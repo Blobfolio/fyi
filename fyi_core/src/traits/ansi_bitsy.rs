@@ -53,9 +53,11 @@ where T: Borrow<str> {
 	/// Number of characters.
 	fn chars_len(&self) -> usize {
 		let tmp = self.borrow();
-		match tmp.is_empty() {
-			true => 0,
-			false => bytecount::num_chars(tmp.as_bytes()),
+		if tmp.is_empty() {
+			0
+		}
+		else {
+			bytecount::num_chars(tmp.as_bytes())
 		}
 	}
 
@@ -65,9 +67,11 @@ where T: Borrow<str> {
 	/// This only considers "\n". Fuck carriages. Haha.
 	fn lines_len(&self) -> usize {
 		let tmp = self.borrow();
-		match tmp.is_empty() {
-			true => 0,
-			false => bytecount::count(tmp.as_bytes(), b'\n') + 1,
+		if tmp.is_empty() {
+			0
+		}
+		else {
+			bytecount::count(tmp.as_bytes(), b'\n') + 1
 		}
 	}
 
@@ -96,9 +100,11 @@ impl<'ab> AnsiBitsy<'ab> for [u8] {
 	#[inline]
 	/// Number of characters.
 	fn chars_len(&self) -> usize {
-		match self.is_empty() {
-			true => 0,
-			false => bytecount::num_chars(self),
+		if self.is_empty() {
+			0
+		}
+		else {
+			bytecount::num_chars(self)
 		}
 	}
 
@@ -107,9 +113,11 @@ impl<'ab> AnsiBitsy<'ab> for [u8] {
 	///
 	/// This only considers "\n". Fuck carriages. Haha.
 	fn lines_len(&self) -> usize {
-		match self.is_empty() {
-			true => 0,
-			false => bytecount::count(self, b'\n') + 1,
+		if self.is_empty() {
+			0
+		}
+		else {
+			bytecount::count(self, b'\n') + 1
 		}
 	}
 
@@ -130,7 +138,7 @@ impl<'ab> AnsiBitsy<'ab> for [u8] {
 
 
 
-/// We want to operate on BytesMut to avoid allocation, but unless we
+/// We want to operate on `BytesMut` to avoid allocation, but unless we
 /// express the impl as a dyn-AsRef Rust won't allow it. Haha.
 impl<'ab> AnsiBitsy<'ab> for dyn AsRef<BytesMut> {
 	/// Return type for stripped.
@@ -140,9 +148,11 @@ impl<'ab> AnsiBitsy<'ab> for dyn AsRef<BytesMut> {
 	/// Number of characters.
 	fn chars_len(&self) -> usize {
 		let tmp = self.as_ref();
-		match tmp.is_empty() {
-			true => 0,
-			false => bytecount::num_chars(tmp),
+		if tmp.is_empty() {
+			0
+		}
+		else {
+			bytecount::num_chars(tmp)
 		}
 	}
 
@@ -152,9 +162,11 @@ impl<'ab> AnsiBitsy<'ab> for dyn AsRef<BytesMut> {
 	/// This only considers "\n". Fuck carriages. Haha.
 	fn lines_len(&self) -> usize {
 		let tmp = self.as_ref();
-		match tmp.is_empty() {
-			true => 0,
-			false => bytecount::count(tmp, b'\n') + 1,
+		if tmp.is_empty() {
+			0
+		}
+		else {
+			bytecount::count(tmp, b'\n') + 1
 		}
 	}
 

@@ -99,20 +99,21 @@ impl<'mp> Prefix<'mp> {
 	pub fn new<S> (msg: S, color: u8) -> Self
 	where S: Into<Cow<'mp, str>> {
 		let msg = msg.into();
-		match msg.is_empty() {
-			true => Self::None,
-			false => {
-				let mut out: String = String::with_capacity(msg.len() + 19);
-				out.push_str("\x1B[1;38;5;");
-				itoa::fmt(&mut out, color).unwrap();
-				out.push('m');
-				out.push_str(&msg);
-				out.push_str(":\x1B[0m ");
-				Self::Custom(out.into())
-			},
+		if msg.is_empty() {
+			Self::None
+		}
+		else {
+			let mut out: String = String::with_capacity(msg.len() + 19);
+			out.push_str("\x1B[1;38;5;");
+			itoa::fmt(&mut out, color).unwrap();
+			out.push('m');
+			out.push_str(&msg);
+			out.push_str(":\x1B[0m ");
+			Self::Custom(out.into())
 		}
 	}
 
+	#[must_use]
 	/// Happy or sad?
 	pub fn happy(&self) -> bool {
 		match *self {
@@ -121,16 +122,28 @@ impl<'mp> Prefix<'mp> {
 		}
 	}
 
+	#[must_use]
 	/// Print the prefix!
 	pub fn as_bytes(&'mp self) -> &'mp [u8] {
-		(&**self).as_bytes()
+		match *self {
+			Self::Custom(ref p) => p.as_bytes(),
+			Self::Debug => b"\x1B[96;1mDebug:\x1B[0m ",
+			Self::Error => b"\x1B[91;1mError:\x1B[0m ",
+			Self::Info => b"\x1B[96;1mInfo:\x1B[0m ",
+			Self::Notice => b"\x1B[95;1mNotice:\x1B[0m ",
+			Self::Success => b"\x1B[92;1mSuccess:\x1B[0m ",
+			Self::Warning => b"\x1B[93;1mWarning:\x1B[0m ",
+			_ => b"",
+		}
 	}
 
+	#[must_use]
 	/// Print the prefix!
 	pub fn prefix(&'mp self) -> Cow<'mp, str> {
 		(&**self).into()
 	}
 
+	#[must_use]
 	/// Prefix length.
 	pub fn is_empty(&'mp self) -> bool {
 		match *self {
@@ -139,30 +152,28 @@ impl<'mp> Prefix<'mp> {
 		}
 	}
 
+	#[must_use]
 	/// Prefix length.
 	pub fn len(&'mp self) -> usize {
 		match *self {
 			Self::Custom(ref p) => p.len(),
-			Self::Debug => 18,
-			Self::Error => 18,
+			Self::Debug | Self::Error => 18,
 			Self::Info => 17,
 			Self::Notice => 19,
-			Self::Success => 20,
-			Self::Warning => 20,
+			Self::Success | Self::Warning => 20,
 			_ => 0,
 		}
 	}
 
+	#[must_use]
 	/// Prefix width.
 	pub fn width(&'mp self) -> usize {
 		match *self {
 			Self::Custom(ref p) => p.width(),
-			Self::Debug => 7,
-			Self::Error => 7,
+			Self::Debug | Self::Error => 7,
 			Self::Info => 6,
 			Self::Notice => 8,
-			Self::Success => 9,
-			Self::Warning => 9,
+			Self::Success | Self::Warning => 9,
 			_ => 0,
 		}
 	}
@@ -196,18 +207,21 @@ impl<'m> Msg<'m> {
 		}
 	}
 
+	#[must_use]
 	/// Set Flags.
 	pub fn with_flags(mut self, flags: u8) -> Self {
 		self.flags = flags;
 		self
 	}
 
+	#[must_use]
 	/// Set Indentation.
 	pub fn with_indent(mut self, indent: u8) -> Self {
 		self.indent = indent;
 		self
 	}
 
+	#[must_use]
 	/// Set Prefix.
 	pub fn with_prefix(mut self, prefix: Prefix<'m>) -> Self {
 		self.prefix = prefix;
@@ -220,6 +234,7 @@ impl<'m> Msg<'m> {
 	// Getters
 	// -------------------------------------------------------------
 
+	#[must_use]
 	/// Msg.
 	pub fn msg(&self) -> Cow<'_, str> {
 		let mut buf: BytesMut = BytesMut::with_capacity(256);
@@ -264,7 +279,7 @@ impl<'m> Msg<'m> {
 		let old_width: usize = buf.width();
 
 		// Can it fit on one line?
-		if width >= old_width + 21 + 1 {
+		if width > old_width + 21 {
 			buf.put(strings::whitespace_bytes(width - 21 - old_width).as_ref());
 
 			buf.extend_from_slice(b"\x1B[2m[\x1B[34;2m");
@@ -284,6 +299,7 @@ impl<'m> Msg<'m> {
 		}
 	}
 
+	#[must_use]
 	/// Prefix.
 	pub fn prefix(&self) -> Prefix {
 		self.prefix.clone()
@@ -296,6 +312,7 @@ impl<'m> Msg<'m> {
 	// -------------------------------------------------------------
 
 	#[cfg(feature = "interactive")]
+	#[must_use]
 	/// Prompt instead.
 	pub fn prompt(&self) -> bool {
 		casual::confirm(&[
@@ -308,7 +325,7 @@ impl<'m> Msg<'m> {
 	/// Print.
 	pub fn print(&self) {
 		let mut flags: u8 = self.flags | PRINT_NEWLINE;
-		if false == self.prefix.happy() {
+		if ! self.prefix.happy() {
 			flags |= PRINT_STDERR;
 		}
 
@@ -319,6 +336,7 @@ impl<'m> Msg<'m> {
 	// Message Templates
 	// -------------------------------------------------------------
 
+	#[must_use]
 	/// Template: Crunched In X.
 	pub fn crunched_in(num: u64, time: Instant, du: Option<(u64, u64)>) -> Self {
 		let elapsed = time.elapsed().as_secs().elapsed();
@@ -349,6 +367,7 @@ impl<'m> Msg<'m> {
 			.with_prefix(Prefix::new("Crunched", 2))
 	}
 
+	#[must_use]
 	/// Template: Finished In X.
 	pub fn finished_in(time: Instant) -> Self {
 		Msg::new(Cow::Owned([

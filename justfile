@@ -107,6 +107,15 @@ bench BENCH="" FILTER="":
 	[ ! -d "{{ justfile_directory() }}/fyi_witch/target" ] || rm -rf "{{ justfile_directory() }}/fyi_witch/target"
 
 
+# Clippy.
+@clippy:
+	# First let's build the Rust bit.
+	RUSTFLAGS="-C link-arg=-s" cargo clippy \
+		--release \
+		--all-features \
+		--target-dir "{{ cargo_dir }}"
+
+
 # Build Release!
 demo-progress:
 	#!/usr/bin/env bash

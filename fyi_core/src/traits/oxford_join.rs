@@ -45,13 +45,13 @@ impl AsRef<[u8]> for OxfordGlue {
 	/// As ref.
 	fn as_ref(&self) -> &[u8] {
 		match *self {
-			OxfordGlue::For => " for ".as_bytes(),
-			OxfordGlue::And => " and ".as_bytes(),
-			OxfordGlue::Nor => " nor ".as_bytes(),
-			OxfordGlue::But => " but ".as_bytes(),
-			OxfordGlue::Or => " or ".as_bytes(),
-			OxfordGlue::Yet => " yet ".as_bytes(),
-			OxfordGlue::So => " so ".as_bytes(),
+			OxfordGlue::For => b" for ",
+			OxfordGlue::And => b" and ",
+			OxfordGlue::Nor => b" nor ",
+			OxfordGlue::But => b" but ",
+			OxfordGlue::Or => b" or ",
+			OxfordGlue::Yet => b" yet ",
+			OxfordGlue::So => b" so ",
 		}
 	}
 }
@@ -81,20 +81,21 @@ impl Default for OxfordGlue {
 }
 
 impl OxfordGlue {
+	#[must_use]
 	/// Conjunction.
 	///
-	/// This is the same as as_ref(), except the leading space is
+	/// This is the same as `as_ref()`, except the leading space is
 	/// stripped, and the result is returned as bytes since that's
 	/// what is needed for gluing anyway.
 	pub fn conjunction(&self) -> &[u8] {
 		match *self {
-			OxfordGlue::For => "for ".as_bytes(),
-			OxfordGlue::And => "and ".as_bytes(),
-			OxfordGlue::Nor => "nor ".as_bytes(),
-			OxfordGlue::But => "but ".as_bytes(),
-			OxfordGlue::Or => "or ".as_bytes(),
-			OxfordGlue::Yet => "yet ".as_bytes(),
-			OxfordGlue::So => "so ".as_bytes(),
+			OxfordGlue::For => b"for ",
+			OxfordGlue::And => b"and ",
+			OxfordGlue::Nor => b"nor ",
+			OxfordGlue::But => b"but ",
+			OxfordGlue::Or => b"or ",
+			OxfordGlue::Yet => b"yet ",
+			OxfordGlue::So => b"so ",
 		}
 	}
 }

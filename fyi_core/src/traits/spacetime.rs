@@ -37,7 +37,7 @@ pub trait AbsPath {
 	/// Parent.
 	fn parent_abs(&self) -> Result<PathBuf>;
 
-	/// Absolute PathBuf.
+	/// Absolute `PathBuf`.
 	fn to_path_buf_abs(&self) -> PathBuf;
 }
 
@@ -54,7 +54,7 @@ where T: AsRef<Path> {
 		Err(format!("{:?} has no parent.", self.as_ref()).into())
 	}
 
-	/// Absolute PathBuf.
+	/// Absolute `PathBuf`.
 	fn to_path_buf_abs(&self) -> PathBuf {
 		match fs::canonicalize(self.as_ref()) {
 			Ok(path) => path,
@@ -104,19 +104,19 @@ macro_rules! impl_elapsed {
 
 				// Days.
 				if out[3] >= 86400 {
-					out[0] = out[3] / 86400;
+					out[0] = num_integer::div_floor(out[3], 86400);
 					out[3] -= out[0] * 86400;
 				}
 
 				// Hours.
 				if out[3] >= 3600 {
-					out[1] = out[3] / 3600;
+					out[1] = num_integer::div_floor(out[3], 3600);
 					out[3] -= out[1] * 3600;
 				}
 
 				// Minutes.
 				if out[3] >= 60 {
-					out[2] = out[3] / 60;
+					out[2] = num_integer::div_floor(out[3], 60);
 					out[3] -= out[2] * 60;
 				}
 
@@ -194,16 +194,16 @@ macro_rules! impl_elapsed {
 				}
 				else {
 					let c = self.elapsed_chunks();
-					if 0 != c[0] {
+					if 0 == c[0] {
 						format!(
-							"{:02}:{:02}:{:02}:{:02}",
-							c[0], c[1], c[2], c[3]
+							"{:02}:{:02}:{:02}",
+							c[1], c[2], c[3]
 						).into()
 					}
 					else {
 						format!(
-							"{:02}:{:02}:{:02}",
-							c[1], c[2], c[3]
+							"{:02}:{:02}:{:02}:{:02}",
+							c[0], c[1], c[2], c[3]
 						).into()
 					}
 				}
@@ -292,7 +292,7 @@ where T: AsRef<Path> {
 			}
 		}
 
-		return false;
+		false
 	}
 }
 

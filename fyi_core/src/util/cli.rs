@@ -38,26 +38,29 @@ where S: Borrow<str> {
 	}
 
 	// Print it!
-	match 0 == (crate::PRINT_STDERR & flags) {
-		true => {
-			let writer = stdout();
-			let mut handle = writer.lock();
-			match handle.write_all(&buf.to_vec()).is_ok() {
-				true => handle.flush().is_ok(),
-				false => false,
-			}
-		},
-		false => {
-			let writer = stderr();
-			let mut handle = writer.lock();
-			match handle.write_all(&buf.to_vec()).is_ok() {
-				true => handle.flush().is_ok(),
-				false => false,
-			}
-		},
+	if 0 == (crate::PRINT_STDERR & flags) {
+		let writer = stdout();
+		let mut handle = writer.lock();
+		if handle.write_all(&buf.to_vec()).is_ok() {
+			handle.flush().is_ok()
+		}
+		else {
+			false
+		}
+	}
+	else {
+		let writer = stderr();
+		let mut handle = writer.lock();
+		if handle.write_all(&buf.to_vec()).is_ok() {
+			handle.flush().is_ok()
+		}
+		else {
+			false
+		}
 	}
 }
 
+#[must_use]
 /// Obtain the terminal cli width.
 ///
 /// The current terminal width.
