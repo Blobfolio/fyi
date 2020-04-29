@@ -14,8 +14,11 @@ pkg_dir2    := justfile_directory() + "/fyi_core"
 pkg_dir3    := justfile_directory() + "/fyi_witch"
 
 cargo_dir   := "/tmp/" + pkg_id + "-cargo"
+cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
 pgo_dir     := "/tmp/pgo-data"
 release_dir := justfile_directory() + "/release"
+
+rustflags   := "-Clinker-plugin-lto -Clinker=clang-9 -Clink-args=-fuse-ld=lld-9 -C link-arg=-s"
 
 
 
@@ -30,6 +33,7 @@ bench BENCH="" FILTER="":
 			-q \
 			--workspace \
 			--all-features \
+			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}" -- "{{ FILTER }}"
 	else
 		cargo bench \
@@ -37,6 +41,7 @@ bench BENCH="" FILTER="":
 			--bench "{{ BENCH }}" \
 			--workspace \
 			--all-features \
+			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}" -- "{{ FILTER }}"
 	fi
 	exit 0
@@ -45,9 +50,10 @@ bench BENCH="" FILTER="":
 # Build Release!
 @build:
 	# First let's build the Rust bit.
-	RUSTFLAGS="-C link-arg=-s" cargo build \
+	RUSTFLAGS="{{ rustflags }}" cargo build \
 		--bin "{{ pkg_id }}" \
 		--release \
+		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
 
@@ -58,7 +64,7 @@ bench BENCH="" FILTER="":
 	mv "{{ cargo_dir }}" "{{ justfile_directory() }}/target"
 
 	# First let's build the Rust bit.
-	RUSTFLAGS="-C link-arg=-s" cargo-deb \
+	cargo-deb \
 		--no-build \
 		-p {{ pkg_id }} \
 		-o "{{ justfile_directory() }}/release"
@@ -74,7 +80,7 @@ bench BENCH="" FILTER="":
 
 	# Use help2man to make a crappy MAN page.
 	help2man -o "{{ release_dir }}/man/{{ pkg_id }}.1" \
-		-N "{{ cargo_dir }}/release/{{ pkg_id }}"
+		-N "{{ cargo_bin }}"
 
 	# Strip some ugly out.
 	sd '{{ pkg_name }} [0-9.]+\nBlobfolio, LLC. <hello@blobfolio.com>\n' \
@@ -89,57 +95,59 @@ bench BENCH="" FILTER="":
 # Build PGO.
 @build-pgo: clean
 	# First let's build the Rust bit.
-	RUSTFLAGS="-C link-arg=-s -C profile-generate={{ pgo_dir }}" \
+	RUSTFLAGS="{{ rustflags }} -Cprofile-generate={{ pgo_dir }}" \
 		cargo build \
 			--bin "{{ pkg_id }}" \
 			--release \
+			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}"
 
 	clear
 
 	# Instrumentation!
-	"{{ cargo_dir }}/release/fyi" debug "Beginning instrumentation!"
-	"{{ cargo_dir }}/release/fyi" prompt "Answer yes or no. Seriously!" || true
-	"{{ cargo_dir }}/release/fyi" prompt "Now answer the opposite way." || true
-	"{{ cargo_dir }}/release/fyi" blank -c 2
-	"{{ cargo_dir }}/release/fyi" blank -e -c 2
-	"{{ cargo_dir }}/release/fyi" debug -i 1 -t "Instrumenting!"
-	"{{ cargo_dir }}/release/fyi" debug -i 1 --no-color "Instrumenting!"
-	"{{ cargo_dir }}/release/fyi" error "We're doing what we're meant to."
-	"{{ cargo_dir }}/release/fyi" error -e 1 "We're doing what we're meant to." || true
-	"{{ cargo_dir }}/release/fyi" info -t "Still going…"
-	"{{ cargo_dir }}/release/fyi" notice "Notices are important."
-	"{{ cargo_dir }}/release/fyi" print "Nothing doing here."
-	"{{ cargo_dir }}/release/fyi" print -p "Custom" -c 199 "Nothing doing here."
-	"{{ cargo_dir }}/release/fyi" success "Very nearly there now!"
-	"{{ cargo_dir }}/release/fyi" warning -t "This is the last one."
-	"{{ cargo_dir }}/release/fyi" warning --no-color -t "Color has been removed from the output."
-	"{{ cargo_dir }}/release/fyi" warning --no-color -t "Euclid Apollonius of Perga courage of our questions brain is the seed of intelligence quasar tendrils of gossamer clouds. The carbon in our apple pies not a sunrise but a galaxyrise tesseract white dwarf the sky calls to us star stuff harvesting star light. Stirred by starlight hearts of the stars made in the interiors of collapsing stars Tunguska event the ash of stellar alchemy with pretty stories for which there's little good evidence and billions upon billions upon billions upon billions upon billions upon billions upon billions."
-	"{{ cargo_dir }}/release/fyi" -h
-	"{{ cargo_dir }}/release/fyi" -V
-	"{{ cargo_dir }}/release/fyi" blank -c 1
-	"{{ cargo_dir }}/release/fyi" badanswer || true
+	"{{ cargo_bin }}" debug "Beginning instrumentation!"
+	"{{ cargo_bin }}" prompt "Answer yes or no. Seriously!" || true
+	"{{ cargo_bin }}" prompt "Now answer the opposite way." || true
+	"{{ cargo_bin }}" blank -c 2
+	"{{ cargo_bin }}" blank -e -c 2
+	"{{ cargo_bin }}" debug -i 1 -t "Instrumenting!"
+	"{{ cargo_bin }}" debug -i 1 --no-color "Instrumenting!"
+	"{{ cargo_bin }}" error "We're doing what we're meant to."
+	"{{ cargo_bin }}" error -e 1 "We're doing what we're meant to." || true
+	"{{ cargo_bin }}" info -t "Still going…"
+	"{{ cargo_bin }}" notice "Notices are important."
+	"{{ cargo_bin }}" print "Nothing doing here."
+	"{{ cargo_bin }}" print -p "Custom" -c 199 "Nothing doing here."
+	"{{ cargo_bin }}" success "Very nearly there now!"
+	"{{ cargo_bin }}" warning -t "This is the last one."
+	"{{ cargo_bin }}" warning --no-color -t "Color has been removed from the output."
+	"{{ cargo_bin }}" warning --no-color -t "Euclid Apollonius of Perga courage of our questions brain is the seed of intelligence quasar tendrils of gossamer clouds. The carbon in our apple pies not a sunrise but a galaxyrise tesseract white dwarf the sky calls to us star stuff harvesting star light. Stirred by starlight hearts of the stars made in the interiors of collapsing stars Tunguska event the ash of stellar alchemy with pretty stories for which there's little good evidence and billions upon billions upon billions upon billions upon billions upon billions upon billions."
+	"{{ cargo_bin }}" -h
+	"{{ cargo_bin }}" -V
+	"{{ cargo_bin }}" blank -c 1
+	"{{ cargo_bin }}" badanswer || true
 
 	clear
 
-	# OK, let's build it. Also, Rustup, what the fuck is with your
-	# buried paths?!
-	/usr/local/rustup/toolchains/1.43.0-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-profdata \
+	# Merge the data back in.
+	llvm-profdata-9 \
 		merge -o "{{ pgo_dir }}/merged.profdata" "{{ pgo_dir }}"
 
-	RUSTFLAGS="-C link-arg=-s -C profile-use={{ pgo_dir }}/merged.profdata" \
+	RUSTFLAGS="{{ rustflags }} -Cprofile-use={{ pgo_dir }}/merged.profdata" \
 		cargo build \
 			--bin "{{ pkg_id }}" \
 			--release \
+			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}"
 
 
 # Check Release!
 @check:
 	# First let's build the Rust bit.
-	RUSTFLAGS="-C link-arg=-s" cargo check \
+	RUSTFLAGS="{{ rustflags }}" cargo check \
 		--release \
 		--all-features \
+		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
 
@@ -159,10 +167,11 @@ bench BENCH="" FILTER="":
 
 # Clippy.
 @clippy:
-	# First let's build the Rust bit.
-	RUSTFLAGS="-C link-arg=-s" cargo clippy \
+	clear
+	RUSTFLAGS="{{ rustflags }}" cargo clippy \
 		--release \
 		--all-features \
+		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
 
@@ -177,6 +186,7 @@ demo-progress:
 		-p fyi_core \
 		--example progress \
 		--all-features \
+		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
 
@@ -187,6 +197,7 @@ demo-progress:
 		--all-features \
 		--release \
 		--workspace \
+		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}" -- \
 			--format terse \
 
