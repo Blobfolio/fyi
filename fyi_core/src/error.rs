@@ -40,9 +40,11 @@ impl Error {
 	where T: AsRef<str> {
 		Error(msg.as_ref().to_string())
 	}
+}
 
+impl Default for Error {
 	/// Default.
-	pub fn default() -> Error {
+	fn default() -> Error {
 		Error("Boo.".to_string())
 	}
 }

@@ -23,9 +23,11 @@ where T: AsPrimitive<u64> {
 	where N: AsPrimitive<u64> {
 		let before: u64 = self.as_();
 		let after: u64 = after.as_();
-		match 0 < after && after < before {
-			true => before - after,
-			false => 0,
+		if 0 < after && after < before {
+			before - after
+		}
+		else {
+			0
 		}
 	}
 }

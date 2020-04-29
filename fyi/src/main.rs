@@ -12,6 +12,19 @@ FYI is a dead-simple status message printer for CLI use applications.
 #![deny(missing_copy_implementations)]
 #![deny(missing_debug_implementations)]
 
+#![warn(clippy::filetype_is_file)]
+#![warn(clippy::integer_division)]
+#![warn(clippy::needless_borrow)]
+#![warn(clippy::pedantic)]
+#![warn(clippy::suboptimal_flops)]
+#![warn(clippy::unneeded_field_pattern)]
+
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::missing_errors_doc)]
+
 extern crate clap;
 extern crate fyi_core;
 
@@ -53,9 +66,11 @@ fn do_blank(opts: &ArgMatches) {
 		count = 1;
 	}
 
-	let flags: u8 = match opts.is_present("stderr") {
-		true => PRINT_STDERR | PRINT_NEWLINE,
-		false => PRINT_NEWLINE,
+	let flags: u8 = if opts.is_present("stderr") {
+		PRINT_STDERR | PRINT_NEWLINE
+	}
+	else {
+		PRINT_NEWLINE
 	};
 
 	for _ in 0..count {
@@ -99,10 +114,12 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 
 	// Prompt.
 	if "prompt" == name {
-		match msg.prompt() {
-			true => process::exit(0),
-			false => process::exit(1),
-		};
+		if msg.prompt() {
+			process::exit(0);
+		}
+		else {
+			process::exit(1);
+		}
 	}
 
 	msg.print();
@@ -110,7 +127,7 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 	// We might have a custom exit code.
 	let exit: u8 = parse_cli_u8(opts.value_of("exit").unwrap_or("0"));
 	if 0 != exit {
-		process::exit(exit as i32);
+		process::exit(i32::from(exit));
 	}
 }
 

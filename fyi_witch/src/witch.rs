@@ -58,7 +58,7 @@ impl Witch {
 	/// New.
 	pub fn new<P>(paths: &[P], pattern: Option<String>) -> Self
 	where P: AsRef<Path> {
-		let paths: Vec<PathBuf> = paths.into_iter()
+		let paths: Vec<PathBuf> = paths.iter()
 			.map(|p| p.as_ref().to_path_buf())
 			.collect();
 
@@ -74,20 +74,18 @@ impl Witch {
 	/// New.
 	pub fn new_filtered(paths: &[PathBuf], pattern: &Regex) -> Self {
 		Witch(
-			paths.into_iter()
+			paths.iter()
 				.par_bridge()
-				.flat_map(|ref i| WalkDir::new(i)
+				.flat_map(|i| WalkDir::new(i)
 					.follow_links(true)
 					.skip_hidden(false)
 					.into_iter()
 					.filter_map(|e| {
 						if let Ok(path) = e {
-							if path.file_type().is_file() {
-								if let Ok(path) = fs::canonicalize(&path.path()) {
-									if pattern.is_match(path.to_str().unwrap_or("")) {
-										Some(path)
-									}
-									else { None }
+							if path.file_type().is_dir() { None }
+							else if let Ok(path) = fs::canonicalize(&path.path()) {
+								if pattern.is_match(path.to_str().unwrap_or("")) {
+									Some(path)
 								}
 								else { None }
 							}
@@ -101,22 +99,21 @@ impl Witch {
 		)
 	}
 
+	#[must_use]
 	/// New.
 	pub fn new_straight(paths: &[PathBuf]) -> Self {
 		Witch(
-			paths.into_iter()
+			paths.iter()
 				.par_bridge()
-				.flat_map(|ref i| WalkDir::new(i)
+				.flat_map(|i| WalkDir::new(i)
 					.follow_links(true)
 					.skip_hidden(false)
 					.into_iter()
 					.filter_map(|e| {
 						if let Ok(path) = e {
-							if path.file_type().is_file() {
-								if let Ok(path) = fs::canonicalize(&path.path()) {
-									Some(path)
-								}
-								else { None }
+							if path.file_type().is_dir() { None }
+							else if let Ok(path) = fs::canonicalize(&path.path()) {
+								Some(path)
 							}
 							else { None }
 						}
@@ -132,7 +129,7 @@ impl Witch {
 	pub fn from_file<P> (path: P, pattern: Option<String>) -> Self
 	where P: AsRef<Path> {
 		let path: PathBuf = path.as_ref().to_path_buf();
-		if false == path.is_file() {
+		if ! path.is_file() {
 			return Witch(HashSet::new());
 		}
 
@@ -143,9 +140,11 @@ impl Witch {
 			.filter_map(|x| match x {
 				Ok(x) => {
 					let x = x.trim();
-					match x.is_empty() {
-						true => None,
-						false => Some(PathBuf::from(x)),
+					if x.is_empty() {
+						None
+					}
+					else {
+						Some(PathBuf::from(x))
 					}
 				},
 				_ => None,
@@ -161,27 +160,30 @@ impl Witch {
 		}
 	}
 
+	#[must_use]
 	/// Get Disk Size.
 	pub fn du(&self) -> u64 {
 		self.0.par_iter()
-			.map(|ref x| match x.metadata() {
+			.map(|x| match x.metadata() {
 				Ok(meta) => meta.len(),
 				_ => 0,
 			})
 			.sum()
 	}
 
+	#[must_use]
 	/// Get files.
 	pub fn files(&self) -> HashSet<PathBuf> {
 		self.0.clone()
 	}
 
-
+	#[must_use]
 	/// Is Empty.
 	pub fn is_empty(&self) -> bool {
 		self.0.is_empty()
 	}
 
+	#[must_use]
 	/// Get Length.
 	pub fn len(&self) -> usize {
 		self.0.len()
@@ -205,9 +207,9 @@ impl Witch {
 		S: Into<Cow<'static, str>>,
 		F: Fn(&Arc<PathBuf>) + Send + Sync
 	{
-		let bar = self._progress_bar(name.into());
-		self._progress_loop(&bar, cb);
-		bar.crunched_in(None);
+		let pbar = self._progress_bar(name.into());
+		self._progress_loop(&pbar, cb);
+		pbar.crunched_in(None);
 	}
 
 	/// Parallel Loop w/ Progress and Size Comparison.
@@ -216,19 +218,18 @@ impl Witch {
 		S: Into<Cow<'static, str>>,
 		F: Fn(&Arc<PathBuf>) + Send + Sync
 	{
-		let bar = self._progress_bar(name.into());
+		let pbar = self._progress_bar(name.into());
 		let before: u64 = self.du();
 
-		self._progress_loop(&bar, cb);
+		self._progress_loop(&pbar, cb);
 
 		let after: u64 = self.du();
-		bar.crunched_in(Some((before, after)));
+		pbar.crunched_in(Some((before, after)));
 	}
 
-	#[inline(always)]
 	fn _progress_bar(&self, name: Cow<'_, str>) -> Arc<Progress<'static>> {
 		Arc::new(Progress::new(
-			Msg::new("Reticulating splines…")
+			Msg::new("Reticulating splines\u{2026}")
 				.with_prefix(Prefix::new(name, 199))
 				.to_string(),
 			self.0.len() as u64,
@@ -236,18 +237,17 @@ impl Witch {
 		))
 	}
 
-	#[inline(always)]
-	fn _progress_loop<F> (&self, bar: &Arc<Progress<'static>>, cb: F)
+	fn _progress_loop<F> (&self, pbar: &Arc<Progress<'static>>, cb: F)
 	where F: Fn(&Arc<PathBuf>) + Send + Sync {
 		// Loop!
-		let handle = Progress::steady_tick(&bar, None);
+		let handle = Progress::steady_tick(pbar, None);
 		self.0.par_iter().for_each(|x| {
 			let file: String = x.to_str()
 				.unwrap_or("")
 				.to_string();
-			bar.clone().add_task(&file);
+			pbar.clone().add_task(&file);
 			cb(&Arc::new(x.clone()));
-			bar.clone().update(1, None, Some(file));
+			pbar.clone().update(1, None, Some(file));
 		});
 		handle.join().unwrap();
 	}

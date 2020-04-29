@@ -69,10 +69,11 @@ impl WitchIO for Path {
 		let meta = self.metadata()?;
 		if meta.is_file() {
 			let parent = self.parent()
-				.ok_or(Error::new(format!(
+				.ok_or_else(|| Error::new(format!(
 					"Unable to copy {:?} to tmpfile.",
 					self,
 				)))?;
+
 
 			// Allocate a tempfile.
 			let target = match suffix {
@@ -107,14 +108,14 @@ impl WitchIO for Path {
 			fs::remove_file(&self)?;
 			Ok(())
 		}
-		else if false == self.exists() {
-			Ok(())
-		}
-		else {
+		else if self.exists() {
 			Err(Error::new(format!(
 				"Unable to delete {:?}.",
 				self,
 			)))
+		}
+		else {
+			Ok(())
 		}
 	}
 
@@ -165,18 +166,18 @@ impl WitchIO for Path {
 
 	/// Write Bytes.
 	fn witch_write(&self, data: &[u8]) -> Result<()> {
-		if false == self.is_dir() {
-			let mut tmp = tempfile_fast::Sponge::new_for(&self)?;
-			tmp.write_all(&data)?;
-			tmp.commit()?;
-
-			Ok(())
-		}
-		else {
+		if self.is_dir() {
 			Err(Error::new(format!(
 				"Unable to write to {:?}.",
 				self,
 			)))
+		}
+		else {
+			let mut tmp = tempfile_fast::Sponge::new_for(&self)?;
+			tmp.write_all(data)?;
+			tmp.commit()?;
+
+			Ok(())
 		}
 	}
 }

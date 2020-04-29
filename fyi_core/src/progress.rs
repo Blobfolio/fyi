@@ -75,6 +75,7 @@ impl<'pi> ProgressInner<'pi> {
 	// Status
 	// -----------------------------------------------------------------
 
+	#[must_use]
 	/// Is Running?
 	pub fn is_running(&self) -> bool {
 		(self.flags & PROGRESSING) != 0
@@ -103,11 +104,10 @@ impl<'pi> ProgressInner<'pi> {
 		// If we have a message to add, we need to record the length
 		// afterwards so we can ignore the slice when building the bar
 		// line.
-		let start: usize = if ! self.msg.is_empty() {
+		let start: usize = if self.msg.is_empty() { 0 }
+		else {
 			self._msg_put_msg(&mut buf, width);
 			buf.len()
-		} else {
-			0
 		};
 
 		// These always happen.
@@ -125,7 +125,7 @@ impl<'pi> ProgressInner<'pi> {
 		// We want the bar to fill all available space (up to a max of
 		// 62 chars with spaces and brackets), but if it needs to be a
 		// bit smaller to fit the ETA, we'll go with that.
-		let cur_width: usize = buf[start..].width() + buf2.width();
+		let mut cur_width: usize = buf[start..].width() + buf2.width();
 		if width >= cur_width + 14 + 14 {
 			self._msg_put_bar(&mut buf, width - cur_width - 14);
 		}
@@ -137,7 +137,7 @@ impl<'pi> ProgressInner<'pi> {
 		buf.put(buf2);
 
 		// Tack on an ETA.
-		let cur_width: usize = buf[start..].width();
+		cur_width = buf[start..].width();
 		if width >= cur_width + 14 {
 			self._msg_put_eta(&mut buf, width - cur_width);
 		}
@@ -213,7 +213,7 @@ impl<'pi> ProgressInner<'pi> {
 		// To make a worthwhile estimate, we need to be somewhere in the
 		// middle.
 		let percent: f64 = self.percent();
-		if percent < 0.1 || percent == 1.0 {
+		if percent < 0.1 || percent >= 1.0 {
 			return;
 		}
 
@@ -236,7 +236,7 @@ impl<'pi> ProgressInner<'pi> {
 	/// The tasks.
 	fn _msg_put_tasks(&self, buf: &mut BytesMut, width: usize) {
 		for i in &self.tasks {
-			buf.put("\n    \x1B[35m↳ ".as_bytes());
+			buf.put("\n    \x1B[35m\u{21b3} ".as_bytes());
 			buf.put(i.shorten(width).as_bytes());
 			buf.extend_from_slice(b"\x1B[0m");
 		}
@@ -248,12 +248,15 @@ impl<'pi> ProgressInner<'pi> {
 	// Getters
 	// -----------------------------------------------------------------
 
+	#[must_use]
 	/// Percent done.
 	pub fn percent(&self) -> f64 {
 		if self.total > 0 {
-			match self.total > self.done {
-				true => self.done as f64 / self.total as f64,
-				false => 1.0,
+			if self.total > self.done {
+				self.done as f64 / self.total as f64
+			}
+			else {
+				1.0
 			}
 		}
 		else {
@@ -334,7 +337,7 @@ impl<'pi> ProgressInner<'pi> {
 		}
 
 		// We might need to clear the previous entry.
-		if false == self.last.is_empty() {
+		if ! self.last.is_empty() {
 			let lines = self.last.lines_len();
 
 			// The count starts at zero for the purposes of CLEAR.
@@ -382,8 +385,8 @@ impl<'p> Progress<'p> {
 
 		Self(Mutex::new(ProgressInner{
 			msg: msg.into(),
-			total: total,
-			flags: flags,
+			total,
+			flags,
 			..ProgressInner::default()
 		}))
 	}
@@ -439,6 +442,7 @@ impl<'p> Progress<'p> {
 		ptr.msg = msg.into();
 	}
 
+	#[must_use]
 	/// Steady tick.
 	pub fn steady_tick(me: &Arc<Progress<'static>>, rate: Option<u64>) -> JoinHandle<()> {
 		let sleep = Duration::from_millis(match rate {

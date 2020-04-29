@@ -10,6 +10,19 @@
 #![deny(missing_copy_implementations)]
 #![deny(missing_debug_implementations)]
 
+#![warn(clippy::filetype_is_file)]
+#![warn(clippy::integer_division)]
+#![warn(clippy::needless_borrow)]
+#![warn(clippy::pedantic)]
+#![warn(clippy::suboptimal_flops)]
+#![warn(clippy::unneeded_field_pattern)]
+
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::missing_errors_doc)]
+
 #[cfg(feature = "interactive")]
 extern crate casual;
 
@@ -19,6 +32,7 @@ extern crate chrono;
 extern crate itoa;
 extern crate lazy_static;
 extern crate num_format;
+extern crate num_integer;
 extern crate num_traits;
 extern crate regex;
 extern crate term_size;
@@ -53,6 +67,9 @@ pub const PRINT_STDERR: u8 = 16;
 #[cfg(feature = "progress")]
 /// Progress Active.
 pub const PROGRESSING: u8 = 32;
+
+/// …
+pub const ELLIPSIS: &str = "\u{2026}";
 
 /// Exports.
 pub use crate::msg::{
