@@ -9,8 +9,8 @@
 
 pkg_id      := "fyi"
 pkg_name    := "FYI"
-pkg_dir1    := justfile_directory() + "/fyi_core"
-pkg_dir2    := justfile_directory() + "/fyi"
+pkg_dir1    := justfile_directory() + "/fyi"
+pkg_dir2    := justfile_directory() + "/fyi_core"
 pkg_dir3    := justfile_directory() + "/fyi_witch"
 
 cargo_dir   := "/tmp/" + pkg_id + "-cargo"
@@ -46,7 +46,7 @@ bench BENCH="" FILTER="":
 @build:
 	# First let's build the Rust bit.
 	RUSTFLAGS="-C link-arg=-s" cargo build \
-		--bin fyi \
+		--bin "{{ pkg_id }}" \
 		--release \
 		--target-dir "{{ cargo_dir }}"
 
@@ -91,7 +91,7 @@ bench BENCH="" FILTER="":
 	# First let's build the Rust bit.
 	RUSTFLAGS="-C link-arg=-s -C profile-generate={{ pgo_dir }}" \
 		cargo build \
-			--bin fyi \
+			--bin "{{ pkg_id }}" \
 			--release \
 			--target-dir "{{ cargo_dir }}"
 
@@ -129,7 +129,7 @@ bench BENCH="" FILTER="":
 
 	RUSTFLAGS="-C link-arg=-s -C profile-use={{ pgo_dir }}/merged.profdata" \
 		cargo build \
-			--bin fyi \
+			--bin "{{ pkg_id }}" \
 			--release \
 			--target-dir "{{ cargo_dir }}"
 
@@ -152,9 +152,9 @@ bench BENCH="" FILTER="":
 	# But some Cargo apps place shit in subdirectories even if
 	# they place *other* shit in the designated target dir. Haha.
 	[ ! -d "{{ justfile_directory() }}/target" ] || rm -rf "{{ justfile_directory() }}/target"
-	[ ! -d "{{ justfile_directory() }}/fyi/target" ] || rm -rf "{{ justfile_directory() }}/fyi/target"
-	[ ! -d "{{ justfile_directory() }}/fyi_core/target" ] || rm -rf "{{ justfile_directory() }}/fyi_core/target"
-	[ ! -d "{{ justfile_directory() }}/fyi_witch/target" ] || rm -rf "{{ justfile_directory() }}/fyi_witch/target"
+	[ ! -d "{{ pkg_dir1 }}/target" ] || rm -rf "{{ pkg_dir1 }}/target"
+	[ ! -d "{{ pkg_dir2 }}/target" ] || rm -rf "{{ pkg_dir2 }}/target"
+	[ ! -d "{{ pkg_dir3 }}/target" ] || rm -rf "{{ pkg_dir3 }}/target"
 
 
 # Clippy.
@@ -210,23 +210,19 @@ version:
 	fyi success "Setting version to $_ver2."
 
 	# Set the release version!
-	toml set "{{ pkg_dir1 }}/Cargo.toml" \
-		package.version \
-		"$_ver2" > /tmp/Cargo.toml
-	mv "/tmp/Cargo.toml" "{{ pkg_dir1 }}/Cargo.toml"
-	just _fix-chown "{{ pkg_dir1 }}/Cargo.toml"
+	just _version "{{ pkg_dir1 }}" "$_ver2"
+	just _version "{{ pkg_dir2 }}" "$_ver2"
+	just _version "{{ pkg_dir3 }}" "$_ver2"
 
-	toml set "{{ pkg_dir2 }}/Cargo.toml" \
-		package.version \
-		"$_ver2" > /tmp/Cargo.toml
-	mv "/tmp/Cargo.toml" "{{ pkg_dir2 }}/Cargo.toml"
-	just _fix-chown "{{ pkg_dir2 }}/Cargo.toml"
 
-	toml set "{{ pkg_dir3 }}/Cargo.toml" \
-		package.version \
-		"$_ver2" > /tmp/Cargo.toml
-	mv "/tmp/Cargo.toml" "{{ pkg_dir3 }}/Cargo.toml"
-	just _fix-chown "{{ pkg_dir3 }}/Cargo.toml"
+# Set version for real.
+@_version DIR VER:
+	[ -f "{{ DIR }}/Cargo.toml" ] || exit 1
+
+	# Set the release version!
+	toml set "{{ DIR }}/Cargo.toml" package.version "{{ VER }}" > /tmp/Cargo.toml
+	just _fix-chown "/tmp/Cargo.toml"
+	mv "/tmp/Cargo.toml" "{{ DIR }}/Cargo.toml"
 
 
 # Init dependencies.
