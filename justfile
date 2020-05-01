@@ -76,7 +76,7 @@ bench BENCH="" FILTER="":
 # Build Man.
 @build-man: build-pgo
 	# Pre-clean.
-	rm "{{ release_dir }}/man"/*
+	find "{{ release_dir }}/man" -type f -delete
 
 	# Use help2man to make a crappy MAN page.
 	help2man -o "{{ release_dir }}/man/{{ pkg_id }}.1" \
