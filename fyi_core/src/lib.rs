@@ -73,7 +73,6 @@ pub const ELLIPSIS: &str = "\u{2026}";
 
 /// Exports.
 pub use crate::msg::{
-	Color,
 	Msg,
 	Prefix,
 };
