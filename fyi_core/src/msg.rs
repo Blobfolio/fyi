@@ -275,12 +275,19 @@ impl<'m> Msg<'m> {
 		let width: usize = cli::term_width();
 		let old_width: usize = buf.width();
 
+		// Turns out patching and chopping an RFC-3339 string is much
+		// faster than messing around with a custom `.format()` call.
+		let mut dt: String = chrono::Local::now().to_rfc3339();
+		unsafe {
+			let tmp = dt.as_mut_vec();
+			tmp[10] = b' ';
+		}
+
 		// Can it fit on one line?
 		if width > old_width + 21 {
 			buf.put(strings::whitespace_bytes(width - 21 - old_width).as_ref());
-
 			buf.extend_from_slice(b"\x1B[2m[\x1B[34;2m");
-			buf.put(chrono::Local::now().format("%F %T").to_string().as_bytes());
+			buf.put(dt[0..19].as_bytes());
 			buf.extend_from_slice(b"\x1B[0m\x1B[2m]\x1B[0m");
 		}
 		// Well shit.
@@ -290,7 +297,7 @@ impl<'m> Msg<'m> {
 				self._msg_put_indent(buf);
 			}
 			buf.extend_from_slice(b"\x1B[2m[\x1B[34;2m");
-			buf.put(chrono::Local::now().format("%F %T").to_string().as_bytes());
+			buf.put(dt[0..19].as_bytes());
 			buf.extend_from_slice(b"\x1B[0m\x1B[2m]\x1B[0m\n");
 			buf.unsplit(b);
 		}
