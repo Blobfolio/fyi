@@ -146,10 +146,7 @@ impl<'mp> Prefix<'mp> {
 	#[must_use]
 	/// Prefix length.
 	pub fn is_empty(&'mp self) -> bool {
-		match *self {
-			Self::None => true,
-			_ => false,
-		}
+		Self::None == *self
 	}
 
 	#[must_use]
