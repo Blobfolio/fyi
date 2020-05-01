@@ -227,7 +227,7 @@ impl<'pi> ProgressInner<'pi> {
 			elapsed / self.done as f64 * (self.total - self.done) as f64
 		) as usize).elapsed_short();
 
-		buf.put(strings::whitespace_bytes(width - 13).as_ref());
+		buf.extend_from_slice(&strings::whitespace_bytes(width - 13));
 		buf.extend_from_slice(b"\x1B[35mETA: \x1B[0m\x1B[95;1m");
 		buf.put(eta.as_bytes());
 		buf.extend_from_slice(b"\x1B[0m");

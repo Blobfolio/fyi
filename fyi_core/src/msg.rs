@@ -253,7 +253,7 @@ impl<'m> Msg<'m> {
 	/// Msg indent.
 	fn _msg_put_indent(&self, buf: &mut BytesMut) {
 		let indent: usize = self.indent as usize * 4;
-		buf.put(strings::whitespace_bytes(indent).as_ref());
+		buf.extend_from_slice(&strings::whitespace_bytes(indent));
 	}
 
 	/// Msg prefix.
@@ -275,7 +275,7 @@ impl<'m> Msg<'m> {
 
 		// Can it fit on one line?
 		if width > old_width + 21 {
-			buf.put(strings::whitespace_bytes(width - 21 - old_width).as_ref());
+			buf.extend_from_slice(&strings::whitespace_bytes(width - 21 - old_width));
 			buf.extend_from_slice(b"\x1B[2m[\x1B[34;2m");
 			Msg::_msg_put_timestamp_inner(buf);
 			buf.extend_from_slice(b"\x1B[0m\x1B[2m]\x1B[0m");
