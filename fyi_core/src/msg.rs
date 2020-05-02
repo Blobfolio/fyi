@@ -309,11 +309,11 @@ impl<'m> Msg<'m> {
 		write!(
 			buf,
 			"-{}-{} {}:{}:{}",
-			strings::zero_padded_time(now.month()),
-			strings::zero_padded_time(now.day()),
-			strings::zero_padded_time(now.hour()),
-			strings::zero_padded_time(now.minute()),
-			strings::zero_padded_time(now.second()),
+			now.month().zero_padded_time(),
+			now.day().zero_padded_time(),
+			now.hour().zero_padded_time(),
+			now.minute().zero_padded_time(),
+			now.second().zero_padded_time(),
 		).expect("Invalid string.");
 	}
 

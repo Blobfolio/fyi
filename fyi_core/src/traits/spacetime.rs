@@ -86,6 +86,13 @@ pub trait Elapsed {
 	/// This turns seconds into a 00:00:00-style display. Days are included
 	/// only if positive.
 	fn elapsed_short(&self) -> Cow<'static, str>;
+
+	/// Zero-Padded Time.
+	///
+	/// This is meant for the individual pieces of a 00:00:00-type format,
+	/// i.e. numbers between 0-59. An empty string will be returned for
+	/// overly big shit.
+	fn zero_padded_time(self) -> &'static str;
 }
 
 
@@ -95,6 +102,7 @@ macro_rules! impl_elapsed {
 		impl Elapsed for $type {
 			type Chunk = [$type; 4];
 
+			#[must_use]
 			/// Elapsed Chunks
 			///
 			/// Return a fixed array containing the number of days, hours,
@@ -194,18 +202,93 @@ macro_rules! impl_elapsed {
 				}
 				else {
 					let c = self.elapsed_chunks();
-					if 0 == c[0] {
-						format!(
-							"{:02}:{:02}:{:02}",
-							c[1], c[2], c[3]
-						).into()
+					let mut out: String = String::with_capacity(11);
+
+					// The number of days might exceed our cache.
+					if c[0] > 59 {
+						itoa::fmt(&mut out, c[0]).unwrap();
 					}
-					else {
-						format!(
-							"{:02}:{:02}:{:02}:{:02}",
-							c[0], c[1], c[2], c[3]
-						).into()
+					// But we only want to include it if there's a value.
+					else if c[0] > 0 {
+						out.push_str(c[0].zero_padded_time());
+						out.push(':');
 					}
+
+					out.push_str(c[1].zero_padded_time());
+					out.push(':');
+					out.push_str(c[2].zero_padded_time());
+					out.push(':');
+					out.push_str(c[3].zero_padded_time());
+
+					out.into()
+				}
+			}
+
+			#[must_use]
+			/// Zero-Padded Time.
+			fn zero_padded_time(self) -> &'static str {
+				match self {
+					0 => "00",
+					1 => "01",
+					2 => "02",
+					3 => "03",
+					4 => "04",
+					5 => "05",
+					6 => "06",
+					7 => "07",
+					8 => "08",
+					9 => "09",
+					10 => "10",
+					11 => "11",
+					12 => "12",
+					13 => "13",
+					14 => "14",
+					15 => "15",
+					16 => "16",
+					17 => "17",
+					18 => "18",
+					19 => "19",
+					20 => "20",
+					21 => "21",
+					22 => "22",
+					23 => "23",
+					24 => "24",
+					25 => "25",
+					26 => "26",
+					27 => "27",
+					28 => "28",
+					29 => "29",
+					30 => "30",
+					31 => "31",
+					32 => "32",
+					33 => "33",
+					34 => "34",
+					35 => "35",
+					36 => "36",
+					37 => "37",
+					38 => "38",
+					39 => "39",
+					40 => "40",
+					41 => "41",
+					42 => "42",
+					43 => "43",
+					44 => "44",
+					45 => "45",
+					46 => "46",
+					47 => "47",
+					48 => "48",
+					49 => "49",
+					50 => "50",
+					51 => "51",
+					52 => "52",
+					53 => "53",
+					54 => "54",
+					55 => "55",
+					56 => "56",
+					57 => "57",
+					58 => "58",
+					59 => "59",
+					_ => "",
 				}
 			}
 		}
