@@ -4,7 +4,7 @@
 
 use bytes::{
 	BytesMut,
-	BufMut
+	BufMut,
 };
 use crate::{
 	MSG_TIMESTAMP,
@@ -27,7 +27,10 @@ use num_format::{
 };
 use std::{
 	borrow::Cow,
-	fmt,
+	fmt::{
+		self,
+		Write
+	},
 	ops::Deref,
 	time::Instant,
 };
@@ -303,16 +306,15 @@ impl<'m> Msg<'m> {
 
 		let now = Local::now();
 		itoa::fmt(&mut *buf, now.year()).expect("Invalid year.");
-		buf.put_u8(b'-');
-		buf.extend_from_slice(strings::zero_padded_time_bytes(now.month()));
-		buf.put_u8(b'-');
-		buf.extend_from_slice(strings::zero_padded_time_bytes(now.day()));
-		buf.put_u8(b' ');
-		buf.extend_from_slice(strings::zero_padded_time_bytes(now.hour()));
-		buf.put_u8(b'-');
-		buf.extend_from_slice(strings::zero_padded_time_bytes(now.minute()));
-		buf.put_u8(b'-');
-		buf.extend_from_slice(strings::zero_padded_time_bytes(now.second()));
+		write!(
+			buf,
+			"-{}-{} {}:{}:{}",
+			strings::zero_padded_time(now.month()),
+			strings::zero_padded_time(now.day()),
+			strings::zero_padded_time(now.hour()),
+			strings::zero_padded_time(now.minute()),
+			strings::zero_padded_time(now.second()),
+		).expect("Invalid string.");
 	}
 
 	#[must_use]
