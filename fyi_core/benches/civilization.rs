@@ -123,6 +123,8 @@ fn elapsed_elapsed_chunks(c: &mut Criterion) {
 fn elapsed_elapsed(c: &mut Criterion) {
 	let mut group = c.benchmark_group("traits::spacetime::Elapsed::elapsed");
 	for size in [0, 50, 100, 10000, 1000000].iter() {
+		println!("\x1B[96m{}\x1B[0m", size.elapsed());
+
 		group.bench_with_input(
 			BenchmarkId::from_parameter(size),
 			size,
@@ -139,6 +141,8 @@ fn elapsed_elapsed(c: &mut Criterion) {
 fn elapsed_elapsed_short(c: &mut Criterion) {
 	let mut group = c.benchmark_group("traits::spacetime::Elapsed::elapsed_short");
 	for size in [0, 50, 100, 10000, 1000000].iter() {
+		println!("\x1B[96m{}\x1B[0m", size.elapsed_short());
+
 		group.bench_with_input(
 			BenchmarkId::from_parameter(size),
 			size,
