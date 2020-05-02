@@ -295,20 +295,7 @@ where S: AsRef<str> {
 ///
 /// Generate a string consisting of X spaces.
 pub fn whitespace(count: usize) -> Cow<'static, str> {
-	lazy_static::lazy_static! {
-		// Precompute 100 spaces; it is cheaper to shrink than to grow.
-		static ref WHITE: Cow<'static, str> = Cow::Owned("                                                                                                    ".to_string());
-	}
-
-	if 0 == count {
-		"".into()
-	}
-	else if count <= 100 {
-		WHITE[0..count].into()
-	}
-	else {
-		unsafe { String::from_utf8_unchecked(vec![b' '; count]).into() }
-	}
+	unsafe { String::from_utf8_unchecked(whitespace_bytes(count).to_vec()).into() }
 }
 
 #[must_use]
