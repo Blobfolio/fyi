@@ -304,15 +304,15 @@ pub fn whitespace(count: usize) -> Cow<'static, str> {
 /// Generate a string consisting of X spaces.
 pub fn whitespace_bytes(count: usize) -> Cow<'static, [u8]> {
 	lazy_static::lazy_static! {
-		// Precompute 100 spaces; it is cheaper to shrink than to grow.
-		static ref WHITE: Cow<'static, [u8]> = Cow::Owned(vec![b' '; 100]);
+		// Precompute 256 spaces; it is cheaper to shrink than to grow.
+		static ref WHITE: Vec<u8> = vec![b' '; 256];
 	}
 
 	if 0 == count {
-		vec![].into()
+		Cow::Borrowed(&[])
 	}
-	else if count <= 100 {
-		WHITE[0..count].into()
+	else if count <= 256 {
+		Cow::Borrowed(&WHITE[0..count])
 	}
 	else {
 		vec![b' '; count].into()

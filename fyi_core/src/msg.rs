@@ -235,7 +235,7 @@ impl<'m> Msg<'m> {
 	#[must_use]
 	/// Msg.
 	pub fn msg(&self) -> Cow<'_, str> {
-		let mut buf: BytesMut = BytesMut::with_capacity(256);
+		let mut buf: BytesMut = BytesMut::with_capacity(512);
 
 		if 0 != self.indent {
 			self._msg_put_indent(&mut buf);
