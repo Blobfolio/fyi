@@ -2,6 +2,7 @@
 members = [
 	"fyi",
     "fyi_core",
+    "fyi_msg",
     "fyi_witch",
 ]
 

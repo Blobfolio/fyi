@@ -192,6 +192,7 @@ demo-progress:
 
 # Unit tests!
 @test:
+	clear
 	RUST_TEST_THREADS=1 cargo test \
 		--tests \
 		--all-features \
