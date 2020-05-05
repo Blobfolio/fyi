@@ -138,6 +138,9 @@ fn _print_put_timestamp(buf: &mut BytesMut) {
 	use std::fmt::Write;
 
 	lazy_static::lazy_static! {
+		// The year takes longer to stringify than any other piece of the
+		// timestamp. Let's cache it. This will introduce an error for tasks
+		// that run past midnight 12/31, but whatever. Haha.
 		static ref YEAR: Cow<'static, str> = {
 			let mut tmp: String = String::with_capacity(4);
 			itoa::fmt(&mut tmp, Local::now().year()).expect("Invalid year.");
@@ -161,11 +164,11 @@ fn _print_put_timestamp(buf: &mut BytesMut) {
 		buf,
 		"\x1B[2m[\x1B[34m{}-{}-{} {}:{}:{}\x1B[39m]\x1B[0m",
 		YEAR.as_ref(),
-		str::double_digit_time(now.month().into()),
-		str::double_digit_time(now.day().into()),
-		str::double_digit_time(now.hour().into()),
-		str::double_digit_time(now.minute().into()),
-		str::double_digit_time(now.second().into()),
+		now.month().double_digit_time(),
+		now.day().double_digit_time(),
+		now.hour().double_digit_time(),
+		now.minute().double_digit_time(),
+		now.second().double_digit_time(),
 	).expect("Invalid timestamp.");
 }
 
