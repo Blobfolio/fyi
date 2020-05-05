@@ -47,4 +47,5 @@ pub use print::{
 	print,
 	prompt,
 	term_width,
+	whitespace,
 };

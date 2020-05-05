@@ -17,7 +17,6 @@ use crate::traits::{
 	DoubleTime,
 	GirthExt,
 	StripAnsi,
-	WhiteSpace,
 };
 use std::borrow::Cow;
 use chrono::{
@@ -66,7 +65,7 @@ pub fn print(data: &[u8], indent: u8, flags: Flags) {
 
 	// Start with indentation.
 	if 0 < indent {
-		buf.extend_from_slice(<[u8]>::whitespace(indent.saturating_mul(4)));
+		buf.extend_from_slice(whitespace(indent.saturating_mul(4) as usize));
 	}
 
 	// Add the message.
@@ -110,7 +109,7 @@ pub fn prompt(data: &[u8], indent: u8, flags: Flags) -> bool {
 
 	// Start with indentation.
 	if 0 < indent {
-		buf.extend_from_slice(<[u8]>::whitespace(indent.saturating_mul(4)));
+		buf.extend_from_slice(whitespace(indent.saturating_mul(4) as usize));
 	}
 
 	// Add the message.
@@ -154,7 +153,7 @@ fn _print_put_timestamp(buf: &mut BytesMut) {
 
 	// We can fit it on one line.
 	if cli_width > msg_width + 21 {
-		buf.extend_from_slice(<[u8]>::whitespace((cli_width - msg_width - 21) as u8));
+		buf.extend_from_slice(whitespace(cli_width - msg_width - 21));
 	}
 	else {
 		buf.put_u8(b'\n');
@@ -206,4 +205,13 @@ pub fn term_width() -> usize {
 	// Reserve one space at the end "just in case".
 	if let Some((w, _)) = term_size::dimensions() { w - 1 }
 	else { 0 }
+}
+
+#[must_use]
+/// Whitespace maker.
+pub fn whitespace(num: usize) -> &'static [u8] {
+	static WHITES: &[u8; 255] = &[b' '; 255];
+
+	if num >= 255 { &WHITES[..] }
+	else { &WHITES[0..num] }
 }
