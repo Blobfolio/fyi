@@ -25,9 +25,6 @@ FYI is a dead-simple status message printer for CLI use applications.
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::missing_errors_doc)]
 
-extern crate clap;
-extern crate fyi_msg;
-
 use clap::ArgMatches;
 use fyi_msg::{
 	Flags,

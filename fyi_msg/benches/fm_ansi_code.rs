@@ -2,8 +2,6 @@
 # Benchmark: `fyi_msg::traits::AnsiCodeBold`
 */
 
-extern crate criterion;
-
 use criterion::{
 	BenchmarkId,
 	Criterion,

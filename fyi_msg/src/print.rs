@@ -9,10 +9,6 @@ to make the process more ergonomical, but the methods here can be called
 directly.
 */
 
-use bytes::{
-	BytesMut,
-	BufMut,
-};
 use crate::traits::{
 	DoubleTime,
 	GirthExt,
@@ -60,7 +56,7 @@ impl Default for Flags {
 /// won't do the writer part. This helps with benchmarking, etc., but is
 /// admittedly useless in production.
 pub fn print(data: &[u8], indent: u8, flags: Flags) {
-	let mut buf = BytesMut::with_capacity(512);
+	let mut buf: Vec<u8> = Vec::with_capacity(256);
 
 	// Start with indentation.
 	if 0 < indent {
@@ -79,7 +75,7 @@ pub fn print(data: &[u8], indent: u8, flags: Flags) {
 
 	// Add a newline?
 	if ! flags.contains(Flags::NO_LINE) {
-		buf.put_u8(b'\n');
+		buf.push(b'\n');
 	}
 
 	// No ANSI?
@@ -104,7 +100,7 @@ pub fn print(data: &[u8], indent: u8, flags: Flags) {
 #[must_use]
 /// Prompt.
 pub fn prompt(data: &[u8], indent: u8, flags: Flags) -> bool {
-	let mut buf = BytesMut::with_capacity(usize::max(256, data.len()));
+	let mut buf: Vec<u8> = Vec::with_capacity(usize::max(256, data.len()));
 
 	// Start with indentation.
 	if 0 < indent {
@@ -132,17 +128,17 @@ pub fn prompt(data: &[u8], indent: u8, flags: Flags) -> bool {
 }
 
 /// Push Timestamp.
-fn _print_put_timestamp(buf: &mut BytesMut) {
+fn _print_put_timestamp(buf: &mut Vec<u8>) {
 	let cli_width: usize = term_width();
 	let msg_width: usize = buf.count_width();
 
 	// We can fit it on one line.
 	if cli_width > msg_width + 21 {
 		buf.extend_from_slice(whitespace(cli_width - msg_width - 21));
-		buf.extend_from_slice(b"\x1B[2m[\x1B[34m2020-00-00 00:00:00\x1B[39m]\x1B[0m");
+		buf.extend_from_slice(&b"\x1B[2m[\x1B[34m2020-00-00 00:00:00\x1B[39m]\x1B[0m"[..]);
 	}
 	else {
-		buf.extend_from_slice(b"\n\x1B[2m[\x1B[34m2020-00-00 00:00:00\x1B[39m]\x1B[0m");
+		buf.extend_from_slice(&b"\n\x1B[2m[\x1B[34m2020-00-00 00:00:00\x1B[39m]\x1B[0m"[..]);
 	}
 
 	let len = buf.len();

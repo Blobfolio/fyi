@@ -2,8 +2,6 @@
 # Build
 */
 
-extern crate clap;
-
 include!("src/menu.rs");
 
 

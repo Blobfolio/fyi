@@ -2,8 +2,6 @@
 # Benchmark: `fyi_msg::traits::DoubleTime`
 */
 
-extern crate criterion;
-
 use criterion::{
 	BenchmarkId,
 	Criterion,

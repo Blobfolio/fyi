@@ -2,8 +2,6 @@
 # Benchmark: `fyi_msg::Msg`
 */
 
-extern crate criterion;
-
 use criterion::{
 	black_box,
 	Criterion,

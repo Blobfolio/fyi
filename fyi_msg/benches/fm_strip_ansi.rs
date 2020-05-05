@@ -2,8 +2,6 @@
 # Benchmark: `fyi_msg::traits::StripAnsi`
 */
 
-extern crate criterion;
-
 use criterion::{
 	BenchmarkId,
 	Criterion,

@@ -2,8 +2,6 @@
 # Benchmark: `fyi_msg::whitespace`
 */
 
-extern crate criterion;
-
 use criterion::{
 	BenchmarkId,
 	Criterion,
