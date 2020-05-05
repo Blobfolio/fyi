@@ -18,8 +18,6 @@ fn whitespace(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::traits::WhiteSpace");
 
 	for spaces in [0, 4, 50, 100, 250].iter() {
-		// Test the [u8] implementation as that's the focus; str performance is
-		// comparable.
 		group.bench_with_input(
 			BenchmarkId::from_parameter(format!(
 				"<[u8]>::whitespace({})",

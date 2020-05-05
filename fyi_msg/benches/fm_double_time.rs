@@ -18,8 +18,6 @@ fn double_digit_time(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::traits::DoubleTime");
 
 	for secs in [1_u8, 50_u8, 100_u8].iter() {
-		// Test the [u8] implementation as that's the focus; str performance is
-		// comparable.
 		group.bench_with_input(
 			BenchmarkId::from_parameter(format!(
 				"{}.double_digit_time()",

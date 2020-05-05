@@ -22,6 +22,9 @@ _fyi() {
             debug)
                 cmd+="__debug"
                 ;;
+            done)
+                cmd+="__done"
+                ;;
             error)
                 cmd+="__error"
                 ;;
@@ -43,6 +46,9 @@ _fyi() {
             success)
                 cmd+="__success"
                 ;;
+            task)
+                cmd+="__task"
+                ;;
             warning)
                 cmd+="__warning"
                 ;;
@@ -53,7 +59,7 @@ _fyi() {
 
     case "${cmd}" in
         fyi)
-            opts=" -h -V  --help --version   blank print debug error info notice confirm success warning help  prompt"
+            opts=" -h -V  --help --version   blank print confirm debug done error info notice success task warning help  prompt"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -107,6 +113,29 @@ _fyi() {
             return 0
             ;;
         fyi__debug)
+            opts=" -t -h -V -i  --no-color --add-timestamp --help --version --indent  <MSG> "
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                
+                --indent)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                    -i)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        fyi__done)
             opts=" -t -h -V -i  --no-color --add-timestamp --help --version --indent  <MSG> "
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -276,6 +305,29 @@ _fyi() {
             return 0
             ;;
         fyi__success)
+            opts=" -t -h -V -i  --no-color --add-timestamp --help --version --indent  <MSG> "
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                
+                --indent)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                    -i)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        fyi__task)
             opts=" -t -h -V -i  --no-color --add-timestamp --help --version --indent  <MSG> "
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )

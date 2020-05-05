@@ -23,8 +23,6 @@ fn count_chars(c: &mut Criterion) {
 		"Björk Guðmundsdóttir",
 		"This is a slightly longer sentence, but nothing crazy.",
 	].iter() {
-		// Test the [u8] implementation as that's the focus; str performance is
-		// comparable.
 		group.bench_with_input(
 			BenchmarkId::from_parameter(format!(
 				"{:?}.count_chars()",
@@ -49,8 +47,6 @@ fn count_lines(c: &mut Criterion) {
 		"Hello\nWorld",
 		"Hello\n\nWorld",
 	].iter() {
-		// Test the [u8] implementation as that's the focus; str performance is
-		// comparable.
 		group.bench_with_input(
 			BenchmarkId::from_parameter(format!(
 				"{:?}.count_lines()",
@@ -76,8 +72,6 @@ fn count_width(c: &mut Criterion) {
 		"\x1b[1mBjörk Guðmundsdóttir",
 		"This is a \x1b[1mslightly\x1b[0m longer sentence, but nothing crazy.",
 	].iter() {
-		// Test the [u8] implementation as that's the focus; str performance is
-		// comparable.
 		group.bench_with_input(
 			BenchmarkId::from_parameter(format!(
 				"{:?}.count_width()",

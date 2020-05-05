@@ -25,8 +25,6 @@ fn strip_ansi(c: &mut Criterion) {
 		println!("\x1B[1;96mimpl [u8]:\x1B[0m {}", String::from_utf8(text.as_bytes().strip_ansi().to_vec()).unwrap());
 		println!("\x1B[1;96mimpl str:\x1B[0m  {}", text.strip_ansi());
 
-		// Test the [u8] implementation as that's the focus; str performance is
-		// comparable.
 		group.bench_with_input(
 			BenchmarkId::from_parameter(format!(
 				"{:?}.strip_ansi()",
