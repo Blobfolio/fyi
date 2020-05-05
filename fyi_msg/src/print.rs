@@ -9,12 +9,16 @@ to make the process more ergonomical, but the methods here can be called
 directly.
 */
 
-use bytes::BytesMut;
-use bytes::BufMut;
-use crate::traits::DoubleTime;
-use crate::traits::GirthExt;
-use crate::traits::StripAnsi;
-use crate::traits::WhiteSpace;
+use bytes::{
+	BytesMut,
+	BufMut,
+};
+use crate::traits::{
+	DoubleTime,
+	GirthExt,
+	StripAnsi,
+	WhiteSpace,
+};
 use std::borrow::Cow;
 use chrono::{
 	Datelike,
