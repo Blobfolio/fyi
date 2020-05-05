@@ -106,12 +106,13 @@ bench BENCH="" FILTER="":
 
 	# Instrumentation!
 	"{{ cargo_bin }}" debug "Beginning instrumentation!"
-	"{{ cargo_bin }}" prompt "Answer yes or no. Seriously!" || true
-	"{{ cargo_bin }}" prompt "Now answer the opposite way." || true
+	"{{ cargo_bin }}" confirm "Answer yes or no. Seriously!" || true
+	"{{ cargo_bin }}" confirm "Now answer the opposite way." || true
 	"{{ cargo_bin }}" blank -c 2
 	"{{ cargo_bin }}" blank -e -c 2
 	"{{ cargo_bin }}" debug -i 1 -t "Instrumenting!"
 	"{{ cargo_bin }}" debug -i 1 --no-color "Instrumenting!"
+	"{{ cargo_bin }}" task "Example task."
 	"{{ cargo_bin }}" error "We're doing what we're meant to."
 	"{{ cargo_bin }}" error -e 1 "We're doing what we're meant to." || true
 	"{{ cargo_bin }}" info -t "Still going…"
@@ -122,6 +123,7 @@ bench BENCH="" FILTER="":
 	"{{ cargo_bin }}" warning -t "This is the last one."
 	"{{ cargo_bin }}" warning --no-color -t "Color has been removed from the output."
 	"{{ cargo_bin }}" warning --no-color -t "Euclid Apollonius of Perga courage of our questions brain is the seed of intelligence quasar tendrils of gossamer clouds. The carbon in our apple pies not a sunrise but a galaxyrise tesseract white dwarf the sky calls to us star stuff harvesting star light. Stirred by starlight hearts of the stars made in the interiors of collapsing stars Tunguska event the ash of stellar alchemy with pretty stories for which there's little good evidence and billions upon billions upon billions upon billions upon billions upon billions upon billions."
+	"{{ cargo_bin }}" done "We actually are (almost) done!"
 	"{{ cargo_bin }}" -h
 	"{{ cargo_bin }}" -V
 	"{{ cargo_bin }}" blank -c 1
