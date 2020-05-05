@@ -18,7 +18,6 @@ use crate::traits::{
 	GirthExt,
 	StripAnsi,
 };
-use std::borrow::Cow;
 use chrono::{
 	Datelike,
 	Local,
@@ -105,7 +104,7 @@ pub fn print(data: &[u8], indent: u8, flags: Flags) {
 #[must_use]
 /// Prompt.
 pub fn prompt(data: &[u8], indent: u8, flags: Flags) -> bool {
-	let mut buf = BytesMut::with_capacity(512);
+	let mut buf = BytesMut::with_capacity(usize::max(256, data.len()));
 
 	// Start with indentation.
 	if 0 < indent {
@@ -134,41 +133,40 @@ pub fn prompt(data: &[u8], indent: u8, flags: Flags) -> bool {
 
 /// Push Timestamp.
 fn _print_put_timestamp(buf: &mut BytesMut) {
-	use std::fmt::Write;
-
-	lazy_static::lazy_static! {
-		// The year takes longer to stringify than any other piece of the
-		// timestamp. Let's cache it. This will introduce an error for tasks
-		// that run past midnight 12/31, but whatever. Haha.
-		static ref YEAR: Cow<'static, str> = {
-			let mut tmp: String = String::with_capacity(4);
-			itoa::fmt(&mut tmp, Local::now().year()).expect("Invalid year.");
-			Cow::Owned(tmp)
-		};
-	}
-
 	let cli_width: usize = term_width();
 	let msg_width: usize = buf.count_width();
-	let now = Local::now();
 
 	// We can fit it on one line.
 	if cli_width > msg_width + 21 {
 		buf.extend_from_slice(whitespace(cli_width - msg_width - 21));
+		buf.extend_from_slice(b"\x1B[2m[\x1B[34m2020-00-00 00:00:00\x1B[39m]\x1B[0m");
 	}
 	else {
-		buf.put_u8(b'\n');
+		buf.extend_from_slice(b"\n\x1B[2m[\x1B[34m2020-00-00 00:00:00\x1B[39m]\x1B[0m");
 	}
 
-	write!(
-		buf,
-		"\x1B[2m[\x1B[34m{}-{}-{} {}:{}:{}\x1B[39m]\x1B[0m",
-		YEAR.as_ref(),
-		now.month().double_digit_time(),
-		now.day().double_digit_time(),
-		now.hour().double_digit_time(),
-		now.minute().double_digit_time(),
-		now.second().double_digit_time(),
-	).expect("Invalid timestamp.");
+	let len = buf.len();
+	let now = Local::now();
+
+	let mut tmp = now.month().double_digit_time();
+	buf[len - 24] = tmp[0];
+	buf[len - 23] = tmp[1];
+
+	tmp = now.day().double_digit_time();
+	buf[len - 21] = tmp[0];
+	buf[len - 20] = tmp[1];
+
+	tmp = now.hour().double_digit_time();
+	buf[len - 18] = tmp[0];
+	buf[len - 17] = tmp[1];
+
+	tmp = now.minute().double_digit_time();
+	buf[len - 15] = tmp[0];
+	buf[len - 14] = tmp[1];
+
+	tmp = now.second().double_digit_time();
+	buf[len - 12] = tmp[0];
+	buf[len - 11] = tmp[1];
 }
 
 /// Print `Stdout`.
