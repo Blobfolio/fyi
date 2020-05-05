@@ -32,8 +32,6 @@ extern crate bytes;
 extern crate chrono;
 extern crate itoa;
 extern crate lazy_static;
-extern crate num_format;
-extern crate num_integer;
 extern crate num_traits;
 extern crate regex;
 extern crate term_size;
