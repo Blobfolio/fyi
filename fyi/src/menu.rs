@@ -220,7 +220,8 @@ pub fn menu() -> App<'static, 'static> {
 				)
 		)
 		.subcommand(
-			SubCommand::with_name("prompt")
+			SubCommand::with_name("confirm")
+				.alias("prompt")
 				.about("Ask a Yes/No question. An exit code of 0 indicates acceptance.")
 				.arg(clap::Arg::with_name("no_color")
 					.long("no-color")

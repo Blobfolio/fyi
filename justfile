@@ -10,7 +10,7 @@
 pkg_id      := "fyi"
 pkg_name    := "FYI"
 pkg_dir1    := justfile_directory() + "/fyi"
-pkg_dir2    := justfile_directory() + "/fyi_core"
+pkg_dir2    := justfile_directory() + "/fyi_msg"
 pkg_dir3    := justfile_directory() + "/fyi_witch"
 
 cargo_dir   := "/tmp/" + pkg_id + "-cargo"
@@ -162,7 +162,7 @@ bench BENCH="" FILTER="":
 	[ ! -d "{{ justfile_directory() }}/target" ] || rm -rf "{{ justfile_directory() }}/target"
 	[ ! -d "{{ pkg_dir1 }}/target" ] || rm -rf "{{ pkg_dir1 }}/target"
 	[ ! -d "{{ pkg_dir2 }}/target" ] || rm -rf "{{ pkg_dir2 }}/target"
-	[ ! -d "{{ pkg_dir3 }}/target" ] || rm -rf "{{ pkg_dir3 }}/target"
+	# [ ! -d "{{ pkg_dir3 }}/target" ] || rm -rf "{{ pkg_dir3 }}/target"
 
 
 # Clippy.
@@ -176,18 +176,18 @@ bench BENCH="" FILTER="":
 
 
 # Build Release!
-demo-progress:
-	#!/usr/bin/env bash
+#demo-progress:
+#	#!/usr/bin/env bash
 
-	clear
+#	clear
 
-	cargo run \
-		-q \
-		-p fyi_core \
-		--example progress \
-		--all-features \
-		--target x86_64-unknown-linux-gnu \
-		--target-dir "{{ cargo_dir }}"
+#	cargo run \
+#		-q \
+#		-p fyi_core \
+#		--example progress \
+#		--all-features \
+#		--target x86_64-unknown-linux-gnu \
+#		--target-dir "{{ cargo_dir }}"
 
 
 # Unit tests!
@@ -224,7 +224,7 @@ version:
 	# Set the release version!
 	just _version "{{ pkg_dir1 }}" "$_ver2"
 	just _version "{{ pkg_dir2 }}" "$_ver2"
-	just _version "{{ pkg_dir3 }}" "$_ver2"
+	# just _version "{{ pkg_dir3 }}" "$_ver2"
 
 
 # Set version for real.

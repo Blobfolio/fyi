@@ -40,6 +40,13 @@ extern crate term_size;
 
 mod msg;
 
+pub mod print;
 pub mod traits;
 
 pub use msg::Msg;
+pub use print::{
+	Flags,
+	print,
+	prompt,
+	term_width,
+};

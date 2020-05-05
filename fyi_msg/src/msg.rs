@@ -1,8 +1,18 @@
 /*!
-# FYI Msg: Prefix
+# FYI Message
+
+The `Msg` struct is an efficient way to construct a "Prefix: Hello World"-type
+status message.
 */
 
-use crate::traits::AnsiCodeBold;
+use crate::{
+	print,
+	Flags,
+	traits::{
+		AnsiCodeBold,
+		Printable,
+	},
+};
 use std::{
 	borrow::Borrow,
 	fmt,
@@ -142,8 +152,6 @@ impl Msg {
 	new_msg_method!(task, "Task", 199);         // Hot Pink.
 	new_msg_method!(warning, "Warning", 11);    // Light Yellow.
 
-
-
 	#[must_use]
 	#[inline]
 	/// As Str.
@@ -169,5 +177,18 @@ impl Msg {
 	/// Length.
 	pub fn len(&self) -> usize {
 		self.0.len()
+	}
+}
+
+impl Printable for Msg {
+	/// Print.
+	fn print(&self, indent: u8, flags: Flags) {
+		print::print(self, indent, flags);
+	}
+
+	#[cfg(feature = "interactive")]
+	/// Prompt.
+	fn prompt(&self, indent: u8, flags: Flags) -> bool {
+		print::prompt(self, indent, flags)
 	}
 }

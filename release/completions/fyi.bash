@@ -16,6 +16,9 @@ _fyi() {
             blank)
                 cmd+="__blank"
                 ;;
+            confirm)
+                cmd+="__confirm"
+                ;;
             debug)
                 cmd+="__debug"
                 ;;
@@ -50,7 +53,7 @@ _fyi() {
 
     case "${cmd}" in
         fyi)
-            opts=" -h -V  --help --version   blank print debug error info notice prompt success warning help"
+            opts=" -h -V  --help --version   blank print debug error info notice confirm success warning help  prompt"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -81,6 +84,21 @@ _fyi() {
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        fyi__confirm)
+            opts=" -h -V  --no-color --help --version  <QUESTION> "
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                
                 *)
                     COMPREPLY=()
                     ;;
