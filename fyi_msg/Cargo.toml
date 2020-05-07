@@ -32,15 +32,15 @@ name = "fm_ansi_code"
 harness = false
 
 [[bench]]
-name = "fm_double_time"
-harness = false
-
-[[bench]]
 name = "fm_girth_ext"
 harness = false
 
 [[bench]]
 name = "fm_msg"
+harness = false
+
+[[bench]]
+name = "fm_timestamp"
 harness = false
 
 [[bench]]

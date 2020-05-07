@@ -9,15 +9,12 @@ to make the process more ergonomical, but the methods here can be called
 directly.
 */
 
-use crate::traits::{
-	DoubleTime,
-	GirthExt,
-	StripAnsi,
-};
-use chrono::{
-	Datelike,
-	Local,
-	Timelike,
+use crate::{
+	Timestamp,
+	traits::{
+		GirthExt,
+		StripAnsi,
+	},
 };
 
 
@@ -56,141 +53,138 @@ impl Default for Flags {
 /// won't do the writer part. This helps with benchmarking, etc., but is
 /// admittedly useless in production.
 pub fn print(data: &[u8], indent: u8, flags: Flags) {
-	let mut buf: Vec<u8> = Vec::with_capacity(256);
-
-	// Start with indentation.
-	if 0 < indent {
-		buf.extend_from_slice(whitespace(indent.saturating_mul(4) as usize));
+	// Indentation is annoying. Let's get it over with. Haha.
+	if indent > 0 {
+		return print(
+			&[
+				whitespace(indent.saturating_mul(4) as usize),
+				data,
+			].concat(),
+			0,
+			flags
+		);
 	}
 
-	// Add the message.
-	if ! data.is_empty() {
-		buf.extend_from_slice(data);
-	}
-
-	// Add a timestamp?
+	// Timestamps are heavy enough to demand their own specialized creation.
 	if flags.contains(Flags::TIMESTAMPED) {
-		_print_put_timestamp(&mut buf);
+		_print_timestamped(data, flags);
 	}
-
-	// Add a newline?
-	if ! flags.contains(Flags::NO_LINE) {
-		buf.push(b'\n');
-	}
-
-	// No ANSI?
-	if flags.contains(Flags::NO_ANSI) {
-		if flags.contains(Flags::TO_STDERR) {
-			_print_stderr(&buf.strip_ansi());
-		}
-		else if ! flags.contains(Flags::TO_NOWHERE) {
-			_print_stdout(&buf.strip_ansi());
-		}
-	}
-	// Regular way!
+	// Print to `Stderr`.
 	else if flags.contains(Flags::TO_STDERR) {
-		_print_stderr(&buf);
+		_print_stderr(data, flags);
 	}
+	// Print to `Stdout`.
 	else if ! flags.contains(Flags::TO_NOWHERE) {
-		_print_stdout(&buf);
+		_print_stdout(data, flags);
 	}
 }
 
 #[cfg(feature = "interactive")]
 #[must_use]
 /// Prompt.
-pub fn prompt(data: &[u8], indent: u8, flags: Flags) -> bool {
-	let mut buf: Vec<u8> = Vec::with_capacity(usize::max(256, data.len()));
-
-	// Start with indentation.
+pub fn prompt(data: &[u8], indent: u8, mut flags: Flags) -> bool {
+	// Attach the indent and recurse.
 	if 0 < indent {
-		buf.extend_from_slice(whitespace(indent.saturating_mul(4) as usize));
+		return prompt(
+			&[
+				whitespace(indent.saturating_mul(4) as usize),
+				data,
+			].concat(),
+			0,
+			flags
+		);
 	}
 
-	// Add the message.
-	if ! data.is_empty() {
-		if flags.contains(Flags::NO_ANSI) {
-			buf.extend_from_slice(data.strip_ansi().as_ref());
-		}
-		else {
-			buf.extend_from_slice(data);
-		}
+	// Strip ANSI and recurse.
+	if flags.contains(Flags::NO_ANSI) {
+		flags.remove(Flags::NO_ANSI);
+		return prompt(&data.strip_ansi(), 0, flags);
 	}
 
-	// Timestamps, etc., are unsupported by this method.
-
+	// Actually confirm it...
 	if flags.contains(Flags::TO_NOWHERE) { false }
 	else {
 		casual::confirm(unsafe {
-			std::str::from_utf8_unchecked(&buf)
+			std::str::from_utf8_unchecked(data)
 		})
 	}
 }
 
-/// Push Timestamp.
-fn _print_put_timestamp(buf: &mut Vec<u8>) {
+/// Print Timestamped.
+fn _print_timestamped(data: &[u8], flags: Flags) {
 	let cli_width: usize = term_width();
-	let msg_width: usize = buf.count_width();
-
-	// We can fit it on one line.
-	if cli_width > msg_width + 21 {
-		buf.extend_from_slice(whitespace(cli_width - msg_width - 21));
-		buf.extend_from_slice(&b"\x1B[2m[\x1B[34m2020-00-00 00:00:00\x1B[39m]\x1B[0m"[..]);
+	let msg_width: usize = data.count_width();
+	let offset: &[u8] = if cli_width > msg_width + 21 {
+		whitespace(cli_width - msg_width - 21)
 	}
-	else {
-		buf.extend_from_slice(&b"\n\x1B[2m[\x1B[34m2020-00-00 00:00:00\x1B[39m]\x1B[0m"[..]);
+	else { &b"\n"[..] };
+
+	// Print to `Stderr`.
+	if flags.contains(Flags::TO_STDERR) {
+		_print_stderr(
+			&[
+				data,
+				offset,
+				&Timestamp::new(),
+			].concat(),
+			flags
+		);
 	}
-
-	let len = buf.len();
-	let now = Local::now();
-
-	let mut tmp = now.month().double_digit_time();
-	buf[len - 24] = tmp[0];
-	buf[len - 23] = tmp[1];
-
-	tmp = now.day().double_digit_time();
-	buf[len - 21] = tmp[0];
-	buf[len - 20] = tmp[1];
-
-	tmp = now.hour().double_digit_time();
-	buf[len - 18] = tmp[0];
-	buf[len - 17] = tmp[1];
-
-	tmp = now.minute().double_digit_time();
-	buf[len - 15] = tmp[0];
-	buf[len - 14] = tmp[1];
-
-	tmp = now.second().double_digit_time();
-	buf[len - 12] = tmp[0];
-	buf[len - 11] = tmp[1];
+	// Print to `Stdout`.
+	else if ! flags.contains(Flags::TO_NOWHERE) {
+		_print_stdout(
+			&[
+				data,
+				offset,
+				&Timestamp::new(),
+			].concat(),
+			flags
+		);
+	}
 }
 
 /// Print `Stdout`.
-fn _print_stdout(data: &[u8]) -> bool {
+fn _print_stdout(data: &[u8], mut flags: Flags) -> bool {
 	use std::io::Write;
+
+	// Strip ANSI?
+	if flags.contains(Flags::NO_ANSI) {
+		flags.remove(Flags::NO_ANSI);
+		return _print_stdout(&data.strip_ansi(), flags);
+	}
+	else if ! flags.contains(Flags::NO_LINE) {
+		flags.insert(Flags::NO_LINE);
+		return _print_stdout(&[data, &b"\n"[..]].concat(), flags);
+	}
 
 	let writer = std::io::stdout();
 	let mut handle = writer.lock();
 	if handle.write_all(data).is_ok() {
 		handle.flush().is_ok()
 	}
-	else {
-		false
-	}
+	else { false }
 }
 
 /// Print `Stderr`.
-fn _print_stderr(data: &[u8]) -> bool {
+fn _print_stderr(data: &[u8], mut flags: Flags) -> bool {
 	use std::io::Write;
+
+	// Strip ANSI?
+	if flags.contains(Flags::NO_ANSI) {
+		flags.remove(Flags::NO_ANSI);
+		return _print_stderr(&data.strip_ansi(), flags);
+	}
+	else if ! flags.contains(Flags::NO_LINE) {
+		flags.insert(Flags::NO_LINE);
+		return _print_stderr(&[data, &b"\n"[..]].concat(), flags);
+	}
 
 	let writer = std::io::stderr();
 	let mut handle = writer.lock();
 	if handle.write_all(data).is_ok() {
 		handle.flush().is_ok()
 	}
-	else {
-		false
-	}
+	else { false }
 }
 
 #[must_use]

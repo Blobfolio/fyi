@@ -24,6 +24,7 @@
 #![allow(clippy::missing_errors_doc)]
 
 mod msg;
+mod timestamp;
 
 pub mod print;
 pub mod traits;
@@ -36,3 +37,4 @@ pub use print::{
 	term_width,
 	whitespace,
 };
+pub use timestamp::Timestamp;

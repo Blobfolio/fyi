@@ -102,7 +102,7 @@ fn print(c: &mut Criterion) {
 	let msg = Msg::debug(example_str);
 	msg.print(0, Flags::NO_ANSI);
 	c.bench_function("fyi_msg::Msg::debug(\"This is...\")/print(0, Flags::NO_ANSI)", move |b| {
-		b.iter(|| msg.print(two_u8, no_ansi_flag))
+		b.iter(|| msg.print(zero_u8, no_ansi_flag))
 	});
 	println!("");
 	println!("");
@@ -110,7 +110,15 @@ fn print(c: &mut Criterion) {
 	let msg = Msg::debug(example_str);
 	msg.print(0, Flags::TIMESTAMPED);
 	c.bench_function("fyi_msg::Msg::debug(\"This is...\")/print(0, Flags::TIMESTAMPED)", move |b| {
-		b.iter(|| msg.print(two_u8, timestamped_flag))
+		b.iter(|| msg.print(zero_u8, timestamped_flag))
+	});
+	println!("");
+	println!("");
+
+	let msg = Msg::debug(example_str);
+	msg.print(1, Flags::TIMESTAMPED);
+	c.bench_function("fyi_msg::Msg::debug(\"This is...\")/print(1, Flags::TIMESTAMPED)", move |b| {
+		b.iter(|| msg.print(one_u8, timestamped_flag))
 	});
 	println!("");
 	println!("");
