@@ -60,14 +60,14 @@ fn do_blank(opts: &ArgMatches) {
 	}
 
 	let flags = if opts.is_present("stderr") {
-		Flags::TO_STDERR
+		Flags::TO_STDERR | Flags::NO_LINE
 	}
 	else {
-		Flags::NONE
+		Flags::NO_LINE
 	};
 
 	for _ in 0..count {
-		fyi_msg::print(b"", 0, flags);
+		unsafe { fyi_msg::print(b"\n", 0, flags); }
 	}
 }
 
