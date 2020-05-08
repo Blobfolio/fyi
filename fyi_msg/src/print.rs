@@ -52,7 +52,12 @@ impl Default for Flags {
 /// If `Flags::TO_NOWHERE` is set, this will still build the message, it just
 /// won't do the writer part. This helps with benchmarking, etc., but is
 /// admittedly useless in production.
-pub fn print(data: &[u8], indent: u8, flags: Flags) {
+///
+/// # Safety
+///
+/// This method accepts a raw `[u8]`; when using it, make sure the data you
+/// pass is valid UTF-8.
+pub unsafe fn print(data: &[u8], indent: u8, flags: Flags) {
 	// Indentation is annoying. Let's get it over with. Haha.
 	if indent > 0 {
 		return print(
@@ -82,7 +87,14 @@ pub fn print(data: &[u8], indent: u8, flags: Flags) {
 #[cfg(feature = "interactive")]
 #[must_use]
 /// Prompt.
-pub fn prompt(data: &[u8], indent: u8, mut flags: Flags) -> bool {
+///
+/// This is a simple print wrapper around `casual::confirm()`.
+///
+/// # Safety
+///
+/// This method accepts a raw `[u8]`; when using it, make sure the data you
+/// pass is valid UTF-8.
+pub unsafe fn prompt(data: &[u8], indent: u8, mut flags: Flags) -> bool {
 	// Attach the indent and recurse.
 	if 0 < indent {
 		return prompt(
@@ -104,9 +116,7 @@ pub fn prompt(data: &[u8], indent: u8, mut flags: Flags) -> bool {
 	// Actually confirm it...
 	if flags.contains(Flags::TO_NOWHERE) { false }
 	else {
-		casual::confirm(unsafe {
-			std::str::from_utf8_unchecked(data)
-		})
+		casual::confirm(std::str::from_utf8_unchecked(data))
 	}
 }
 
