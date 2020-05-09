@@ -48,9 +48,7 @@ impl GirthExt for [u8] {
 	#[inline]
 	/// Number of characters.
 	fn count_chars(&self) -> usize {
-		if self.is_empty() {
-			0
-		}
+		if self.is_empty() { 0 }
 		else {
 			bytecount::num_chars(self)
 		}
@@ -59,9 +57,7 @@ impl GirthExt for [u8] {
 	#[inline]
 	/// Number of lines.
 	fn count_lines(&self) -> usize {
-		if self.is_empty() {
-			0
-		}
+		if self.is_empty() { 0 }
 		else {
 			bytecount::count(self, b'\n') + 1
 		}
@@ -70,7 +66,10 @@ impl GirthExt for [u8] {
 	#[inline]
 	/// Display Width.
 	fn count_width(&self) -> usize {
-		bytecount::num_chars(&STRIPPER_BYTES.replace_all(self, regex::bytes::NoExpand(b"")))
+		if self.is_empty() { 0 }
+		else {
+			bytecount::num_chars(&STRIPPER_BYTES.replace_all(self, regex::bytes::NoExpand(b"")))
+		}
 	}
 }
 
@@ -79,9 +78,7 @@ impl GirthExt for str {
 	#[inline]
 	/// Number of characters.
 	fn count_chars(&self) -> usize {
-		if self.is_empty() {
-			0
-		}
+		if self.is_empty() { 0 }
 		else {
 			bytecount::num_chars(self.as_bytes())
 		}
@@ -90,9 +87,7 @@ impl GirthExt for str {
 	#[inline]
 	/// Number of lines.
 	fn count_lines(&self) -> usize {
-		if self.is_empty() {
-			0
-		}
+		if self.is_empty() { 0 }
 		else {
 			bytecount::count(self.as_bytes(), b'\n') + 1
 		}
@@ -101,7 +96,10 @@ impl GirthExt for str {
 	#[inline]
 	/// Display Width.
 	fn count_width(&self) -> usize {
-		bytecount::num_chars(STRIPPER.replace_all(self, "").as_bytes())
+		if self.is_empty() { 0 }
+		else {
+			bytecount::num_chars(STRIPPER.replace_all(self, "").as_bytes())
+		}
 	}
 }
 
