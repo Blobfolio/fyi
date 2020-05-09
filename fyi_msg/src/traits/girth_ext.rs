@@ -24,10 +24,7 @@ assert_eq!("\x1B[1mBjörk".count_lines(), 1);
 ```
 */
 
-use crate::traits::{
-	STRIPPER,
-	STRIPPER_BYTES,
-};
+use crate::traits::StripAnsi;
 
 
 
@@ -67,8 +64,11 @@ impl GirthExt for [u8] {
 	/// Display Width.
 	fn count_width(&self) -> usize {
 		if self.is_empty() { 0 }
+		else if ! self.contains(&27) && ! self.contains(&155) {
+			bytecount::num_chars(self)
+		}
 		else {
-			bytecount::num_chars(&STRIPPER_BYTES.replace_all(self, regex::bytes::NoExpand(b"")))
+			bytecount::num_chars(&self.strip_ansi())
 		}
 	}
 }
@@ -98,7 +98,7 @@ impl GirthExt for str {
 	fn count_width(&self) -> usize {
 		if self.is_empty() { 0 }
 		else {
-			bytecount::num_chars(STRIPPER.replace_all(self, "").as_bytes())
+			bytecount::num_chars(self.strip_ansi().as_bytes())
 		}
 	}
 }
