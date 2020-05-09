@@ -5,7 +5,7 @@ The `GirthExt` trait brings additional length-related helpers to UTF-8 string
 types:
 * `count_chars()` Returns the total number of characters.
 * `count_lines()` Returns the number of lines (`\n`-separated) the value occupies.
-* `count_width()` Essentially the same as `count_chars()`, except ANSI codes are not counted.
+* `count_width()` Returns an approximate "column width" for the string, i.e. the printable bits.
 
 ## Example:
 
@@ -24,7 +24,7 @@ assert_eq!("\x1B[1mBjörk".count_lines(), 1);
 ```
 */
 
-use crate::traits::StripAnsi;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 
 
@@ -37,6 +37,23 @@ pub trait GirthExt {
 	fn count_lines(&self) -> usize;
 
 	/// Display Width.
+	///
+	/// This method returns an *approximate* display/column width for a string.
+	/// Like every other Rust program, it uses the `unicode-width` to determine
+	/// the printable width of each character, but it also avoids certain ANSI
+	/// sequences (namely the color stylings FYI uses).
+	///
+	/// Like with `unicode-width`, it will incorrectly measure certain
+	/// combinative characters, and because this is optimized for speed around
+	/// our own use cases, it will also incorrectly measure ANSI formatting
+	/// we don't account for.
+	///
+	/// For a slightly more accurate (and slower) reading for ANSI-containing
+	/// strings, run `val.strip_ansi()` first, then calculate the width.
+	///
+	/// If you aren't using any "fat" characters, combine `val.strip_ansi()`
+	/// (if there's ANSI) with `val.count_chars()` for a simple char count,
+	/// which is more or less equivalent to display width in such cases.
 	fn count_width(&self) -> usize;
 }
 
@@ -64,11 +81,27 @@ impl GirthExt for [u8] {
 	/// Display Width.
 	fn count_width(&self) -> usize {
 		if self.is_empty() { 0 }
-		else if ! self.contains(&27) && ! self.contains(&155) {
-			bytecount::num_chars(self)
+		else if self.contains(&27) {
+			let mut in_ansi: bool = false;
+			unsafe { std::str::from_utf8_unchecked(self) }.chars()
+				.fold(0, |width, c| {
+					if in_ansi {
+						if c == 'A' || c == 'K' || c == 'm' {
+							in_ansi = false;
+						}
+						width
+					}
+					else if c == '\x1b' {
+						in_ansi = true;
+						width
+					}
+					else {
+						width + UnicodeWidthChar::width(c).unwrap_or(0)
+					}
+				})
 		}
 		else {
-			bytecount::num_chars(&self.strip_ansi())
+			UnicodeWidthStr::width(unsafe { std::str::from_utf8_unchecked(self) })
 		}
 	}
 }
@@ -98,7 +131,23 @@ impl GirthExt for str {
 	fn count_width(&self) -> usize {
 		if self.is_empty() { 0 }
 		else {
-			bytecount::num_chars(self.strip_ansi().as_bytes())
+			let mut in_ansi: bool = false;
+			self.chars()
+				.fold(0, |width, c| {
+					if in_ansi {
+						if c == 'A' || c == 'K' || c == 'm' {
+							in_ansi = false;
+						}
+						width
+					}
+					else if c == '\x1b' {
+						in_ansi = true;
+						width
+					}
+					else {
+						width + UnicodeWidthChar::width(c).unwrap_or(0)
+					}
+				})
 		}
 	}
 }
@@ -167,6 +216,7 @@ mod tests {
 		_count_width("Hello", 5);
 		_count_width("\x1B[1mHello", 5);
 		_count_width("Björk", 5);
+		_count_width("B\u{1b}[1;38;5;199mjö\x1b[0mrk", 5);
 	}
 
 	fn _count_width(text: &str, expected: usize) {
