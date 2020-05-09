@@ -16,6 +16,7 @@ use crate::{
 		StripAnsi,
 	},
 };
+use std::io::Write;
 
 
 
@@ -44,6 +45,28 @@ impl Default for Flags {
 	}
 }
 
+macro_rules! print_format_indent {
+	($data:ident, $indent:ident) => (
+		&[
+			whitespace($indent.saturating_mul(4) as usize),
+			$data,
+		].concat()
+	);
+}
+
+macro_rules! print_format_timestamp {
+	($data:ident) => (
+		&[
+			$data,
+			match term_width().saturating_sub($data.count_width() + 21) {
+				0 => &b"\n"[..],
+				space => whitespace(space)
+			},
+			&Timestamp::new(),
+		].concat()
+	);
+}
+
 /// Prepare message for print.
 ///
 /// This method mutates the data according to the prescribed flags, then sends
@@ -60,26 +83,18 @@ impl Default for Flags {
 pub unsafe fn print(data: &[u8], indent: u8, flags: Flags) {
 	// Indentation is annoying. Let's get it over with. Haha.
 	if indent > 0 {
-		return print(
-			&[
-				whitespace(indent.saturating_mul(4) as usize),
-				data,
-			].concat(),
-			0,
-			flags
-		);
+		print(print_format_indent!(data, indent), 0, flags)
 	}
-
-	// Timestamps are heavy enough to demand their own specialized creation.
-	if flags.contains(Flags::TIMESTAMPED) {
-		_print_timestamped(data, flags);
+	// Timetsamp?
+	else if flags.contains(Flags::TIMESTAMPED) {
+		print(print_format_timestamp!(data), 0, flags & !Flags::TIMESTAMPED)
 	}
 	// Print to `Stderr`.
 	else if flags.contains(Flags::TO_STDERR) {
 		_print_stderr(data, flags);
 	}
 	// Print to `Stdout`.
-	else if ! flags.contains(Flags::TO_NOWHERE) {
+	else {
 		_print_stdout(data, flags);
 	}
 }
@@ -97,65 +112,35 @@ pub unsafe fn print(data: &[u8], indent: u8, flags: Flags) {
 pub unsafe fn prompt(data: &[u8], indent: u8, flags: Flags) -> bool {
 	// Attach the indent and recurse.
 	if 0 < indent {
-		return prompt(
-			&[
-				whitespace(indent.saturating_mul(4) as usize),
-				data,
-			].concat(),
-			0,
-			flags
-		);
+		prompt(print_format_indent!(data, indent), 0, flags)
 	}
-
 	// Strip ANSI and recurse.
-	if flags.contains(Flags::NO_ANSI) {
-		return prompt(&data.strip_ansi(), 0, flags & !Flags::NO_ANSI);
+	else if flags.contains(Flags::NO_ANSI) {
+		prompt(&data.strip_ansi(), 0, flags & !Flags::NO_ANSI)
 	}
-
-	// Actually confirm it...
-	if flags.contains(Flags::TO_NOWHERE) { false }
 	else {
 		casual::confirm(std::str::from_utf8_unchecked(data))
 	}
 }
 
-/// Print Timestamped.
-///
-/// # Safety
-///
-/// This method accepts a raw `[u8]`; when using it, make sure the data you
-/// pass is valid UTF-8.
-unsafe fn _print_timestamped(data: &[u8], flags: Flags) {
-	let cli_width: usize = term_width();
-	let msg_width: usize = data.count_width();
-	let offset: &[u8] = if cli_width > msg_width + 21 {
-		whitespace(cli_width - msg_width - 21)
-	}
-	else { &b"\n"[..] };
-
-	// Print to `Stderr`.
-	if flags.contains(Flags::TO_STDERR) {
-		_print_stderr(
-			&[
-				data,
-				offset,
-				&Timestamp::new(),
-			].concat(),
-			flags
-		);
-	}
-	// Print to `Stdout`.
-	else if ! flags.contains(Flags::TO_NOWHERE) {
-		_print_stdout(
-			&[
-				data,
-				offset,
-				&Timestamp::new(),
-			].concat(),
-			flags
-		);
-	}
+#[must_use]
+/// Term Width
+pub fn term_width() -> usize {
+	// Reserve one space at the end "just in case".
+	if let Some((w, _)) = term_size::dimensions() { w - 1 }
+	else { 0 }
 }
+
+#[must_use]
+/// Whitespace maker.
+pub fn whitespace(num: usize) -> &'static [u8] {
+	static WHITES: &[u8; 255] = &[b' '; 255];
+
+	if num >= 255 { &WHITES[..] }
+	else { &WHITES[0..num] }
+}
+
+
 
 /// Print `Stdout`.
 ///
@@ -164,8 +149,6 @@ unsafe fn _print_timestamped(data: &[u8], flags: Flags) {
 /// This method accepts a raw `[u8]`; when using it, make sure the data you
 /// pass is valid UTF-8.
 unsafe fn _print_stdout(data: &[u8], flags: Flags) -> bool {
-	use std::io::Write;
-
 	// Strip ANSI?
 	if flags.contains(Flags::NO_ANSI) {
 		return _print_stdout(&data.strip_ansi(), flags & !Flags::NO_ANSI);
@@ -203,8 +186,6 @@ unsafe fn _print_stdout(data: &[u8], flags: Flags) -> bool {
 /// This method accepts a raw `[u8]`; when using it, make sure the data you
 /// pass is valid UTF-8.
 unsafe fn _print_stderr(data: &[u8], flags: Flags) -> bool {
-	use std::io::Write;
-
 	// Strip ANSI?
 	if flags.contains(Flags::NO_ANSI) {
 		return _print_stderr(&data.strip_ansi(), flags & !Flags::NO_ANSI);
@@ -219,21 +200,4 @@ unsafe fn _print_stderr(data: &[u8], flags: Flags) -> bool {
 		handle.flush().is_ok()
 	}
 	else { false }
-}
-
-#[must_use]
-/// Term Width
-pub fn term_width() -> usize {
-	// Reserve one space at the end "just in case".
-	if let Some((w, _)) = term_size::dimensions() { w - 1 }
-	else { 0 }
-}
-
-#[must_use]
-/// Whitespace maker.
-pub fn whitespace(num: usize) -> &'static [u8] {
-	static WHITES: &[u8; 255] = &[b' '; 255];
-
-	if num >= 255 { &WHITES[..] }
-	else { &WHITES[0..num] }
 }
