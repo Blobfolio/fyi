@@ -94,7 +94,7 @@ pub unsafe fn print(data: &[u8], indent: u8, flags: Flags) {
 ///
 /// This method accepts a raw `[u8]`; when using it, make sure the data you
 /// pass is valid UTF-8.
-pub unsafe fn prompt(data: &[u8], indent: u8, mut flags: Flags) -> bool {
+pub unsafe fn prompt(data: &[u8], indent: u8, flags: Flags) -> bool {
 	// Attach the indent and recurse.
 	if 0 < indent {
 		return prompt(
@@ -109,8 +109,7 @@ pub unsafe fn prompt(data: &[u8], indent: u8, mut flags: Flags) -> bool {
 
 	// Strip ANSI and recurse.
 	if flags.contains(Flags::NO_ANSI) {
-		flags.remove(Flags::NO_ANSI);
-		return prompt(&data.strip_ansi(), 0, flags);
+		return prompt(&data.strip_ansi(), 0, flags & !Flags::NO_ANSI);
 	}
 
 	// Actually confirm it...
@@ -121,7 +120,12 @@ pub unsafe fn prompt(data: &[u8], indent: u8, mut flags: Flags) -> bool {
 }
 
 /// Print Timestamped.
-fn _print_timestamped(data: &[u8], flags: Flags) {
+///
+/// # Safety
+///
+/// This method accepts a raw `[u8]`; when using it, make sure the data you
+/// pass is valid UTF-8.
+unsafe fn _print_timestamped(data: &[u8], flags: Flags) {
 	let cli_width: usize = term_width();
 	let msg_width: usize = data.count_width();
 	let offset: &[u8] = if cli_width > msg_width + 21 {
@@ -154,17 +158,17 @@ fn _print_timestamped(data: &[u8], flags: Flags) {
 }
 
 /// Print `Stdout`.
-fn _print_stdout(data: &[u8], mut flags: Flags) -> bool {
+///
+/// # Safety
+///
+/// This method accepts a raw `[u8]`; when using it, make sure the data you
+/// pass is valid UTF-8.
+unsafe fn _print_stdout(data: &[u8], flags: Flags) -> bool {
 	use std::io::Write;
 
 	// Strip ANSI?
 	if flags.contains(Flags::NO_ANSI) {
-		flags.remove(Flags::NO_ANSI);
-		return _print_stdout(&data.strip_ansi(), flags);
-	}
-	else if ! flags.contains(Flags::NO_LINE) {
-		flags.insert(Flags::NO_LINE);
-		return _print_stdout(&[data, &b"\n"[..]].concat(), flags);
+		return _print_stdout(&data.strip_ansi(), flags & !Flags::NO_ANSI);
 	}
 
 	let writer = std::io::stdout();
@@ -176,17 +180,17 @@ fn _print_stdout(data: &[u8], mut flags: Flags) -> bool {
 }
 
 /// Print `Stderr`.
-fn _print_stderr(data: &[u8], mut flags: Flags) -> bool {
+///
+/// # Safety
+///
+/// This method accepts a raw `[u8]`; when using it, make sure the data you
+/// pass is valid UTF-8.
+unsafe fn _print_stderr(data: &[u8], flags: Flags) -> bool {
 	use std::io::Write;
 
 	// Strip ANSI?
 	if flags.contains(Flags::NO_ANSI) {
-		flags.remove(Flags::NO_ANSI);
-		return _print_stderr(&data.strip_ansi(), flags);
-	}
-	else if ! flags.contains(Flags::NO_LINE) {
-		flags.insert(Flags::NO_LINE);
-		return _print_stderr(&[data, &b"\n"[..]].concat(), flags);
+		return _print_stderr(&data.strip_ansi(), flags & !Flags::NO_ANSI);
 	}
 
 	let writer = std::io::stderr();
