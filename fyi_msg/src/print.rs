@@ -93,6 +93,10 @@ pub unsafe fn print(data: &[u8], indent: u8, flags: Flags) {
 	else if flags.contains(Flags::TO_STDERR) {
 		_print_stderr(data, flags);
 	}
+	// Nowhere.
+	else if flags.contains(Flags::TO_NOWHERE) {
+		_print_nowhere(data, flags);
+	}
 	// Print to `Stdout`.
 	else {
 		_print_stdout(data, flags);
@@ -127,7 +131,7 @@ pub unsafe fn prompt(data: &[u8], indent: u8, flags: Flags) -> bool {
 /// Term Width
 pub fn term_width() -> usize {
 	// Reserve one space at the end "just in case".
-	if let Some((w, _)) = term_size::dimensions() { w - 1 }
+	if let Some((w, _)) = term_size::dimensions() { w.saturating_sub(1) }
 	else { 0 }
 }
 
@@ -149,34 +153,20 @@ pub fn whitespace(num: usize) -> &'static [u8] {
 /// This method accepts a raw `[u8]`; when using it, make sure the data you
 /// pass is valid UTF-8.
 unsafe fn _print_stdout(data: &[u8], flags: Flags) -> bool {
-	// Strip ANSI?
-	if flags.contains(Flags::NO_ANSI) {
-		return _print_stdout(&data.strip_ansi(), flags & !Flags::NO_ANSI);
-	}
+	let writer = std::io::stdout();
+	let mut handle = writer.lock();
+	_print_to(&mut handle, data, flags)
+}
 
-	// Emulate write with a sink.
-	if flags.contains(Flags::TO_NOWHERE) {
-		let mut handle = std::io::sink();
-		if ! flags.contains(Flags::NO_LINE) {
-			writeln!(handle, "{}", std::str::from_utf8_unchecked(data)).is_ok()
-		}
-		else if handle.write_all(data).is_ok() {
-			handle.flush().is_ok()
-		}
-		else { false }
-	}
-	// Go to `Stdout` proper.
-	else {
-		let writer = std::io::stdout();
-		let mut handle = writer.lock();
-		if ! flags.contains(Flags::NO_LINE) {
-			writeln!(handle, "{}", std::str::from_utf8_unchecked(data)).is_ok()
-		}
-		else if handle.write_all(data).is_ok() {
-			handle.flush().is_ok()
-		}
-		else { false }
-	}
+/// Print `Stderr`.
+///
+/// # Safety
+///
+/// This method accepts a raw `[u8]`; when using it, make sure the data you
+/// pass is valid UTF-8.
+unsafe fn _print_nowhere(data: &[u8], flags: Flags) -> bool {
+	let mut handle = std::io::sink();
+	_print_to(&mut handle, data, flags)
 }
 
 /// Print `Stderr`.
@@ -186,18 +176,26 @@ unsafe fn _print_stdout(data: &[u8], flags: Flags) -> bool {
 /// This method accepts a raw `[u8]`; when using it, make sure the data you
 /// pass is valid UTF-8.
 unsafe fn _print_stderr(data: &[u8], flags: Flags) -> bool {
-	// Strip ANSI?
-	if flags.contains(Flags::NO_ANSI) {
-		return _print_stderr(&data.strip_ansi(), flags & !Flags::NO_ANSI);
-	}
-
 	let writer = std::io::stderr();
 	let mut handle = writer.lock();
-	if ! flags.contains(Flags::NO_LINE) {
-		writeln!(handle, "{}", std::str::from_utf8_unchecked(data)).is_ok()
+	_print_to(&mut handle, data, flags)
+}
+
+/// Print To.
+///
+/// # Safety
+///
+/// This method accepts a raw `[u8]`; when using it, make sure the data you
+/// pass is valid UTF-8.
+unsafe fn _print_to<W: Write> (writer: &mut W, data: &[u8], flags: Flags) -> bool {
+	if flags.contains(Flags::NO_ANSI) {
+		_print_to(writer, &data.strip_ansi(), flags & !Flags::NO_ANSI)
 	}
-	else if handle.write_all(data).is_ok() {
-		handle.flush().is_ok()
+	else if ! flags.contains(Flags::NO_LINE) {
+		writeln!(writer, "{}", std::str::from_utf8_unchecked(data)).is_ok()
+	}
+	else if writer.write_all(data).is_ok() {
+		writer.flush().is_ok()
 	}
 	else { false }
 }
