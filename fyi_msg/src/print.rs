@@ -171,12 +171,29 @@ unsafe fn _print_stdout(data: &[u8], flags: Flags) -> bool {
 		return _print_stdout(&data.strip_ansi(), flags & !Flags::NO_ANSI);
 	}
 
-	let writer = std::io::stdout();
-	let mut handle = writer.lock();
-	if handle.write_all(data).is_ok() {
-		handle.flush().is_ok()
+	// Emulate write with a sink.
+	if flags.contains(Flags::TO_NOWHERE) {
+		let mut handle = std::io::sink();
+		if ! flags.contains(Flags::NO_LINE) {
+			writeln!(handle, "{}", std::str::from_utf8_unchecked(data)).is_ok()
+		}
+		else if handle.write_all(data).is_ok() {
+			handle.flush().is_ok()
+		}
+		else { false }
 	}
-	else { false }
+	// Go to `Stdout` proper.
+	else {
+		let writer = std::io::stdout();
+		let mut handle = writer.lock();
+		if ! flags.contains(Flags::NO_LINE) {
+			writeln!(handle, "{}", std::str::from_utf8_unchecked(data)).is_ok()
+		}
+		else if handle.write_all(data).is_ok() {
+			handle.flush().is_ok()
+		}
+		else { false }
+	}
 }
 
 /// Print `Stderr`.
@@ -195,7 +212,10 @@ unsafe fn _print_stderr(data: &[u8], flags: Flags) -> bool {
 
 	let writer = std::io::stderr();
 	let mut handle = writer.lock();
-	if handle.write_all(data).is_ok() {
+	if ! flags.contains(Flags::NO_LINE) {
+		writeln!(handle, "{}", std::str::from_utf8_unchecked(data)).is_ok()
+	}
+	else if handle.write_all(data).is_ok() {
 		handle.flush().is_ok()
 	}
 	else { false }
