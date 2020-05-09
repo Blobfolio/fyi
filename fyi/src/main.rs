@@ -80,9 +80,6 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 	if opts.is_present("no_color") {
 		flags.insert(Flags::NO_ANSI);
 	}
-	if opts.is_present("time") {
-		flags.insert(Flags::TIMESTAMPED);
-	}
 
 	let msg: Msg = match name {
 		"confirm" => Msg::confirm(opts.value_of("msg").unwrap_or("")),
@@ -112,6 +109,12 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 		}
 	}
 
+	if opts.is_present("stderr") {
+		flags.insert(Flags::TO_STDERR);
+	}
+	if opts.is_present("time") {
+		flags.insert(Flags::TIMESTAMPED);
+	}
 	msg.print(indent, flags);
 
 	// We might have a custom exit code.
