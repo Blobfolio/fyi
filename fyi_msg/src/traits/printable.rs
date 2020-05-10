@@ -17,5 +17,5 @@ pub trait Printable {
 	#[cfg(feature = "interactive")]
 	#[must_use]
 	/// Prompt.
-	fn prompt(&self, indent: u8, flags: Flags) -> bool;
+	fn prompt(&self, indent: u8) -> bool;
 }

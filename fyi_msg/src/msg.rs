@@ -188,7 +188,7 @@ impl Printable for Msg {
 
 	#[cfg(feature = "interactive")]
 	/// Prompt.
-	fn prompt(&self, indent: u8, flags: Flags) -> bool {
-		unsafe { print::prompt(self, indent, flags) }
+	fn prompt(&self, indent: u8) -> bool {
+		unsafe { print::prompt(self, indent) }
 	}
 }

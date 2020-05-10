@@ -76,11 +76,6 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 	// Build and print!
 	let indent: u8 = parse_cli_u8(opts.value_of("indent").unwrap_or("0"));
 
-	let mut flags: Flags = Flags::NONE;
-	if opts.is_present("no_color") {
-		flags.insert(Flags::NO_ANSI);
-	}
-
 	let msg: Msg = match name {
 		"confirm" => Msg::confirm(opts.value_of("msg").unwrap_or("")),
 		"debug" => Msg::debug(opts.value_of("msg").unwrap_or("")),
@@ -101,7 +96,7 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 
 	// Prompt.
 	if "confirm" == name {
-		if msg.prompt(indent, flags) {
+		if msg.prompt(indent) {
 			return;
 		}
 		else {
@@ -109,6 +104,7 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 		}
 	}
 
+	let mut flags: Flags = Flags::NONE;
 	if opts.is_present("stderr") {
 		flags.insert(Flags::TO_STDERR);
 	}

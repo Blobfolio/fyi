@@ -11,10 +11,7 @@ directly.
 
 use crate::{
 	Timestamp,
-	traits::{
-		GirthExt,
-		StripAnsi,
-	},
+	traits::GirthExt,
 };
 use std::io::Write;
 
@@ -22,19 +19,15 @@ use std::io::Write;
 
 bitflags::bitflags! {
 	/// Print flags.
-	pub struct Flags: u32 {
+	pub struct Flags: u16 {
 		/// Empty flag.
-		const NONE        = 0b0000_0000;
-		/// Strip ANSI formatting.
-		const NO_ANSI     = 0b0000_0001;
+		const NONE        = 0b0000;
 		/// Do not append a new line.
-		const NO_LINE     = 0b0000_0010;
+		const NO_LINE     = 0b0010;
 		/// Include a local timestamp.
-		const TIMESTAMPED = 0b0000_0100;
-		/// Do not actually print anything. This is meant for debugging only.
-		const TO_NOWHERE  = 0b0000_1000;
+		const TIMESTAMPED = 0b0100;
 		/// Send to `Stderr` instead of `Stdout`.
-		const TO_STDERR   = 0b0001_0000;
+		const TO_STDERR   = 0b1000;
 	}
 }
 
@@ -67,39 +60,71 @@ macro_rules! print_format_timestamp {
 	);
 }
 
+macro_rules! print_format_indent_and_timestamp {
+	($data:ident, $indent:ident) => {{
+		let tmp: usize = $indent.saturating_mul(4) as usize;
+		&[
+			whitespace(tmp),
+			$data,
+			match term_width().saturating_sub(tmp + $data.count_width() + 21) {
+				0 => &b"\n"[..],
+				space => whitespace(space)
+			},
+			&Timestamp::new(),
+		].concat()
+	}};
+}
+
+macro_rules! print_format {
+	($handle:ident, $data:ident, $indent:ident, $flags:ident) => {
+		// Indentation is annoying. Let's get it over with. Haha.
+		if $indent > 0 {
+			if $flags.contains(Flags::TIMESTAMPED) {
+				_print_to(
+					&mut $handle,
+					print_format_indent_and_timestamp!($data, $indent),
+					$flags
+				)
+			}
+			else {
+				_print_to(
+					&mut $handle,
+					print_format_indent!($data, $indent),
+					$flags
+				)
+			}
+		}
+		// Timetsamp?
+		else if $flags.contains(Flags::TIMESTAMPED) {
+			_print_to(
+				&mut $handle,
+				print_format_timestamp!($data),
+				$flags
+			)
+		}
+		else {
+			_print_to(&mut $handle, $data, $flags)
+		}
+	};
+}
+
 /// Prepare message for print.
 ///
 /// This method mutates the data according to the prescribed flags, then sends
 /// it to the right writer for output.
-///
-/// If `Flags::TO_NOWHERE` is set, this will still build the message, it just
-/// won't do the writer part. This helps with benchmarking, etc., but is
-/// admittedly useless in production.
 ///
 /// # Safety
 ///
 /// This method accepts a raw `[u8]`; when using it, make sure the data you
 /// pass is valid UTF-8.
 pub unsafe fn print(data: &[u8], indent: u8, flags: Flags) {
-	// Indentation is annoying. Let's get it over with. Haha.
-	if indent > 0 {
-		print(print_format_indent!(data, indent), 0, flags)
-	}
-	// Timetsamp?
-	else if flags.contains(Flags::TIMESTAMPED) {
-		print(print_format_timestamp!(data), 0, flags & !Flags::TIMESTAMPED)
-	}
 	// Print to `Stderr`.
-	else if flags.contains(Flags::TO_STDERR) {
-		_print_stderr(data, flags);
-	}
-	// Nowhere.
-	else if flags.contains(Flags::TO_NOWHERE) {
-		_print_nowhere(data, flags);
+	if flags.contains(Flags::TO_STDERR) {
+		_print_stderr(data, indent, flags);
 	}
 	// Print to `Stdout`.
 	else {
-		_print_stdout(data, flags);
+		_print_stdout(data, indent, flags);
 	}
 }
 
@@ -113,14 +138,10 @@ pub unsafe fn print(data: &[u8], indent: u8, flags: Flags) {
 ///
 /// This method accepts a raw `[u8]`; when using it, make sure the data you
 /// pass is valid UTF-8.
-pub unsafe fn prompt(data: &[u8], indent: u8, flags: Flags) -> bool {
+pub unsafe fn prompt(data: &[u8], indent: u8) -> bool {
 	// Attach the indent and recurse.
 	if 0 < indent {
-		prompt(print_format_indent!(data, indent), 0, flags)
-	}
-	// Strip ANSI and recurse.
-	else if flags.contains(Flags::NO_ANSI) {
-		prompt(&data.strip_ansi(), 0, flags & !Flags::NO_ANSI)
+		prompt(print_format_indent!(data, indent), 0)
 	}
 	else {
 		casual::confirm(std::str::from_utf8_unchecked(data))
@@ -146,27 +167,29 @@ pub fn whitespace(num: usize) -> &'static [u8] {
 
 
 
+#[cfg(not(feature = "bench"))]
 /// Print `Stdout`.
 ///
 /// # Safety
 ///
 /// This method accepts a raw `[u8]`; when using it, make sure the data you
 /// pass is valid UTF-8.
-unsafe fn _print_stdout(data: &[u8], flags: Flags) -> bool {
+unsafe fn _print_stdout(data: &[u8], indent: u8, flags: Flags) -> bool {
 	let writer = std::io::stdout();
 	let mut handle = writer.lock();
-	_print_to(&mut handle, data, flags)
+	print_format!(handle, data, indent, flags)
 }
 
-/// Print `Stderr`.
+#[cfg(feature = "bench")]
+/// Print `Sink`.
 ///
 /// # Safety
 ///
 /// This method accepts a raw `[u8]`; when using it, make sure the data you
 /// pass is valid UTF-8.
-unsafe fn _print_nowhere(data: &[u8], flags: Flags) -> bool {
+unsafe fn _print_stdout(data: &[u8], indent: u8, flags: Flags) -> bool {
 	let mut handle = std::io::sink();
-	_print_to(&mut handle, data, flags)
+	print_format!(handle, data, indent, flags)
 }
 
 /// Print `Stderr`.
@@ -175,10 +198,10 @@ unsafe fn _print_nowhere(data: &[u8], flags: Flags) -> bool {
 ///
 /// This method accepts a raw `[u8]`; when using it, make sure the data you
 /// pass is valid UTF-8.
-unsafe fn _print_stderr(data: &[u8], flags: Flags) -> bool {
+unsafe fn _print_stderr(data: &[u8], indent: u8, flags: Flags) -> bool {
 	let writer = std::io::stderr();
 	let mut handle = writer.lock();
-	_print_to(&mut handle, data, flags)
+	print_format!(handle, data, indent, flags)
 }
 
 /// Print To.
@@ -188,10 +211,7 @@ unsafe fn _print_stderr(data: &[u8], flags: Flags) -> bool {
 /// This method accepts a raw `[u8]`; when using it, make sure the data you
 /// pass is valid UTF-8.
 unsafe fn _print_to<W: Write> (writer: &mut W, data: &[u8], flags: Flags) -> bool {
-	if flags.contains(Flags::NO_ANSI) {
-		_print_to(writer, &data.strip_ansi(), flags & !Flags::NO_ANSI)
-	}
-	else if ! flags.contains(Flags::NO_LINE) {
+	if ! flags.contains(Flags::NO_LINE) {
 		writeln!(writer, "{}", std::str::from_utf8_unchecked(data)).is_ok()
 	}
 	else if writer.write_all(data).is_ok() {
