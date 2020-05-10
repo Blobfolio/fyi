@@ -111,7 +111,6 @@ bench BENCH="" FILTER="":
 	"{{ cargo_bin }}" blank -c 2
 	"{{ cargo_bin }}" blank -e -c 2
 	"{{ cargo_bin }}" debug -i 1 -t "Instrumenting!"
-	"{{ cargo_bin }}" debug -i 1 --no-color "Instrumenting!"
 	"{{ cargo_bin }}" task "Example task."
 	"{{ cargo_bin }}" error "We're doing what we're meant to."
 	"{{ cargo_bin }}" error -e 1 "We're doing what we're meant to." || true
@@ -120,9 +119,8 @@ bench BENCH="" FILTER="":
 	"{{ cargo_bin }}" print "Nothing doing here."
 	"{{ cargo_bin }}" print -p "Custom" -c 199 "Nothing doing here."
 	"{{ cargo_bin }}" success "Very nearly there now!"
-	"{{ cargo_bin }}" warning -t "This is the last one."
-	"{{ cargo_bin }}" warning --no-color -t "Color has been removed from the output."
-	"{{ cargo_bin }}" warning --no-color -t "Euclid Apollonius of Perga courage of our questions brain is the seed of intelligence quasar tendrils of gossamer clouds. The carbon in our apple pies not a sunrise but a galaxyrise tesseract white dwarf the sky calls to us star stuff harvesting star light. Stirred by starlight hearts of the stars made in the interiors of collapsing stars Tunguska event the ash of stellar alchemy with pretty stories for which there's little good evidence and billions upon billions upon billions upon billions upon billions upon billions upon billions."
+	"{{ cargo_bin }}" warning --stderr -t "This is the last one."
+	"{{ cargo_bin }}" warning -i 4 -t "Euclid Apollonius of Perga courage of our questions brain is the seed of intelligence quasar tendrils of gossamer clouds. The carbon in our apple pies not a sunrise but a galaxyrise tesseract white dwarf the sky calls to us star stuff harvesting star light. Stirred by starlight hearts of the stars made in the interiors of collapsing stars Tunguska event the ash of stellar alchemy with pretty stories for which there's little good evidence and billions upon billions upon billions upon billions upon billions upon billions upon billions."
 	"{{ cargo_bin }}" done "We actually are (almost) done!"
 	"{{ cargo_bin }}" -h
 	"{{ cargo_bin }}" -V
