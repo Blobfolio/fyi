@@ -33,6 +33,7 @@ pub use msg::Msg;
 pub use print::{
 	Flags,
 	print,
+	print_to,
 	prompt,
 	term_width,
 	whitespace,

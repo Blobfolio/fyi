@@ -80,14 +80,14 @@ macro_rules! print_format {
 		// Indentation is annoying. Let's get it over with. Haha.
 		if $indent > 0 {
 			if $flags.contains(Flags::TIMESTAMPED) {
-				_print_to(
+				print_to(
 					&mut $handle,
 					print_format_indent_and_timestamp!($data, $indent),
 					$flags
 				)
 			}
 			else {
-				_print_to(
+				print_to(
 					&mut $handle,
 					print_format_indent!($data, $indent),
 					$flags
@@ -96,14 +96,14 @@ macro_rules! print_format {
 		}
 		// Timetsamp?
 		else if $flags.contains(Flags::TIMESTAMPED) {
-			_print_to(
+			print_to(
 				&mut $handle,
 				print_format_timestamp!($data),
 				$flags
 			)
 		}
 		else {
-			_print_to(&mut $handle, $data, $flags)
+			print_to(&mut $handle, $data, $flags)
 		}
 	};
 }
@@ -126,6 +126,22 @@ pub unsafe fn print(data: &[u8], indent: u8, flags: Flags) {
 	else {
 		_print_stdout(data, indent, flags);
 	}
+}
+
+/// Print To.
+///
+/// # Safety
+///
+/// This method accepts a raw `[u8]`; when using it, make sure the data you
+/// pass is valid UTF-8.
+pub unsafe fn print_to<W: Write> (writer: &mut W, data: &[u8], flags: Flags) -> bool {
+	if ! flags.contains(Flags::NO_LINE) {
+		writeln!(writer, "{}", std::str::from_utf8_unchecked(data)).is_ok()
+	}
+	else if writer.write_all(data).is_ok() {
+		writer.flush().is_ok()
+	}
+	else { false }
 }
 
 #[cfg(feature = "interactive")]
@@ -202,20 +218,4 @@ unsafe fn _print_stderr(data: &[u8], indent: u8, flags: Flags) -> bool {
 	let writer = std::io::stderr();
 	let mut handle = writer.lock();
 	print_format!(handle, data, indent, flags)
-}
-
-/// Print To.
-///
-/// # Safety
-///
-/// This method accepts a raw `[u8]`; when using it, make sure the data you
-/// pass is valid UTF-8.
-unsafe fn _print_to<W: Write> (writer: &mut W, data: &[u8], flags: Flags) -> bool {
-	if ! flags.contains(Flags::NO_LINE) {
-		writeln!(writer, "{}", std::str::from_utf8_unchecked(data)).is_ok()
-	}
-	else if writer.write_all(data).is_ok() {
-		writer.flush().is_ok()
-	}
-	else { false }
 }
