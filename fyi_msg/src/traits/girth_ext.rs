@@ -24,7 +24,7 @@ assert_eq!("\x1B[1mBjörk".count_lines(), 1);
 ```
 */
 
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use unicode_width::UnicodeWidthChar;
 
 
 
@@ -77,11 +77,10 @@ impl GirthExt for [u8] {
 		}
 	}
 
-	#[inline]
 	/// Display Width.
 	fn count_width(&self) -> usize {
 		if self.is_empty() { 0 }
-		else if self.contains(&27) {
+		else {
 			let mut in_ansi: bool = false;
 			unsafe { std::str::from_utf8_unchecked(self) }.chars()
 				.fold(0, |width, c| {
@@ -99,9 +98,6 @@ impl GirthExt for [u8] {
 						width + UnicodeWidthChar::width(c).unwrap_or(0)
 					}
 				})
-		}
-		else {
-			UnicodeWidthStr::width(unsafe { std::str::from_utf8_unchecked(self) })
 		}
 	}
 }
@@ -126,7 +122,6 @@ impl GirthExt for str {
 		}
 	}
 
-	#[inline]
 	/// Display Width.
 	fn count_width(&self) -> usize {
 		if self.is_empty() { 0 }
