@@ -167,7 +167,7 @@ pub fn whitespace(num: usize) -> &'static [u8] {
 
 
 
-#[cfg(not(feature = "bench"))]
+#[cfg(not(feature = "stdout_sinkhole"))]
 /// Print `Stdout`.
 ///
 /// # Safety
@@ -180,7 +180,7 @@ unsafe fn _print_stdout(data: &[u8], indent: u8, flags: Flags) -> bool {
 	print_format!(handle, data, indent, flags)
 }
 
-#[cfg(feature = "bench")]
+#[cfg(feature = "stdout_sinkhole")]
 /// Print `Sink`.
 ///
 /// # Safety

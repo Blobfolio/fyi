@@ -28,6 +28,7 @@ optional = true
 [features]
 default = []
 interactive = [ "casual" ]
+stdout_sinkhole = []
 
 [dev-dependencies]
 criterion = "*"
