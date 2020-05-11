@@ -30,11 +30,7 @@ pub mod print;
 pub mod traits;
 
 pub use msg::Msg;
-pub use print::{
-	Flags,
-	print,
-	print_to,
-};
+pub use print::Flags;
 
 #[cfg(feature = "interactive")]
 pub use print::prompt;
@@ -43,12 +39,10 @@ pub use timestamp::Timestamp;
 
 /// Miscellaneous utility classes.
 pub mod utility {
-	#[must_use]
-	#[inline]
-	/// Hash Calc.
-	pub fn hash(t: &[u8]) -> u64 {
-		seahash::hash(t)
-	}
+	pub use super::print::{
+		print,
+		print_to,
+	};
 
 	/// In-Place u8 Slice Replacement
 	///

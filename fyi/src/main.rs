@@ -30,6 +30,7 @@ use fyi_msg::{
 	Flags,
 	Msg,
 	traits::Printable,
+	utility,
 };
 use std::process;
 
@@ -67,7 +68,7 @@ fn do_blank(opts: &ArgMatches) {
 	};
 
 	for _ in 0..count {
-		unsafe { fyi_msg::print(b"\n", 0, flags); }
+		unsafe { utility::print(b"\n", 0, flags); }
 	}
 }
 
