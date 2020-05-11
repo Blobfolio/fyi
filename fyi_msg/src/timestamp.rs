@@ -129,7 +129,6 @@ impl Timestamp {
 	/// Time Number to String.
 	pub fn time_format_dd(num: u32) -> &'static [u8] {
 		match num {
-			0 => b"00",
 			1 => b"01",
 			2 => b"02",
 			3 => b"03",
@@ -189,7 +188,7 @@ impl Timestamp {
 			57 => b"57",
 			58 => b"58",
 			59 => b"59",
-			_ => b"",
+			_ => b"00",
 		}
 	}
 }
@@ -205,7 +204,7 @@ mod tests {
 		_time_format_dd(1, "01");
 		_time_format_dd(9, "09");
 		_time_format_dd(50, "50");
-		_time_format_dd(60, "");
+		_time_format_dd(60, "00");
 	}
 
 	fn _time_format_dd(num: u32, expected: &str) {
