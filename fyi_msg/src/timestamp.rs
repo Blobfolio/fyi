@@ -16,6 +16,7 @@ println({}, Timestamp::new());
 ```
 */
 
+use crate::utility;
 use std::{
 	borrow::Borrow,
 	fmt,
@@ -84,20 +85,6 @@ impl fmt::Display for Timestamp {
 	}
 }
 
-// The fastest way to write our date bits to the buffer is by index,
-// which requires some repetitive code best offloaded to a macro.
-macro_rules! write_time_chunk {
-	($buf:ident, $var:ident, $val:expr, $start:literal, $end:literal) => {
-		$var = Timestamp::time_format_dd($val);
-		if $buf[$start] != $var[0] {
-			$buf[$start] = $var[0];
-		}
-		if $buf[$end] != $var[1] {
-			$buf[$end] = $var[1];
-		}
-	};
-}
-
 impl Timestamp {
 	#[must_use]
 	/// New timestamp.
@@ -113,13 +100,12 @@ impl Timestamp {
 
 		// Note: the shortcut we're taking to patch in the year will require
 		// revisiting prior to 2060. Haha.
-		let mut tmp;
-		write_time_chunk!(buf, tmp, (now.year() as u32).saturating_sub(2000), 12, 13);
-		write_time_chunk!(buf, tmp, now.month(), 15, 16);
-		write_time_chunk!(buf, tmp, now.day(), 18, 19);
-		write_time_chunk!(buf, tmp, now.hour(), 21, 22);
-		write_time_chunk!(buf, tmp, now.minute(), 24, 25);
-		write_time_chunk!(buf, tmp, now.second(), 27, 28);
+		utility::slice_swap(&mut buf[12..14], Timestamp::time_format_dd((now.year() as u32).saturating_sub(2000)));
+		utility::slice_swap(&mut buf[15..17], Timestamp::time_format_dd(now.month()));
+		utility::slice_swap(&mut buf[18..20], Timestamp::time_format_dd(now.day()));
+		utility::slice_swap(&mut buf[21..23], Timestamp::time_format_dd(now.hour()));
+		utility::slice_swap(&mut buf[24..26], Timestamp::time_format_dd(now.minute()));
+		utility::slice_swap(&mut buf[27..29], Timestamp::time_format_dd(now.second()));
 
 		// Done!
 		Self(buf)

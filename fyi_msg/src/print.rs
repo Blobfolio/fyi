@@ -12,6 +12,7 @@ directly.
 use crate::{
 	Timestamp,
 	traits::GirthExt,
+	utility,
 };
 use std::io::Write;
 
@@ -41,7 +42,7 @@ impl Default for Flags {
 macro_rules! print_format_indent {
 	($data:ident, $indent:ident) => (
 		&[
-			whitespace($indent.saturating_mul(4) as usize),
+			utility::whitespace($indent.saturating_mul(4) as usize),
 			$data,
 		].concat()
 	);
@@ -51,9 +52,9 @@ macro_rules! print_format_timestamp {
 	($data:ident) => (
 		&[
 			$data,
-			match term_width().saturating_sub($data.count_width() + 21) {
+			match utility::term_width().saturating_sub($data.count_width() + 21) {
 				0 => &b"\n"[..],
-				space => whitespace(space)
+				space => utility::whitespace(space)
 			},
 			&Timestamp::new(),
 		].concat()
@@ -64,11 +65,11 @@ macro_rules! print_format_indent_and_timestamp {
 	($data:ident, $indent:ident) => {{
 		let tmp: usize = $indent.saturating_mul(4) as usize;
 		&[
-			whitespace(tmp),
+			utility::whitespace(tmp),
 			$data,
-			match term_width().saturating_sub(tmp + $data.count_width() + 21) {
+			match utility::term_width().saturating_sub(tmp + $data.count_width() + 21) {
 				0 => &b"\n"[..],
-				space => whitespace(space)
+				space => utility::whitespace(space)
 			},
 			&Timestamp::new(),
 		].concat()
@@ -162,23 +163,6 @@ pub unsafe fn prompt(data: &[u8], indent: u8) -> bool {
 	else {
 		casual::confirm(std::str::from_utf8_unchecked(data))
 	}
-}
-
-#[must_use]
-/// Term Width
-pub fn term_width() -> usize {
-	// Reserve one space at the end "just in case".
-	if let Some((w, _)) = term_size::dimensions() { w.saturating_sub(1) }
-	else { 0 }
-}
-
-#[must_use]
-/// Whitespace maker.
-pub fn whitespace(num: usize) -> &'static [u8] {
-	static WHITES: &[u8; 255] = &[b' '; 255];
-
-	if num >= 255 { &WHITES[..] }
-	else { &WHITES[0..num] }
 }
 
 
