@@ -162,13 +162,14 @@ bench BENCH="" FILTER="":
 	[ ! -d "{{ justfile_directory() }}/target" ] || rm -rf "{{ justfile_directory() }}/target"
 	[ ! -d "{{ pkg_dir1 }}/target" ] || rm -rf "{{ pkg_dir1 }}/target"
 	[ ! -d "{{ pkg_dir2 }}/target" ] || rm -rf "{{ pkg_dir2 }}/target"
-	# [ ! -d "{{ pkg_dir3 }}/target" ] || rm -rf "{{ pkg_dir3 }}/target"
+	[ ! -d "{{ pkg_dir3 }}/target" ] || rm -rf "{{ pkg_dir3 }}/target"
 
 
 # Clippy.
 @clippy:
 	clear
 	RUSTFLAGS="{{ rustflags }}" cargo clippy \
+		--workspace \
 		--release \
 		--all-features \
 		--target x86_64-unknown-linux-gnu \

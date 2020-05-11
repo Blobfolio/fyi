@@ -16,6 +16,7 @@ path = "../fyi_msg"
 
 [features]
 default = []
+stdout_sinkhole = []
 
 [dev-dependencies]
 criterion = "*"
@@ -23,6 +24,10 @@ rayon = "*"
 
 [[bench]]
 name = "fp_lapsed"
+harness = false
+
+[[bench]]
+name = "fp_progress"
 harness = false
 
 [[example]]

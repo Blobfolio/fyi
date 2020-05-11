@@ -85,11 +85,11 @@ fn main() {
 	const SET_MSG_TARGET: f64 = 34.0 / 44.0;
 
 	// Do our "work".
-	presidents.par_iter().for_each(|(p, d)| {
-		bar.clone().add_task(*p);
+	presidents.into_par_iter().for_each(|(p, d)| {
+		bar.clone().add_task(p);
 
 		// Simulate processing overhead.
-		let pause: u64 = (*d as f64 / FOUR_YEARS * 1000.0) as u64;
+		let pause: u64 = (d as f64 / FOUR_YEARS * 1000.0) as u64;
 		thread::sleep(Duration::from_millis(pause));
 
 		// Change the message as we get to the end.
@@ -107,5 +107,5 @@ fn main() {
 	handle.join().unwrap();
 
 	// Print a quick summary.
-	// TODO: bar.finished_in();
+	bar.finished_in();
 }

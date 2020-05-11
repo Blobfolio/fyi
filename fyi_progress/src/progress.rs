@@ -18,8 +18,9 @@ use fyi_msg::{
 	traits::GirthExt,
 	utility,
 };
-use indexmap::set::IndexSet;
+use indexmap::map::IndexMap;
 use std::{
+	borrow::Borrow,
 	sync::{
 		Arc,
 		Mutex,
@@ -39,24 +40,28 @@ use std::{
 #[derive(Debug, Clone)]
 /// Progress Bar (Internal)
 struct ProgressInner {
+	msg: Vec<u8>,
+	time: Instant,
 	done: u64,
 	total: u64,
-	time: Instant,
-	msg: Vec<u8>,
-	tasks: IndexSet<String>,
-	last: Vec<u8>,
+	tasks: IndexMap<u64, Vec<u8>>,
+	last_hash: u64,
+	last_lines: usize,
+	tick_lock: bool,
 }
 
 impl Default for ProgressInner {
 	/// Default.
 	fn default() -> Self {
 		ProgressInner {
+			msg: Vec::new(),
+			time: Instant::now(),
 			done: 0,
 			total: 0,
-			time: Instant::now(),
-			msg: Vec::new(),
-			tasks: IndexSet::new(),
-			last: Vec::new(),
+			tasks: IndexMap::new(),
+			last_hash: 0,
+			last_lines: 0,
+			tick_lock: false,
 		}
 	}
 }
@@ -69,8 +74,19 @@ impl ProgressInner {
 	}
 
 	/// Add task.
-	pub fn add_task<T: Into<String>> (&mut self, task: T) {
-		self.tasks.insert(task.into());
+	pub fn add_task<T: Borrow<str>> (&mut self, task: T) {
+		// Each task line starts with: "\n    ↳ "
+		static INTRO: &[u8] = &[10, 32, 32, 32, 32, 27, 91, 51, 53, 109, 226, 134, 179, 32];
+
+		let task = task.borrow().as_bytes();
+		self.tasks.insert(
+			utility::hash(task),
+			[
+				INTRO,
+				task,
+				b"\x1B[0m",
+			].concat()
+		);
 	}
 
 	/// Increment Done.
@@ -95,8 +111,8 @@ impl ProgressInner {
 	}
 
 	/// Remove task.
-	pub fn remove_task<T: AsRef<str>> (&mut self, task: T) {
-		self.tasks.remove(task.as_ref());
+	pub fn remove_task<T: Borrow<str>> (&mut self, task: T) {
+		self.tasks.remove(&utility::hash(task.borrow().as_bytes()));
 	}
 
 	/// Set done.
@@ -117,7 +133,8 @@ impl ProgressInner {
 		if self.msg != &**msg {
 			self.msg.clear();
 			if ! msg.is_empty() {
-				self.msg.extend_from_slice(&[&**msg, b"\n"].concat());
+				self.msg.extend_from_slice(&**msg);
+				self.msg.push(b'\n');
 			}
 		}
 	}
@@ -140,9 +157,10 @@ impl ProgressInner {
 	/// Tick.
 	pub fn tick(&mut self) {
 		// Easy bail.
-		if ! self.is_running() {
+		if self.tick_lock || ! self.is_running() {
 			return;
 		}
+		self.tick_lock = true;
 
 		// There's a message.
 		if ! self.msg.is_empty() {
@@ -151,7 +169,7 @@ impl ProgressInner {
 				self._print(&[
 					&*self.msg,
 					&*self._tick_bar(),
-				].concat())
+				].concat());
 			}
 			// All three.
 			else {
@@ -159,51 +177,56 @@ impl ProgressInner {
 					&*self.msg,
 					&*self._tick_bar(),
 					&*self._tick_tasks(),
-				].concat())
+				].concat());
 			}
 		}
 		// Just the bar.
 		else if self.tasks.is_empty() {
-			self._print(&self._tick_bar())
+			self._print(&self._tick_bar());
 		}
 		// Bar and tasks.
 		else {
 			self._print(&[
 				self._tick_bar(),
 				self._tick_tasks(),
-			].concat())
+			].concat());
 		}
+
+		self.tick_lock = false;
 	}
 
 	/// Print.
 	fn _print(&mut self, text: &[u8]) {
-		// No change?
-		if self.last == text {
+		// We don't need to reprint if nothing's changed since last time.
+		let hash: u64 = utility::hash(text);
+		if self.last_hash == hash {
 			return;
 		}
+		self.last_hash = hash;
 
-		// Did we do something last time?
-		if ! self.last.is_empty() {
-			cls(self.last.count_lines());
+		// Clear old lines.
+		if 0 != self.last_lines {
+			cls(self.last_lines);
 
 			// If there's no message, we're done!
 			if text.is_empty() {
-				self.last.clear();
+				self.last_lines = 0;
 				return;
 			}
 		}
-
-		// Update our cached copy.
-		self.last.clear();
-		self.last.extend_from_slice(text);
+		self.last_lines = text.count_lines();
 
 		// We'll be sending to `Stderr`.
-		let writer = std::io::stderr();
-		let mut handle = writer.lock();
+		#[cfg(not(feature = "stdout_sinkhole"))] let writer = std::io::stderr();
+		#[cfg(not(feature = "stdout_sinkhole"))] let mut handle = writer.lock();
+
+		// JK, sinkhole is used for benchmarking.
+		#[cfg(feature = "stdout_sinkhole")] let mut handle = std::io::sink();
+
 		unsafe {
 			print_to(
 				&mut handle,
-				&self.last,
+				text,
 				Flags::NONE
 			);
 		}
@@ -340,18 +363,11 @@ impl ProgressInner {
 
 	/// Tick tasks.
 	fn _tick_tasks(&self) -> Vec<u8> {
-		// Each task line starts with: "\n    ↳ "
-		static INTRO: &[u8] = &[10, 32, 32, 32, 32, 27, 91, 51, 53, 109, 226, 134, 179, 32];
-
-		self.tasks.iter()
-			.flat_map(|t| {
-				[
-					INTRO,
-					t.as_bytes(),
-					b"\x1B[0m",
-				].concat()
-			})
-			.collect()
+		let mut buf: Vec<u8> = Vec::with_capacity(256);
+		for i in self.tasks.values() {
+			buf.extend_from_slice(&i[..]);
+		}
+		buf
 	}
 }
 
@@ -365,7 +381,10 @@ impl Progress {
 	#[must_use]
 	/// New Progress!
 	pub fn new(msg: Option<Msg>, total: u64) -> Self {
-		if let Some(msg) = msg {
+		if 0 == total {
+			Progress::default()
+		}
+		else if let Some(msg) = msg {
 			Progress(Mutex::new(ProgressInner {
 				msg: [&*msg, b"\n"].concat(),
 				total,
@@ -380,23 +399,40 @@ impl Progress {
 		}
 	}
 
-	#[must_use]
-	/// Is Running.
-	pub fn is_running(&self) -> bool {
-		let ptr = self.0.lock().unwrap();
-		ptr.is_running()
-	}
-
 	/// Add task.
-	pub fn add_task<T: Into<String>> (&self, task: T) {
+	pub fn add_task<T: Borrow<str>> (&self, task: T) {
 		let mut ptr = self.0.lock().unwrap();
 		ptr.add_task(task)
+	}
+
+	/// Finished in.
+	pub fn finished_in(&self) {
+		use fyi_msg::traits::Printable;
+
+		let ptr = self.0.lock().unwrap();
+		if ! ptr.is_running() {
+			Msg::crunched([
+				"Finished in ",
+				unsafe { std::str::from_utf8_unchecked(&lapsed::full(
+					ptr.time.elapsed().as_secs() as u32
+				))},
+				".",
+			].concat())
+				.print(0, Flags::TO_STDERR);
+		}
 	}
 
 	/// Increment Done.
 	pub fn increment(&self, num: u64) {
 		let mut ptr = self.0.lock().unwrap();
 		ptr.increment(num)
+	}
+
+	#[must_use]
+	/// Is Running.
+	pub fn is_running(&self) -> bool {
+		let ptr = self.0.lock().unwrap();
+		ptr.is_running()
 	}
 
 	#[must_use]
@@ -407,7 +443,7 @@ impl Progress {
 	}
 
 	/// Remove task.
-	pub fn remove_task<T: AsRef<str>> (&self, task: T) {
+	pub fn remove_task<T: Borrow<str>> (&self, task: T) {
 		let mut ptr = self.0.lock().unwrap();
 		ptr.remove_task(task)
 	}
@@ -456,7 +492,7 @@ impl Progress {
 	}
 
 	/// Update.
-	pub fn update<T: AsRef<str>> (&self, num: u64, msg: Option<Msg>, task: Option<T>) {
+	pub fn update<T: Borrow<str>> (&self, num: u64, msg: Option<Msg>, task: Option<T>) {
 		let mut ptr = self.0.lock().unwrap();
 		if num > 0 {
 			ptr.increment(num);
@@ -489,8 +525,11 @@ fn cls(num: usize) {
 	];
 
 	// We'll be sending to `Stderr`.
-	let writer = std::io::stderr();
-	let mut handle = writer.lock();
+	#[cfg(not(feature = "stdout_sinkhole"))] let writer = std::io::stderr();
+	#[cfg(not(feature = "stdout_sinkhole"))] let mut handle = writer.lock();
+
+	// JK, sinkhole is used for benchmarking.
+	#[cfg(feature = "stdout_sinkhole")] let mut handle = std::io::sink();
 
 	if num <= 9 {
 		unsafe {
