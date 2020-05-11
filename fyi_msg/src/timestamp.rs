@@ -95,7 +95,8 @@ impl Timestamp {
 			Timelike,
 		};
 
-		let mut buf: Vec<u8> = b"\x1B[2m[\x1B[34m2000-00-00 00:00:00\x1B[39m]\x1B[0m".to_vec();
+		// This is equivalent to "\x1B[2m[\x1B[34m2000-00-00 00:00:00\x1B[39m]\x1B[0m"
+		let mut buf: Vec<u8> = vec![27, 91, 50, 109, 91, 27, 91, 51, 52, 109, 50, 48, 48, 48, 45, 48, 48, 45, 48, 48, 32, 48, 48, 58, 48, 48, 58, 48, 48, 27, 91, 51, 57, 109, 93, 27, 91, 48, 109];
 		let now = Local::now();
 
 		// Note: the shortcut we're taking to patch in the year will require
