@@ -43,6 +43,13 @@ pub use timestamp::Timestamp;
 
 /// Miscellaneous utility classes.
 pub mod utility {
+	#[must_use]
+	#[inline]
+	/// Hash Calc.
+	pub fn hash(t: &[u8]) -> u64 {
+		seahash::hash(t)
+	}
+
 	/// In-Place u8 Slice Replacement
 	///
 	/// Note, the two sides must have the same length.
