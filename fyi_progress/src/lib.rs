@@ -25,5 +25,8 @@
 
 mod progress;
 
+/// Lapsed.
+pub mod lapsed;
+
 /// Progress.
 pub use progress::Progress;

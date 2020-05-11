@@ -11,7 +11,7 @@ pkg_id      := "fyi"
 pkg_name    := "FYI"
 pkg_dir1    := justfile_directory() + "/fyi"
 pkg_dir2    := justfile_directory() + "/fyi_msg"
-pkg_dir3    := justfile_directory() + "/fyi_witch"
+pkg_dir3    := justfile_directory() + "/fyi_progress"
 
 cargo_dir   := "/tmp/" + pkg_id + "-cargo"
 cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
@@ -176,18 +176,17 @@ bench BENCH="" FILTER="":
 
 
 # Build Release!
-#demo-progress:
-#	#!/usr/bin/env bash
+demo-progress:
+	#!/usr/bin/env bash
 
-#	clear
+	clear
 
-#	cargo run \
-#		-q \
-#		-p fyi_core \
-#		--example progress \
-#		--all-features \
-#		--target x86_64-unknown-linux-gnu \
-#		--target-dir "{{ cargo_dir }}"
+	cargo run \
+		-q \
+		-p fyi_progress \
+		--example progress \
+		--target x86_64-unknown-linux-gnu \
+		--target-dir "{{ cargo_dir }}"
 
 
 # Unit tests!
