@@ -88,6 +88,12 @@ impl fmt::Display for Timestamp {
 impl Timestamp {
 	#[must_use]
 	/// New timestamp.
+	///
+	/// Initiate a new timestamp starting NOW. The struct dereferences to a
+	/// colored byte string that looks like "[yyyy-mm-dd hh:ii:ss]".
+	///
+	/// The intention is to have something quick to print, not something to
+	/// run duration, etc., calculations against.
 	pub fn new() -> Self {
 		use chrono::{
 			Datelike,
@@ -114,6 +120,10 @@ impl Timestamp {
 
 	#[must_use]
 	/// Time Number to String.
+	///
+	/// This is a simple conversion table for turning `u32` representations of
+	/// numbers 0–59 into double-digit strings like "00" and "59". It is faster
+	/// having these ready than trying to `itoa::write` them on-the-fly.
 	pub fn time_format_dd(num: u32) -> &'static [u8] {
 		match num {
 			1 => b"01",

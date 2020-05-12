@@ -1,8 +1,37 @@
 /*!
 # FYI Message
 
-The `Msg` struct is an efficient way to construct a "Prefix: Hello World"-type
-status message.
+The `Msg` struct is an efficient way to construct and/or print a simple,
+colored "Prefix: Hello World"-type status message.
+
+## Example:
+
+```no_run
+use fyi_msg::Msg;
+
+// Create a message with a custom prefix and color.
+let msg = Msg::new("Yo", 199, "How are you doing today?");
+
+// Use a short-hand method to create a message with a pre-defined prefix:
+let msg = Msg::error("Well darn.");
+let msg = Msg::debug("I like cookies.");
+let msg = Msg::success("Example executed!");
+```
+
+Messages can be printed by pulling in the `Printable` trait and calling the
+`print()` method, passing any relevant flags and indentation to it.
+
+```no_run
+use fyi_msg::Flags;
+use fyi_msg::Msg;
+use fyi_msg::traits::Printable;
+
+// Create a message.
+let msg = Msg::plain("Nobody likes a prefixed message.");
+msg.print(0, Flags::NONE); // Print to `Stdout` without any changes.
+msg.print(0, Flags::TIMESTAMPED); // Print it with a timestamp.
+msg.print(0, Flags::TO_STDERR); // Print to `Stderr`.
+```
 */
 
 use crate::{

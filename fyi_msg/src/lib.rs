@@ -46,7 +46,15 @@ pub mod utility {
 
 	/// In-Place u8 Slice Replacement
 	///
-	/// Note, the two sides must have the same length.
+	/// It is often more efficient to copy bytes into the middle of an existing
+	/// buffer than to run a million separate `push()` or `extend_from_slice()`
+	/// operations.
+	///
+	/// This method can be used to do just that for any two `[u8]` slices of
+	/// matching lengths. (Note: if the lengths don't match, it will panic!)
+	///
+	/// Each index from the right is compared against the corresponding index
+	/// on the left and copied if different.
 	pub fn slice_swap(lhs: &mut [u8], rhs: &[u8]) {
 		let len: usize = lhs.len();
 		assert_eq!(len, rhs.len());
@@ -60,6 +68,10 @@ pub mod utility {
 
 	#[must_use]
 	/// Term Width
+	///
+	/// This is a simple wrapper around `term_size::dimensions()` to provide
+	/// the current terminal column width. We don't have any use for height,
+	/// so that property is ignored.
 	pub fn term_width() -> usize {
 		// Reserve one space at the end "just in case".
 		if let Some((w, _)) = term_size::dimensions() { w.saturating_sub(1) }
@@ -68,6 +80,9 @@ pub mod utility {
 
 	#[must_use]
 	/// Whitespace maker.
+	///
+	/// This method borrows whitespace from a static reference, useful for
+	/// quickly padding strings, etc.
 	pub fn whitespace(num: usize) -> &'static [u8] {
 		static WHITES: &[u8; 255] = &[b' '; 255];
 

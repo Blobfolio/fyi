@@ -2,11 +2,16 @@
 # FYI Printer
 
 The `Printer` is an interface for sending shit to `Stdout`/`Stderr` with
-various possible formatting options (see e.g. the `Flags`).
+various possible formatting options (see also: `Flags`).
 
 There is a corresponding trait `Printable` that `Msg` and strings implement
 to make the process more ergonomical, but the methods here can be called
 directly.
+
+Most of the methods in this module are unsafe because they accept `[u8]` inputs
+that are expected to be valid UTF-8. `Msg`, etc., performs that validation, but
+if for some reason you find a separate use case for these highly-specific
+methods, make sure your strings are right before printing.
 */
 
 use crate::{
@@ -39,6 +44,7 @@ impl Default for Flags {
 	}
 }
 
+/// Time-saving Macro #1.
 macro_rules! print_format_indent {
 	($data:ident, $indent:ident) => (
 		&[
@@ -48,6 +54,7 @@ macro_rules! print_format_indent {
 	);
 }
 
+/// Time-saving Macro #2.
 macro_rules! print_format_timestamp {
 	($data:ident) => (
 		&[
@@ -61,6 +68,7 @@ macro_rules! print_format_timestamp {
 	);
 }
 
+/// Time-saving Macro #3.
 macro_rules! print_format_indent_and_timestamp {
 	($data:ident, $indent:ident) => {{
 		let tmp: usize = $indent.saturating_mul(4) as usize;
@@ -76,6 +84,7 @@ macro_rules! print_format_indent_and_timestamp {
 	}};
 }
 
+/// Time-saving Macro #4.
 macro_rules! print_format {
 	($handle:ident, $data:ident, $indent:ident, $flags:ident) => {
 		// Indentation is annoying. Let's get it over with. Haha.
@@ -131,6 +140,11 @@ pub unsafe fn print(data: &[u8], indent: u8, flags: Flags) {
 
 /// Print To.
 ///
+/// This method completes the write to the specified writer. By this point, all
+/// formatting-type modifications have already been made, except for the
+/// trailing new line (disabled via `Flags::NO_LINE`); that one tweak is made
+/// here.
+///
 /// # Safety
 ///
 /// This method accepts a raw `[u8]`; when using it, make sure the data you
@@ -151,6 +165,9 @@ pub unsafe fn print_to<W: Write> (writer: &mut W, data: &[u8], flags: Flags) -> 
 ///
 /// This is a simple print wrapper around `casual::confirm()`.
 ///
+/// As we aren't doing the heavy lifting here, there is no support for `Flags`,
+/// however prompt messages can be indented.
+///
 /// # Safety
 ///
 /// This method accepts a raw `[u8]`; when using it, make sure the data you
@@ -170,6 +187,9 @@ pub unsafe fn prompt(data: &[u8], indent: u8) -> bool {
 #[cfg(not(feature = "stdout_sinkhole"))]
 /// Print `Stdout`.
 ///
+/// This is a convenience wrapper to pass data to `print_to()` using `stdout()`
+/// as the writer.
+///
 /// # Safety
 ///
 /// This method accepts a raw `[u8]`; when using it, make sure the data you
@@ -183,6 +203,12 @@ unsafe fn _print_stdout(data: &[u8], indent: u8, flags: Flags) -> bool {
 #[cfg(feature = "stdout_sinkhole")]
 /// Print `Sink`.
 ///
+/// The `stdout_sinkhole` flag is set during benchmarking in order to silently
+/// replace `stdout()` with a `sink()`. This lets us get decent comparative
+/// measurements without drowning the display in thousands of prints.
+///
+/// If building `FYI` manually, make sure not to set this feature. Haha.
+///
 /// # Safety
 ///
 /// This method accepts a raw `[u8]`; when using it, make sure the data you
@@ -193,6 +219,9 @@ unsafe fn _print_stdout(data: &[u8], indent: u8, flags: Flags) -> bool {
 }
 
 /// Print `Stderr`.
+///
+/// This is a convenience wrapper to pass data to `print_to()` using `stderr()`
+/// as the writer.
 ///
 /// # Safety
 ///

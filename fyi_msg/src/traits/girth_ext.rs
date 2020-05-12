@@ -31,9 +31,14 @@ use unicode_width::UnicodeWidthChar;
 /// Extra Length Helpers.
 pub trait GirthExt {
 	/// Number of characters.
+	///
+	/// This is largely the same as doing `str.chars().count()`, but faster.
 	fn count_chars(&self) -> usize;
 
 	/// Number of lines.
+	///
+	/// This returns `"\n".count() + 1` for strings with length, or `0` for
+	/// empty strings.
 	fn count_lines(&self) -> usize;
 
 	/// Display Width.

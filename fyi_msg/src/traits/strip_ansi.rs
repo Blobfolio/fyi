@@ -10,7 +10,6 @@ depending on the source type (`&str` or `&[u8]` respectively).
 
 ```no_run
 use fyi_msg::traits::StripAnsi;
-
 assert_eq!("\x1B[1mBOLD\x1B[0m".strip_ansi(), "BOLD");
 ```
 */

@@ -1,10 +1,4 @@
-/*!
-# Build
-*/
-
 include!("src/menu.rs");
-
-
 
 /// Build tasks.
 fn main() {

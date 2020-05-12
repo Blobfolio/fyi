@@ -1,5 +1,20 @@
 /*!
-# FYI Progress: Lapsed.
+# FYI Progress: Lapsed
+
+This module provides a few simple time helpers for expressing seconds in ways
+other than gigantic numbers.
+
+It is most frequently paired with `Duration.as_secs()`.
+
+Given this was designed for use with a progress bar, it only considers seconds,
+minutes, and hours. Days, weeks, years, etc., are ignored. If your project
+requires tracking longer durations, use `chrono` or similar; the overhead will
+be a drop in the bucket against such runtimes. Haha.
+
+The primary methods are:
+* `compact()`, which prints a digital-clock-like string like "00:00:00".
+* `full()`, which combines the non-zero values with commas and conjunctions, perfect for humans to absorb, e.g. "2 hours, 1 minute, and 36 seconds"
+
 */
 
 use std::borrow::Cow;
@@ -11,7 +26,12 @@ use fyi_msg::{
 
 
 #[must_use]
-/// Elapsed Short.
+/// Compact Time.
+///
+/// The compact format mimics digital clocks, e.g. "HH:MM:SS".
+///
+/// For times stretching beyond one day, a static value of "23:59:59" is
+/// returned.
 pub fn compact(num: u32) -> Cow<'static, [u8]> {
 	static ZERO: &[u8] = b"00:00:00";
 
@@ -35,7 +55,20 @@ pub fn compact(num: u32) -> Cow<'static, [u8]> {
 }
 
 #[must_use]
-/// Elapsed.
+/// Full, Human-Readable Time.
+///
+/// The full format breaks seconds down into hours, minutes, and seconds, then
+/// joins the non-zero values with grammatically-appropriate commas and
+/// conjunctions.
+///
+/// For example, if a time matches exactly two hours, it returns "2 hours". If
+/// minutes are involved, "2 hours and 13 minutes". If seconds, then you get
+/// "2 hours, 13 minutes, and 1 second".
+///
+/// Etc.
+///
+/// For times stretching beyond one day, a static value of "1+ days" is
+/// returned.
 pub fn full(num: u32) -> Cow<'static, [u8]> {
 	static ONE: [&[u8]; 3] = [b" hour", b" minute", b" second"];
 	static MANY: [&[u8]; 3] = [b" hours", b" minutes", b" seconds"];
@@ -104,10 +137,14 @@ pub fn full(num: u32) -> Cow<'static, [u8]> {
 }
 
 #[must_use]
-/// Elapsed Chunks
+/// Chunked Seconds
 ///
-/// Return a fixed array containing the number of days, hours,
-/// minutes, and seconds.
+/// This method converts seconds into hours, minutes, and seconds, returning
+/// a fixed-length array with each value in order, e.g. `[h, m, s]`.
+///
+/// As with the rest of the methods in this module, days and beyond are not
+/// considered. Large values are simply truncated to `86399`, i.e. one second
+/// shy of a full day.
 pub fn secs_chunks(num: u32) -> [u32; 3] {
 	let mut out: [u32; 3] = [0, 0, u32::min(86399, num)];
 

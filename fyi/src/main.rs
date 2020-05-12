@@ -1,9 +1,3 @@
-/*!
-# FYI
-
-FYI is a dead-simple status message printer for CLI use applications.
-*/
-
 #![warn(missing_docs)]
 #![warn(trivial_casts)]
 #![warn(trivial_numeric_casts)]
