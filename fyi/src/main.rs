@@ -1,3 +1,7 @@
+/*!
+# FYI
+*/
+
 #![warn(missing_docs)]
 #![warn(trivial_casts)]
 #![warn(trivial_numeric_casts)]

@@ -12,6 +12,7 @@ pkg_name    := "FYI"
 pkg_dir1    := justfile_directory() + "/fyi"
 pkg_dir2    := justfile_directory() + "/fyi_msg"
 pkg_dir3    := justfile_directory() + "/fyi_progress"
+pkg_dir4    := justfile_directory() + "/fyi_witcher"
 
 cargo_dir   := "/tmp/" + pkg_id + "-cargo"
 cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
@@ -163,6 +164,7 @@ bench BENCH="" FILTER="":
 	[ ! -d "{{ pkg_dir1 }}/target" ] || rm -rf "{{ pkg_dir1 }}/target"
 	[ ! -d "{{ pkg_dir2 }}/target" ] || rm -rf "{{ pkg_dir2 }}/target"
 	[ ! -d "{{ pkg_dir3 }}/target" ] || rm -rf "{{ pkg_dir3 }}/target"
+	[ ! -d "{{ pkg_dir4 }}/target" ] || rm -rf "{{ pkg_dir4 }}/target"
 
 
 # Clippy.
@@ -224,7 +226,8 @@ version:
 	# Set the release version!
 	just _version "{{ pkg_dir1 }}" "$_ver2"
 	just _version "{{ pkg_dir2 }}" "$_ver2"
-	# just _version "{{ pkg_dir3 }}" "$_ver2"
+	just _version "{{ pkg_dir3 }}" "$_ver2"
+	just _version "{{ pkg_dir4 }}" "$_ver2"
 
 
 # Set version for real.

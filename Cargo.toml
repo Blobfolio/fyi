@@ -3,6 +3,7 @@ members = [
 	"fyi",
     "fyi_msg",
     "fyi_progress",
+    "fyi_witcher",
 ]
 
 [profile.release]
