@@ -6,8 +6,22 @@ canonicalized and validated against a regular expression.
 
 */
 
+use fyi_msg::{
+	Flags,
+	Msg,
+	traits::Printable,
+	utility,
+};
+use fyi_progress::{
+	lapsed,
+	Progress,
+};
 use indexmap::set::IndexSet;
 use jwalk::WalkDir;
+use num_format::{
+	Locale,
+	ToFormattedString,
+};
 use rayon::prelude::*;
 use regex::Regex;
 use std::{
@@ -21,8 +35,71 @@ use std::{
 		Path,
 		PathBuf,
 	},
+	sync::Arc,
 };
 
+
+
+macro_rules! make_progress {
+	($name:expr, $len:expr) => (
+		Arc::new(Progress::new(
+			Some(Msg::new("Reticulating splines\u{2026}", 199, $name)),
+			$len
+		))
+	);
+}
+
+macro_rules! make_progress_loop {
+	($witcher:ident, $progress:ident, $cb:ident) => {
+		let handle = Progress::steady_tick(&$progress, None);
+		$witcher.par_iter().for_each(|x| {
+			let file: &str = x.to_str().unwrap_or("");
+			$progress.clone().add_task(file);
+			$cb(&Arc::new(x.clone()));
+			$progress.clone().update(1, None, Some(file));
+		});
+		handle.join().unwrap();
+	};
+}
+
+macro_rules! crunched_in {
+	($total:expr, $secs:expr) => (
+		Msg::crunched(unsafe {
+			std::str::from_utf8_unchecked(&[
+				&utility::inflect($total, "file in ", "files in "),
+				&lapsed::full($secs),
+				&b"."[..],
+			].concat())
+		})
+	);
+
+	($total:expr, $secs:expr, $before:expr, $after:expr) => (
+		if $before > $after && $after > 0 {
+			Msg::crunched(unsafe {
+				std::str::from_utf8_unchecked(&[
+					&utility::inflect($total, "file in ", "files in "),
+					&lapsed::full($secs),
+					&b"."[..],
+				].concat())
+			})
+		}
+		else {
+			Msg::crunched(unsafe {
+				std::str::from_utf8_unchecked(&[
+					&utility::inflect($total, "file in ", "files in "),
+					&lapsed::full($secs),
+					&b", saving "[..],
+					($before - $after).to_formatted_string(&Locale::en).as_bytes(),
+					format!(
+						" bytes ({:3.*}%).",
+						2,
+						(1.0 - ($after as f64 / $before as f64)) * 100.0
+					).as_bytes()
+				].concat())
+			})
+		}
+	);
+}
 
 
 #[derive(Debug, Default, Clone)]
@@ -83,5 +160,61 @@ impl Witcher {
 			)
 			.collect()
 		)
+	}
+
+	#[must_use]
+	/// Get Disk Size.
+	pub fn du(&self) -> u64 {
+		self.0.par_iter()
+			.map(|x| match x.metadata() {
+				Ok(meta) => meta.len(),
+				_ => 0,
+			})
+			.sum()
+	}
+
+
+
+	// -----------------------------------------------------------------
+	// Loopers
+	// -----------------------------------------------------------------
+
+	/// Parallel Loop.
+	pub fn process<F> (&self, cb: F)
+	where F: Fn(&PathBuf) + Send + Sync {
+		self.0.par_iter().for_each(cb);
+	}
+
+	/// Parallel Loop w/ Progress.
+	pub fn progress<S, F> (&self, name: S, cb: F)
+	where
+		S: Borrow<str>,
+		F: Fn(&Arc<PathBuf>) + Send + Sync
+	{
+		let pbar = make_progress!(name, self.0.len() as u64);
+		make_progress_loop!(self, pbar, cb);
+		crunched_in!(
+			pbar.total(),
+			pbar.time().elapsed().as_secs() as u32
+		).print(0, Flags::TO_STDERR);
+	}
+
+	/// Parallel Loop w/ Progress.
+	pub fn progress_crunch<S, F> (&self, name: S, cb: F)
+	where
+		S: Borrow<str>,
+		F: Fn(&Arc<PathBuf>) + Send + Sync
+	{
+		let pbar = make_progress!(name, self.0.len() as u64);
+		let before: u64 = self.du();
+
+		make_progress_loop!(self, pbar, cb);
+
+		crunched_in!(
+			pbar.total(),
+			pbar.time().elapsed().as_secs() as u32,
+			before,
+			self.du()
+		).print(0, Flags::TO_STDERR);
 	}
 }
