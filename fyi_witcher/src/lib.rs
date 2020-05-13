@@ -31,3 +31,34 @@ pub use witcher::Witcher;
 
 /// Generic result type.
 pub type Result<T, E = String> = std::result::Result<T, E>;
+
+/// Utilities.
+pub mod utility {
+	use std::path::Path;
+
+	/// Ergonomical file size.
+	pub fn file_extension<P> (path: P) -> String
+	where P: AsRef<Path> {
+		let path = path.as_ref();
+		if path.is_dir() {
+			"".to_string()
+		}
+		else if let Some(ext) = path.extension() {
+			ext.to_str()
+				.unwrap_or("")
+				.to_lowercase()
+		}
+		else {
+			"".to_string()
+		}
+	}
+
+	/// Ergonomical file size.
+	pub fn file_size<P> (path: P) -> u64
+	where P: AsRef<Path> {
+		if let Ok(meta) = path.as_ref().metadata() {
+			meta.len()
+		}
+		else { 0 }
+	}
+}

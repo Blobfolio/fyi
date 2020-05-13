@@ -1,5 +1,8 @@
 /*!
 # FYI Witcher Traits: Path I/O
+
+This trait adds a handful of read/write/copy/move-type methods to `Path`
+objects.
 */
 
 use crate::Result;
@@ -184,7 +187,10 @@ impl WitchIO for Path {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use fyi_core::traits::PathProps;
+	use crate::utility::{
+		file_extension,
+		file_size,
+	};
 	use std::path::PathBuf;
 
 	#[test]
@@ -202,7 +208,7 @@ mod tests {
 
 		from.witch_copy(&to).unwrap();
 		assert!(to.is_file());
-		assert_eq!(from.file_size(), to.file_size());
+		assert_eq!(file_size(&from), file_size(&to));
 
 		// And remove it.
 		to.witch_delete().unwrap();
@@ -219,7 +225,7 @@ mod tests {
 			let path: PathBuf = tmp.path().to_path_buf();
 
 			assert!(path.is_file());
-			assert_eq!(from.file_size(), path.file_size());
+			assert_eq!(file_size(&from), file_size(&path));
 
 			drop(tmp);
 			assert!(! path.is_file());
@@ -232,8 +238,8 @@ mod tests {
 			let path: PathBuf = tmp.path().to_path_buf();
 
 			assert!(path.is_file());
-			assert_eq!(path.file_extension(), "bak");
-			assert_eq!(from.file_size(), path.file_size());
+			assert_eq!(file_extension(&path), "bak");
+			assert_eq!(file_size(&from), file_size(&path));
 
 			drop(tmp);
 			assert!(! path.is_file());
@@ -264,7 +270,7 @@ mod tests {
 		assert!(to.is_file());
 
 		// We can compare it against our original.
-		assert_eq!(src.file_size(), to.file_size());
+		assert_eq!(file_size(&src), file_size(&to));
 
 		// And remove it.
 		to.witch_delete().unwrap();
@@ -289,7 +295,7 @@ mod tests {
 		let path: PathBuf = tmp.path().to_path_buf();
 
 		assert!(path.is_file());
-		assert_eq!(path.file_size(), 0);
+		assert_eq!(file_size(&path), 0);
 
 		// Write it.
 		path.witch_write(data.as_bytes()).unwrap();
