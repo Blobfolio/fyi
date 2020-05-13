@@ -81,12 +81,12 @@ macro_rules! crunched_in {
 	);
 
 	($total:expr, $secs:expr, $before:expr, $after:expr) => (
-		if $before > $after && $after > 0 {
+		if 0 == $after || $before <= $after {
 			Msg::crunched(unsafe {
 				std::str::from_utf8_unchecked(&[
 					&utility::inflect($total, "file in ", "files in "),
 					&lapsed::full($secs),
-					&b"."[..],
+					&b", but nothing doing."[..],
 				].concat())
 			})
 		}
