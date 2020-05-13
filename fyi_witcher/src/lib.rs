@@ -24,6 +24,10 @@
 #![allow(clippy::missing_errors_doc)]
 
 mod witcher;
+pub mod traits;
 
-// The Witcher!
+/// The Witcher!
 pub use witcher::Witcher;
+
+/// Generic result type.
+pub type Result<T, E = String> = std::result::Result<T, E>;
