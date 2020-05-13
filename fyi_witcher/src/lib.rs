@@ -61,4 +61,19 @@ pub mod utility {
 		}
 		else { 0 }
 	}
+
+	/// Is Executable?
+	pub fn is_executable<P> (path: P) -> bool
+	where P: AsRef<Path> {
+		use std::os::unix::fs::PermissionsExt;
+
+		if let Ok(meta) = path.as_ref().metadata() {
+			if meta.is_file() {
+				let permissions = meta.permissions();
+				return permissions.mode() & 0o111 != 0;
+			}
+		}
+
+		false
+	}
 }
