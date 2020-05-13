@@ -56,9 +56,5 @@ name = "fm_timestamp"
 harness = false
 
 [[bench]]
-name = "fm_strip_ansi"
-harness = false
-
-[[bench]]
 name = "fm_utility"
 harness = false

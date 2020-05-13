@@ -58,9 +58,9 @@ fn new(c: &mut Criterion) {
 	println!("");
 	println!("");
 
-	Msg::warning(example_str).print(0, Flags::TO_STDERR);
-	c.bench_function("fyi_msg::Msg/warning(\"This is an example message!\")", move |b| {
-		b.iter(|| Msg::warning(example_str))
+	Msg::eg(example_str).print(0, Flags::TO_STDERR);
+	c.bench_function("fyi_msg::Msg/eg(\"This is an example message!\")", move |b| {
+		b.iter(|| Msg::eg(example_str))
 	});
 	println!("");
 	println!("");
@@ -118,6 +118,6 @@ fn print(c: &mut Criterion) {
 criterion_group!(
 	benches,
 	new,
-	print,
+	// print,
 );
 criterion_main!(benches);
