@@ -82,6 +82,7 @@ use fyi_msg::{
 	utility,
 };
 use indexmap::map::IndexMap;
+use smallvec::SmallVec;
 use std::{
 	borrow::Borrow,
 	sync::{
@@ -277,15 +278,15 @@ impl ProgressInner {
 			if self.tasks.is_empty() {
 				self._print(&[
 					&*self.msg,
-					&*self._tick_bar(),
+					&self._tick_bar(),
 				].concat())
 			}
 			// All three.
 			else {
 				self._print(&[
 					&*self.msg,
-					&*self._tick_bar(),
-					&*self._tick_tasks(),
+					&self._tick_bar(),
+					&self._tick_tasks(),
 				].concat())
 			}
 		}
@@ -458,8 +459,8 @@ impl ProgressInner {
 	///
 	/// Returns done, total, and percentage in a single byte string with their
 	/// corresponding ending positions in the buffer.
-	fn _tick_label_bits(&self) -> (Vec<u8>, usize, usize, usize) {
-		let mut buf: Vec<u8> = Vec::with_capacity(32);
+	fn _tick_label_bits(&self) -> (SmallVec<[u8; 64]>, usize, usize, usize) {
+		let mut buf: SmallVec<[u8; 64]> = SmallVec::new();
 
 		itoa::write(&mut buf, self.done).unwrap();
 		let done_end: usize = buf.len();

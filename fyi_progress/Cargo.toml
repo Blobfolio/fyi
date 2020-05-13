@@ -15,6 +15,11 @@ seahash = "4.0.*"
 [dependencies.fyi_msg]
 path = "../fyi_msg"
 
+[dependencies.smallvec]
+version = "1.4.*"
+default-features = false
+features = [ "write" ]
+
 [features]
 default = []
 stdout_sinkhole = []
