@@ -26,7 +26,14 @@ use rayon::prelude::*;
 use regex::Regex;
 use std::{
 	borrow::Borrow,
-	fs,
+	fs::{
+		self,
+		File,
+	},
+	io::{
+		self,
+		BufRead,
+	},
 	ops::{
 		Deref,
 		DerefMut,
@@ -160,6 +167,32 @@ impl Witcher {
 			)
 			.collect()
 		)
+	}
+
+	/// From File.
+	///
+	/// Read the contents of a text file containing a list of paths to search,
+	/// one per line.
+	pub fn from_file<P, R> (path: P, pattern: R) -> Self
+	where
+		P: AsRef<Path>,
+		R: Borrow<str> {
+			if let Ok(file) = File::open(path.as_ref()) {
+				Witcher::new(
+					&io::BufReader::new(file).lines()
+						.filter_map(|x| match x {
+							Ok(x) => {
+								let x = x.trim();
+								if x.is_empty() { None }
+								else { Some(PathBuf::from(x)) }
+							},
+							_ => None,
+						})
+						.collect::<Vec<PathBuf>>(),
+					pattern,
+				)
+			}
+    		else { Witcher::default() }
 	}
 
 	#[must_use]
