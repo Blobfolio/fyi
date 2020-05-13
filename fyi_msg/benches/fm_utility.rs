@@ -34,28 +34,6 @@ fn inflect(c: &mut Criterion) {
 	}
 }
 
-fn strip_ansi(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_msg::utility");
-
-	for text in [
-		"Normal",
-		"\x1B[1;96mBjörk\x1B[0m Guðmundsdóttir",
-	].iter() {
-		group.bench_with_input(
-			BenchmarkId::from_parameter(format!(
-				"strip_ansi(\"{:?}\")",
-				text
-			)),
-			text.as_bytes(),
-			|b, text| {
-				b.iter(||
-					utility::strip_ansi(text)
-				);
-			}
-		);
-	}
-}
-
 fn whitespace(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::utility");
 
@@ -75,7 +53,6 @@ fn whitespace(c: &mut Criterion) {
 criterion_group!(
 	benches,
 	inflect,
-	strip_ansi,
 	whitespace,
 );
 criterion_main!(benches);

@@ -43,10 +43,6 @@ pub mod utility {
 		Locale,
 		WriteFormatted,
 	};
-	use regex::bytes::{
-		NoExpand,
-		Regex,
-	};
 	use std::borrow::{
 		Borrow,
 		Cow,
@@ -106,24 +102,6 @@ pub mod utility {
 			if lhs[i] != rhs[i] {
 				lhs[i] = rhs[i];
 			}
-		}
-	}
-
-	#[must_use]
-	/// Strip ANSI.
-	pub fn strip_ansi(data: &[u8]) -> Cow<'_, [u8]> {
-		lazy_static::lazy_static! {
-			/// Regex: [u8] ANSI
-			pub static ref STRIPPER: Regex =
-				Regex::new(r"[\x1b\x9b][\[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-PRZcf-nqry=><]")
-				.unwrap();
-		}
-
-		if data.is_empty() || (! data.contains(&27) && ! data.contains(&155)) {
-			Cow::Borrowed(data)
-		}
-		else {
-			STRIPPER.replace_all(data, NoExpand(b""))
 		}
 	}
 
