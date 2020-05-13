@@ -39,10 +39,49 @@ pub use timestamp::Timestamp;
 
 /// Miscellaneous utility classes.
 pub mod utility {
+	use num_format::{
+		Locale,
+		WriteFormatted,
+	};
+	use std::borrow::{
+		Borrow,
+		Cow,
+	};
 	pub use super::print::{
 		print,
 		print_to,
 	};
+
+	/// String Inflection
+	///
+	/// Given a number, come up with a string like "1 thing" or "2 things".
+	pub fn inflect<T1, T2> (num: u64, one: T1, many: T2) -> Cow<'static, [u8]>
+	where
+		T1: Borrow<str>,
+		T2: Borrow<str> {
+		if 1 == num {
+			Cow::Owned([
+				b"1 ",
+				one.borrow().as_bytes(),
+			].concat())
+		}
+		else if num < 1000 {
+			let noun = many.borrow();
+			let mut buf: Vec<u8> = Vec::with_capacity(noun.len() + 4);
+			itoa::write(&mut buf, num).expect("Invalid number.");
+			buf.push(b' ');
+			buf.extend_from_slice(noun.as_bytes());
+			Cow::Owned(buf)
+		}
+		else {
+			let noun = many.borrow();
+			let mut buf: Vec<u8> = Vec::with_capacity(noun.len() + 4);
+			buf.write_formatted(&num, &Locale::en).expect("Invalid number.");
+			buf.push(b' ');
+			buf.extend_from_slice(noun.as_bytes());
+			Cow::Owned(buf)
+		}
+	}
 
 	/// In-Place u8 Slice Replacement
 	///
