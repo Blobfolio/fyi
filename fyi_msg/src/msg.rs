@@ -114,6 +114,17 @@ macro_rules! new_msg_method {
 	};
 }
 
+/// Shorthand for defining new messages.
+macro_rules! new_msg_wc_method {
+	($method:ident, $label:literal, $color:literal) => {
+		#[inline]
+		/// New $label message.
+		pub fn $method<T: Borrow<str>> (msg: T) -> Self {
+			Self::without_colon($label, $color, msg)
+		}
+	};
+}
+
 impl Msg {
 	/// Bold ANSI.
 	const BOLD: &'static [u8; 4] = b"\x1B[1m";
@@ -153,6 +164,37 @@ impl Msg {
 		}
 	}
 
+	/// New message (without prefix colon).
+	pub fn without_colon<T1, T2> (prefix: T1, prefix_color: u8, msg: T2) -> Self
+	where
+	T1: Borrow<str>,
+	T2: Borrow<str> {
+		let prefix: &str = prefix.borrow();
+		let msg: &str = msg.borrow();
+
+		if prefix.is_empty() {
+			if msg.is_empty() {
+				Self::default()
+			}
+			else {
+				Msg([
+					Self::BOLD,
+					msg.as_bytes(),
+					Self::RESET_ALL,
+				].concat())
+			}
+		}
+		else {
+			Msg([
+				<[u8]>::ansi_code_bold(prefix_color),
+				prefix.as_bytes(),
+				&Self::PREFIX_CLOSER[1..],
+				msg.as_bytes(),
+				Self::RESET_ALL,
+			].concat())
+		}
+	}
+
 	/// New message (without prefix).
 	pub fn plain<T> (msg: T) -> Self
 	where T: Borrow<str> {
@@ -180,6 +222,9 @@ impl Msg {
 	new_msg_method!(success, "Success", 10);    // Light Green.
 	new_msg_method!(task, "Task", 199);         // Hot Pink.
 	new_msg_method!(warning, "Warning", 11);    // Light Yellow.
+
+	new_msg_wc_method!(eg, "e.g.", 14);         // Light Cyan.
+	new_msg_wc_method!(ie, "i.e.", 14);         // Light Cyan.
 
 	#[must_use]
 	#[inline]
