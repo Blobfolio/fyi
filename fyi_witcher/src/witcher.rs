@@ -50,7 +50,7 @@ use std::{
 macro_rules! make_progress {
 	($name:expr, $len:expr) => (
 		Arc::new(Progress::new(
-			Some(Msg::new("Reticulating splines\u{2026}", 199, $name)),
+			Some(Msg::new($name, 199, "Reticulating splines\u{2026}")),
 			$len
 		))
 	);
