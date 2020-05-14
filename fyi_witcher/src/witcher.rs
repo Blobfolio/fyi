@@ -2,15 +2,14 @@
 # FYI Witcher: Witcher
 
 `Witcher` stores the results of a recursive file-search with all paths
-canonicalized and validated against a regular expression.
-
+canonicalized, deduplicated, and validated against a regular expression.
 */
 
+use crate::utility::inflect;
 use fyi_msg::{
 	Flags,
 	Msg,
 	traits::Printable,
-	utility,
 };
 use fyi_progress::{
 	lapsed,
@@ -73,7 +72,7 @@ macro_rules! crunched_in {
 	($total:expr, $secs:expr) => (
 		Msg::crunched(unsafe {
 			std::str::from_utf8_unchecked(&[
-				&utility::inflect($total, "file in ", "files in "),
+				&inflect($total, "file in ", "files in "),
 				&lapsed::full($secs),
 				&b"."[..],
 			].concat())
@@ -84,7 +83,7 @@ macro_rules! crunched_in {
 		if 0 == $after || $before <= $after {
 			Msg::crunched(unsafe {
 				std::str::from_utf8_unchecked(&[
-					&utility::inflect($total, "file in ", "files in "),
+					&inflect($total, "file in ", "files in "),
 					&lapsed::full($secs),
 					&b", but nothing doing."[..],
 				].concat())
@@ -93,7 +92,7 @@ macro_rules! crunched_in {
 		else {
 			Msg::crunched(unsafe {
 				std::str::from_utf8_unchecked(&[
-					&utility::inflect($total, "file in ", "files in "),
+					&inflect($total, "file in ", "files in "),
 					&lapsed::full($secs),
 					&b", saving "[..],
 					($before - $after).to_formatted_string(&Locale::en).as_bytes(),
@@ -123,7 +122,7 @@ impl Deref for Witcher {
 }
 
 impl DerefMut for Witcher {
-	/// Deref.
+	/// Deref Mut.
 	fn deref_mut(&mut self) -> &mut IndexSet<PathBuf> {
 		&mut self.0
 	}
@@ -132,7 +131,10 @@ impl DerefMut for Witcher {
 impl Witcher {
 	/// New.
 	///
-	/// Recursively search for files and store the result.
+	/// Recursively search for files within the specified paths, filtered
+	/// according to a regular expression, and store the results.
+	///
+	/// All results are canonicalized and deduped for minimum confusion.
 	pub fn new<P, R> (paths: &[P], pattern: R) -> Self
 	where
 		P: AsRef<Path>,
@@ -172,7 +174,8 @@ impl Witcher {
 	/// From File.
 	///
 	/// Read the contents of a text file containing a list of paths to search,
-	/// one per line.
+	/// one per line. The paths are parsed from that file, then fed into the
+	/// `new()` method, so ends up working the same way.
 	pub fn from_file<P, R> (path: P, pattern: R) -> Self
 	where
 		P: AsRef<Path>,
@@ -197,6 +200,11 @@ impl Witcher {
 
 	#[must_use]
 	/// Get Disk Size.
+	///
+	/// Add up all the file sizes in the result set.
+	///
+	/// Note: this value is not cached; you should be able to call it once, do
+	/// some stuff, then call it again and get a different result.
 	pub fn du(&self) -> u64 {
 		self.0.par_iter()
 			.map(|x| match x.metadata() {
@@ -213,12 +221,23 @@ impl Witcher {
 	// -----------------------------------------------------------------
 
 	/// Parallel Loop.
+	///
+	/// Execute your callback once for each file in the result set. Calls will
+	/// not necessarily be in a predictable order, but everything will be hit.
 	pub fn process<F> (&self, cb: F)
 	where F: Fn(&PathBuf) + Send + Sync {
 		self.0.par_iter().for_each(cb);
 	}
 
 	/// Parallel Loop w/ Progress.
+	///
+	/// Execute your callback once for each file while displaying a `Progress`.
+	/// Each thread automatically adds the current file name as a "task" at the
+	/// start and removes it at the end, so i.e. the progress bar will show the
+	/// active entries.
+	///
+	/// At the end, the progress bar will be cleared and a message will be
+	/// printed like: "Crunched: Finished 30 files in 1 minute and 3 seconds."
 	pub fn progress<S, F> (&self, name: S, cb: F)
 	where
 		S: Borrow<str>,
@@ -233,6 +252,13 @@ impl Witcher {
 	}
 
 	/// Parallel Loop w/ Progress.
+	///
+	/// This is the same as calling `progress()`, except that it will add up
+	/// the total disk size of files before and after and report any savings
+	/// in the final message.
+	///
+	/// If your operation doesn't affect file sizes, or doesn't need reporting
+	/// of this manner, use one of the other loops (or write your own).
 	pub fn progress_crunch<S, F> (&self, name: S, cb: F)
 	where
 		S: Borrow<str>,

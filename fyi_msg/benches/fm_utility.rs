@@ -3,7 +3,6 @@
 */
 
 use criterion::{
-	black_box,
 	BenchmarkId,
 	Criterion,
 	criterion_group,
@@ -13,21 +12,19 @@ use fyi_msg::utility;
 
 
 
-fn inflect(c: &mut Criterion) {
+fn ansi_code_bold(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::utility");
-	let singular = black_box("agendum");
-	let plural = black_box("agenda");
 
-	for num in [0_u64, 1_u64, 500_u64, 1000_u64, 86400_u64].iter() {
+	for color in [0, 1, 50, 100].iter() {
 		group.bench_with_input(
 			BenchmarkId::from_parameter(format!(
-				"inflect({}, \"agendum\", \"agenda\")",
-				num
+				"ansi_code_bold({})",
+				color
 			)),
-			num,
-			|b, &num| {
+			color,
+			|b, &color| {
 				b.iter(||
-					utility::inflect(num, singular, plural)
+					utility::ansi_code_bold(color)
 				);
 			}
 		);
@@ -50,9 +47,11 @@ fn whitespace(c: &mut Criterion) {
 	}
 }
 
+
+
 criterion_group!(
 	benches,
-	inflect,
+	ansi_code_bold,
 	whitespace,
 );
 criterion_main!(benches);

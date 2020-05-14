@@ -21,6 +21,8 @@ fn new(c: &mut Criterion) {
 	});
 }
 
+
+
 criterion_group!(
 	benches,
 	new,

@@ -51,7 +51,7 @@ impl WitchIO for Path {
 	where P: AsRef<Path> {
 		if self.is_file() {
 			let to = to.as_ref().to_path_buf();
-			to.witch_write(&self.witch_read()?)?;
+			to.witch_write(&fs::read(&self).map_err(|e| e.to_string())?)?;
 
 			Ok(())
 		}
@@ -173,9 +173,12 @@ impl WitchIO for Path {
 			))
 		}
 		else {
-			let mut tmp = tempfile_fast::Sponge::new_for(&self).map_err(|e| e.to_string())?;
-			tmp.write_all(data).map_err(|e| e.to_string())?;
-			tmp.commit().map_err(|e| e.to_string())?;
+			let mut tmp = tempfile_fast::Sponge::new_for(&self)
+				.map_err(|e| e.to_string())?;
+			tmp.write_all(data)
+				.map_err(|e| e.to_string())?;
+			tmp.commit()
+				.map_err(|e| e.to_string())?;
 
 			Ok(())
 		}

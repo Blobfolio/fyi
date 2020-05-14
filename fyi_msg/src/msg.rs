@@ -37,10 +37,8 @@ msg.print(0, Flags::TO_STDERR); // Print to `Stderr`.
 use crate::{
 	print,
 	Flags,
-	traits::{
-		AnsiCodeBold,
-		Printable,
-	},
+	traits::Printable,
+	utility::ansi_code_bold,
 };
 use std::{
 	borrow::Borrow,
@@ -155,7 +153,7 @@ impl Msg {
 		}
 		else {
 			Msg([
-				<[u8]>::ansi_code_bold(prefix_color),
+				ansi_code_bold(prefix_color),
 				prefix.as_bytes(),
 				Self::PREFIX_CLOSER,
 				msg.as_bytes(),
@@ -186,7 +184,7 @@ impl Msg {
 		}
 		else {
 			Msg([
-				<[u8]>::ansi_code_bold(prefix_color),
+				ansi_code_bold(prefix_color),
 				prefix.as_bytes(),
 				&Self::PREFIX_CLOSER[1..],
 				msg.as_bytes(),
