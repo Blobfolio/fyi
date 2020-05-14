@@ -1,8 +1,9 @@
 [workspace]
 members = [
 	"fyi",
-    "fyi_core",
-    "fyi_witch",
+    "fyi_msg",
+    "fyi_progress",
+    "fyi_witcher",
 ]
 
 [profile.release]

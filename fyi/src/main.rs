@@ -1,7 +1,5 @@
 /*!
 # FYI
-
-FYI is a dead-simple status message printer for CLI use applications.
 */
 
 #![warn(missing_docs)]
@@ -25,18 +23,12 @@ FYI is a dead-simple status message printer for CLI use applications.
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::missing_errors_doc)]
 
-extern crate clap;
-extern crate fyi_core;
-
 use clap::ArgMatches;
-use fyi_core::{
+use fyi_msg::{
+	Flags,
 	Msg,
-	MSG_TIMESTAMP,
-	Prefix,
-	PRINT_NEWLINE,
-	PRINT_NO_COLOR,
-	PRINT_STDERR,
-	util::cli,
+	traits::Printable,
+	utility,
 };
 use std::process;
 
@@ -66,63 +58,59 @@ fn do_blank(opts: &ArgMatches) {
 		count = 1;
 	}
 
-	let flags: u8 = if opts.is_present("stderr") {
-		PRINT_STDERR | PRINT_NEWLINE
+	let flags = if opts.is_present("stderr") {
+		Flags::TO_STDERR | Flags::NO_LINE
 	}
 	else {
-		PRINT_NEWLINE
+		Flags::NO_LINE
 	};
 
 	for _ in 0..count {
-		cli::print("", flags);
+		unsafe { utility::print(b"\n", 0, flags); }
 	}
 }
 
 /// Print message.
 fn do_msg(name: &str, opts: &ArgMatches) {
 	// Build and print!
-	let msg: Msg = Msg::new(opts.value_of("msg").unwrap_or(""))
-		.with_prefix(match name {
-			"debug" => Prefix::Debug,
-			"error" => Prefix::Error,
-			"info" => Prefix::Info,
-			"notice" => Prefix::Notice,
-			"prompt" => Prefix::None,
-			"success" => Prefix::Success,
-			"warning" => Prefix::Warning,
-			_ => {
-				match opts.value_of("prefix") {
-					Some(p) => Prefix::new(
-						p,
-						parse_cli_u8(opts.value_of("prefix_color").unwrap_or("199"))
-					),
-					_ => Prefix::None,
-				}
-			},
-		})
-		.with_flags({
-			let mut flags: u8 = 0;
-			if opts.is_present("no_color") {
-				flags |= PRINT_NO_COLOR;
-			}
-			if opts.is_present("time") {
-				flags |= MSG_TIMESTAMP;
-			}
-			flags
-		})
-		.with_indent(parse_cli_u8(opts.value_of("indent").unwrap_or("0")));
+	let indent: u8 = parse_cli_u8(opts.value_of("indent").unwrap_or("0"));
+
+	let msg: Msg = match name {
+		"confirm" => Msg::confirm(opts.value_of("msg").unwrap_or("")),
+		"debug" => Msg::debug(opts.value_of("msg").unwrap_or("")),
+		"error" => Msg::error(opts.value_of("msg").unwrap_or("")),
+		"info" => Msg::info(opts.value_of("msg").unwrap_or("")),
+		"notice" => Msg::notice(opts.value_of("msg").unwrap_or("")),
+		"success" => Msg::success(opts.value_of("msg").unwrap_or("")),
+		"warning" => Msg::warning(opts.value_of("msg").unwrap_or("")),
+		_ => match opts.value_of("prefix") {
+			Some(p) => Msg::new(
+				p,
+				parse_cli_u8(opts.value_of("prefix_color").unwrap_or("199")),
+				opts.value_of("msg").unwrap_or("")
+			),
+			_ => Msg::plain(opts.value_of("msg").unwrap_or("")),
+		},
+	};
 
 	// Prompt.
-	if "prompt" == name {
-		if msg.prompt() {
-			process::exit(0);
+	if "confirm" == name {
+		if msg.prompt(indent) {
+			return;
 		}
 		else {
 			process::exit(1);
 		}
 	}
 
-	msg.print();
+	let mut flags: Flags = Flags::NONE;
+	if opts.is_present("stderr") {
+		flags.insert(Flags::TO_STDERR);
+	}
+	if opts.is_present("time") {
+		flags.insert(Flags::TIMESTAMPED);
+	}
+	msg.print(indent, flags);
 
 	// We might have a custom exit code.
 	let exit: u8 = parse_cli_u8(opts.value_of("exit").unwrap_or("0"));

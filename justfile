@@ -10,8 +10,9 @@
 pkg_id      := "fyi"
 pkg_name    := "FYI"
 pkg_dir1    := justfile_directory() + "/fyi"
-pkg_dir2    := justfile_directory() + "/fyi_core"
-pkg_dir3    := justfile_directory() + "/fyi_witch"
+pkg_dir2    := justfile_directory() + "/fyi_msg"
+pkg_dir3    := justfile_directory() + "/fyi_progress"
+pkg_dir4    := justfile_directory() + "/fyi_witcher"
 
 cargo_dir   := "/tmp/" + pkg_id + "-cargo"
 cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
@@ -76,7 +77,7 @@ bench BENCH="" FILTER="":
 # Build Man.
 @build-man: build-pgo
 	# Pre-clean.
-	rm "{{ release_dir }}/man"/*
+	find "{{ release_dir }}/man" -type f -delete
 
 	# Use help2man to make a crappy MAN page.
 	help2man -o "{{ release_dir }}/man/{{ pkg_id }}.1" \
@@ -106,12 +107,12 @@ bench BENCH="" FILTER="":
 
 	# Instrumentation!
 	"{{ cargo_bin }}" debug "Beginning instrumentation!"
-	"{{ cargo_bin }}" prompt "Answer yes or no. Seriously!" || true
-	"{{ cargo_bin }}" prompt "Now answer the opposite way." || true
+	"{{ cargo_bin }}" confirm "Answer yes or no. Seriously!" || true
+	"{{ cargo_bin }}" confirm "Now answer the opposite way." || true
 	"{{ cargo_bin }}" blank -c 2
 	"{{ cargo_bin }}" blank -e -c 2
 	"{{ cargo_bin }}" debug -i 1 -t "Instrumenting!"
-	"{{ cargo_bin }}" debug -i 1 --no-color "Instrumenting!"
+	"{{ cargo_bin }}" task "Example task."
 	"{{ cargo_bin }}" error "We're doing what we're meant to."
 	"{{ cargo_bin }}" error -e 1 "We're doing what we're meant to." || true
 	"{{ cargo_bin }}" info -t "Still going…"
@@ -119,9 +120,9 @@ bench BENCH="" FILTER="":
 	"{{ cargo_bin }}" print "Nothing doing here."
 	"{{ cargo_bin }}" print -p "Custom" -c 199 "Nothing doing here."
 	"{{ cargo_bin }}" success "Very nearly there now!"
-	"{{ cargo_bin }}" warning -t "This is the last one."
-	"{{ cargo_bin }}" warning --no-color -t "Color has been removed from the output."
-	"{{ cargo_bin }}" warning --no-color -t "Euclid Apollonius of Perga courage of our questions brain is the seed of intelligence quasar tendrils of gossamer clouds. The carbon in our apple pies not a sunrise but a galaxyrise tesseract white dwarf the sky calls to us star stuff harvesting star light. Stirred by starlight hearts of the stars made in the interiors of collapsing stars Tunguska event the ash of stellar alchemy with pretty stories for which there's little good evidence and billions upon billions upon billions upon billions upon billions upon billions upon billions."
+	"{{ cargo_bin }}" warning --stderr -t "This is the last one."
+	"{{ cargo_bin }}" warning -i 4 -t "Euclid Apollonius of Perga courage of our questions brain is the seed of intelligence quasar tendrils of gossamer clouds. The carbon in our apple pies not a sunrise but a galaxyrise tesseract white dwarf the sky calls to us star stuff harvesting star light. Stirred by starlight hearts of the stars made in the interiors of collapsing stars Tunguska event the ash of stellar alchemy with pretty stories for which there's little good evidence and billions upon billions upon billions upon billions upon billions upon billions upon billions."
+	"{{ cargo_bin }}" done "We actually are (almost) done!"
 	"{{ cargo_bin }}" -h
 	"{{ cargo_bin }}" -V
 	"{{ cargo_bin }}" blank -c 1
@@ -163,12 +164,14 @@ bench BENCH="" FILTER="":
 	[ ! -d "{{ pkg_dir1 }}/target" ] || rm -rf "{{ pkg_dir1 }}/target"
 	[ ! -d "{{ pkg_dir2 }}/target" ] || rm -rf "{{ pkg_dir2 }}/target"
 	[ ! -d "{{ pkg_dir3 }}/target" ] || rm -rf "{{ pkg_dir3 }}/target"
+	[ ! -d "{{ pkg_dir4 }}/target" ] || rm -rf "{{ pkg_dir4 }}/target"
 
 
 # Clippy.
 @clippy:
 	clear
 	RUSTFLAGS="{{ rustflags }}" cargo clippy \
+		--workspace \
 		--release \
 		--all-features \
 		--target x86_64-unknown-linux-gnu \
@@ -183,15 +186,15 @@ demo-progress:
 
 	cargo run \
 		-q \
-		-p fyi_core \
+		-p fyi_progress \
 		--example progress \
-		--all-features \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
 
 # Unit tests!
 @test:
+	clear
 	RUST_TEST_THREADS=1 cargo test \
 		--tests \
 		--all-features \
@@ -224,6 +227,7 @@ version:
 	just _version "{{ pkg_dir1 }}" "$_ver2"
 	just _version "{{ pkg_dir2 }}" "$_ver2"
 	just _version "{{ pkg_dir3 }}" "$_ver2"
+	just _version "{{ pkg_dir4 }}" "$_ver2"
 
 
 # Set version for real.

@@ -1,12 +1,4 @@
-/*!
-# Build
-*/
-
-extern crate clap;
-
 include!("src/menu.rs");
-
-
 
 /// Build tasks.
 fn main() {
