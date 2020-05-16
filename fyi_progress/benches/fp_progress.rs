@@ -74,6 +74,7 @@ fn tick(c: &mut Criterion) {
 }
 
 
+
 criterion_group!(
 	benches,
 	new,
