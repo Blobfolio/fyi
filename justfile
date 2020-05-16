@@ -23,7 +23,7 @@ rustflags   := "-Clinker-plugin-lto -Clinker=clang-9 -Clink-args=-fuse-ld=lld-9 
 
 
 
-# Build Release!
+# Bench it!
 bench BENCH="" FILTER="":
 	#!/usr/bin/env bash
 
