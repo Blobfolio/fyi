@@ -115,9 +115,11 @@ fn print(c: &mut Criterion) {
 	println!("");
 }
 
+
+
 criterion_group!(
 	benches,
 	new,
-	// print,
+	print,
 );
 criterion_main!(benches);
