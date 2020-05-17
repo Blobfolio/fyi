@@ -12,12 +12,9 @@ use fyi_msg::Timestamp;
 
 
 fn new(c: &mut Criterion) {
-	println!("{}", Timestamp::new());
 	c.bench_function("fyi_msg::Timestamp/new()", move |b| {
 		b.iter(|| Timestamp::new())
 	});
-	println!("");
-	println!("");
 }
 
 criterion_group!(

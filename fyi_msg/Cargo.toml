@@ -33,7 +33,7 @@ features = [ "write" ]
 [features]
 default = []
 interactive = [ "casual" ]
-stdout_sinkhole = []
+bench_sink = []
 
 [dev-dependencies]
 criterion = "*"

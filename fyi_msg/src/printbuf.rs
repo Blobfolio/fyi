@@ -275,11 +275,54 @@ impl PrintBuf {
 	/// assigned part index 0.
 	pub fn from_parts<T> (parts: &[T]) -> Self
 	where T: Borrow<str> {
-		let mut buf: PrintBuf = PrintBuf::with_capacity(256);
-		for p in parts {
-			unsafe { buf.add_part_unchecked(p.borrow().as_bytes()); }
+		let len: usize = parts.iter()
+			.map(|x| x.borrow().len())
+			.sum();
+
+		if len == 0 {
+			let mut buf: PrintBuf = PrintBuf::with_capacity(64);
+			for _ in parts {
+				buf.parts.push((0, 0));
+			}
+			buf
 		}
-		buf
+		else {
+			let mut buf: PrintBuf = PrintBuf::with_capacity(len);
+			for p in parts {
+				unsafe { buf.add_part_unchecked(p.borrow().as_bytes()); }
+			}
+			buf
+		}
+	}
+
+	#[must_use]
+	/// From Parts (Unchecked).
+	///
+	/// Create a new `PrintBuf` with content `part`. The seeding value will be
+	/// assigned part index 0.
+	///
+	/// # Safety
+	///
+	/// This method accepts a raw `[u8]` that is assumed to be valid UTF-8.
+	pub unsafe fn from_parts_unchecked(parts: &[&[u8]]) -> Self {
+		let len: usize = parts.iter()
+			.map(|x| x.len())
+			.sum();
+
+		if len == 0 {
+			let mut buf: PrintBuf = PrintBuf::with_capacity(64);
+			for _ in parts {
+				buf.parts.push((0, 0));
+			}
+			buf
+		}
+		else {
+			let mut buf: PrintBuf = PrintBuf::with_capacity(len);
+			for p in parts {
+				buf.add_part_unchecked(p);
+			}
+			buf
+		}
 	}
 
 	#[must_use]
@@ -321,8 +364,15 @@ impl PrintBuf {
 	/// This method accepts a raw `[u8]` that is assumed to be valid UTF-8.
 	pub unsafe fn add_part_unchecked(&mut self, part: &[u8]) -> usize {
 		let start: usize = self.buf.len();
-		self.buf.extend_from_slice(part);
-		self.parts.push((start, self.buf.len()));
+
+		if part.is_empty() {
+			self.parts.push((start, start));
+		}
+		else {
+			self.buf.extend_from_slice(part);
+			self.parts.push((start, self.buf.len()));
+		}
+
 		self.parts.len() - 1
 	}
 
@@ -363,6 +413,19 @@ impl PrintBuf {
 	}
 
 	#[must_use]
+	/// Empty Buffer With Specified Number of Parts
+	///
+	/// This is like `with_capacity()`, except it reserves a certain number
+	/// of parts.
+	pub fn with_parts(num: usize) -> Self {
+		let mut buf: PrintBuf = PrintBuf::default();
+		for _ in 0..num {
+			buf.parts.push((0, 0));
+		}
+		buf
+	}
+
+	#[must_use]
 	/// Get Part.
 	///
 	/// Return a part of the buffer (or an empty string if the index is out of
@@ -387,6 +450,55 @@ impl PrintBuf {
 	/// This method assumes `idx` is in range.
 	pub unsafe fn get_part_unchecked(&self, idx: usize) -> Cow<[u8]> {
 		Cow::Borrowed(&self.buf[self.parts[idx].0..self.parts[idx].1])
+	}
+
+	#[must_use]
+	/// Get Part Length (bytes).
+	///
+	/// Return the byte size of a part.
+	pub fn get_part_len(&self, idx: usize) -> usize {
+		if idx < self.parts.len() {
+			unsafe {
+				let range = self.get_part_range_unchecked(idx);
+				range.1 - range.0
+			}
+		}
+		else { 0 }
+	}
+
+	#[must_use]
+	/// Get Part Range.
+	///
+	/// Return the range boundaries a part occupies. The start is inclusive,
+	/// the end is exclusive.
+	pub fn get_part_range(&self, idx: usize) -> (usize, usize) {
+		if idx < self.parts.len() {
+			unsafe { self.get_part_range_unchecked(idx) }
+		}
+		else {
+			(0, 0)
+		}
+	}
+
+	#[must_use]
+	/// Get Part Range (Unchecked).
+	///
+	/// This method performs the same tasks as `get_part_range()`, without
+	/// checking the index is in range.
+	///
+	/// # Safety
+	///
+	/// This method assumes `idx` is in range.
+	pub unsafe fn get_part_range_unchecked(&self, idx: usize) -> (usize, usize) {
+		(self.parts[idx].0, self.parts[idx].1)
+	}
+
+	#[must_use]
+	/// Get Part Ranges.
+	///
+	/// Return all range boundaries.
+	pub fn get_part_ranges(&self) -> Vec<(usize, usize)> {
+		self.parts.clone().into_vec()
 	}
 
 	/// Insert Line Break.
@@ -428,8 +540,12 @@ impl PrintBuf {
 	pub unsafe fn insert_part_unchecked(&mut self, idx: usize, part: &[u8]) {
 		let adj: usize = part.len();
 
+		// The buffer isn't changing.
+		if adj == 0 {
+			self.parts.insert(idx, (self.parts[idx].0, self.parts[idx].0 ));
+		}
 		// Add to the beginning.
-		if idx == 0 {
+		else if idx == 0 {
 			// Inject the slice.
 			let b = self.buf.split_off(0);
 			self.buf.extend_from_slice(part);
@@ -452,6 +568,9 @@ impl PrintBuf {
 	}
 
 	/// Partition by Line.
+	///
+	/// Repartition the buffer so each part represents a line (rather than
+	/// whatever arbitrary bit of data it had before).
 	pub fn partition_by_lines(&mut self) -> Vec<usize> {
 		if self.is_empty() {
 			self.parts.clear();
@@ -527,6 +646,14 @@ impl PrintBuf {
 		}
 		else {
 			unsafe { self.printer.println(self) }
+		}
+	}
+
+	/// Erase whatever was last printed.
+	pub fn print_erase(&mut self) {
+		if self.last_lines > 0 {
+			self.printer.erase(self.last_lines);
+			self.last_lines = 0;
 		}
 	}
 
@@ -689,6 +816,12 @@ impl PrintBuf {
 			self.last_width = 0;
 			self.last_wrap = false;
 		}
+	}
+
+	#[must_use]
+	/// Get the Term Width and Last Used Term Width
+	pub fn term_widths(&self) -> (usize, usize) {
+		(term_width(), self.last_width)
 	}
 
 	/// Chop it.

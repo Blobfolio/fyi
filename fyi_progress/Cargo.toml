@@ -7,6 +7,7 @@ description = "FYI is a dead-simple status message printer for CLI use applicati
 publish = false
 
 [dependencies]
+bitflags = "1.2.*"
 indexmap = "1.3.*"
 itoa = "0.4.*"
 num-integer = "0.1.*"
@@ -15,14 +16,9 @@ seahash = "4.0.*"
 [dependencies.fyi_msg]
 path = "../fyi_msg"
 
-[dependencies.smallvec]
-version = "1.4.*"
-default-features = false
-features = [ "write" ]
-
 [features]
 default = []
-stdout_sinkhole = []
+bench_sink = []
 
 [dev-dependencies]
 criterion = "*"

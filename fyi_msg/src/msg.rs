@@ -71,14 +71,7 @@ impl Borrow<[u8]> for Msg {
 impl Default for Msg {
 	/// Default.
 	fn default() -> Self {
-		Msg(PrintBuf::from_parts(&[
-			// Indentation.
-			"",
-			// Message.
-			"",
-			// Timestamp.
-			"",
-		]))
+		Msg(PrintBuf::with_parts(3))
 	}
 }
 
@@ -124,55 +117,59 @@ macro_rules! new_msg_wc_method {
 }
 
 impl Msg {
-	/// Bold ANSI.
-	const BOLD: &'static str = "\x1B[1m";
-	/// Reset styles.
-	const RESET_ALL: &'static str = "\x1B[0m";
-	/// Prefix closer.
-	const PREFIX_CLOSER: &'static str = ":\x1B[39m ";
+	/// The part index for indentation.
+	const IDX_INDENT: usize = 0;
+
+	/// The part index for timestamps.
+	const IDX_TIMESTAMP: usize = 1;
+
+	/// The part index for the actual message.
+	#[allow(dead_code)] const IDX_MSG: usize = 2;
 
 	/// New message.
 	pub fn new<T1, T2> (prefix: T1, prefix_color: u8, msg: T2) -> Self
 	where
 	T1: Borrow<str>,
 	T2: Borrow<str> {
-		let prefix: &str = prefix.borrow();
-		let msg: &str = msg.borrow();
-
+		let prefix = prefix.borrow();
 		if prefix.is_empty() {
-			if msg.is_empty() {
-				Self::default()
-			}
-			else {
-				Msg(PrintBuf::from_parts(&[
+			return Self::plain(msg);
+		}
+
+		let msg = msg.borrow();
+		if msg.is_empty() {
+			unsafe {
+				Msg(PrintBuf::from_parts_unchecked(&[
 					// Indentation.
-					"",
+					&[],
 					// Timestamp.
-					"",
+					&[],
 					// Message.
 					&[
-						Self::BOLD,
-						msg.borrow(),
-						Self::RESET_ALL,
+						ansi_code_bold(prefix_color),
+						prefix.as_bytes(),
+						&[58, 27, 91, 48, 109],
 					].concat(),
 				]))
 			}
 		}
 		else {
-			Msg(PrintBuf::from_parts(&[
-				// Indentation.
-				"",
-				// Timestamp.
-				"",
-				// Message.
-				&[
-					unsafe { std::str::from_utf8_unchecked(ansi_code_bold(prefix_color)) },
-					prefix.borrow(),
-					Self::PREFIX_CLOSER,
-					msg.borrow(),
-					Self::RESET_ALL,
-				].concat(),
-			]))
+			unsafe {
+				Msg(PrintBuf::from_parts_unchecked(&[
+					// Indentation.
+					&[],
+					// Timestamp.
+					&[],
+					// Message.
+					&[
+						ansi_code_bold(prefix_color),
+						prefix.as_bytes(),
+						&[58, 27, 91, 51, 57, 109, 32],
+						msg.as_bytes(),
+						&[27, 91, 48, 109],
+					].concat(),
+				]))
+			}
 		}
 	}
 
@@ -181,66 +178,70 @@ impl Msg {
 	where
 	T1: Borrow<str>,
 	T2: Borrow<str> {
-		let prefix: &str = prefix.borrow();
-		let msg: &str = msg.borrow();
-
+		let prefix = prefix.borrow();
 		if prefix.is_empty() {
-			if msg.is_empty() {
-				Self::default()
-			}
-			else {
-				Msg(PrintBuf::from_parts(&[
+			return Self::plain(msg);
+		}
+
+		let msg = msg.borrow();
+		if msg.is_empty() {
+			unsafe {
+				Msg(PrintBuf::from_parts_unchecked(&[
 					// Indentation.
-					"",
+					&[],
 					// Timestamp.
-					"",
+					&[],
 					// Message.
 					&[
-						Self::BOLD,
-						msg.borrow(),
-						Self::RESET_ALL,
+						ansi_code_bold(prefix_color),
+						prefix.as_bytes(),
+						&[27, 91, 48, 109],
 					].concat(),
 				]))
 			}
 		}
 		else {
-			Msg(PrintBuf::from_parts(&[
-				// Indentation.
-				"",
-				// Timestamp.
-				"",
-				// Message.
-				&[
-					unsafe { std::str::from_utf8_unchecked(ansi_code_bold(prefix_color)) },
-					prefix.borrow(),
-					&Self::PREFIX_CLOSER[1..],
-					msg.borrow(),
-					Self::RESET_ALL,
-				].concat(),
-			]))
+			unsafe {
+				Msg(PrintBuf::from_parts_unchecked(&[
+					// Indentation.
+					&[],
+					// Timestamp.
+					&[],
+					// Message.
+					&[
+						ansi_code_bold(prefix_color),
+						prefix.as_bytes(),
+						&[27, 91, 51, 57, 109, 32],
+						msg.as_bytes(),
+						&[27, 91, 48, 109],
+					].concat(),
+				]))
+			}
 		}
 	}
 
 	/// New message (without prefix).
 	pub fn plain<T> (msg: T) -> Self
 	where T: Borrow<str> {
-		let msg: &str = msg.borrow();
+		let msg = msg.borrow();
 		if msg.is_empty() {
 			Self::default()
 		}
 		else {
-			Msg(PrintBuf::from_parts(&[
-				// Indentation.
-				"",
-				// Timestamp.
-				"",
-				// Message.
-				&[
-					Self::BOLD,
-					msg.borrow(),
-					Self::RESET_ALL,
-				].concat(),
-			]))
+			unsafe {
+				Msg(PrintBuf::from_parts_unchecked(&[
+					// Indentation.
+					&[],
+					// Timestamp.
+					&[],
+					// Message.
+					&[
+						&[27, 91, 49, 109],
+						msg.as_bytes(),
+						&[27, 91, 48, 109],
+					].concat(),
+				]))
+			}
 		}
 	}
 
@@ -275,7 +276,7 @@ impl Msg {
 
 	/// Indent.
 	pub fn indent(&mut self) {
-		unsafe { self.0.replace_part_unchecked(0, &[32, 32, 32, 32]); }
+		unsafe { self.0.replace_part_unchecked(Self::IDX_INDENT, &[32, 32, 32, 32]); }
 	}
 
 	/// Print.
@@ -302,12 +303,12 @@ impl Msg {
 
 	/// Remove Indent.
 	pub fn remove_indent(&mut self) {
-		unsafe { self.0.replace_part_unchecked(0, &[]); }
+		unsafe { self.0.replace_part_unchecked(Self::IDX_INDENT, &[]); }
 	}
 
 	/// Remove Timestamp.
 	pub fn remove_timestamp(&mut self) {
-		unsafe { self.0.replace_part_unchecked(1, &[]); }
+		unsafe { self.0.replace_part_unchecked(Self::IDX_TIMESTAMP, &[]); }
 	}
 
 	/// Set Printer.
@@ -320,10 +321,10 @@ impl Msg {
 	pub fn timestamp(&mut self) {
 		unsafe {
 			self.0.replace_part_unchecked(
-				1,
+				Self::IDX_TIMESTAMP,
 				&[
 					Timestamp::new().deref(),
-					&[32_u8],
+					&[32_u8, 32_u8],
 				].concat()
 			);
 		}
