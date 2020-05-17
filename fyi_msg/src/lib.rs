@@ -24,6 +24,7 @@
 #![allow(clippy::missing_errors_doc)]
 
 mod msg;
+mod printbuf;
 mod timestamp;
 
 pub mod print;
@@ -32,4 +33,9 @@ pub mod utility;
 
 pub use msg::Msg;
 pub use print::Flags;
+pub use printbuf::{
+	PrintBuf,
+	PrinterKind,
+	PrintFlags
+};
 pub use timestamp::Timestamp;
