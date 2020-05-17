@@ -7,9 +7,9 @@ canonicalized, deduplicated, and validated against a regular expression.
 
 use crate::utility::inflect;
 use fyi_msg::{
-	Flags,
 	Msg,
-	traits::Printable,
+	PrinterKind,
+	PrintFlags,
 };
 use fyi_progress::{
 	lapsed,
@@ -244,11 +244,15 @@ impl Witcher {
 		F: Fn(&Arc<PathBuf>) + Send + Sync
 	{
 		let pbar = make_progress!(name, self.0.len() as u64);
+
 		make_progress_loop!(self, pbar, cb);
-		crunched_in!(
+
+		let mut msg: Msg = crunched_in!(
 			pbar.total(),
 			pbar.time().elapsed().as_secs() as u32
-		).print(0, Flags::TO_STDERR);
+		);
+		msg.set_printer(PrinterKind::Stderr);
+		msg.print(PrintFlags::NONE);
 	}
 
 	/// Parallel Loop w/ Progress.
@@ -269,11 +273,13 @@ impl Witcher {
 
 		make_progress_loop!(self, pbar, cb);
 
-		crunched_in!(
+		let mut msg: Msg = crunched_in!(
 			pbar.total(),
 			pbar.time().elapsed().as_secs() as u32,
 			before,
 			self.du()
-		).print(0, Flags::TO_STDERR);
+		);
+		msg.set_printer(PrinterKind::Stderr);
+		msg.print(PrintFlags::NONE);
 	}
 }

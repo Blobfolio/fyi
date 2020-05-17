@@ -17,27 +17,13 @@ let msg = Msg::error("Well darn.");
 let msg = Msg::debug("I like cookies.");
 let msg = Msg::success("Example executed!");
 ```
-
-Messages can be printed by pulling in the `Printable` trait and calling the
-`print()` method, passing any relevant flags and indentation to it.
-
-```no_run
-use fyi_msg::Flags;
-use fyi_msg::Msg;
-use fyi_msg::traits::Printable;
-
-// Create a message.
-let msg = Msg::plain("Nobody likes a prefixed message.");
-msg.print(0, Flags::NONE); // Print to `Stdout` without any changes.
-msg.print(0, Flags::TIMESTAMPED); // Print it with a timestamp.
-msg.print(0, Flags::TO_STDERR); // Print to `Stderr`.
-```
 */
 
 use crate::{
-	print,
-	Flags,
-	traits::Printable,
+	PrintBuf,
+	PrinterKind,
+	PrintFlags,
+	Timestamp,
 	utility::ansi_code_bold,
 };
 use std::{
@@ -48,9 +34,9 @@ use std::{
 
 
 
-#[derive(Debug, Default, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, Hash, PartialEq)]
 /// The Message!
-pub struct Msg(Vec<u8>);
+pub struct Msg(PrintBuf);
 
 impl AsRef<str> for Msg {
 	#[inline]
@@ -79,6 +65,20 @@ impl Borrow<[u8]> for Msg {
 	#[inline]
 	fn borrow(&self) -> &[u8] {
 		self
+	}
+}
+
+impl Default for Msg {
+	/// Default.
+	fn default() -> Self {
+		Msg(PrintBuf::from_parts(&[
+			// Indentation.
+			"",
+			// Message.
+			"",
+			// Timestamp.
+			"",
+		]))
 	}
 }
 
@@ -118,18 +118,18 @@ macro_rules! new_msg_wc_method {
 		#[inline]
 		/// New $label message.
 		pub fn $method<T: Borrow<str>> (msg: T) -> Self {
-			Self::without_colon($label, $color, msg)
+			Self::new_no_colon($label, $color, msg)
 		}
 	};
 }
 
 impl Msg {
 	/// Bold ANSI.
-	const BOLD: &'static [u8; 4] = b"\x1B[1m";
+	const BOLD: &'static str = "\x1B[1m";
 	/// Reset styles.
-	const RESET_ALL: &'static [u8; 4] = b"\x1B[0m";
+	const RESET_ALL: &'static str = "\x1B[0m";
 	/// Prefix closer.
-	const PREFIX_CLOSER: &'static [u8; 7] = b":\x1B[39m ";
+	const PREFIX_CLOSER: &'static str = ":\x1B[39m ";
 
 	/// New message.
 	pub fn new<T1, T2> (prefix: T1, prefix_color: u8, msg: T2) -> Self
@@ -144,26 +144,40 @@ impl Msg {
 				Self::default()
 			}
 			else {
-				Msg([
-					Self::BOLD,
-					msg.as_bytes(),
-					Self::RESET_ALL,
-				].concat())
+				Msg(PrintBuf::from_parts(&[
+					// Indentation.
+					"",
+					// Timestamp.
+					"",
+					// Message.
+					&[
+						Self::BOLD,
+						msg.borrow(),
+						Self::RESET_ALL,
+					].concat(),
+				]))
 			}
 		}
 		else {
-			Msg([
-				ansi_code_bold(prefix_color),
-				prefix.as_bytes(),
-				Self::PREFIX_CLOSER,
-				msg.as_bytes(),
-				Self::RESET_ALL,
-			].concat())
+			Msg(PrintBuf::from_parts(&[
+				// Indentation.
+				"",
+				// Timestamp.
+				"",
+				// Message.
+				&[
+					unsafe { std::str::from_utf8_unchecked(ansi_code_bold(prefix_color)) },
+					prefix.borrow(),
+					Self::PREFIX_CLOSER,
+					msg.borrow(),
+					Self::RESET_ALL,
+				].concat(),
+			]))
 		}
 	}
 
 	/// New message (without prefix colon).
-	pub fn without_colon<T1, T2> (prefix: T1, prefix_color: u8, msg: T2) -> Self
+	pub fn new_no_colon<T1, T2> (prefix: T1, prefix_color: u8, msg: T2) -> Self
 	where
 	T1: Borrow<str>,
 	T2: Borrow<str> {
@@ -175,21 +189,35 @@ impl Msg {
 				Self::default()
 			}
 			else {
-				Msg([
-					Self::BOLD,
-					msg.as_bytes(),
-					Self::RESET_ALL,
-				].concat())
+				Msg(PrintBuf::from_parts(&[
+					// Indentation.
+					"",
+					// Timestamp.
+					"",
+					// Message.
+					&[
+						Self::BOLD,
+						msg.borrow(),
+						Self::RESET_ALL,
+					].concat(),
+				]))
 			}
 		}
 		else {
-			Msg([
-				ansi_code_bold(prefix_color),
-				prefix.as_bytes(),
-				&Self::PREFIX_CLOSER[1..],
-				msg.as_bytes(),
-				Self::RESET_ALL,
-			].concat())
+			Msg(PrintBuf::from_parts(&[
+				// Indentation.
+				"",
+				// Timestamp.
+				"",
+				// Message.
+				&[
+					unsafe { std::str::from_utf8_unchecked(ansi_code_bold(prefix_color)) },
+					prefix.borrow(),
+					&Self::PREFIX_CLOSER[1..],
+					msg.borrow(),
+					Self::RESET_ALL,
+				].concat(),
+			]))
 		}
 	}
 
@@ -201,11 +229,18 @@ impl Msg {
 			Self::default()
 		}
 		else {
-			Msg([
-				Self::BOLD,
-				msg.as_bytes(),
-				Self::RESET_ALL,
-			].concat())
+			Msg(PrintBuf::from_parts(&[
+				// Indentation.
+				"",
+				// Timestamp.
+				"",
+				// Message.
+				&[
+					Self::BOLD,
+					msg.borrow(),
+					Self::RESET_ALL,
+				].concat(),
+			]))
 		}
 	}
 
@@ -238,29 +273,59 @@ impl Msg {
 		self
 	}
 
-	#[must_use]
-	#[inline]
-	/// Is Empty?
-	pub fn is_empty(&self) -> bool {
-		self.0.is_empty()
+	/// Indent.
+	pub fn indent(&mut self) {
+		unsafe { self.0.replace_part_unchecked(0, &[32, 32, 32, 32]); }
 	}
 
-	#[must_use]
-	/// Length.
-	pub fn len(&self) -> usize {
-		self.0.len()
-	}
-}
-
-impl Printable for Msg {
 	/// Print.
-	fn print(&self, indent: u8, flags: Flags) {
-		unsafe { print::print(self, indent, flags); }
+	pub fn print(&mut self, flags: PrintFlags) {
+		self.0.print(flags);
 	}
 
 	#[cfg(feature = "interactive")]
+	#[must_use]
 	/// Prompt.
-	fn prompt(&self, indent: u8) -> bool {
-		unsafe { print::prompt(self, indent) }
+	///
+	/// This is a simple print wrapper around `casual::confirm()`.
+	///
+	/// As we aren't doing the heavy lifting here, there is no support for `Flags`,
+	/// however prompt messages can be indented.
+	///
+	/// # Safety
+	///
+	/// This method accepts a raw `[u8]`; when using it, make sure the data you
+	/// pass is valid UTF-8.
+	pub fn prompt(&self) -> bool {
+		casual::confirm(unsafe { std::str::from_utf8_unchecked(&self.0) })
+	}
+
+	/// Remove Indent.
+	pub fn remove_indent(&mut self) {
+		unsafe { self.0.replace_part_unchecked(0, &[]); }
+	}
+
+	/// Remove Timestamp.
+	pub fn remove_timestamp(&mut self) {
+		unsafe { self.0.replace_part_unchecked(1, &[]); }
+	}
+
+	/// Set Printer.
+	/// Set Printer.
+	pub fn set_printer(&mut self, printer: PrinterKind) {
+		self.0.set_printer(printer);
+	}
+
+	/// Add/Update timestamp.
+	pub fn timestamp(&mut self) {
+		unsafe {
+			self.0.replace_part_unchecked(
+				1,
+				&[
+					Timestamp::new().deref(),
+					&[32_u8],
+				].concat()
+			);
+		}
 	}
 }

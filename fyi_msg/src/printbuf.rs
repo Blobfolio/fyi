@@ -269,6 +269,20 @@ impl PrintBuf {
 	}
 
 	#[must_use]
+	/// From Parts.
+	///
+	/// Create a new `PrintBuf` with content `part`. The seeding value will be
+	/// assigned part index 0.
+	pub fn from_parts<T> (parts: &[T]) -> Self
+	where T: Borrow<str> {
+		let mut buf: PrintBuf = PrintBuf::with_capacity(256);
+		for p in parts {
+			unsafe { buf.add_part_unchecked(p.borrow().as_bytes()); }
+		}
+		buf
+	}
+
+	#[must_use]
 	/// With Capacity.
 	///
 	/// Initialize an empty `PrintBuf` with capacity.

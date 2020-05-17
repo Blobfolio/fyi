@@ -78,6 +78,8 @@ use crate::lapsed;
 use fyi_msg::{
 	Flags,
 	Msg,
+	PrinterKind,
+	PrintFlags,
 	traits::GirthExt,
 	utility,
 };
@@ -545,18 +547,17 @@ impl Progress {
 	/// instantiation, so don't dally or cache the object or anything or
 	/// the timing won't make any sense.
 	pub fn finished_in(&self) {
-		use fyi_msg::traits::Printable;
-
 		let ptr = self.0.lock().unwrap();
 		if ! ptr.is_running() {
-			Msg::crunched([
+			let mut msg = Msg::crunched([
 				"Finished in ",
 				unsafe { std::str::from_utf8_unchecked(&lapsed::full(
 					ptr.time.elapsed().as_secs() as u32
 				))},
 				".",
-			].concat())
-				.print(0, Flags::TO_STDERR);
+			].concat());
+			msg.set_printer(PrinterKind::Stderr);
+			msg.print(PrintFlags::NONE);
 		}
 	}
 

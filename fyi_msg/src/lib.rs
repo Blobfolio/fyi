@@ -27,12 +27,10 @@ mod msg;
 mod printbuf;
 mod timestamp;
 
-pub mod print;
 pub mod traits;
 pub mod utility;
 
 pub use msg::Msg;
-pub use print::Flags;
 pub use printbuf::{
 	PrintBuf,
 	PrinterKind,

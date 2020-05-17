@@ -4,15 +4,6 @@
 This mod contains miscellaneous utility functions for the crate.
 */
 
-/// Re-export these helpers.
-pub use crate::print::{
-	print,
-	print_to,
-};
-
-#[cfg(feature = "interactive")]
-pub use crate::print::prompt;
-
 #[must_use]
 #[allow(clippy::too_many_lines)]
 /// Return escape sequence.
