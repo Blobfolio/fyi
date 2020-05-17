@@ -39,10 +39,6 @@ bench_sink = []
 criterion = "*"
 
 [[bench]]
-name = "fm_girth_ext"
-harness = false
-
-[[bench]]
 name = "fm_msg"
 harness = false
 

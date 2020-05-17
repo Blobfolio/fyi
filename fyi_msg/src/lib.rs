@@ -27,7 +27,6 @@ mod msg;
 mod printbuf;
 mod timestamp;
 
-pub mod traits;
 pub mod utility;
 
 pub use msg::Msg;
