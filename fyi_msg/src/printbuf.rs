@@ -269,6 +269,27 @@ impl PrintBuf {
 	}
 
 	#[must_use]
+	/// From Part (Unchecked).
+	///
+	/// This method performs the same tasks as `from()`, without UTF-8 checks.
+	///
+	/// # Safety
+	///
+	/// This method accepts a raw `[u8]` that is assumed to be valid UTF-8.
+	pub unsafe fn from_at_with_parts_unchecked(part: &[u8], at: usize, with: usize) -> Self {
+		assert!(at < with);
+
+		let mut parts: SmallVec<[(usize, usize); 16]> = smallvec![(0, 0); with];
+		parts[at].1 = part.len();
+
+		PrintBuf {
+			buf: BytesMut::from(part),
+			parts,
+			..PrintBuf::default()
+		}
+	}
+
+	#[must_use]
 	/// From Parts.
 	///
 	/// Create a new `PrintBuf` with content `part`. The seeding value will be
@@ -318,9 +339,7 @@ impl PrintBuf {
 		}
 		else {
 			let mut buf: PrintBuf = PrintBuf::with_capacity(len);
-			for p in parts {
-				buf.add_part_unchecked(p);
-			}
+			buf.add_parts_unchecked(parts);
 			buf
 		}
 	}
@@ -335,6 +354,19 @@ impl PrintBuf {
 			parts: SmallVec::new(),
 			..PrintBuf::default()
 		}
+	}
+
+	#[must_use]
+	/// Empty Buffer With Specified Number of Parts
+	///
+	/// This is like `with_capacity()`, except it reserves a certain number
+	/// of parts.
+	pub fn with_parts(num: usize) -> Self {
+		let mut buf: PrintBuf = PrintBuf::default();
+		for _ in 0..num {
+			buf.parts.push((0, 0));
+		}
+		buf
 	}
 
 	/// Add Line Break.
@@ -410,19 +442,6 @@ impl PrintBuf {
 	pub fn clear(&mut self) {
 		self.buf.clear();
 		self.parts.clear();
-	}
-
-	#[must_use]
-	/// Empty Buffer With Specified Number of Parts
-	///
-	/// This is like `with_capacity()`, except it reserves a certain number
-	/// of parts.
-	pub fn with_parts(num: usize) -> Self {
-		let mut buf: PrintBuf = PrintBuf::default();
-		for _ in 0..num {
-			buf.parts.push((0, 0));
-		}
-		buf
 	}
 
 	#[must_use]
@@ -542,7 +561,7 @@ impl PrintBuf {
 
 		// The buffer isn't changing.
 		if adj == 0 {
-			self.parts.insert(idx, (self.parts[idx].0, self.parts[idx].0 ));
+			self.parts.insert(idx, (self.parts[idx].0, self.parts[idx].0));
 		}
 		// Add to the beginning.
 		else if idx == 0 {
@@ -907,10 +926,12 @@ impl PrintBuf {
 		}
 		// Rebuild it better than it was!
 		else {
-			Cow::Owned([
-				&buf[..cur_len],
-				b"\x1B[0m",
-			].concat())
+			Cow::Owned(
+				buf[..cur_len].iter()
+					.chain(&b"\x1B[0m"[..])
+					.cloned()
+					.collect::<Vec<u8>>(),
+			)
 		}
 	}
 

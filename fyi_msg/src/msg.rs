@@ -34,6 +34,14 @@ use std::{
 
 
 
+static CLOSE: &[u8] = &[27, 91, 48, 109];
+static COLON_CLOSE: &[u8] = &[58, 27, 91, 48, 109];
+static EMPTY: &[u8] = &[];
+static OPEN_BOLD: &[u8] = &[27, 91, 49, 109];
+static PREFIX_JOINER: &[u8] = &[58, 27, 91, 51, 57, 109, 32];
+
+
+
 #[derive(Debug, Clone, Hash, PartialEq)]
 /// The Message!
 pub struct Msg(PrintBuf);
@@ -124,7 +132,7 @@ impl Msg {
 	const IDX_TIMESTAMP: usize = 1;
 
 	/// The part index for the actual message.
-	#[allow(dead_code)] const IDX_MSG: usize = 2;
+	const IDX_MSG: usize = 2;
 
 	/// New message.
 	pub fn new<T1, T2> (prefix: T1, prefix_color: u8, msg: T2) -> Self
@@ -139,36 +147,30 @@ impl Msg {
 		let msg = msg.borrow();
 		if msg.is_empty() {
 			unsafe {
-				Msg(PrintBuf::from_parts_unchecked(&[
-					// Indentation.
-					&[],
-					// Timestamp.
-					&[],
-					// Message.
-					&[
-						ansi_code_bold(prefix_color),
-						prefix.as_bytes(),
-						&[58, 27, 91, 48, 109],
-					].concat(),
-				]))
+				Msg(PrintBuf::from_at_with_parts_unchecked(
+					&ansi_code_bold(prefix_color).iter()
+						.chain(prefix.as_bytes())
+						.chain(COLON_CLOSE)
+						.cloned()
+						.collect::<Vec<u8>>(),
+					Msg::IDX_MSG,
+					3
+				))
 			}
 		}
 		else {
 			unsafe {
-				Msg(PrintBuf::from_parts_unchecked(&[
-					// Indentation.
-					&[],
-					// Timestamp.
-					&[],
-					// Message.
-					&[
-						ansi_code_bold(prefix_color),
-						prefix.as_bytes(),
-						&[58, 27, 91, 51, 57, 109, 32],
-						msg.as_bytes(),
-						&[27, 91, 48, 109],
-					].concat(),
-				]))
+				Msg(PrintBuf::from_at_with_parts_unchecked(
+					&ansi_code_bold(prefix_color).iter()
+						.chain(prefix.as_bytes())
+						.chain(PREFIX_JOINER)
+						.chain(msg.as_bytes())
+						.chain(CLOSE)
+						.cloned()
+						.collect::<Vec<u8>>(),
+					Msg::IDX_MSG,
+					3
+				))
 			}
 		}
 	}
@@ -186,36 +188,30 @@ impl Msg {
 		let msg = msg.borrow();
 		if msg.is_empty() {
 			unsafe {
-				Msg(PrintBuf::from_parts_unchecked(&[
-					// Indentation.
-					&[],
-					// Timestamp.
-					&[],
-					// Message.
-					&[
-						ansi_code_bold(prefix_color),
-						prefix.as_bytes(),
-						&[27, 91, 48, 109],
-					].concat(),
-				]))
+				Msg(PrintBuf::from_at_with_parts_unchecked(
+					&ansi_code_bold(prefix_color).iter()
+						.chain(prefix.as_bytes())
+						.chain(CLOSE)
+						.cloned()
+						.collect::<Vec<u8>>(),
+					Msg::IDX_MSG,
+					3
+				))
 			}
 		}
 		else {
 			unsafe {
-				Msg(PrintBuf::from_parts_unchecked(&[
-					// Indentation.
-					&[],
-					// Timestamp.
-					&[],
-					// Message.
-					&[
-						ansi_code_bold(prefix_color),
-						prefix.as_bytes(),
-						&[27, 91, 51, 57, 109, 32],
-						msg.as_bytes(),
-						&[27, 91, 48, 109],
-					].concat(),
-				]))
+				Msg(PrintBuf::from_at_with_parts_unchecked(
+					&ansi_code_bold(prefix_color).iter()
+						.chain(prefix.as_bytes())
+						.chain(&PREFIX_JOINER[1..])
+						.chain(msg.as_bytes())
+						.chain(CLOSE)
+						.cloned()
+						.collect::<Vec<u8>>(),
+					Msg::IDX_MSG,
+					3
+				))
 			}
 		}
 	}
@@ -229,18 +225,15 @@ impl Msg {
 		}
 		else {
 			unsafe {
-				Msg(PrintBuf::from_parts_unchecked(&[
-					// Indentation.
-					&[],
-					// Timestamp.
-					&[],
-					// Message.
-					&[
-						&[27, 91, 49, 109],
-						msg.as_bytes(),
-						&[27, 91, 48, 109],
-					].concat(),
-				]))
+				Msg(PrintBuf::from_at_with_parts_unchecked(
+					&OPEN_BOLD.iter()
+						.chain(msg.as_bytes())
+						.chain(CLOSE)
+						.cloned()
+						.collect::<Vec<u8>>(),
+					Msg::IDX_MSG,
+					3
+				))
 			}
 		}
 	}
@@ -303,12 +296,12 @@ impl Msg {
 
 	/// Remove Indent.
 	pub fn remove_indent(&mut self) {
-		unsafe { self.0.replace_part_unchecked(Self::IDX_INDENT, &[]); }
+		unsafe { self.0.replace_part_unchecked(Self::IDX_INDENT, EMPTY); }
 	}
 
 	/// Remove Timestamp.
 	pub fn remove_timestamp(&mut self) {
-		unsafe { self.0.replace_part_unchecked(Self::IDX_TIMESTAMP, &[]); }
+		unsafe { self.0.replace_part_unchecked(Self::IDX_TIMESTAMP, EMPTY); }
 	}
 
 	/// Set Printer.
@@ -322,10 +315,10 @@ impl Msg {
 		unsafe {
 			self.0.replace_part_unchecked(
 				Self::IDX_TIMESTAMP,
-				&[
-					Timestamp::new().deref(),
-					&[32_u8, 32_u8],
-				].concat()
+				&Timestamp::new().deref().iter()
+					.chain(&[32, 32])
+					.cloned()
+					.collect::<Vec<u8>>(),
 			);
 		}
 	}
