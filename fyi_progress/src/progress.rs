@@ -100,6 +100,12 @@ use std::{
 
 
 
+static PART_EMPTY: &[u8] = &[];
+static PART_RESET: &[u8] = &[27, 91, 48, 109];
+static PART_ZERO: &[u8] = &[48];
+
+
+
 bitflags::bitflags! {
 	/// Progress Bar flags.
 	///
@@ -151,35 +157,68 @@ struct ProgressInner {
 }
 
 impl Default for ProgressInner {
+	#[cfg(not(feature = "bench_sink"))]
 	/// Default.
 	fn default() -> Self {
-		let mut buf: PrintBuf = PrintBuf::from_parts(&[
-			"", // 0 Message + \n.
-			"\x1B[2m[\x1B[0;1m",
-			"00:00:00", // 2 Elapsed.
-			"\x1B[0;2m]\x1B[0m  ",
-			"", // 4 Bar + space space.
-			"\x1B[96;1m",
-			"0", // 6 Done.
-			"\x1B[0;2m/\x1B[0;34m",
-			"0", // 8 Total.
-			"\x1B[0;1m  ",
-			"0.00%", // 10 Percent.
-			"\x1B[0m",
-			"", // 12 Tasks.
-		]);
+		unsafe {
+			ProgressInner {
+				buf: PrintBuf::from_parts_unchecked(&[
+					PART_EMPTY, // 0 Message + \n.
+					b"\x1B[2m[\x1B[0;1m",
+					b"00:00:00", // 2 Elapsed.
+					b"\x1B[0;2m]\x1B[0m  ",
+					PART_EMPTY, // 4 Bar + space space.
+					b"\x1B[96;1m",
+					PART_ZERO, // 6 Done.
+					b"\x1B[0;2m/\x1B[0;34m",
+					PART_ZERO, // 8 Total.
+					b"\x1B[0;1m  ",
+					b"0.00%", // 10 Percent.
+					PART_RESET,
+					PART_EMPTY, // 12 Tasks.
+				])
+					.with_printer(PrinterKind::Stderr),
+				time: Instant::now(),
+				done: 0,
+				total: 0,
+				tasks: IndexSet::new(),
+				flags: ProgressFlags::NONE,
+				last_secs: 0,
+			}
+		}
+	}
 
-		#[cfg(feature = "bench_sink")] buf.set_printer(PrinterKind::Sink);
-		#[cfg(not(feature = "bench_sink"))] buf.set_printer(PrinterKind::Stderr);
-
-		ProgressInner {
-			buf,
-			time: Instant::now(),
-			done: 0,
-			total: 0,
-			tasks: IndexSet::new(),
-			flags: ProgressFlags::NONE,
-			last_secs: 0,
+	#[cfg(feature = "bench_sink")]
+	/// Default (Sink).
+	///
+	/// This version is intended for use in benchmarks, etc. Instead of
+	/// printing our sexy bar straight to the screen, it goes to a black hole.
+	fn default() -> Self {
+		unsafe {
+			ProgressInner {
+				buf: PrintBuf::from_parts_unchecked(&[
+					PART_EMPTY, // 0 Message + \n.
+					b"\x1B[2m[\x1B[0;1m",
+					b"00:00:00", // 2 Elapsed.
+					b"\x1B[0;2m]\x1B[0m  ",
+					PART_EMPTY, // 4 Bar + space space.
+					b"\x1B[96;1m",
+					PART_ZERO, // 6 Done.
+					b"\x1B[0;2m/\x1B[0;34m",
+					PART_ZERO, // 8 Total.
+					b"\x1B[0;1m  ",
+					b"0.00%", // 10 Percent.
+					PART_RESET,
+					PART_EMPTY, // 12 Tasks.
+				])
+					.with_printer(PrinterKind::Sink),
+				time: Instant::now(),
+				done: 0,
+				total: 0,
+				tasks: IndexSet::new(),
+				flags: ProgressFlags::NONE,
+				last_secs: 0,
+			}
 		}
 	}
 }
@@ -313,7 +352,10 @@ impl ProgressInner {
 				unsafe {
 					self.buf.replace_part_unchecked(
 						ProgressInner::IDX_MSG,
-						&[&msg[..], &[10_u8]].concat()
+						&msg.iter()
+							.chain(&[10])
+							.cloned()
+							.collect::<Vec<u8>>(),
 					);
 				}
 			}
@@ -411,16 +453,12 @@ impl ProgressInner {
 	/// Tick Tasks.
 	fn _tick_tasks(&self) -> Vec<u8> {
 		self.tasks.iter()
-			.cloned()
-			.flat_map(|s| {
-				[
-					// "\n    ↳ ".
-					&[10, 32, 32, 32, 32, 27, 91, 51, 53, 109, 226, 134, 179, 32],
-					s.as_bytes(),
-					b"\x1B[0m",
-				].concat()
-			})
-			.collect()
+			.flat_map(|s| [10, 32, 32, 32, 32, 27, 91, 51, 53, 109, 226, 134, 179, 32].iter()
+				.chain(s.as_bytes())
+				.chain(PART_RESET)
+				.cloned()
+			)
+			.collect::<Vec<u8>>()
 	}
 
 	/// Tick bar.
@@ -430,8 +468,9 @@ impl ProgressInner {
 	/// content would be so that the main `tick()` method can set it.
 	fn _tick_bar(&self, width: usize) -> Vec<u8> {
 		// The bar bits.
-		static DONE: &[u8] = &[b'='; 255];
-		static UNDONE: &[u8] = &[b'-'; 255];
+		// The "done" portion is in range 14..269.
+		// The "undone" portion is in range 276..531.
+		static BAR: &[u8] = &[27, 91, 50, 109, 91, 27, 91, 48, 59, 57, 54, 59, 49, 109, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 27, 91, 48, 59, 51, 52, 109, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32];
 
 		// First, find out how much *display* space is being used by the other
 		// bar elements. The magic number comes from:
@@ -453,34 +492,18 @@ impl ProgressInner {
 		if width_available < 10 {
 			Vec::new()
 		}
-		// There is no progress at all.
-		else if 0 == self.done {
-			[
-				b"\x1B[2m[\x1B[0;34m",
-				&UNDONE[0..width_available],
-				b"\x1B[0;2m]\x1B[0m  ",
-			].concat()
-		}
-		// We're totally done!
-		else if self.done == self.total {
-			[
-				b"\x1B[2m[\x1B[0;96;1m",
-				&DONE[0..width_available],
-				b"\x1B[0;2m]\x1B[0m  ",
-			].concat()
-		}
 		// We've got a mixture.
 		else {
 			let done_width: usize = f64::floor(self.percent() * width_available as f64) as usize;
-			let undone_width: usize = width_available - done_width;
+			let mut tmp: Vec<u8> = BAR.to_vec();
 
-			[
-				b"\x1B[2m[\x1B[0;96;1m",
-				&DONE[0..done_width],
-				b"\x1B[0;34m",
-				&UNDONE[0..undone_width],
-				b"\x1B[0;2m]\x1B[0m  ",
-			].concat()
+			// Chop out the parts we don't need.
+			let mut chop: usize = 276 + width_available - done_width;
+			tmp.drain(chop..531);
+			chop = 14 + done_width;
+			tmp.drain(chop..269);
+
+			tmp
 		}
 	}
 }
@@ -533,15 +556,15 @@ impl Progress {
 	pub fn finished_in(&self) {
 		let ptr = self.0.lock().unwrap();
 		if ! ptr.is_running() {
-			let mut msg = Msg::crunched([
+			Msg::crunched([
 				"Finished in ",
 				unsafe { std::str::from_utf8_unchecked(&lapsed::full(
 					ptr.time.elapsed().as_secs() as u32
 				))},
 				".",
-			].concat());
-			msg.set_printer(PrinterKind::Stderr);
-			msg.print(PrintFlags::NONE);
+			].concat())
+				.with_printer(PrinterKind::Stderr)
+				.print(PrintFlags::NONE);
 		}
 	}
 

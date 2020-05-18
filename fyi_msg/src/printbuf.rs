@@ -369,6 +369,13 @@ impl PrintBuf {
 		buf
 	}
 
+	#[must_use]
+	/// With Printer.
+	pub fn with_printer(mut self, printer: PrinterKind) -> Self {
+		self.set_printer(printer);
+		self
+	}
+
 	/// Add Line Break.
 	///
 	/// Add a `\n` to the end of the stream, increasing the part count by one.

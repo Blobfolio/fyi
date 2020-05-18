@@ -18,7 +18,7 @@ use fyi_msg::{
 fn new(c: &mut Criterion) {
 	let blank_str = black_box("");
 	let example_str = "This is an example message!";
-	let prefix_str = "Prefix";
+	let prefix_str = "Prefix:";
 	let zero_u8 = black_box(0_u8);
 	let one99_u8 = black_box(199_u8);
 

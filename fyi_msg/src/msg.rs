@@ -35,10 +35,9 @@ use std::{
 
 
 static CLOSE: &[u8] = &[27, 91, 48, 109];
-static COLON_CLOSE: &[u8] = &[58, 27, 91, 48, 109];
 static EMPTY: &[u8] = &[];
 static OPEN_BOLD: &[u8] = &[27, 91, 49, 109];
-static PREFIX_JOINER: &[u8] = &[58, 27, 91, 51, 57, 109, 32];
+static PREFIX_JOINER: &[u8] = &[27, 91, 51, 57, 109, 32];
 
 
 
@@ -104,22 +103,11 @@ impl fmt::Display for Msg {
 
 /// Shorthand for defining new messages.
 macro_rules! new_msg_method {
-	($method:ident, $label:literal, $color:literal) => {
+	($method:ident, $label:literal) => {
 		#[inline]
 		/// New $label message.
 		pub fn $method<T: Borrow<str>> (msg: T) -> Self {
-			Self::new($label, $color, msg)
-		}
-	};
-}
-
-/// Shorthand for defining new messages.
-macro_rules! new_msg_wc_method {
-	($method:ident, $label:literal, $color:literal) => {
-		#[inline]
-		/// New $label message.
-		pub fn $method<T: Borrow<str>> (msg: T) -> Self {
-			Self::new_no_colon($label, $color, msg)
+			unsafe { Self::new_unchecked($label, msg.borrow().as_bytes()) }
 		}
 	};
 }
@@ -140,17 +128,17 @@ impl Msg {
 	T1: Borrow<str>,
 	T2: Borrow<str> {
 		let prefix = prefix.borrow();
-		if prefix.is_empty() {
-			return Self::plain(msg);
-		}
-
 		let msg = msg.borrow();
-		if msg.is_empty() {
+
+		if prefix.is_empty() {
+			Self::plain(msg)
+		}
+		else if msg.is_empty() {
 			unsafe {
 				Msg(PrintBuf::from_at_with_parts_unchecked(
 					&ansi_code_bold(prefix_color).iter()
 						.chain(prefix.as_bytes())
-						.chain(COLON_CLOSE)
+						.chain(CLOSE)
 						.cloned()
 						.collect::<Vec<u8>>(),
 					Msg::IDX_MSG,
@@ -175,45 +163,25 @@ impl Msg {
 		}
 	}
 
-	/// New message (without prefix colon).
-	pub fn new_no_colon<T1, T2> (prefix: T1, prefix_color: u8, msg: T2) -> Self
-	where
-	T1: Borrow<str>,
-	T2: Borrow<str> {
-		let prefix = prefix.borrow();
-		if prefix.is_empty() {
-			return Self::plain(msg);
-		}
-
-		let msg = msg.borrow();
-		if msg.is_empty() {
-			unsafe {
-				Msg(PrintBuf::from_at_with_parts_unchecked(
-					&ansi_code_bold(prefix_color).iter()
-						.chain(prefix.as_bytes())
-						.chain(CLOSE)
-						.cloned()
-						.collect::<Vec<u8>>(),
-					Msg::IDX_MSG,
-					3
-				))
-			}
-		}
-		else {
-			unsafe {
-				Msg(PrintBuf::from_at_with_parts_unchecked(
-					&ansi_code_bold(prefix_color).iter()
-						.chain(prefix.as_bytes())
-						.chain(&PREFIX_JOINER[1..])
-						.chain(msg.as_bytes())
-						.chain(CLOSE)
-						.cloned()
-						.collect::<Vec<u8>>(),
-					Msg::IDX_MSG,
-					3
-				))
-			}
-		}
+	#[must_use]
+	/// New Message w/ Default Prefix.
+	///
+	/// This method is used by most all the convenience methods.
+	///
+	/// # Safety
+	///
+	/// This method assumes the prefix is valid UTF-8 — and correctly colored —
+	/// and the message is valid UTF-8.
+	pub unsafe fn new_unchecked(prefix: &[u8], msg: &[u8]) -> Self {
+		Msg(PrintBuf::from_at_with_parts_unchecked(
+			&prefix.iter()
+				.chain(msg)
+				.chain(CLOSE)
+				.cloned()
+				.collect::<Vec<u8>>(),
+			Msg::IDX_MSG,
+			3
+		))
 	}
 
 	/// New message (without prefix).
@@ -238,20 +206,40 @@ impl Msg {
 		}
 	}
 
-	new_msg_method!(confirm, "Confirm", 208);   // Orange.
-	new_msg_method!(crunched, "Crunched", 10);  // Light Green.
-	new_msg_method!(debug, "Debug", 14);        // Light Cyan.
-	new_msg_method!(done, "Done", 10);          // Light Green.
-	new_msg_method!(error, "Error", 9);         // Light Red.
-	new_msg_method!(info, "Info", 13);          // Light Magenta.
-	new_msg_method!(notice, "Notice", 13);      // Light Magenta.
-	new_msg_method!(question, "Question", 208); // Orange.
-	new_msg_method!(success, "Success", 10);    // Light Green.
-	new_msg_method!(task, "Task", 199);         // Hot Pink.
-	new_msg_method!(warning, "Warning", 11);    // Light Yellow.
+	#[must_use]
+	/// With Indentation.
+	pub fn with_indent(mut self) -> Self {
+		self.indent();
+		self
+	}
 
-	new_msg_wc_method!(eg, "e.g.", 14);         // Light Cyan.
-	new_msg_wc_method!(ie, "i.e.", 14);         // Light Cyan.
+	#[must_use]
+	/// With Printer.
+	pub fn with_printer(mut self, printer: PrinterKind) -> Self {
+		self.set_printer(printer);
+		self
+	}
+
+	#[must_use]
+	/// With Timestamp.
+	pub fn with_timestamp(mut self) -> Self {
+		self.timestamp();
+		self
+	}
+
+	new_msg_method!(confirm, b"\x1B[1;38;5;208mConfirm:\x1B[0;1m ");   // Orange.
+	new_msg_method!(crunched, b"\x1B[1;92mCrunched:\x1B[0;1m ");       // Light Green.
+	new_msg_method!(debug, b"\x1B[1;96mDebug:\x1B[0;1m ");             // Light Cyan.
+	new_msg_method!(done, b"\x1B[1;92mDone:\x1B[0;1m ");               // Light Green.
+	new_msg_method!(eg, b"\x1B[1;96me.g.\x1B[0;1m ");                  // Light Cyan.
+	new_msg_method!(error, b"\x1B[1;91mError:\x1B[0;1m ");             // Light Red.
+	new_msg_method!(ie, b"\x1B[1;96mi.e.\x1B[0;1m ");                  // Light Cyan.
+	new_msg_method!(info, b"\x1B[1;95mInfo:\x1B[0;1m ");               // Light Magenta.
+	new_msg_method!(notice, b"\x1B[1;95mNotice:\x1B[0;1m ");           // Light Magenta.
+	new_msg_method!(question, b"\x1B[1;38;5;208mQuestion:\x1B[0;1m "); // Orange.
+	new_msg_method!(success, b"\x1B[1;92mSuccess:\x1B[0;1m ");         // Light Green.
+	new_msg_method!(task, b"\x1B[1;38;5;199mTask:\x1B[0;1m ");         // Hot Pink.
+	new_msg_method!(warning, b"\x1B[1;93mWarning:\x1B[0;1m ");         // Light Yellow.
 
 	#[must_use]
 	#[inline]

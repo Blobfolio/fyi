@@ -247,12 +247,12 @@ impl Witcher {
 
 		make_progress_loop!(self, pbar, cb);
 
-		let mut msg: Msg = crunched_in!(
+		crunched_in!(
 			pbar.total(),
 			pbar.time().elapsed().as_secs() as u32
-		);
-		msg.set_printer(PrinterKind::Stderr);
-		msg.print(PrintFlags::NONE);
+		)
+			.with_printer(PrinterKind::Stderr)
+			.print(PrintFlags::NONE);
 	}
 
 	/// Parallel Loop w/ Progress.
@@ -273,13 +273,13 @@ impl Witcher {
 
 		make_progress_loop!(self, pbar, cb);
 
-		let mut msg: Msg = crunched_in!(
+		crunched_in!(
 			pbar.total(),
 			pbar.time().elapsed().as_secs() as u32,
 			before,
 			self.du()
-		);
-		msg.set_printer(PrinterKind::Stderr);
-		msg.print(PrintFlags::NONE);
+		)
+			.with_printer(PrinterKind::Stderr)
+			.print(PrintFlags::NONE);
 	}
 }
