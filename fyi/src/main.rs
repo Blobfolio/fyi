@@ -48,8 +48,6 @@ fn main() {
 		(name, Some(o)) => do_msg(name, o),
 		_ => {},
 	}
-
-	process::exit(0);
 }
 
 /// Shoot blanks.
