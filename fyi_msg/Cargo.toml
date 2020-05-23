@@ -8,21 +8,14 @@ publish = false
 
 [dependencies]
 bytes = "0.5.*"
-bitflags = "1.2.*"
 chrono = "0.4.*"
 memchr = "2.3.*"
-seahash = "4.0.*"
-term_size = "0.3.*"
 unicode-width = "0.1.*"
 
 [dependencies.bytecount]
 version = "0.6.*"
 default-features = false
 features = [ "runtime-dispatch-simd" ]
-
-[dependencies.casual]
-version = "0.1.*"
-optional = true
 
 [dependencies.smallvec]
 version = "1.4.*"
@@ -31,18 +24,12 @@ features = [ "write" ]
 
 [features]
 default = []
-interactive = [ "casual" ]
-bench_sink = []
 
 [dev-dependencies]
 criterion = "*"
 
 [[bench]]
 name = "fm_msg"
-harness = false
-
-[[bench]]
-name = "fm_timestamp"
 harness = false
 
 [[bench]]

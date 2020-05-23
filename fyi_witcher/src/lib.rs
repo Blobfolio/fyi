@@ -23,6 +23,7 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::missing_errors_doc)]
 
+/*
 mod witcher;
 pub mod traits;
 pub mod utility;
@@ -32,3 +33,4 @@ pub use witcher::Witcher;
 
 /// Generic result type.
 pub type Result<T, E = String> = std::result::Result<T, E>;
+*/

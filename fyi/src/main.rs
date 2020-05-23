@@ -24,12 +24,14 @@
 #![allow(clippy::missing_errors_doc)]
 
 use clap::ArgMatches;
-use fyi_msg::{
-	PrintFlags,
-	PrinterKind,
-	Msg,
+use fyi_msg::Msg;
+use std::{
+	io::{
+		self,
+		Write
+	},
+	process
 };
-use std::process;
 
 mod menu;
 
@@ -58,10 +60,16 @@ fn do_blank(opts: &ArgMatches) {
 	}
 
 	if opts.is_present("stderr") {
-		for _ in 0..count { eprintln!(); }
+		let writer = io::stderr();
+		let mut handle = writer.lock();
+		handle.write_all(&[10].repeat(count as usize)).unwrap();
+		handle.flush().unwrap();
 	}
 	else {
-		for _ in 0..count { println!(); }
+		let writer = io::stdout();
+		let mut handle = writer.lock();
+		handle.write_all(&[10].repeat(count as usize)).unwrap();
+		handle.flush().unwrap();
 	}
 }
 
@@ -81,18 +89,18 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 				parse_cli_u8(opts.value_of("prefix_color").unwrap_or("199")),
 				opts.value_of("msg").unwrap_or("")
 			),
-			_ => Msg::plain(opts.value_of("msg").unwrap_or("")),
+			_ => Msg::new("", 0, opts.value_of("msg").unwrap_or("")),
 		},
 	};
 
 	// Build and print!
 	if opts.is_present("indent") {
-		msg.indent();
+		msg.set_indent(1);
 	}
 
 	// Prompt.
 	if "confirm" == name {
-		if msg.prompt() {
+		if casual::confirm(msg) {
 			return;
 		}
 		else {
@@ -100,15 +108,26 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 		}
 	}
 
-	if opts.is_present("stderr") {
-		msg.set_printer(PrinterKind::Stderr);
-	}
-
 	if opts.is_present("time") {
-		msg.timestamp();
+		msg.set_timestamp(false);
 	}
 
-	msg.print(PrintFlags::NONE);
+	// Print it to `Stderr`.
+	if opts.is_present("stderr") {
+		let writer = io::stderr();
+		let mut handle = writer.lock();
+		handle.write_all(&msg).unwrap();
+		handle.write_all(&[10]).unwrap();
+		handle.flush().unwrap();
+	}
+	// Print it to `Stdout`.
+	else {
+		let writer = io::stdout();
+		let mut handle = writer.lock();
+		handle.write_all(&msg).unwrap();
+		handle.write_all(&[10]).unwrap();
+		handle.flush().unwrap();
+	}
 
 	// We might have a custom exit code.
 	let exit: u8 = parse_cli_u8(opts.value_of("exit").unwrap_or("0"));

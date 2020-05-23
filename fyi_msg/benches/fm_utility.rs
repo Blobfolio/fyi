@@ -3,6 +3,7 @@
 */
 
 use criterion::{
+	black_box,
 	BenchmarkId,
 	Criterion,
 	criterion_group,
@@ -15,7 +16,7 @@ use fyi_msg::utility;
 fn ansi_code_bold(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::utility");
 
-	for color in [0, 1, 50, 100].iter() {
+	for color in [0, 50, 100].iter() {
 		group.bench_with_input(
 			BenchmarkId::from_parameter(format!(
 				"ansi_code_bold({})",
@@ -31,10 +32,26 @@ fn ansi_code_bold(c: &mut Criterion) {
 	}
 }
 
+fn time_format_dd(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_msg::utility");
+
+	for num in [0, 10, 100].iter() {
+		group.bench_with_input(
+			BenchmarkId::from_parameter(format!("time_format_dd({})", num)),
+			num,
+			|b, &num| {
+				b.iter(||
+					utility::time_format_dd(num)
+				);
+			}
+		);
+	}
+}
+
 fn whitespace(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::utility");
 
-	for spaces in [0, 4, 50, 100, 250].iter() {
+	for spaces in [0, 50, 300].iter() {
 		group.bench_with_input(
 			BenchmarkId::from_parameter(format!("whitespace({})", spaces)),
 			spaces,
@@ -53,5 +70,6 @@ criterion_group!(
 	benches,
 	ansi_code_bold,
 	whitespace,
+	time_format_dd,
 );
 criterion_main!(benches);

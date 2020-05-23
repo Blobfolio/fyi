@@ -1,8 +1,8 @@
 /*!
 # FYI Message
 
-The `Msg` struct is an efficient way to construct and/or print a simple,
-colored "Prefix: Hello World"-type status message.
+The `Msg` struct is an efficient way to construct a simple, printable, colored
+`Prefix: Hello World`-type status message.
 
 ## Example:
 
@@ -20,11 +20,12 @@ let msg = Msg::success("Example executed!");
 */
 
 use crate::{
-	PrintBuf,
-	PrinterKind,
-	PrintFlags,
-	Timestamp,
-	utility::ansi_code_bold,
+	MsgBuf,
+	utility::{
+		ansi_code_bold,
+		time_format_dd,
+		whitespace,
+	},
 };
 use std::{
 	borrow::Borrow,
@@ -34,16 +35,33 @@ use std::{
 
 
 
-static CLOSE: &[u8] = &[27, 91, 48, 109];
-static EMPTY: &[u8] = &[];
-static OPEN_BOLD: &[u8] = &[27, 91, 49, 109];
-static PREFIX_JOINER: &[u8] = &[27, 91, 51, 57, 109, 32];
+macro_rules! new_prefix {
+	($fn:ident, $pre:literal, $prefix:literal) => {
+		#[must_use]
+		/// New Prefix + Msg
+		pub fn $fn<T: Borrow<str>> (msg: T) -> Self {
+			let msg = msg.borrow();
+			if msg.is_empty() {
+				Msg::new_prefix_unchecked($pre, $prefix)
+			}
+			else {
+				Msg::new_prefix_msg_unchecked($pre, $prefix, msg.as_bytes())
+			}
+		}
+	};
+}
+
+
+
+static MSG_PRE: &[u8] = &[27, 91, 49, 109];
+static RESET: &[u8] = &[27, 91, 48, 109];
+static PREFIX_POST: &[u8] = &[27, 91, 48, 109, 32];
 
 
 
 #[derive(Debug, Clone, Hash, PartialEq)]
 /// The Message!
-pub struct Msg(PrintBuf);
+pub struct Msg(MsgBuf);
 
 impl AsRef<str> for Msg {
 	#[inline]
@@ -78,7 +96,7 @@ impl Borrow<[u8]> for Msg {
 impl Default for Msg {
 	/// Default.
 	fn default() -> Self {
-		Msg(PrintBuf::with_parts(3))
+		Msg(MsgBuf::with_parts(10))
 	}
 }
 
@@ -101,213 +119,268 @@ impl fmt::Display for Msg {
 	}
 }
 
-/// Shorthand for defining new messages.
-macro_rules! new_msg_method {
-	($method:ident, $label:literal) => {
-		#[inline]
-		/// New $label message.
-		pub fn $method<T: Borrow<str>> (msg: T) -> Self {
-			unsafe { Self::new_unchecked($label, msg.borrow().as_bytes()) }
-		}
-	};
-}
+
 
 impl Msg {
-	/// The part index for indentation.
+	/// The Message Partition!
 	const IDX_INDENT: usize = 0;
+	const IDX_TIMESTAMP_PRE: usize = 1;  // ANSI.
+	const IDX_TIMESTAMP: usize = 2;
+	const IDX_TIMESTAMP_POST: usize = 3; // ANSI.
+	const IDX_PREFIX_PRE: usize = 4;     // ANSI.
+	const IDX_PREFIX: usize = 5;
+	const IDX_PREFIX_POST: usize = 6;    // ANSI.
+	const IDX_MSG_PRE: usize = 7;        // ANSI.
+	const IDX_MSG: usize = 8;
+	const IDX_MSG_POST: usize = 9;       // ANSI.
 
-	/// The part index for timestamps.
-	const IDX_TIMESTAMP: usize = 1;
 
-	/// The part index for the actual message.
-	const IDX_MSG: usize = 2;
 
-	/// New message.
-	pub fn new<T1, T2> (prefix: T1, prefix_color: u8, msg: T2) -> Self
-	where
-	T1: Borrow<str>,
-	T2: Borrow<str> {
+	// ------------------------------------------------------------------------
+	// Public Static Methods
+	// ------------------------------------------------------------------------
+
+	#[must_use]
+	/// New Prefix + Msg
+	pub fn new<T: Borrow<str>> (prefix: T, prefix_color: u8, msg: T) -> Self {
 		let prefix = prefix.borrow();
 		let msg = msg.borrow();
 
-		if prefix.is_empty() {
-			Self::plain(msg)
-		}
-		else if msg.is_empty() {
-			unsafe {
-				Msg(PrintBuf::from_at_with_parts_unchecked(
-					&ansi_code_bold(prefix_color).iter()
-						.chain(prefix.as_bytes())
-						.chain(CLOSE)
-						.cloned()
-						.collect::<Vec<u8>>(),
-					Msg::IDX_MSG,
-					3
-				))
-			}
-		}
-		else {
-			unsafe {
-				Msg(PrintBuf::from_at_with_parts_unchecked(
-					&ansi_code_bold(prefix_color).iter()
-						.chain(prefix.as_bytes())
-						.chain(PREFIX_JOINER)
-						.chain(msg.as_bytes())
-						.chain(CLOSE)
-						.cloned()
-						.collect::<Vec<u8>>(),
-					Msg::IDX_MSG,
-					3
-				))
-			}
+		match (prefix.is_empty(), msg.is_empty()) {
+			// Neither.
+			(true, true) => Msg::default(),
+			// Both.
+			(false, false) => Msg::new_prefix_msg_unchecked(
+				ansi_code_bold(prefix_color),
+				prefix.as_bytes(),
+				msg.as_bytes()
+			),
+			// Message only.
+			(true, false) => Msg::new_msg_unchecked(msg.as_bytes()),
+			// Prefix only.
+			(false, true) => Msg::new_prefix_unchecked(
+				ansi_code_bold(prefix_color),
+				prefix.as_bytes()
+			),
 		}
 	}
 
+
+
+	// ------------------------------------------------------------------------
+	// Private Static Methods
+	// ------------------------------------------------------------------------
+
 	#[must_use]
-	/// New Message w/ Default Prefix.
+	/// New Prefix + Msg (Unchecked)
 	///
-	/// This method is used by most all the convenience methods.
+	fn new_prefix_msg_unchecked(prefix_pre: &[u8], prefix: &[u8], msg: &[u8]) -> Self {
+		Msg(MsgBuf::from_many(&[
+			// Indentation and timestamp.
+			&[], &[], &[], &[],
+			prefix_pre,
+			prefix,
+			PREFIX_POST,
+			MSG_PRE,
+			msg,
+			RESET,
+		]))
+	}
+
+	#[must_use]
+	/// New Prefix (Unchecked)
 	///
-	/// # Safety
+	fn new_prefix_unchecked(prefix_pre: &[u8], prefix: &[u8]) -> Self {
+		Msg(MsgBuf::from_many(&[
+			// Indentation and timestamp.
+			&[], &[], &[], &[],
+			prefix_pre,
+			prefix,
+			RESET,
+			// Message.
+			&[], &[], &[],
+		]))
+	}
+
+	#[must_use]
+	/// New Message (Unchecked)
 	///
-	/// This method assumes the prefix is valid UTF-8 — and correctly colored —
-	/// and the message is valid UTF-8.
-	pub unsafe fn new_unchecked(prefix: &[u8], msg: &[u8]) -> Self {
-		Msg(PrintBuf::from_at_with_parts_unchecked(
-			&prefix.iter()
-				.chain(msg)
-				.chain(CLOSE)
-				.cloned()
-				.collect::<Vec<u8>>(),
-			Msg::IDX_MSG,
-			3
-		))
+	fn new_msg_unchecked(msg: &[u8]) -> Self {
+		Msg(MsgBuf::from_many(&[
+			// Indentation and timestamp.
+			&[], &[], &[], &[],
+			// Prefix.
+			&[], &[], &[],
+			MSG_PRE,
+			msg,
+			RESET,
+		]))
 	}
 
-	/// New message (without prefix).
-	pub fn plain<T> (msg: T) -> Self
-	where T: Borrow<str> {
-		let msg = msg.borrow();
-		if msg.is_empty() {
-			Self::default()
-		}
-		else {
-			unsafe {
-				Msg(PrintBuf::from_at_with_parts_unchecked(
-					&OPEN_BOLD.iter()
-						.chain(msg.as_bytes())
-						.chain(CLOSE)
-						.cloned()
-						.collect::<Vec<u8>>(),
-					Msg::IDX_MSG,
-					3
-				))
-			}
-		}
-	}
 
-	#[must_use]
-	/// With Indentation.
-	pub fn with_indent(mut self) -> Self {
-		self.indent();
-		self
-	}
 
-	#[must_use]
-	/// With Printer.
-	pub fn with_printer(mut self, printer: PrinterKind) -> Self {
-		self.set_printer(printer);
-		self
-	}
-
-	#[must_use]
-	/// With Timestamp.
-	pub fn with_timestamp(mut self) -> Self {
-		self.timestamp();
-		self
-	}
-
-	new_msg_method!(confirm, b"\x1B[1;38;5;208mConfirm:\x1B[0;1m ");   // Orange.
-	new_msg_method!(crunched, b"\x1B[1;92mCrunched:\x1B[0;1m ");       // Light Green.
-	new_msg_method!(debug, b"\x1B[1;96mDebug:\x1B[0;1m ");             // Light Cyan.
-	new_msg_method!(done, b"\x1B[1;92mDone:\x1B[0;1m ");               // Light Green.
-	new_msg_method!(eg, b"\x1B[1;96me.g.\x1B[0;1m ");                  // Light Cyan.
-	new_msg_method!(error, b"\x1B[1;91mError:\x1B[0;1m ");             // Light Red.
-	new_msg_method!(ie, b"\x1B[1;96mi.e.\x1B[0;1m ");                  // Light Cyan.
-	new_msg_method!(info, b"\x1B[1;95mInfo:\x1B[0;1m ");               // Light Magenta.
-	new_msg_method!(notice, b"\x1B[1;95mNotice:\x1B[0;1m ");           // Light Magenta.
-	new_msg_method!(question, b"\x1B[1;38;5;208mQuestion:\x1B[0;1m "); // Orange.
-	new_msg_method!(success, b"\x1B[1;92mSuccess:\x1B[0;1m ");         // Light Green.
-	new_msg_method!(task, b"\x1B[1;38;5;199mTask:\x1B[0;1m ");         // Hot Pink.
-	new_msg_method!(warning, b"\x1B[1;93mWarning:\x1B[0;1m ");         // Light Yellow.
-
-	#[must_use]
-	#[inline]
-	/// As Str.
-	pub fn as_str(&self) -> &str {
-		self.as_ref()
-	}
-
-	#[must_use]
-	#[inline]
-	/// As Bytes.
-	pub fn as_bytes(&self) -> &[u8] {
-		self
-	}
+	// ------------------------------------------------------------------------
+	// Public Methods
+	// ------------------------------------------------------------------------
 
 	/// Indent.
-	pub fn indent(&mut self) {
-		unsafe { self.0.replace_part_unchecked(Self::IDX_INDENT, &[32, 32, 32, 32]); }
-	}
-
-	/// Print.
-	pub fn print(&mut self, flags: PrintFlags) {
-		self.0.print(flags);
-	}
-
-	#[cfg(feature = "interactive")]
-	#[must_use]
-	/// Prompt.
-	///
-	/// This is a simple print wrapper around `casual::confirm()`.
-	///
-	/// As we aren't doing the heavy lifting here, there is no support for `Flags`,
-	/// however prompt messages can be indented.
-	///
-	/// # Safety
-	///
-	/// This method accepts a raw `[u8]`; when using it, make sure the data you
-	/// pass is valid UTF-8.
-	pub fn prompt(&self) -> bool {
-		casual::confirm(unsafe { std::str::from_utf8_unchecked(&self.0) })
-	}
-
-	/// Remove Indent.
-	pub fn remove_indent(&mut self) {
-		unsafe { self.0.replace_part_unchecked(Self::IDX_INDENT, EMPTY); }
-	}
-
-	/// Remove Timestamp.
-	pub fn remove_timestamp(&mut self) {
-		unsafe { self.0.replace_part_unchecked(Self::IDX_TIMESTAMP, EMPTY); }
-	}
-
-	/// Set Printer.
-	/// Set Printer.
-	pub fn set_printer(&mut self, printer: PrinterKind) {
-		self.0.set_printer(printer);
-	}
-
-	/// Add/Update timestamp.
-	pub fn timestamp(&mut self) {
-		unsafe {
-			self.0.replace_part_unchecked(
-				Self::IDX_TIMESTAMP,
-				&Timestamp::new().deref().iter()
-					.chain(&[32, 32])
-					.cloned()
-					.collect::<Vec<u8>>(),
-			);
+	pub fn set_indent(&mut self, indent: usize) {
+		let len: usize = usize::min(10, indent) * 4;
+		if self.0.get_part_len(Msg::IDX_INDENT) != len {
+			// Clear it.
+			if 0 == len { self.0.clear_part(Msg::IDX_INDENT); }
+			else {
+				self.0.replace_part(Msg::IDX_INDENT, whitespace(len));
+			}
 		}
+	}
+
+	/// Set Message.
+	pub fn set_msg<T: Borrow<str>>(&mut self, msg: T) {
+		let msg = msg.borrow();
+
+		// Remove the message.
+		if msg.is_empty() {
+			if self.0.get_part_len(Msg::IDX_MSG_PRE) != 0 {
+				self.0.clear_part(Msg::IDX_MSG_PRE);
+				self.0.clear_part(Msg::IDX_MSG);
+				self.0.clear_part(Msg::IDX_MSG_POST);
+			}
+
+			// We might need to change the end of the prefix too.
+			if self.0.get_part_len(Msg::IDX_PREFIX_POST) != 0 {
+				self.0.replace_part(Msg::IDX_PREFIX_POST, RESET);
+			}
+		}
+		// Add or change it.
+		else {
+			// The opening and closing needs to be taken care of.
+			if self.0.get_part_len(Msg::IDX_MSG_PRE) == 0 {
+				self.0.extend_part(Msg::IDX_MSG_PRE, MSG_PRE);
+				self.0.extend_part(Msg::IDX_MSG_POST, RESET);
+			}
+
+			self.0.replace_part(Msg::IDX_MSG, msg.as_bytes());
+
+			// We might need to change the end of the prefix too.
+			if self.0.get_part_len(Msg::IDX_PREFIX_POST) != 0 {
+				self.0.replace_part(Msg::IDX_PREFIX_POST, PREFIX_POST);
+			}
+		}
+	}
+
+	/// Set Prefix.
+	pub fn set_prefix<T: Borrow<str>>(&mut self, prefix: T, prefix_color: u8) {
+		let prefix = prefix.borrow();
+
+		// Remove the prefix.
+		if prefix.is_empty() {
+			if self.0.get_part_len(Msg::IDX_PREFIX_PRE) != 0 {
+				self.0.clear_part(Msg::IDX_PREFIX_PRE);
+				self.0.clear_part(Msg::IDX_PREFIX);
+				self.0.clear_part(Msg::IDX_PREFIX_POST);
+			}
+		}
+		// Add or change it.
+		else {
+			self.0.replace_part(Msg::IDX_PREFIX_PRE, ansi_code_bold(prefix_color));
+			self.0.replace_part(Msg::IDX_PREFIX, prefix.as_bytes());
+			if self.0.get_part_len(Msg::IDX_MSG_PRE) == 0 {
+				self.0.replace_part(Msg::IDX_PREFIX_POST, RESET);
+			}
+			else {
+				self.0.replace_part(Msg::IDX_PREFIX_POST, PREFIX_POST);
+			}
+		}
+	}
+
+	/// Timestamp.
+	pub fn set_timestamp(&mut self, clear: bool) {
+		static TIMESTAMP_PRE: &[u8] = &[27, 91, 50, 109, 91, 27, 91, 51, 52, 109];
+		static TIMESTAMP_POST: &[u8] = &[27, 91, 51, 57, 109, 93, 27, 91, 48, 109, 32];
+
+		// Remove the timestamp, if any.
+		if clear {
+			if self.0.get_part_len(Msg::IDX_TIMESTAMP_PRE) != 0 {
+				self.0.clear_part(Msg::IDX_TIMESTAMP_PRE);
+				self.0.clear_part(Msg::IDX_TIMESTAMP);
+				self.0.clear_part(Msg::IDX_TIMESTAMP_POST);
+			}
+		}
+		else {
+			// The pre and post need to be populated too.
+			if self.0.get_part_len(Msg::IDX_TIMESTAMP_PRE) == 0 {
+				self.0.extend_part(Msg::IDX_TIMESTAMP_PRE, TIMESTAMP_PRE);
+				self.0.extend_part(Msg::IDX_TIMESTAMP_POST, TIMESTAMP_POST);
+			}
+
+			// And of course, the timestamp.
+			self.write_timestamp();
+		}
+	}
+
+
+
+	// ------------------------------------------------------------------------
+	// Convenience Methods
+	// ------------------------------------------------------------------------
+
+	new_prefix!(confirm, b"\x1B[1;38;5;208m", b"Confirm:");   // Orange.
+	new_prefix!(crunched, b"\x1B[1;92m", b"Crunched:");       // Light Green.
+	new_prefix!(debug, b"\x1B[1;96m", b"Debug:");             // Light Cyan.
+	new_prefix!(done, b"\x1B[1;92m", b"Done:");               // Light Green.
+	new_prefix!(eg, b"\x1B[1;96m", b"e.g.");                  // Light Cyan.
+	new_prefix!(error, b"\x1B[1;91m", b"Error:");             // Light Red.
+	new_prefix!(ie, b"\x1B[1;96m", b"i.e.");                  // Light Cyan.
+	new_prefix!(info, b"\x1B[1;95m", b"Info:");               // Light Magenta.
+	new_prefix!(notice, b"\x1B[1;95m", b"Notice:");           // Light Magenta.
+	new_prefix!(question, b"\x1B[1;38;5;208m", b"Question:"); // Orange.
+	new_prefix!(success, b"\x1B[1;92m", b"Success:");         // Light Green.
+	new_prefix!(task, b"\x1B[1;38;5;199m", b"Task:");         // Hot Pink.
+	new_prefix!(warning, b"\x1B[1;93m", b"Warning:");         // Light Yellow.
+
+
+
+	// ------------------------------------------------------------------------
+	// Convenient Conversion
+	// ------------------------------------------------------------------------
+
+	#[must_use]
+	/// As Str
+	pub fn as_str(&self) -> &str {
+		unsafe { std::str::from_utf8_unchecked(self) }
+	}
+
+
+
+	// ------------------------------------------------------------------------
+	// Private Methods
+	// ------------------------------------------------------------------------
+
+	/// Write the Timestamp
+	///
+	/// This is a little tedious, so gets its own method.
+	fn write_timestamp(&mut self) {
+		use chrono::{
+			Datelike,
+			Local,
+			Timelike,
+		};
+
+		self.0.replace_part(
+			Msg::IDX_TIMESTAMP,
+			&{
+				// 2000-00-00 00:00:00
+				let mut buf: Vec<u8> = vec![50, 48, 48, 48, 45, 48, 48, 45, 48, 48, 32, 48, 48, 58, 48, 48, 58, 48, 48];
+				let now = Local::now();
+				buf[2..4].copy_from_slice(time_format_dd((now.year() as u32).saturating_sub(2000)));
+				buf[5..7].copy_from_slice(time_format_dd(now.month()));
+				buf[8..10].copy_from_slice(time_format_dd(now.day()));
+				buf[11..13].copy_from_slice(time_format_dd(now.hour()));
+				buf[14..16].copy_from_slice(time_format_dd(now.minute()));
+				buf[17..19].copy_from_slice(time_format_dd(now.second()));
+				buf
+			}
+		);
 	}
 }
