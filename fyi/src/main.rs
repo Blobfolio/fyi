@@ -114,16 +114,14 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 	if opts.is_present("stderr") {
 		let writer = io::stderr();
 		let mut handle = writer.lock();
-		handle.write_all(&msg).unwrap();
-		handle.write_all(&[10]).unwrap();
+		writeln!(handle, "{}", msg).unwrap();
 		handle.flush().unwrap();
 	}
 	// Print it to `Stdout`.
 	else {
 		let writer = io::stdout();
 		let mut handle = writer.lock();
-		handle.write_all(&msg).unwrap();
-		handle.write_all(&[10]).unwrap();
+		writeln!(handle, "{}", msg).unwrap();
 		handle.flush().unwrap();
 	}
 
