@@ -293,7 +293,7 @@ impl Msg {
 
 	/// Timestamp.
 	pub fn set_timestamp(&mut self, clear: bool) {
-		static TIMESTAMP_PRE: &[u8] = &[27, 91, 50, 109, 91, 27, 91, 51, 52, 109];
+		static TIMESTAMP_PRE: &[u8] = &[27, 91, 50, 109, 91, 27, 91, 48, 59, 51, 52, 109];
 		static TIMESTAMP_POST: &[u8] = &[27, 91, 51, 57, 109, 93, 27, 91, 48, 109, 32];
 
 		// Remove the timestamp, if any.
