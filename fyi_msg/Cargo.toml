@@ -10,20 +10,13 @@ publish = false
 bytes = "0.5.*"
 chrono = "0.4.*"
 memchr = "2.3.*"
+smallvec = "1.4.*"
 unicode-width = "0.1.*"
 
 [dependencies.bytecount]
 version = "0.6.*"
 default-features = false
 features = [ "runtime-dispatch-simd" ]
-
-[dependencies.smallvec]
-version = "1.4.*"
-default-features = false
-features = [ "write" ]
-
-[features]
-default = []
 
 [dev-dependencies]
 criterion = "*"
