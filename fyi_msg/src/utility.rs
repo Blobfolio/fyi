@@ -4,6 +4,8 @@
 This mod contains miscellaneous utility functions for the crate.
 */
 
+
+
 #[must_use]
 /// Return escape sequence.
 ///
