@@ -35,18 +35,15 @@ use std::{
 
 
 
+/// Helper: Generate `Msg` preset methods like "Error:", "Success:", etc.
 macro_rules! new_prefix {
-	($fn:ident, $pre:literal, $prefix:literal) => {
+	($fn:ident, $pre:expr, $prefix:expr) => {
 		#[must_use]
 		/// New Prefix + Msg
 		pub fn $fn<T: Borrow<str>> (msg: T) -> Self {
 			let msg = msg.borrow();
-			if msg.is_empty() {
-				Msg::new_prefix_unchecked($pre, $prefix)
-			}
-			else {
-				Msg::new_prefix_msg_unchecked($pre, $prefix, msg.as_bytes())
-			}
+			if msg.is_empty() { Msg::new_prefix_unchecked($pre, $prefix) }
+			else { Msg::new_prefix_msg_unchecked($pre, $prefix, msg.as_bytes()) }
 		}
 	};
 }
@@ -325,31 +322,19 @@ impl Msg {
 	// Convenience Methods
 	// ------------------------------------------------------------------------
 
-	new_prefix!(confirm, b"\x1B[1;38;5;208m", b"Confirm:");   // Orange.
-	new_prefix!(crunched, b"\x1B[1;92m", b"Crunched:");       // Light Green.
-	new_prefix!(debug, b"\x1B[1;96m", b"Debug:");             // Light Cyan.
-	new_prefix!(done, b"\x1B[1;92m", b"Done:");               // Light Green.
-	new_prefix!(eg, b"\x1B[1;96m", b"e.g.");                  // Light Cyan.
-	new_prefix!(error, b"\x1B[1;91m", b"Error:");             // Light Red.
-	new_prefix!(ie, b"\x1B[1;96m", b"i.e.");                  // Light Cyan.
-	new_prefix!(info, b"\x1B[1;95m", b"Info:");               // Light Magenta.
-	new_prefix!(notice, b"\x1B[1;95m", b"Notice:");           // Light Magenta.
-	new_prefix!(question, b"\x1B[1;38;5;208m", b"Question:"); // Orange.
-	new_prefix!(success, b"\x1B[1;92m", b"Success:");         // Light Green.
-	new_prefix!(task, b"\x1B[1;38;5;199m", b"Task:");         // Hot Pink.
-	new_prefix!(warning, b"\x1B[1;93m", b"Warning:");         // Light Yellow.
-
-
-
-	// ------------------------------------------------------------------------
-	// Convenient Conversion
-	// ------------------------------------------------------------------------
-
-	#[must_use]
-	/// As Str
-	pub fn as_str(&self) -> &str {
-		unsafe { std::str::from_utf8_unchecked(self) }
-	}
+	new_prefix!(confirm, &[27, 91, 49, 59, 51, 56, 59, 53, 59, 50, 48, 56, 109], &[67, 111, 110, 102, 105, 114, 109, 58]);
+	new_prefix!(crunched, &[27, 91, 49, 59, 57, 50, 109], &[67, 114, 117, 110, 99, 104, 101, 100, 58]);
+	new_prefix!(debug, &[27, 91, 49, 59, 57, 54, 109], &[68, 101, 98, 117, 103, 58]);
+	new_prefix!(done, &[27, 91, 49, 59, 57, 50, 109], &[68, 111, 110, 101, 58]);
+	new_prefix!(eg, &[27, 91, 49, 59, 57, 54, 109], &[101, 46, 103, 46]);
+	new_prefix!(error, &[27, 91, 49, 59, 57, 49, 109], &[69, 114, 114, 111, 114, 58]);
+	new_prefix!(ie, &[27, 91, 49, 59, 57, 54, 109], &[105, 46, 101, 46]);
+	new_prefix!(info, &[27, 91, 49, 59, 57, 53, 109], &[73, 110, 102, 111, 58]);
+	new_prefix!(notice, &[27, 91, 49, 59, 57, 53, 109], &[78, 111, 116, 105, 99, 101, 58]);
+	new_prefix!(question, &[27, 91, 49, 59, 51, 56, 59, 53, 59, 50, 48, 56, 109], &[81, 117, 101, 115, 116, 105, 111, 110, 58]);
+	new_prefix!(success, &[27, 91, 49, 59, 57, 50, 109], &[83, 117, 99, 99, 101, 115, 115, 58]);
+	new_prefix!(task, &[27, 91, 49, 59, 51, 56, 59, 53, 59, 49, 57, 57, 109], &[84, 97, 115, 107, 58]);
+	new_prefix!(warning, &[27, 91, 49, 59, 57, 51, 109], &[87, 97, 114, 110, 105, 110, 103, 58]);
 
 
 

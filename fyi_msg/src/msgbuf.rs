@@ -87,9 +87,10 @@ impl MsgBuf {
 	///
 	/// For an unpartitioned, empty buffer, use `MsgBuf::default()`.
 	pub fn from(buf: &[u8]) -> Self {
-		let mut out = MsgBuf::default();
-		out.add_part(buf);
-		out
+		MsgBuf {
+			buf: BytesMut::from(buf),
+			parts: SmallVec::from_slice(&[(0, buf.len())]),
+		}
 	}
 
 	#[must_use]
@@ -102,7 +103,18 @@ impl MsgBuf {
 	/// empty).
 	pub fn from_many(bufs: &[&[u8]]) -> Self {
 		let mut out = MsgBuf::default();
-		out.add_parts(bufs);
+		let mut start: usize = 0;
+		for b in bufs {
+			if b.is_empty() {
+				out.parts.push((start, start));
+			}
+			else {
+				let end: usize = start + b.len();
+				out.buf.extend_from_slice(b);
+				out.parts.push((start, end));
+				start = end;
+			}
+		};
 		out
 	}
 
@@ -112,12 +124,10 @@ impl MsgBuf {
 	/// This creates an empty buffer, but with X number of empty parts that can
 	/// later be written to.
 	pub fn with_parts(num: usize) -> Self {
-		let mut out = MsgBuf::default();
-		let num: usize = usize::max(1, num);
-		for _ in 0..num {
-			out.parts.push((0, 0));
+		MsgBuf {
+			buf: BytesMut::with_capacity(1024),
+			parts: SmallVec::from_elem((0, 0), usize::max(1, num)),
 		}
-		out
 	}
 
 
@@ -272,12 +282,12 @@ impl MsgBuf {
 	///
 	/// Panics if `idx` is out of bounds (and non-zero).
 	pub fn insert_partition(&mut self, idx: usize) {
-		if 0 == idx && ! self.is_partitioned() {
+		if self.parts.is_empty() {
 			self.parts.push((0, 0));
 		}
 		else {
 			assert!(idx < self.parts.len());
-			self.parts.insert(idx, (self.parts[idx].0, self.parts[idx].0));
+			self.parts.insert_from_slice(idx, &[(self.parts[idx].0, self.parts[idx].0)]);
 		}
 	}
 
@@ -342,16 +352,17 @@ impl MsgBuf {
 		assert!(! bufs.is_empty());
 
 		let mut start: usize = self.buf.len();
-		for buf in bufs {
-			let end: usize = start + buf.len();
-
-			if end > start {
-				self.buf.extend_from_slice(buf);
+		for b in bufs {
+			if b.is_empty() {
+				self.parts.push((start, start));
 			}
-
-			self.parts.push((start, end));
-			start = end;
-		}
+			else {
+				let end: usize = start + b.len();
+				self.buf.extend_from_slice(b);
+				self.parts.push((start, end));
+				start = end;
+			}
+		};
 
 		self.parts.len() - 1
 	}
@@ -453,7 +464,7 @@ impl MsgBuf {
 			self.buf.unsplit(b);
 
 			// Shift the indexes.
-			self.parts.insert(idx, (self.parts[idx].0, self.parts[idx].0 + adj));
+			self.parts.insert_from_slice(idx, &[(self.parts[idx].0, self.parts[idx].0 + adj)]);
 			self.shift_partitions_right(idx + 1, adj);
 		}
 	}
@@ -586,10 +597,7 @@ impl MsgBuf {
 		// partition; just enter however many `(0,0)` entries it takes. If
 		// `parts` is empty, a single `(0,0)` will be created.
 		if self.buf.is_empty() {
-			let len: usize = usize::max(1, parts.len());
-			for _ in 0..len {
-				self.parts.push((0, 0));
-			}
+			self.parts.extend_from_slice(&[(0, 0)].repeat(usize::max(1, parts.len())));
 			return;
 		}
 
