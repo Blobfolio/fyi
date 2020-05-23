@@ -13,9 +13,15 @@ itoa = "0.4.*"
 num-integer = "0.1.*"
 seahash = "4.0.*"
 term_size = "0.3.*"
+unicode-width = "0.1.*"
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"
+
+[dependencies.smallvec]
+version = "1.4.*"
+default-features = false
+features = [ "write" ]
 
 [features]
 default = []

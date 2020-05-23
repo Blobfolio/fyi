@@ -23,24 +23,7 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::missing_errors_doc)]
 
-/*
 mod progress;
+pub mod utility;
 
-/// Lapsed.
-pub mod lapsed;
-
-/// Progress.
 pub use progress::Progress;
-
-#[must_use]
-/// Term Width
-///
-/// This is a simple wrapper around `term_size::dimensions()` to provide
-/// the current terminal column width. We don't have any use for height,
-/// so that property is ignored.
-pub fn term_width() -> usize {
-	// Reserve one space at the end "just in case".
-	if let Some((w, _)) = term_size::dimensions() { w.saturating_sub(1) }
-	else { 0 }
-}
-*/
