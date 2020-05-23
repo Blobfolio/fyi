@@ -945,6 +945,12 @@ mod tests {
 		ass!("repartitioned.count_partitions()", buf.count_partitions(), 2);
 		ass_u8!("repartitioned.get_part(0)", buf.get_part(0), &TEST1[..2]);
 		ass_u8!("repartitioned.get_part(1)", buf.get_part(1), &TEST1[2..]);
+
+		buf.clear();
+		ass!("buf.len()", buf.len(), 0);
+		ass!("repartitioned.count_partitions()", buf.count_partitions(), 0);
+		buf.repartition(&[(0, 0), (0, 0), (0, 0)]);
+		ass!("repartitioned.count_partitions()", buf.count_partitions(), 3);
 	}
 
 	#[test]
