@@ -6,7 +6,6 @@ partition table to logically slices within the buffer.
 */
 
 use bytes::BytesMut;
-use memchr::Memchr;
 use smallvec::SmallVec;
 use std::{
 	borrow::Borrow,
@@ -213,11 +212,8 @@ impl MsgBuf {
 	/// iteration.
 	///
 	/// Completely empty buffers will return `None` from the getgo.
-	pub fn lines(&'_ self) -> MsgBufLinesIter<'_> {
-		MsgBufLinesIter {
-			buf: self,
-			pos: 0,
-		}
+	pub fn lines<'a> (&'a self) -> impl Iterator<Item = &'a [u8]> {
+		self.split(|x| x == &10)
 	}
 
 
@@ -662,46 +658,6 @@ impl MsgBuf {
 			self.parts[idx].1 += num;
 			idx += 1;
 		}
-	}
-}
-
-
-
-#[derive(Debug, Clone)]
-/// `MsgBuf` Line Iterator
-///
-/// Iterate through the stored message line-by-line. As with `count_lines()`,
-/// the `\n` character is considered a line break. Any data stored after the
-/// last `\n` character will be returned in the last iteration.
-///
-/// Completely empty buffers will return `None` from the getgo.
-pub struct MsgBufLinesIter<'mb> {
-	buf: &'mb MsgBuf,
-	pos: usize,
-}
-
-impl<'mb> Iterator for MsgBufLinesIter<'mb> {
-	type Item = &'mb [u8];
-
-	/// Next.
-	fn next(&mut self) -> Option<Self::Item> {
-		let len: usize = self.buf.len();
-		let start: usize = self.pos;
-
-		// We haven't run out of bytes yet!
-		if self.pos < len {
-			// Look for line breaks.
-			if let Some(idx) = Memchr::new(10_u8, &self.buf[start..]).next() {
-				self.pos = idx + 1;
-				Some(&self.buf[start..idx])
-			}
-			// The last chunk may not have any line breaks.
-			else {
-				self.pos = len;
-				Some(&self.buf[start..])
-			}
-		}
-		else { None }
 	}
 }
 

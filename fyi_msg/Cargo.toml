@@ -9,7 +9,6 @@ publish = false
 [dependencies]
 bytes = "0.5.*"
 chrono = "0.4.*"
-memchr = "2.3.*"
 smallvec = "1.4.*"
 
 [dependencies.bytecount]
