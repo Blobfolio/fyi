@@ -397,16 +397,23 @@ impl MsgBuf {
 		assert!(idx < self.parts.len());
 
 		if ! buf.is_empty() {
-			let adj: usize = buf.len();
+			// The last part is special.
+			if idx == self.parts.len() - 1 {
+				self.buf.extend_from_slice(buf);
+				self.parts[idx].1 += buf.len();
+			}
+			else {
+				let adj: usize = buf.len();
 
-			// Split the buffer, extend the part, reglue the buffer.
-			let b = self.buf.split_off(self.parts[idx].1);
-			self.buf.extend_from_slice(buf);
-			self.buf.unsplit(b);
+				// Split the buffer, extend the part, reglue the buffer.
+				let b = self.buf.split_off(self.parts[idx].1);
+				self.buf.extend_from_slice(buf);
+				self.buf.unsplit(b);
 
-			// Shift the indexes.
-			self.parts[idx].1 += adj;
-			self.shift_partitions_right(idx + 1, adj);
+				// Shift the indexes.
+				self.parts[idx].1 += adj;
+				self.shift_partitions_right(idx + 1, adj);
+			}
 		}
 	}
 
