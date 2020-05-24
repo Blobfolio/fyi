@@ -203,7 +203,6 @@ impl MsgBuf {
 		else { bytecount::count(&self.buf, b'\n') + 1 }
 	}
 
-	#[must_use]
 	/// Lines Iterator.
 	///
 	/// Iterate through the stored message line-by-line. As with
@@ -212,7 +211,8 @@ impl MsgBuf {
 	/// iteration.
 	///
 	/// Completely empty buffers will return `None` from the getgo.
-	pub fn lines<'a> (&'a self) -> impl Iterator<Item = &'a [u8]> {
+	pub fn lines(&'_ self) -> impl Iterator<Item = &'_ [u8]> {
+		// TODO: This performance is horrific. Do it some other way!
 		self.split(|x| x == &10)
 	}
 
