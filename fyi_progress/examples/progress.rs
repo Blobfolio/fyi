@@ -76,8 +76,8 @@ fn main() {
 
 	// Start a bar.
 	let bar = Arc::new(Progress::new(
-		Some(Msg::new("Processing", 199, "Eviction underway…")),
 		presidents.len() as u64,
+		Some(Msg::new("Processing:", 199, "Eviction underway…")),
 	));
 
 	// Launch a steady tick.
@@ -96,16 +96,16 @@ fn main() {
 		if bar.clone().percent() == SET_MSG_TARGET {
 			bar.clone().update(
 				1,
-				Some(Msg::new("Processing", 208, "Almost done!")),
+				Some(Msg::new("Processing:", 208, "Almost done!")),
 				Some(p)
 			);
 		}
 		else {
-			bar.clone().update(1, None, Some(p));
+			bar.clone().update(1, None::<String>, Some(p));
 		}
 	});
 	handle.join().unwrap();
 
 	// Print a quick summary.
-	bar.finished_in();
+	// bar.finished_in();
 }

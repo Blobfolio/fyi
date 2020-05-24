@@ -75,14 +75,33 @@ assert_eq!(1000, bar.done());
 */
 
 use crate::utility::{
+	chopped_len,
 	int_as_bytes,
+	secs_chunks,
 	term_width,
 };
-use fyi_msg::MsgBuf;
+use fyi_msg::{
+	MsgBuf,
+	utility::time_format_dd,
+};
 use indexmap::set::IndexSet;
-use std::borrow::Borrow;
-use std::sync::Mutex;
-use std::time::Instant;
+use std::{
+	borrow::Borrow,
+	cmp::Ordering,
+	io,
+	sync::{
+		Arc,
+		Mutex,
+	},
+	thread::{
+		self,
+		JoinHandle,
+	},
+	time::{
+		Duration,
+		Instant,
+	},
+};
 
 
 
@@ -96,14 +115,13 @@ bitflags::bitflags! {
 	struct ProgressFlags: u32 {
 		const NONE =         0b0000_0000;
 		const ALL =          0b0111_1111;
-		const PROGRESSED =   0b0001_0001;
+		const PROGRESSED =   0b0000_0111;
 
 		const TICK_BAR =     0b0000_0001;
 		const TICK_DONE =    0b0000_0010;
-		const TICK_ELAPSED = 0b0000_0100;
-		const TICK_MSG =     0b0000_1000;
-		const TICK_PERCENT = 0b0001_0000;
-		const TICK_TASKS =   0b0010_0000;
+		const TICK_PERCENT = 0b0000_0100;
+		const TICK_TASKS =   0b0001_0000;
+		const TICK_TITLE =   0b0010_0000;
 		const TICK_TOTAL =   0b0100_0000;
 	}
 }
@@ -174,8 +192,6 @@ impl Default for ProgressInner {
 				&[27, 91, 48, 109],
 				// Tasks.
 				&[],
-				// Trailing line break.
-				&[10],
 			]),
 			time: Instant::now(),
 			done: 0,
@@ -192,19 +208,18 @@ impl Default for ProgressInner {
 
 impl ProgressInner {
 	const IDX_TITLE: usize = 0;
-	const IDX_ELAPSED_PRE: usize = 1;
+	// const IDX_ELAPSED_PRE: usize = 1;
 	const IDX_ELAPSED: usize = 2;
-	const IDX_ELAPSED_POST: usize = 3;
+	// const IDX_ELAPSED_POST: usize = 3;
 	const IDX_BAR: usize = 4;
-	const IDX_DONE_PRE: usize = 5;
+	// const IDX_DONE_PRE: usize = 5;
 	const IDX_DONE: usize = 6;
-	const IDX_DONE_POST: usize = 7;
+	// const IDX_DONE_POST: usize = 7;
 	const IDX_TOTAL: usize = 8;
-	const IDX_TOTAL_POST: usize = 9;
+	// const IDX_TOTAL_POST: usize = 9;
 	const IDX_PERCENT: usize = 10;
-	const IDX_PERCENT_POST: usize = 11;
+	// const IDX_PERCENT_POST: usize = 11;
 	const IDX_TASKS: usize = 12;
-	const IDX_LINE: usize = 13;
 
 
 
@@ -245,8 +260,6 @@ impl ProgressInner {
 					&[27, 91, 48, 109],
 					// Tasks.
 					&[],
-					// Trailing line break.
-					&[10],
 				]),
 				total,
 				flags: ProgressFlags::PROGRESSED,
@@ -329,13 +342,13 @@ impl ProgressInner {
 		if done >= self.total {
 			if self.done != self.total {
 				self.done = self.total;
-				self.flags |= ProgressFlags::TICK_DONE | ProgressFlags::PROGRESSED;
-				// TODO: self.stop();
+				self.flags |= ProgressFlags::PROGRESSED;
+				self.stop();
 			}
 		}
 		else if done != self.done {
 			self.done = done;
-			self.flags |= ProgressFlags::TICK_DONE | ProgressFlags::PROGRESSED;
+			self.flags |= ProgressFlags::PROGRESSED;
 		}
 	}
 
@@ -361,18 +374,168 @@ impl ProgressInner {
 		}
 	}
 
+	/// Set total.
+	///
+	/// Totals are meant to be set at instantiation, but they can be changed
+	/// mid-go if you're doing something weird.
+	pub fn set_total(&mut self, total: u64) {
+		if total != self.total {
+			self.total = total;
+			self.flags |= ProgressFlags::TICK_TOTAL | ProgressFlags::PROGRESSED;
+
+			// Total must still be bigger than done.
+			if self.total < self.done {
+				self.set_done(self.total);
+			}
+		}
+	}
+
 
 
 	// ------------------------------------------------------------------------
 	// Display
 	// ------------------------------------------------------------------------
 
-	// clear
-	// finished_in
-	// maybe_print
-	// print
-	// stop
-	// tick
+	/// Clear Screen
+	pub fn cls(&mut self) {
+		// Buffer 10 Line Clears
+		static CLS10: &[u8] = &[27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75];
+		// 0..10 moves the cursor left. This is done only once per reset.
+		// 14 is the length of each subsequent command, which moves the cursor up.
+		// To clear "n" lines, then, slice [0..(10 + 14 * n)].
+
+		if self.last_lines > 0 {
+			match self.last_lines.cmp(&10) {
+				Ordering::Equal => { ProgressInner::print(CLS10); },
+				Ordering::Less => {
+					let end: usize = 10 + 14 * self.last_lines;
+					ProgressInner::print(&CLS10[0..end]);
+				},
+				Ordering::Greater => {
+					ProgressInner::print(
+						&CLS10.iter()
+							.chain(&CLS10[14..28].repeat(self.last_lines - 10))
+							.copied()
+							.collect::<Vec<u8>>()
+					);
+				},
+			}
+
+			// Having cleared whatever it was, there were no last_lines.
+			self.last_lines = 0;
+		}
+	}
+
+	/// Maybe Print?
+	///
+	/// After a tick has made its changes, check and see if it is worth
+	/// painting, and if so, make it happen.
+	pub fn maybe_print(&mut self, width: usize) {
+		// Check the hash and width if we've done stuff before.
+		let hash: u64 = seahash::hash(&self.buf);
+		if hash == self.last_hash && width == self.last_width {
+			return;
+		}
+
+		// Otherwise go ahead and update those things.
+		self.last_width = width;
+		self.last_hash = hash;
+
+		// Do we need to clear anything?
+		if self.last_lines > 0 {
+			self.cls();
+		}
+		self.last_lines = self.buf.count_lines();
+
+		// Chop and print!
+		ProgressInner::print(
+			&self.buf.lines()
+				.flat_map(|line| {
+					// The line fits.
+					let len: usize = line.len();
+					let fit_len: usize = chopped_len(line, width);
+					if fit_len == len {
+						line.iter().chain(&[10]).copied().collect::<Vec<u8>>()
+					}
+					else {
+						line[..fit_len].iter()
+							.chain(&[27, 91, 48, 109, 10])
+							.copied()
+							.collect::<Vec<u8>>()
+					}
+				})
+				.collect::<Vec<u8>>()
+		)
+	}
+
+	/// Stop
+	///
+	/// Stop the progress bar, setting done to total, clearing tasks, emptying
+	/// the message, and clearing the last bit that was printed to the terminal
+	/// if any.
+	pub fn stop(&mut self) {
+		if self.done != self.total {
+			self.done = self.total;
+		}
+		if ! self.tasks.is_empty() {
+			self.tasks.clear();
+		}
+		self.flags = ProgressFlags::NONE;
+		self.last_secs = u32::min(86400, self.time.elapsed().as_secs() as u32);
+		self.cls();
+	}
+
+	/// Tick.
+	///
+	/// Calculate progress and print it to the terminal, if necessary.
+	pub fn tick(&mut self) {
+		// Easy bail.
+		if ! self.is_running() { return; }
+
+		// Update our elapsed time.
+		let secs: u32 = u32::min(86400, self.time.elapsed().as_secs() as u32);
+		if secs != self.last_secs {
+			self.last_secs = secs;
+			self.redraw_elapsed();
+		}
+
+		// Update our done amount.
+		if self.flags.contains(ProgressFlags::TICK_DONE) {
+			self.buf.replace_part(ProgressInner::IDX_DONE, &int_as_bytes(self.done)[..]);
+			self.flags &= !ProgressFlags::TICK_DONE;
+		}
+
+		// Did the total change? Probably not, but just in case...
+		if self.flags.contains(ProgressFlags::TICK_TOTAL) {
+			self.buf.replace_part(ProgressInner::IDX_TOTAL, &int_as_bytes(self.total)[..]);
+			self.flags &= !ProgressFlags::TICK_TOTAL;
+		}
+
+		// The percent?
+		if self.flags.contains(ProgressFlags::TICK_PERCENT) {
+			self.buf.replace_part(
+				ProgressInner::IDX_PERCENT,
+				format!("{:>3.*}%", 2, self.percent() * 100.0).as_bytes(),
+			);
+			self.flags &= !ProgressFlags::TICK_PERCENT;
+		}
+
+		// Update our tasks.
+		if self.flags.contains(ProgressFlags::TICK_TASKS) {
+			self.redraw_tasks();
+			self.flags &= !ProgressFlags::TICK_TASKS;
+		}
+
+		// The bar might independently need redrawing if the width has changed.
+		let width: usize = term_width();
+		if width != self.last_width || self.flags.contains(ProgressFlags::TICK_BAR) {
+			self.redraw_bar(width);
+			self.flags &= !ProgressFlags::TICK_BAR;
+		}
+
+		// If anything changed, print it!
+		self.maybe_print(width);
+	}
 
 
 
@@ -389,26 +552,320 @@ impl ProgressInner {
 	/// We don't want to print a bar narrower than 10 characters, and we need
 	/// to reserve an additional 4 characters for the braces and spaces, so
 	/// if the result is less than 14, 0 will be returned.
-	fn bar_space(&self) -> usize {
-		// The magic "5" comes from Elapsed's 2 trailing spaces, total's 2
-		// trailing spaces, and the slash between done/total. (Those values are
-		// hard-coded into the formatting parts.)
-		let total: usize = 5 +
+	fn bar_space(&self, width: usize) -> usize {
+		// The magic "11" is made up of the following hard-coded pieces:
+		// 2: braces around elapsed time;
+		// 2: spaces after elapsed time;
+		// 1: the "/" between done and total;
+		// 2: the spaces after total;
+		// 2: the braces around the bar itself (should there be one);
+		// 2: the spaces after the bar itself (should there be one);
+		let total: usize = usize::min(255, width.saturating_sub(
+			11 +
 			self.buf.get_part_len(ProgressInner::IDX_ELAPSED) +
 			self.buf.get_part_len(ProgressInner::IDX_DONE) +
 			self.buf.get_part_len(ProgressInner::IDX_TOTAL) +
-			self.buf.get_part_len(ProgressInner::IDX_PERCENT);
+			self.buf.get_part_len(ProgressInner::IDX_PERCENT)
+		));
 
-		if total >= 14 { total }
+		if total >= 10 { total }
 		else { 0 }
 	}
 
-	// write_bar
-	// write_tasks
+	#[cfg(not(feature = "bench_sink"))]
+	/// Print!
+	///
+	/// Print some arbitrary data to the write place.
+	fn print(buf: &[u8]) {
+		use io::Write;
+		let writer = io::stderr();
+		let mut handle = writer.lock();
+		handle.write_all(buf).unwrap();
+		handle.flush().unwrap();
+	}
+
+	#[cfg(feature = "bench_sink")]
+	/// Print!
+	///
+	/// This is an alternate version of the printing method used for
+	/// benchmarks. Rather than printing to `Stderr` — which gets noisy fast —
+	/// this prints to `Sink`.
+	fn print(buf: &[u8]) {
+		use io::Write;
+		let mut handle = io::sink();
+		handle.write_all(buf).unwrap();
+		handle.flush().unwrap();
+	}
+
+	/// Redraw Bar
+	///
+	/// This method updates the "bar" slice.
+	fn redraw_bar(&mut self, width: usize) {
+		// The bar bits.
+		// The "done" portion is in range 14..269.
+		// The "undone" portion is in range 276..531.
+		static BAR: &[u8] = &[27, 91, 50, 109, 91, 27, 91, 48, 59, 57, 54, 59, 49, 109, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 27, 91, 48, 59, 51, 52, 109, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32];
+
+		// We don't have room for it.
+		let bar_len: usize = self.bar_space(width);
+		if bar_len < 10 {
+			self.buf.clear_part(ProgressInner::IDX_BAR);
+		}
+		else {
+			let mut tmp: Vec<u8> = BAR.to_vec();
+			let done_width: usize = f64::floor(self.percent() * bar_len as f64) as usize;
+
+			// Chop out the parts we don't need.
+			let mut chop: usize = 276 + bar_len - done_width;
+			tmp.drain(chop..531);
+			chop = 14 + done_width;
+			tmp.drain(chop..269);
+
+			// Copy the completed bar on over.
+			self.buf.replace_part(ProgressInner::IDX_BAR, &tmp);
+		}
+	}
+
+	/// Redraw Elapsed
+	///
+	/// This method updates the "elapsed" time slice.
+	fn redraw_elapsed(&mut self) {
+		if self.last_secs < 86400 {
+			let c = secs_chunks(self.last_secs);
+			let mut buf: [u8; 8] = [48, 48, 58, 48, 48, 58, 48, 48];
+			buf[..2].copy_from_slice(time_format_dd(c[0]));
+			buf[3..5].copy_from_slice(time_format_dd(c[1]));
+			buf[6..].copy_from_slice(time_format_dd(c[2]));
+			self.buf.replace_part(ProgressInner::IDX_ELAPSED, &buf);
+		}
+		else {
+			self.buf.replace_part(ProgressInner::IDX_ELAPSED, b"23:59:59");
+		}
+	}
+
+	/// Redraw Tasks
+	///
+	/// This method updates the "tasks" slice.
+	fn redraw_tasks(&mut self) {
+		if self.tasks.is_empty() {
+			self.buf.clear_part(ProgressInner::IDX_TASKS);
+		}
+		else {
+			self.buf.replace_part(
+				ProgressInner::IDX_TASKS,
+				&self.tasks.iter()
+					.flat_map(|s|
+						[10, 32, 32, 32, 32, 27, 91, 51, 53, 109, 226, 134, 179, 32].iter()
+							.chain(s.as_bytes())
+							.chain(&[27, 91, 48, 109])
+							.copied()
+					)
+					.collect::<Vec<u8>>()
+			);
+		}
+	}
 }
 
 
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 /// Progress Bar!
 pub struct Progress(Mutex<ProgressInner>);
+
+impl Progress {
+	// ------------------------------------------------------------------------
+	// Public Static Methods
+	// ------------------------------------------------------------------------
+
+	#[must_use]
+	/// New Progress!
+	///
+	/// Start a new progress bar, optionally with a message.
+	pub fn new<T: Borrow<str>> (total: u64, title: Option<T>) -> Self {
+		if let Some(title) = title {
+			let mut inner = ProgressInner::new(total);
+			inner.set_title(title);
+			Progress(Mutex::new(inner))
+		}
+		else {
+			Progress(Mutex::new(ProgressInner::new(total)))
+		}
+	}
+
+	#[must_use]
+	/// Steady tick.
+	///
+	/// If your `Progress` instance is behind an Arc, you can pass it to this
+	/// method to spawn a steady-ticker in its own thread. When you use this,
+	/// you do not need to manually call `tick()`, but do need to remember to
+	/// join the handle when you're through with your own loop.
+	///
+	/// See the "progress" example for usage.
+	pub fn steady_tick(me: &Arc<Progress>, rate: Option<u64>) -> JoinHandle<()> {
+		let sleep = Duration::from_millis(u64::max(60, rate.unwrap_or(60)));
+
+		let me2 = me.clone();
+		thread::spawn(move || {
+			loop {
+				me2.clone().tick();
+				thread::sleep(sleep);
+
+				// Are we done?
+				if ! me2.clone().is_running() {
+					break;
+				}
+			}
+		})
+	}
+
+
+
+	// ------------------------------------------------------------------------
+	// Getters
+	// ------------------------------------------------------------------------
+
+	/// Get done.
+	///
+	/// Return the amount done.
+	pub fn done(&self) -> u64 {
+		let ptr = self.0.lock().unwrap();
+		ptr.done
+	}
+
+	#[must_use]
+	/// Is Running.
+	///
+	/// Whether or not progress is underway. For the purposes of this library,
+	/// that means done is less than total.
+	pub fn is_running(&self) -> bool {
+		let ptr = self.0.lock().unwrap();
+		ptr.is_running()
+	}
+
+	#[must_use]
+	/// Percent done.
+	///
+	/// This is literally an expression of `done / total`, returned as a float
+	/// between 0.0 and 1.0.
+	pub fn percent(&self) -> f64 {
+		let ptr = self.0.lock().unwrap();
+		ptr.percent()
+	}
+
+	/// Get time.
+	///
+	/// Return the `Instant` the `Progress` struct was instantiated.
+	pub fn time(&self) -> Instant {
+		let ptr = self.0.lock().unwrap();
+		ptr.time
+	}
+
+	/// Get total.
+	///
+	/// Return the total.
+	pub fn total(&self) -> u64 {
+		let ptr = self.0.lock().unwrap();
+		ptr.total
+	}
+
+
+
+	// ------------------------------------------------------------------------
+	// Setters
+	// ------------------------------------------------------------------------
+
+	/// Add task.
+	///
+	/// Tasks are an arbitrary list of strings that will print beneath the
+	/// progress line. The main idea is to communicate ideas like, "Such and
+	/// such is being actively worked on in Thread #2" or whatever, but there
+	/// are no hard and fast rules.
+	pub fn add_task<T: Borrow<str>> (&self, task: T) {
+		let mut ptr = self.0.lock().unwrap();
+		ptr.add_task(task)
+	}
+
+	/// Increment Done.
+	///
+	/// Increment the "done" count by this amount. It is recommended to prefer
+	/// this method over `set_done()`, which instead takes an absolute value.
+	/// Particularly in multi-threaded scenarios, one cannot be certain the
+	/// order in which instructions will arrive, but if both are just "add
+	/// one to the current", it all works out.
+	pub fn increment(&self, num: u64) {
+		let mut ptr = self.0.lock().unwrap();
+		ptr.increment(num)
+	}
+
+	/// Remove task.
+	///
+	/// If you're thinking of tasks as a list of "this is happening now" stuff,
+	/// `remove_task()` is the conclusion to `add_task()`.
+	pub fn remove_task<T: Borrow<str>> (&self, task: T) {
+		let mut ptr = self.0.lock().unwrap();
+		ptr.remove_task(task)
+	}
+
+	/// Set done.
+	///
+	/// Set the "done" amount to this absolute value. See also `increment()`,
+	/// which instead works relative to the current value.
+	pub fn set_done(&self, done: u64) {
+		let mut ptr = self.0.lock().unwrap();
+		ptr.set_done(done)
+	}
+
+	/// Set Title.
+	///
+	/// Update or unset the message, which if present, prints pinned above the
+	/// progress line.
+	pub fn set_title<T: Borrow<str>> (&self, title: T) {
+		let mut ptr = self.0.lock().unwrap();
+		ptr.set_title(title)
+	}
+
+	/// Set total.
+	pub fn set_total(&self, total: u64) {
+		let mut ptr = self.0.lock().unwrap();
+		ptr.set_total(total)
+	}
+
+	/// Stop
+	///
+	/// Stop the progress bar, setting done to total, clearing tasks, emptying
+	/// the message, and clearing the last bit that was printed to the terminal
+	/// if any.
+	pub fn stop(&self) {
+		let mut ptr = self.0.lock().unwrap();
+		ptr.stop()
+	}
+
+	/// Tick.
+	pub fn tick(&self) {
+		let mut ptr = self.0.lock().unwrap();
+		ptr.tick()
+	}
+
+	/// Update.
+	///
+	/// A one-liner to increment the done count, change the message, and/or
+	/// remove a task. All three values are optional and only result in a
+	/// change if positive.
+	///
+	/// To unset a message, pass `Some(Msg::default())` rather than `None`.
+	pub fn update<T1, T2> (&self, num: u64, title: Option<T1>, task: Option<T2>)
+	where
+	T1: Borrow<str>,
+	T2: Borrow<str> {
+		let mut ptr = self.0.lock().unwrap();
+		if num > 0 {
+			ptr.increment(num);
+		}
+		if let Some(title) = title {
+			ptr.set_title(title);
+		}
+		if let Some(task) = task {
+			ptr.remove_task(task);
+		}
+	}
+}
