@@ -435,6 +435,17 @@ impl MsgBuf {
 		self.parts[idx].1 - self.parts[idx].0
 	}
 
+	#[must_use]
+	/// Get Range.
+	///
+	/// Return an arbitrary buffer slice. Equivalent to `buf[start..end]`.
+	///
+	/// Panics if `start` or `end` are out of bounds.
+	pub fn get_range(&self, start: usize, end: usize) -> &[u8] {
+		assert!(start <= end && end <= self.buf.len());
+		&self.buf[start..end]
+	}
+
 	/// Insert Part.
 	///
 	/// Insert a part into the partition table (and the data into the
