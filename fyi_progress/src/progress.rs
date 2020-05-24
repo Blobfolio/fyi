@@ -85,6 +85,7 @@ use fyi_msg::{
 	utility::time_format_dd,
 };
 use indexmap::set::IndexSet;
+use memchr::Memchr;
 use std::{
 	borrow::Borrow,
 	cmp::Ordering,
@@ -208,7 +209,7 @@ impl Default for ProgressInner {
 
 impl ProgressInner {
 	const IDX_TITLE: usize = 0;
-	// const IDX_ELAPSED_PRE: usize = 1;
+	const IDX_ELAPSED_PRE: usize = 1;
 	const IDX_ELAPSED: usize = 2;
 	// const IDX_ELAPSED_POST: usize = 3;
 	const IDX_BAR: usize = 4;
@@ -218,7 +219,7 @@ impl ProgressInner {
 	const IDX_TOTAL: usize = 8;
 	// const IDX_TOTAL_POST: usize = 9;
 	const IDX_PERCENT: usize = 10;
-	// const IDX_PERCENT_POST: usize = 11;
+	const IDX_PERCENT_POST: usize = 11;
 	const IDX_TASKS: usize = 12;
 
 
@@ -257,7 +258,7 @@ impl ProgressInner {
 					&[27, 91, 48, 59, 49, 109, 32, 32],
 					// Percent.
 					&[48, 46, 48, 48, 37],
-					&[27, 91, 48, 109],
+					&[27, 91, 48, 109, 10],
 					// Tasks.
 					&[],
 				]),
@@ -445,27 +446,95 @@ impl ProgressInner {
 		if self.last_lines > 0 {
 			self.cls();
 		}
-		self.last_lines = self.buf.count_lines();
 
-		// Chop and print!
-		ProgressInner::print(
-			&self.buf.lines()
-				.flat_map(|line| {
-					// The line fits.
-					let len: usize = line.len();
-					let fit_len: usize = chopped_len(line, width);
-					if fit_len == len {
-						line.iter().chain(&[10]).copied().collect::<Vec<u8>>()
+		self.print_chopped(width);
+	}
+
+	/// Print Chopped.
+	///
+	/// It is surprisingly difficult to chop strings to fit a given "width".
+	pub fn print_chopped(&mut self, width: usize) {
+		use io::Write;
+
+		if self.buf.is_empty() {
+			return;
+		}
+
+		let writer = io::stderr();
+		let mut handle = writer.lock();
+
+		// If there is a title, we might have to crunch it.
+		let title: &[u8] = self.buf.get_part(ProgressInner::IDX_TITLE);
+		if ! title.is_empty() {
+			let line_len: usize = title.len();
+			// It fits just fine.
+			if line_len <= width {
+				handle.write_all(title).unwrap();
+			}
+			// It might fit, but we have to calculate.
+			else {
+				let fit_len: usize = chopped_len(title, width);
+				if fit_len == line_len {
+					handle.write_all(title).unwrap();
+				}
+				else {
+					handle.write_all(&title[..fit_len]).unwrap();
+					handle.write_all(&[27, 91, 48, 109, 10]).unwrap();
+				}
+			}
+
+			self.last_lines = 1;
+		}
+
+		// Go ahead and write the progress bits. We've already sized those.
+		let part1 = self.buf.get_partition(ProgressInner::IDX_ELAPSED_PRE);
+		let part2 = self.buf.get_partition(ProgressInner::IDX_PERCENT_POST);
+		handle.write_all(self.buf.get_range(part1.0, part2.1)).unwrap();
+		self.last_lines += 1;
+
+		// Tasks are the worst. Haha.
+		if ! self.tasks.is_empty() {
+			let tasks: &[u8] = self.buf.get_part(ProgressInner::IDX_TASKS);
+			let max_idx: usize = tasks.len();
+			let mut last_idx: usize = 0;
+			self.last_lines += self.tasks.len();
+
+			for idx in Memchr::new(10_u8, tasks) {
+				let line_len: usize = idx - last_idx;
+
+				// It fits just fine.
+				if line_len <= width {
+					let next_idx = usize::min(max_idx, idx + 1);
+					handle.write_all(&tasks[last_idx..next_idx]).unwrap();
+					last_idx = next_idx;
+				}
+				else {
+					let fit_len: usize = chopped_len(&tasks[last_idx..idx], width);
+
+					// It all fits.
+					if fit_len + 1 == line_len {
+						let next_idx = usize::min(max_idx, idx + 1);
+						handle.write_all(&tasks[last_idx..next_idx]).unwrap();
+						last_idx = next_idx;
 					}
+					// We need to chop between fit-len and the end.
 					else {
-						line[..fit_len].iter()
-							.chain(&[27, 91, 48, 109, 10])
-							.copied()
-							.collect::<Vec<u8>>()
+						handle.write_all(&tasks[last_idx..fit_len]).unwrap();
+
+						// We need to keep the last five bytes of the line.
+						let next_idx = usize::min(max_idx, idx + 1);
+						let last_idx2 = next_idx - 5;
+						handle.write_all(&tasks[last_idx2..next_idx]).unwrap();
+						last_idx = next_idx;
 					}
-				})
-				.collect::<Vec<u8>>()
-		)
+				}
+
+				if last_idx == max_idx { break; }
+			}
+		}
+
+		// Flush our work and call it a day!
+		handle.flush().unwrap();
 	}
 
 	/// Stop
@@ -655,9 +724,9 @@ impl ProgressInner {
 				ProgressInner::IDX_TASKS,
 				&self.tasks.iter()
 					.flat_map(|s|
-						[10, 32, 32, 32, 32, 27, 91, 51, 53, 109, 226, 134, 179, 32].iter()
+						[32, 32, 32, 32, 27, 91, 51, 53, 109, 226, 134, 179, 32].iter()
 							.chain(s.as_bytes())
-							.chain(&[27, 91, 48, 109])
+							.chain(&[27, 91, 48, 109, 10])
 							.copied()
 					)
 					.collect::<Vec<u8>>()
