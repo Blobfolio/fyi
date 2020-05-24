@@ -493,6 +493,7 @@ impl ProgressInner {
 		self.last_lines += 1;
 
 		// Tasks are the worst. Haha.
+		// TODO: maybe these shouldn't be buffered at all? JIT?
 		if ! self.tasks.is_empty() {
 			let tasks: &[u8] = self.buf.get_part(ProgressInner::IDX_TASKS);
 			let max_idx: usize = tasks.len();
