@@ -6,14 +6,10 @@ canonicalized, deduplicated, and validated against a regular expression.
 */
 
 use crate::utility::inflect;
-use fyi_msg::{
-	Msg,
-	PrinterKind,
-	PrintFlags,
-};
+use fyi_msg::Msg;
 use fyi_progress::{
-	lapsed,
 	Progress,
+	utility::human_elapsed,
 };
 use indexmap::set::IndexSet;
 use jwalk::WalkDir;
@@ -49,8 +45,8 @@ use std::{
 macro_rules! make_progress {
 	($name:expr, $len:expr) => (
 		Arc::new(Progress::new(
+			$len,
 			Some(Msg::new($name, 199, "Reticulating splines\u{2026}")),
-			$len
 		))
 	);
 }
@@ -62,7 +58,7 @@ macro_rules! make_progress_loop {
 			let file: &str = x.to_str().unwrap_or("");
 			$progress.clone().add_task(file);
 			$cb(&Arc::new(x.clone()));
-			$progress.clone().update(1, None, Some(file));
+			$progress.clone().update(1, None::<String>, Some(file));
 		});
 		handle.join().unwrap();
 	};
@@ -70,30 +66,35 @@ macro_rules! make_progress_loop {
 
 macro_rules! crunched_in {
 	($total:expr, $secs:expr) => (
+		eprintln!("{}",
 		Msg::crunched(unsafe {
 			std::str::from_utf8_unchecked(&[
 				&inflect($total, "file in ", "files in "),
-				&lapsed::full($secs),
+				&human_elapsed($secs),
 				&b"."[..],
 			].concat())
 		})
+		);
 	);
 
 	($total:expr, $secs:expr, $before:expr, $after:expr) => (
 		if 0 == $after || $before <= $after {
+			eprintln!("{}",
 			Msg::crunched(unsafe {
 				std::str::from_utf8_unchecked(&[
 					&inflect($total, "file in ", "files in "),
-					&lapsed::full($secs),
+					&human_elapsed($secs),
 					&b", but nothing doing."[..],
 				].concat())
 			})
+			);
 		}
 		else {
+			eprintln!("{}",
 			Msg::crunched(unsafe {
 				std::str::from_utf8_unchecked(&[
 					&inflect($total, "file in ", "files in "),
-					&lapsed::full($secs),
+					&human_elapsed($secs),
 					&b", saving "[..],
 					($before - $after).to_formatted_string(&Locale::en).as_bytes(),
 					format!(
@@ -103,6 +104,7 @@ macro_rules! crunched_in {
 					).as_bytes()
 				].concat())
 			})
+			);
 		}
 	);
 }
@@ -250,9 +252,7 @@ impl Witcher {
 		crunched_in!(
 			pbar.total(),
 			pbar.time().elapsed().as_secs() as u32
-		)
-			.with_printer(PrinterKind::Stderr)
-			.print(PrintFlags::NONE);
+		);
 	}
 
 	/// Parallel Loop w/ Progress.
@@ -278,8 +278,6 @@ impl Witcher {
 			pbar.time().elapsed().as_secs() as u32,
 			before,
 			self.du()
-		)
-			.with_printer(PrinterKind::Stderr)
-			.print(PrintFlags::NONE);
+		);
 	}
 }

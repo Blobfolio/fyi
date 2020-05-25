@@ -139,7 +139,10 @@ impl Msg {
 
 	#[must_use]
 	/// New Prefix + Msg
-	pub fn new<T: Borrow<str>> (prefix: T, prefix_color: u8, msg: T) -> Self {
+	pub fn new<T1, T2> (prefix: T1, prefix_color: u8, msg: T2) -> Self
+	where
+	T1: Borrow<str>,
+	T2: Borrow<str> {
 		let prefix = prefix.borrow();
 		let msg = msg.borrow();
 
