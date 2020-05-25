@@ -101,9 +101,11 @@ impl MsgBuf {
 	/// Panics if `bufs` is empty. (The parts within `bufs` can, however, be
 	/// empty).
 	pub fn from_many(bufs: &[&[u8]]) -> Self {
+		assert!(! bufs.is_empty());
+
 		let mut out = MsgBuf::default();
 		let mut start: usize = 0;
-		for b in bufs {
+		bufs.iter().for_each(|b| {
 			if b.is_empty() {
 				out.parts.push((start, start));
 			}
@@ -113,7 +115,8 @@ impl MsgBuf {
 				out.parts.push((start, end));
 				start = end;
 			}
-		};
+		});
+
 		out
 	}
 
@@ -335,7 +338,7 @@ impl MsgBuf {
 		assert!(! bufs.is_empty());
 
 		let mut start: usize = self.buf.len();
-		for b in bufs {
+		bufs.iter().for_each(|b| {
 			if b.is_empty() {
 				self.parts.push((start, start));
 			}
@@ -345,7 +348,7 @@ impl MsgBuf {
 				self.parts.push((start, end));
 				start = end;
 			}
-		};
+		});
 
 		self.parts.len() - 1
 	}
@@ -607,7 +610,7 @@ impl MsgBuf {
 
 		// Loop through the provided parts, filling in the gaps as needed.
 		let mut last_idx: usize = 0;
-		for p in parts {
+		parts.iter().for_each(|p| {
 			// The range must be in order of itself.
 			// The range cannot go past the buffer boundaries.
 			// The range cannot begin before the previous end.
@@ -620,7 +623,7 @@ impl MsgBuf {
 
 			last_idx = p.1;
 			self.parts.push((p.0, p.1));
-		}
+		});
 
 		// If the last part falls short of `len()`, add one more.
 		if last_idx < max {
@@ -1072,86 +1075,3 @@ mod tests {
 		ass_u8!("buf.get_part(2)", buf.get_part(2), TEST4);
 	}
 }
-
-
-
-// TODO: add unit tests for everything written so far.
-
-// TODO: what would it take to have PrintBuf hold a dynamic, thread-safe,
-// read-only copy of a MsgBuf? Is Arc<> good enough? Does it have to be a
-// mutex? Should it be rwlock?
-
-
-
-/*
-#[derive(Debug, Clone, Copy, Default, Hash, PartialEq)]
-/// Message Buffer Print State
-///
-/// This holds print-related details, such as stats from the last job, the
-/// desired writer, etc.
-pub struct PrintBuf {
-	/// The destination writer, e.g. `Stdout`.
-	printer: PrinterKind,
-	/// The raw hash of the last source submitted for printing. This hash is
-	/// generated from the raw source and so must be combined with the value of
-	/// `chopped` to determine whether or not an erase/print operation should
-	/// happen at all.
-	raw: u64,
-	/// The number of `\n` characters in the previous print job, used only for
-	/// erasures, and then only successful if the terminal hasn't manually re-
-	/// drawn itself indepenendently in the meantime.
-	lines: usize,
-	/// The width used for chopping during the last print job, if any. For
-	/// repaint operations, this value is combined with the `raw` hash when
-	/// deciding if any action should be taken.
-	chopped: usize,
-}
-
-impl PrintBuf {
-	// erase(x)
-	// print(x, flags)
-	// handle chopping, etc.
-}
-
-
-
-#[derive(Debug, Clone, Default, Hash, PartialEq)]
-/// Message Buffer.
-///
-/// This is the public-facing unit.
-pub struct Msg {
-	buf: MsgBuf,
-	state: PrintBuf,
-}
-
-impl Borrow<str> for Msg {
-	#[inline]
-	fn borrow(&self) -> &str {
-		unsafe { std::str::from_utf8_unchecked(self) }
-	}
-}
-
-impl Borrow<[u8]> for Msg {
-	#[inline]
-	fn borrow(&self) -> &[u8] {
-		self
-	}
-}
-
-impl Deref for Msg {
-	type Target = [u8];
-
-	/// Deref.
-	fn deref(&self) -> &Self::Target {
-		&self.buf
-	}
-}
-
-impl fmt::Display for Msg {
-	#[inline]
-	/// Display.
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str(unsafe { std::str::from_utf8_unchecked(self) })
-	}
-}
-*/
