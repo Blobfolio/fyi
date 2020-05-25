@@ -14,35 +14,38 @@ use fyi_msg::MsgBuf;
 
 
 fn new(c: &mut Criterion) {
-	let blank_part: &[(usize, usize)] = black_box(&[]);
+	let mut group = c.benchmark_group("fyi_msg::MsgBuf");
 
+	let blank_part: &[(usize, usize)] = black_box(&[]);
 	let hello_buf = black_box(b"Hello World");
 	let hello_part = black_box((0, 11));
 	let hello_2parts = black_box(&[(0, 6), (6, 11)]);
 
-	c.bench_function("fyi_msg::MsgBuf/default()", move |b| {
+	group.bench_function("default()", move |b| {
 		b.iter(|| MsgBuf::default())
 	});
 
-	c.bench_function("fyi_msg::MsgBuf/new(b\"Hello World\", [])", move |b| {
+	group.bench_function("new(b\"Hello World\", [])", move |b| {
 		b.iter(|| MsgBuf::new(hello_buf, blank_part))
 	});
 
-	c.bench_function("fyi_msg::MsgBuf/new(b\"Hello World\", [(0, 11)])", move |b| {
+	group.bench_function("new(b\"Hello World\", [(0, 11)])", move |b| {
 		b.iter(|| MsgBuf::new(hello_buf, &[hello_part]))
 	});
 
-	c.bench_function("fyi_msg::MsgBuf/new(b\"Hello World\", [(0, 6), (6, 11)])", move |b| {
+	group.bench_function("new(b\"Hello World\", [(0, 6), (6, 11)])", move |b| {
 		b.iter(|| MsgBuf::new(hello_buf, hello_2parts))
 	});
+
+	group.finish();
 }
 
 fn from(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_msg::MsgBuf");
+
 	let blank_buf: &[u8] = black_box(&[]);
 	let hello_buf = black_box(b"Hello World");
 	let bjork_buf = black_box("Björk Guðmundsdóttir is an Icelandic singer, songwriter, record producer, actress, and DJ.".as_bytes());
-
-	let mut group = c.benchmark_group("fyi_msg::MsgBuf");
 
 	for buf in [
 		blank_buf,
@@ -59,9 +62,13 @@ fn from(c: &mut Criterion) {
 			}
 		);
 	}
+
+	group.finish();
 }
 
 fn from_many(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_msg::MsgBuf");
+
 	let blank_buf: &[u8] = black_box(&[]);
 	let hello_buf = black_box(b"Hello World");
 	let bjork_buf = black_box("Björk Guðmundsdóttir is an Icelandic singer, songwriter, record producer, actress, and DJ.".as_bytes());
@@ -69,7 +76,7 @@ fn from_many(c: &mut Criterion) {
 	let ansi2_buf: &[u8] = black_box(&[69, 114, 114, 111, 114, 58]);
 	let ansi3_buf: &[u8] = black_box(&[27, 91, 48, 109]);
 
-	c.bench_function("fyi_msg::MsgBuf/from_many(3)", move |b| {
+	group.bench_function("from_many(3)", move |b| {
 		b.iter(|| MsgBuf::from_many(&[
 			blank_buf,
 			hello_buf,
@@ -77,7 +84,7 @@ fn from_many(c: &mut Criterion) {
 		]))
 	});
 
-	c.bench_function("fyi_msg::MsgBuf/from_many(6)", move |b| {
+	group.bench_function("from_many(6)", move |b| {
 		b.iter(|| MsgBuf::from_many(&[
 			blank_buf,
 			hello_buf,
@@ -87,6 +94,8 @@ fn from_many(c: &mut Criterion) {
 			ansi3_buf,
 		]))
 	});
+
+	group.finish();
 }
 
 fn with_parts(c: &mut Criterion) {
@@ -109,6 +118,8 @@ fn with_parts(c: &mut Criterion) {
 			}
 		);
 	}
+
+	group.finish();
 }
 
 

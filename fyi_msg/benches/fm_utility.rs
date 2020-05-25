@@ -29,6 +29,8 @@ fn ansi_code_bold(c: &mut Criterion) {
 			}
 		);
 	}
+
+	group.finish();
 }
 
 fn time_format_dd(c: &mut Criterion) {
@@ -45,6 +47,8 @@ fn time_format_dd(c: &mut Criterion) {
 			}
 		);
 	}
+
+	group.finish();
 }
 
 fn whitespace(c: &mut Criterion) {
@@ -61,6 +65,8 @@ fn whitespace(c: &mut Criterion) {
 			}
 		);
 	}
+
+	group.finish();
 }
 
 

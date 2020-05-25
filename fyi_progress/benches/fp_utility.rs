@@ -35,6 +35,8 @@ fn chopped_len(c: &mut Criterion) {
 			}
 		);
 	}
+
+	group.finish();
 }
 
 fn human_elapsed(c: &mut Criterion) {
@@ -54,6 +56,8 @@ fn human_elapsed(c: &mut Criterion) {
 			}
 		);
 	}
+
+	group.finish();
 }
 
 fn int_as_bytes(c: &mut Criterion) {
@@ -73,6 +77,8 @@ fn int_as_bytes(c: &mut Criterion) {
 			}
 		);
 	}
+
+	group.finish();
 }
 
 fn secs_chunks(c: &mut Criterion) {
@@ -92,6 +98,8 @@ fn secs_chunks(c: &mut Criterion) {
 			}
 		);
 	}
+
+	group.finish();
 }
 
 
