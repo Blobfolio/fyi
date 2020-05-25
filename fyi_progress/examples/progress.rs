@@ -287,5 +287,5 @@ fn main() {
 	handle.join().unwrap();
 
 	// Print a quick summary.
-	// bar.finished_in();
+	bar.finished_in();
 }

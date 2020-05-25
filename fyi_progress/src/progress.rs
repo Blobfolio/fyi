@@ -76,11 +76,13 @@ assert_eq!(1000, bar.done());
 
 use crate::utility::{
 	chopped_len,
+	human_elapsed,
 	int_as_bytes,
 	secs_chunks,
 	term_width,
 };
 use fyi_msg::{
+	Msg,
 	MsgBuf,
 	utility::time_format_dd,
 };
@@ -427,6 +429,20 @@ impl ProgressInner {
 		}
 	}
 
+	/// Finished In
+	///
+	/// This method can be used to print a quick "Finished in XYZ" summary
+	/// message after progress has finished.
+	pub fn finished_in(&self) {
+		if ! self.is_running() {
+			ProgressInner::print(&Msg::crunched([
+				"Finished in ",
+				unsafe { std::str::from_utf8_unchecked(&human_elapsed(self.last_secs)) },
+				".\n",
+			].concat()));
+		}
+	}
+
 	/// Maybe Print?
 	///
 	/// After a tick has made its changes, check and see if it is worth
@@ -493,7 +509,6 @@ impl ProgressInner {
 		self.last_lines += 1;
 
 		// Tasks are the worst. Haha.
-		// TODO: maybe these shouldn't be buffered at all? JIT?
 		if ! self.tasks.is_empty() {
 			let tasks: &[u8] = self.buf.get_part(ProgressInner::IDX_TASKS);
 			let max_idx: usize = tasks.len();
@@ -853,6 +868,15 @@ impl Progress {
 	pub fn add_task<T: Borrow<str>> (&self, task: T) {
 		let mut ptr = self.0.lock().unwrap();
 		ptr.add_task(task)
+	}
+
+	/// Finished In
+	///
+	/// This method can be used to print a quick "Finished in XYZ" summary
+	/// message after progress has finished.
+	pub fn finished_in(&self) {
+		let ptr = self.0.lock().unwrap();
+		ptr.finished_in()
 	}
 
 	/// Increment Done.
