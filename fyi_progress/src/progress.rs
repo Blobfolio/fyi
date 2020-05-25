@@ -476,8 +476,9 @@ impl ProgressInner {
 			return;
 		}
 
-		let writer = io::stderr();
-		let mut handle = writer.lock();
+		#[cfg(not(feature = "bench_sink"))] let writer = io::stderr();
+		#[cfg(not(feature = "bench_sink"))] let mut handle = writer.lock();
+		#[cfg(feature = "bench_sink")] let mut handle = io::sink();
 
 		// If there is a title, we might have to crunch it.
 		let title: &[u8] = self.buf.get_part(ProgressInner::IDX_TITLE);
