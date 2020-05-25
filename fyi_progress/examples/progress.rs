@@ -240,9 +240,9 @@ fn main() {
 	];
 
 	// Some titles to change along the way.
-	let title1: String = Msg::new("Civilization:", 199, "Reticulating splines…").to_string();
-	let title2: String = Msg::new("Civilization:", 199, "*Still* reticulating those splines…").to_string();
-	let title3: String = Msg::new("Civilization:", 9, "Approaching the edge of the universe…").to_string();
+	let title1: String = Msg::new("Civilization", 199, "Reticulating splines…").to_string();
+	let title2: String = Msg::new("Civilization", 199, "*Still* reticulating those splines…").to_string();
+	let title3: String = Msg::new("Civilization", 9, "Approaching the edge of the universe…").to_string();
 
 	// Switch titles at these milestones.
 	const START_TITLE2: f64 = 107.0 / 213.0;
