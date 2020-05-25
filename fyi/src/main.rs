@@ -58,16 +58,10 @@ fn do_blank(opts: &ArgMatches) {
 	}
 
 	if opts.is_present("stderr") {
-		let writer = io::stderr();
-		let mut handle = writer.lock();
-		handle.write_all(&[10].repeat(count as usize)).unwrap();
-		handle.flush().unwrap();
+		io::stderr().write_all(&[10].repeat(count as usize)).unwrap();
 	}
 	else {
-		let writer = io::stdout();
-		let mut handle = writer.lock();
-		handle.write_all(&[10].repeat(count as usize)).unwrap();
-		handle.flush().unwrap();
+		io::stdout().write_all(&[10].repeat(count as usize)).unwrap();
 	}
 }
 
@@ -112,17 +106,21 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 
 	// Print it to `Stderr`.
 	if opts.is_present("stderr") {
-		let writer = io::stderr();
-		let mut handle = writer.lock();
-		writeln!(handle, "{}", msg).unwrap();
-		handle.flush().unwrap();
+		io::stderr().write_all(
+			&msg.iter()
+				.chain(&[10])
+				.copied()
+				.collect::<Vec<u8>>()
+		).unwrap();
 	}
 	// Print it to `Stdout`.
 	else {
-		let writer = io::stdout();
-		let mut handle = writer.lock();
-		writeln!(handle, "{}", msg).unwrap();
-		handle.flush().unwrap();
+		io::stdout().write_all(
+			&msg.iter()
+				.chain(&[10])
+				.copied()
+				.collect::<Vec<u8>>()
+		).unwrap();
 	}
 
 	// We might have a custom exit code.
