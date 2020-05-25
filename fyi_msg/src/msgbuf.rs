@@ -203,19 +203,6 @@ impl MsgBuf {
 		else { bytecount::count(&self.buf, b'\n') + 1 }
 	}
 
-	/// Lines Iterator.
-	///
-	/// Iterate through the stored message line-by-line. As with
-	/// `count_lines()`, the `\n` character is considered a line break. Any
-	/// data stored after the last `\n` character will be returned in the last
-	/// iteration.
-	///
-	/// Completely empty buffers will return `None` from the getgo.
-	pub fn lines(&'_ self) -> impl Iterator<Item = &'_ [u8]> {
-		// TODO: This performance is horrific. Do it some other way!
-		self.split(|x| x == &10)
-	}
-
 
 
 	// ------------------------------------------------------------------------
@@ -865,27 +852,6 @@ mod tests {
 		ass_u8!("replaced buf", &buf[..], TEST2);
 		ass!("replaced buf.len()", buf.len(), 4);
 		ass!("replaced buf.count_partitions()", buf.count_partitions(), 1);
-	}
-
-	#[test]
-	fn t_lines() {
-		let mut buf = MsgBuf::from(b"Hello\nWorld");
-		ass!("buf.count_lines()", buf.count_lines(), 2);
-		let mut lines = buf.lines();
-		ass_dbg!("line.next()", lines.next(), Some(&b"Hello"[..]));
-		ass_dbg!("line.next()", lines.next(), Some(&b"World"[..]));
-		assert!(lines.next().is_none(), "line.next() should be None.");
-
-		buf = MsgBuf::from(b"Hello World");
-		ass!("buf.count_lines()", buf.count_lines(), 1);
-		lines = buf.lines();
-		ass_dbg!("line.next()", lines.next(), Some(&b"Hello World"[..]));
-		assert!(lines.next().is_none(), "line.next() should be None.");
-
-		buf = MsgBuf::default();
-		ass!("buf.count_lines()", buf.count_lines(), 0);
-		lines = buf.lines();
-		assert!(lines.next().is_none(), "line.next() should be None.");
 	}
 
 	#[test]
