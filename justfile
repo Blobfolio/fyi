@@ -106,28 +106,35 @@ bench BENCH="" FILTER="":
 	clear
 
 	# Instrumentation!
-	"{{ cargo_bin }}" debug "Beginning instrumentation!"
-	"{{ cargo_bin }}" confirm "Answer yes or no. Seriously!" || true
-	"{{ cargo_bin }}" confirm "Now answer the opposite way." || true
+	"{{ cargo_bin }}" print "This is a message."
+	"{{ cargo_bin }}" print -p "Prefix" "This is a message."
+	"{{ cargo_bin }}" print -p "Prefix" -c 10 "This is a message."
+	"{{ cargo_bin }}" print -t "This is a message."
+	"{{ cargo_bin }}" print -i "This is a message."
+	"{{ cargo_bin }}" print --stderr "This is a message."
+
+	"{{ cargo_bin }}" crunched "This is a crunch method."
+	"{{ cargo_bin }}" debug "This is a debug method."
+	"{{ cargo_bin }}" done "This is a done method."
+	"{{ cargo_bin }}" error "This is a error method."
+	"{{ cargo_bin }}" info "This is a info method."
+	"{{ cargo_bin }}" notice "This is a notice method."
+	"{{ cargo_bin }}" success "This is a success method."
+	"{{ cargo_bin }}" task "This is a task method."
+	"{{ cargo_bin }}" warning "This is a warning method."
+
+	clear
+	"{{ cargo_bin }}" debug "Fine-tune the prompt:"
+	"{{ cargo_bin }}" confirm "Type 'Y':" || true
+	"{{ cargo_bin }}" confirm "Type 'e' and then 'n':" || true
+	"{{ cargo_bin }}" confirm "Just hit <ENTER>:" || true
+	"{{ cargo_bin }}" blank
+	"{{ cargo_bin }}" blank -c 1
 	"{{ cargo_bin }}" blank -c 2
-	"{{ cargo_bin }}" blank -e -c 2
-	"{{ cargo_bin }}" debug -i -t "Instrumenting!"
-	"{{ cargo_bin }}" task "Example task."
-	"{{ cargo_bin }}" error "We're doing what we're meant to."
-	"{{ cargo_bin }}" error -e 1 "We're doing what we're meant to." || true
-	"{{ cargo_bin }}" info -t "Still going…"
-	"{{ cargo_bin }}" notice "Notices are important."
-	"{{ cargo_bin }}" print "Nothing doing here."
-	"{{ cargo_bin }}" print -p "Custom" -c 199 "Nothing doing here."
-	"{{ cargo_bin }}" success "Very nearly there now!"
-	"{{ cargo_bin }}" warning --stderr -t "This is the last one."
-	"{{ cargo_bin }}" warning -i -t "Euclid Apollonius of Perga courage of our questions brain is the seed of intelligence quasar tendrils of gossamer clouds. The carbon in our apple pies not a sunrise but a galaxyrise tesseract white dwarf the sky calls to us star stuff harvesting star light. Stirred by starlight hearts of the stars made in the interiors of collapsing stars Tunguska event the ash of stellar alchemy with pretty stories for which there's little good evidence and billions upon billions upon billions upon billions upon billions upon billions upon billions."
-	"{{ cargo_bin }}" done "We actually are (almost) done!"
+	"{{ cargo_bin }}" print -t "This is a message."
 	"{{ cargo_bin }}" -h
 	"{{ cargo_bin }}" -V
-	"{{ cargo_bin }}" blank -c 1
 	"{{ cargo_bin }}" badanswer || true
-
 	clear
 
 	# Merge the data back in.
