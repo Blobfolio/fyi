@@ -442,7 +442,7 @@ impl MsgBuf {
 	/// Return an arbitrary buffer slice. Equivalent to `buf[start..end]`.
 	///
 	/// Panics if `start` or `end` are out of bounds.
-	pub fn get_range(&self, start: usize, end: usize) -> &[u8] {
+	pub fn get_slice(&self, start: usize, end: usize) -> &[u8] {
 		assert!(start <= end && end <= self.buf.len());
 		&self.buf[start..end]
 	}
