@@ -4,10 +4,6 @@
 This mod contains miscellaneous utility functions for the crate.
 */
 
-use num_format::{
-	Buffer,
-	Locale,
-};
 use std::borrow::Cow;
 use smallvec::SmallVec;
 use unicode_width::UnicodeWidthChar;
@@ -154,14 +150,13 @@ pub fn human_elapsed(num: u32) -> Cow<'static, [u8]> {
 /// Convert an integer into a vector of `u8`.
 pub fn int_as_bytes(num: u64) -> SmallVec<[u8; 8]> {
 	if num < 1000 {
-		let mut buf = SmallVec::<[u8; 8]>::new();
-		itoa::write(&mut buf, num).unwrap();
-		buf
+		let mut buf = itoa::Buffer::new();
+		SmallVec::<[u8; 8]>::from_slice(buf.format(num).as_bytes())
 	}
 	// Handle commas and whatnot for big numbers.
 	else {
-		let mut buf = Buffer::default();
-		buf.write_formatted(&num, &Locale::en);
+		let mut buf = num_format::Buffer::default();
+		buf.write_formatted(&num, &num_format::Locale::en);
 		SmallVec::<[u8; 8]>::from_slice(buf.as_bytes())
 	}
 }
