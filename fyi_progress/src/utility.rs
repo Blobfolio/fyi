@@ -10,6 +10,52 @@ use unicode_width::UnicodeWidthChar;
 
 
 
+const LBL_AND: &[u8] = &[32, 97, 110, 100, 32];
+const LBL_HOUR: &[u8] = &[32, 104, 111, 117, 114];
+const LBL_HOURS: &[u8] = &[32, 104, 111, 117, 114, 115];
+const LBL_MINUTE: &[u8] = &[32, 109, 105, 110, 117, 116, 101];
+const LBL_MINUTES: &[u8] = &[32, 109, 105, 110, 117, 116, 101, 115];
+const LBL_SECOND: &[u8] = &[32, 115, 101, 99, 111, 110, 100];
+const LBL_SECONDS: &[u8] = &[32, 115, 101, 99, 111, 110, 100, 115];
+
+macro_rules! one_time {
+	($fn:ident, $one1:expr, $many1:expr) => {
+		/// Gloop One Time Together.
+		fn $fn(val1: u32) -> Cow<'static, [u8]> {
+			let mut buf: Vec<u8> = Vec::with_capacity(10);
+
+			itoa::write(&mut buf, val1).unwrap();
+			if val1 == 1 { buf.extend_from_slice($one1); }
+			else { buf.extend_from_slice($many1); }
+
+			Cow::Owned(buf)
+		}
+	};
+}
+
+macro_rules! time_and_time {
+	($fn:ident, $one1:expr, $many1:expr, $one2:expr, $many2:expr) => {
+		/// Gloop Two Times Together.
+		fn $fn(val1: u32, val2: u32) -> Cow<'static, [u8]> {
+			let mut buf: Vec<u8> = Vec::with_capacity(25);
+
+			itoa::write(&mut buf, val1).unwrap();
+			if val1 == 1 { buf.extend_from_slice($one1); }
+			else { buf.extend_from_slice($many1); }
+
+			buf.extend_from_slice(LBL_AND);
+
+			itoa::write(&mut buf, val2).unwrap();
+			if val2 == 1 { buf.extend_from_slice($one2); }
+			else { buf.extend_from_slice($many2); }
+
+			Cow::Owned(buf)
+		}
+	};
+}
+
+
+
 #[must_use]
 /// Byte Index At Width
 ///
@@ -62,6 +108,32 @@ pub fn chopped_len(buf: &[u8], width: usize) -> usize {
 	}
 }
 
+one_time!(human_h, LBL_HOUR, LBL_HOURS);
+one_time!(human_m, LBL_MINUTE, LBL_MINUTES);
+one_time!(human_s, LBL_SECOND, LBL_SECONDS);
+time_and_time!(human_hm, LBL_HOUR, LBL_HOURS, LBL_MINUTE, LBL_MINUTES);
+time_and_time!(human_hs, LBL_HOUR, LBL_HOURS, LBL_SECOND, LBL_SECONDS);
+time_and_time!(human_ms, LBL_MINUTE, LBL_MINUTES, LBL_SECOND, LBL_SECONDS);
+
+/// Gloop All Times Together.
+fn human_hms(val1: u32, val2: u32, val3: u32) -> Cow<'static, [u8]> {
+	let mut buf: Vec<u8> = Vec::with_capacity(36);
+
+	itoa::write(&mut buf, val1).unwrap();
+	if val1 == 1 { buf.extend_from_slice(&[32, 104, 111, 117, 114, 44, 32]); }
+	else { buf.extend_from_slice(&[32, 104, 111, 117, 114, 115, 44, 32]); }
+
+	itoa::write(&mut buf, val2).unwrap();
+	if val2 == 1 { buf.extend_from_slice(&[32, 109, 105, 110, 117, 116, 101, 44, 32, 97, 110, 100, 32]); }
+	else { buf.extend_from_slice(&[32, 109, 105, 110, 117, 116, 101, 115, 44, 32, 97, 110, 100, 32]); }
+
+	itoa::write(&mut buf, val3).unwrap();
+	if val3 == 1 { buf.extend_from_slice(&[32, 115, 101, 99, 111, 110, 100]); }
+	else { buf.extend_from_slice(&[32, 115, 101, 99, 111, 110, 100, 115]); }
+
+	Cow::Owned(buf)
+}
+
 #[must_use]
 /// Full, Human-Readable Time.
 ///
@@ -78,65 +150,36 @@ pub fn chopped_len(buf: &[u8], width: usize) -> usize {
 /// For times stretching beyond one day, a static value of "1+ days" is
 /// returned.
 pub fn human_elapsed(num: u32) -> Cow<'static, [u8]> {
-	static ONE: [&[u8]; 3] = [b" hour", b" minute", b" second"];
-	static MANY: [&[u8]; 3] = [b" hours", b" minutes", b" seconds"];
-	static AND: &[u8] = b", and ";
-
 	if 1 == num {
 		Cow::Borrowed(b"1 second")
 	}
 	// Just seconds.
 	else if num < 60 {
-		Cow::Owned({
-			let mut buf: Vec<u8> = Vec::with_capacity(10);
-			itoa::write(&mut buf, num).unwrap();
-			buf.extend_from_slice(MANY[2]);
-			buf
-		})
+		human_s(num)
+	}
+	// Just minutes and/or seconds.
+	else if num < 3600 {
+		let m: u32 = num_integer::div_floor(num, 60);
+		let s: u32 = num - m * 60;
+
+		if s > 0 { human_ms(m, s) }
+		else { human_m(m) }
 	}
 	// Let's build it.
 	else if num < 86400 {
 		let c = secs_chunks(num);
 
-		// Find out how many non-zero values there are.
-		let len: usize = c.iter().filter(|&n| *n != 0).count();
-
-		let mut buf = Vec::with_capacity(64);
-		let mut i: usize = 0;
-		let mut j: usize = 0;
-		loop {
-			// Skip empties.
-			if c[i] == 0 {
-				i += 1;
-				continue;
-			}
-
-			itoa::write(&mut buf, c[i]).unwrap();
-			match c[i] {
-				1 => buf.extend_from_slice(ONE[i]),
-				_ => buf.extend_from_slice(MANY[i]),
-			}
-
-			i += 1;
-			j += 1;
-
-			if j == len {
-				break;
-			}
-			else if len - j == 1 {
-				if len > 2 {
-					buf.extend_from_slice(AND);
-				}
-				else {
-					buf.extend_from_slice(&AND[1..]);
-				}
-			}
-			else {
-				buf.extend_from_slice(&AND[..2]);
-			}
+		match (c[0] == 0, c[1] == 0, c[2] == 0) {
+			// All Three.
+			(false, false, false) => human_hms(c[0], c[1], c[2]),
+			// Hour, Minute.
+			(false, false, true) => human_hm(c[0], c[1]),
+			// Hour, Second.
+			(false, true, false) => human_hs(c[0], c[2]),
+			// Only Hours.
+			(false, true, true) => human_h(c[0]),
+			_ => unreachable!(),
 		}
-
-		Cow::Owned(buf)
 	}
 	// Too long.
 	else {
@@ -222,7 +265,6 @@ mod tests {
 		_human_elapsed(2121, "35 minutes and 21 seconds");
 		_human_elapsed(36015, "10 hours and 15 seconds");
 		_human_elapsed(37732, "10 hours, 28 minutes, and 52 seconds");
-		_human_elapsed(37740, "10 hours and 29 minutes");
 		_human_elapsed(37740, "10 hours and 29 minutes");
 		_human_elapsed(428390, "1+ days");
 	}
