@@ -426,6 +426,17 @@ impl MsgBuf {
 	}
 
 	#[must_use]
+	/// Get Part (Mut).
+	///
+	/// Return the buffer slice corresponding to the partition.
+	///
+	/// Panics if `idx` is out of bounds.
+	pub fn get_part_mut(&mut self, idx: usize) -> &mut [u8] {
+		assert!(idx < self.parts.len());
+		&mut self.buf[self.parts[idx].0..self.parts[idx].1]
+	}
+
+	#[must_use]
 	/// Get Part.
 	///
 	/// If you want all parts, use `parts()` instead. This returns the slice
@@ -435,6 +446,18 @@ impl MsgBuf {
 	pub fn get_parts(&self, idx1: usize, idx2: usize) -> &[u8] {
 		assert!(idx1 < idx2 && idx2 < self.parts.len());
 		&self.buf[self.parts[idx1].0..self.parts[idx2].1]
+	}
+
+	#[must_use]
+	/// Get Part.
+	///
+	/// If you want all parts, use `parts()` instead. This returns the slice
+	/// of the buffer beginning with part `idx1` and ending with part `idx2`.
+	///
+	/// Panics if `idx1` or `idx2` are out of bounds or out of order.
+	pub fn get_parts_mut(&mut self, idx1: usize, idx2: usize) -> &mut [u8] {
+		assert!(idx1 < idx2 && idx2 < self.parts.len());
+		&mut self.buf[self.parts[idx1].0..self.parts[idx2].1]
 	}
 
 	#[must_use]

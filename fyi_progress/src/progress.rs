@@ -708,14 +708,14 @@ impl ProgressInner {
 	fn redraw_elapsed(&mut self) {
 		if self.last_secs < 86400 {
 			let c = secs_chunks(self.last_secs);
-			let mut buf: [u8; 8] = [48, 48, 58, 48, 48, 58, 48, 48];
+			let buf = self.buf.get_part_mut(Self::IDX_ELAPSED);
 			buf[..2].copy_from_slice(time_format_dd(c[0]));
 			buf[3..5].copy_from_slice(time_format_dd(c[1]));
 			buf[6..].copy_from_slice(time_format_dd(c[2]));
-			self.buf.replace_part(Self::IDX_ELAPSED, &buf);
 		}
 		else {
-			self.buf.replace_part(Self::IDX_ELAPSED, b"23:59:59");
+			self.buf.get_part_mut(Self::IDX_ELAPSED)
+				.copy_from_slice(&[50, 51, 58, 53, 57, 58, 53, 57]);
 		}
 	}
 
