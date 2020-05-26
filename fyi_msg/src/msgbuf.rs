@@ -474,6 +474,15 @@ impl MsgBuf {
 	}
 
 	#[must_use]
+	/// Part Is Empty?
+	///
+	/// Panics if `idx` is out of bounds.
+	pub fn part_is_empty(&self, idx: usize) -> bool {
+		assert!(idx < self.parts.len());
+		self.parts[idx].0 == self.parts[idx].1
+	}
+
+	#[must_use]
 	/// Parts Iterator.
 	///
 	/// Loop through the `MsgBuf` part-by-part, including empty ones.

@@ -241,21 +241,21 @@ impl Msg {
 
 		// Remove the message.
 		if msg.is_empty() {
-			if self.0.get_part_len(Msg::IDX_MSG_PRE) != 0 {
+			if ! self.0.part_is_empty(Msg::IDX_MSG_PRE) {
 				self.0.clear_part(Msg::IDX_MSG_PRE);
 				self.0.clear_part(Msg::IDX_MSG);
 				self.0.clear_part(Msg::IDX_MSG_POST);
 			}
 
 			// We might need to change the end of the prefix too.
-			if self.0.get_part_len(Msg::IDX_PREFIX_POST) != 0 {
+			if ! self.0.part_is_empty(Msg::IDX_PREFIX_POST) {
 				self.0.replace_part(Msg::IDX_PREFIX_POST, RESET);
 			}
 		}
 		// Add or change it.
 		else {
 			// The opening and closing needs to be taken care of.
-			if self.0.get_part_len(Msg::IDX_MSG_PRE) == 0 {
+			if self.0.part_is_empty(Msg::IDX_MSG_PRE) {
 				self.0.extend_part(Msg::IDX_MSG_PRE, MSG_PRE);
 				self.0.extend_part(Msg::IDX_MSG_POST, RESET);
 			}
@@ -263,7 +263,7 @@ impl Msg {
 			self.0.replace_part(Msg::IDX_MSG, msg.as_bytes());
 
 			// We might need to change the end of the prefix too.
-			if self.0.get_part_len(Msg::IDX_PREFIX_POST) != 0 {
+			if ! self.0.part_is_empty(Msg::IDX_PREFIX_POST) {
 				self.0.replace_part(Msg::IDX_PREFIX_POST, PREFIX_POST);
 			}
 		}
@@ -275,7 +275,7 @@ impl Msg {
 
 		// Remove the prefix.
 		if prefix.is_empty() {
-			if self.0.get_part_len(Msg::IDX_PREFIX_PRE) != 0 {
+			if ! self.0.part_is_empty(Msg::IDX_PREFIX_PRE) {
 				self.0.clear_part(Msg::IDX_PREFIX_PRE);
 				self.0.clear_part(Msg::IDX_PREFIX);
 				self.0.clear_part(Msg::IDX_PREFIX_POST);
@@ -285,7 +285,7 @@ impl Msg {
 		else {
 			self.0.replace_part(Msg::IDX_PREFIX_PRE, ansi_code_bold(prefix_color));
 			self.0.replace_part(Msg::IDX_PREFIX, prefix.as_bytes());
-			if self.0.get_part_len(Msg::IDX_MSG_PRE) == 0 {
+			if self.0.part_is_empty(Msg::IDX_MSG_PRE) {
 				self.0.replace_part(Msg::IDX_PREFIX_POST, RESET);
 			}
 			else {
@@ -301,7 +301,7 @@ impl Msg {
 
 		// Remove the timestamp, if any.
 		if clear {
-			if self.0.get_part_len(Msg::IDX_TIMESTAMP_PRE) != 0 {
+			if ! self.0.part_is_empty(Msg::IDX_TIMESTAMP_PRE) {
 				self.0.clear_part(Msg::IDX_TIMESTAMP_PRE);
 				self.0.clear_part(Msg::IDX_TIMESTAMP);
 				self.0.clear_part(Msg::IDX_TIMESTAMP_POST);
@@ -309,7 +309,7 @@ impl Msg {
 		}
 		else {
 			// The pre and post need to be populated too.
-			if self.0.get_part_len(Msg::IDX_TIMESTAMP_PRE) == 0 {
+			if self.0.part_is_empty(Msg::IDX_TIMESTAMP_PRE) {
 				self.0.extend_part(Msg::IDX_TIMESTAMP_PRE, TIMESTAMP_PRE);
 				self.0.extend_part(Msg::IDX_TIMESTAMP_POST, TIMESTAMP_POST);
 			}
