@@ -42,8 +42,8 @@ macro_rules! new_prefix {
 		/// New Prefix + Msg
 		pub fn $fn<T: Borrow<str>> (msg: T) -> Self {
 			let msg = msg.borrow();
-			if msg.is_empty() { Msg::new_prefix_unchecked($pre, $prefix) }
-			else { Msg::new_prefix_msg_unchecked($pre, $prefix, msg.as_bytes()) }
+			if msg.is_empty() { Self::new_prefix_unchecked($pre, $prefix) }
+			else { Self::new_prefix_msg_unchecked($pre, $prefix, msg.as_bytes()) }
 		}
 	};
 }
@@ -93,7 +93,7 @@ impl Borrow<[u8]> for Msg {
 impl Default for Msg {
 	/// Default.
 	fn default() -> Self {
-		Msg(MsgBuf::with_parts(10))
+		Self(MsgBuf::with_parts(10))
 	}
 }
 
@@ -148,17 +148,17 @@ impl Msg {
 
 		match (prefix.is_empty(), msg.is_empty()) {
 			// Neither.
-			(true, true) => Msg::default(),
+			(true, true) => Self::default(),
 			// Both.
-			(false, false) => Msg::new_prefix_msg_unchecked(
+			(false, false) => Self::new_prefix_msg_unchecked(
 				ansi_code_bold(prefix_color),
 				prefix.as_bytes(),
 				msg.as_bytes()
 			),
 			// Message only.
-			(true, false) => Msg::new_msg_unchecked(msg.as_bytes()),
+			(true, false) => Self::new_msg_unchecked(msg.as_bytes()),
 			// Prefix only.
-			(false, true) => Msg::new_prefix_unchecked(
+			(false, true) => Self::new_prefix_unchecked(
 				ansi_code_bold(prefix_color),
 				prefix.as_bytes()
 			),
@@ -175,7 +175,7 @@ impl Msg {
 	/// New Prefix + Msg (Unchecked)
 	///
 	fn new_prefix_msg_unchecked(prefix_pre: &[u8], prefix: &[u8], msg: &[u8]) -> Self {
-		Msg(MsgBuf::from_many(&[
+		Self(MsgBuf::from_many(&[
 			// Indentation and timestamp.
 			&[], &[], &[], &[],
 			prefix_pre,
@@ -191,7 +191,7 @@ impl Msg {
 	/// New Prefix (Unchecked)
 	///
 	fn new_prefix_unchecked(prefix_pre: &[u8], prefix: &[u8]) -> Self {
-		Msg(MsgBuf::from_many(&[
+		Self(MsgBuf::from_many(&[
 			// Indentation and timestamp.
 			&[], &[], &[], &[],
 			prefix_pre,
@@ -206,7 +206,7 @@ impl Msg {
 	/// New Message (Unchecked)
 	///
 	fn new_msg_unchecked(msg: &[u8]) -> Self {
-		Msg(MsgBuf::from_many(&[
+		Self(MsgBuf::from_many(&[
 			// Indentation and timestamp.
 			&[], &[], &[], &[],
 			// Prefix.
@@ -226,11 +226,11 @@ impl Msg {
 	/// Indent.
 	pub fn set_indent(&mut self, indent: usize) {
 		let len: usize = usize::min(10, indent) * 4;
-		if self.0.get_part_len(Msg::IDX_INDENT) != len {
+		if self.0.get_part_len(Self::IDX_INDENT) != len {
 			// Clear it.
-			if 0 == len { self.0.clear_part(Msg::IDX_INDENT); }
+			if 0 == len { self.0.clear_part(Self::IDX_INDENT); }
 			else {
-				self.0.replace_part(Msg::IDX_INDENT, whitespace(len));
+				self.0.replace_part(Self::IDX_INDENT, whitespace(len));
 			}
 		}
 	}
@@ -241,30 +241,30 @@ impl Msg {
 
 		// Remove the message.
 		if msg.is_empty() {
-			if ! self.0.part_is_empty(Msg::IDX_MSG_PRE) {
-				self.0.clear_part(Msg::IDX_MSG_PRE);
-				self.0.clear_part(Msg::IDX_MSG);
-				self.0.clear_part(Msg::IDX_MSG_POST);
+			if ! self.0.part_is_empty(Self::IDX_MSG_PRE) {
+				self.0.clear_part(Self::IDX_MSG_PRE);
+				self.0.clear_part(Self::IDX_MSG);
+				self.0.clear_part(Self::IDX_MSG_POST);
 			}
 
 			// We might need to change the end of the prefix too.
-			if ! self.0.part_is_empty(Msg::IDX_PREFIX_POST) {
-				self.0.replace_part(Msg::IDX_PREFIX_POST, RESET);
+			if ! self.0.part_is_empty(Self::IDX_PREFIX_POST) {
+				self.0.replace_part(Self::IDX_PREFIX_POST, RESET);
 			}
 		}
 		// Add or change it.
 		else {
 			// The opening and closing needs to be taken care of.
-			if self.0.part_is_empty(Msg::IDX_MSG_PRE) {
-				self.0.extend_part(Msg::IDX_MSG_PRE, MSG_PRE);
-				self.0.extend_part(Msg::IDX_MSG_POST, RESET);
+			if self.0.part_is_empty(Self::IDX_MSG_PRE) {
+				self.0.extend_part(Self::IDX_MSG_PRE, MSG_PRE);
+				self.0.extend_part(Self::IDX_MSG_POST, RESET);
 			}
 
-			self.0.replace_part(Msg::IDX_MSG, msg.as_bytes());
+			self.0.replace_part(Self::IDX_MSG, msg.as_bytes());
 
 			// We might need to change the end of the prefix too.
-			if ! self.0.part_is_empty(Msg::IDX_PREFIX_POST) {
-				self.0.replace_part(Msg::IDX_PREFIX_POST, PREFIX_POST);
+			if ! self.0.part_is_empty(Self::IDX_PREFIX_POST) {
+				self.0.replace_part(Self::IDX_PREFIX_POST, PREFIX_POST);
 			}
 		}
 	}
@@ -275,21 +275,21 @@ impl Msg {
 
 		// Remove the prefix.
 		if prefix.is_empty() {
-			if ! self.0.part_is_empty(Msg::IDX_PREFIX_PRE) {
-				self.0.clear_part(Msg::IDX_PREFIX_PRE);
-				self.0.clear_part(Msg::IDX_PREFIX);
-				self.0.clear_part(Msg::IDX_PREFIX_POST);
+			if ! self.0.part_is_empty(Self::IDX_PREFIX_PRE) {
+				self.0.clear_part(Self::IDX_PREFIX_PRE);
+				self.0.clear_part(Self::IDX_PREFIX);
+				self.0.clear_part(Self::IDX_PREFIX_POST);
 			}
 		}
 		// Add or change it.
 		else {
-			self.0.replace_part(Msg::IDX_PREFIX_PRE, ansi_code_bold(prefix_color));
-			self.0.replace_part(Msg::IDX_PREFIX, prefix.as_bytes());
-			if self.0.part_is_empty(Msg::IDX_MSG_PRE) {
-				self.0.replace_part(Msg::IDX_PREFIX_POST, RESET);
+			self.0.replace_part(Self::IDX_PREFIX_PRE, ansi_code_bold(prefix_color));
+			self.0.replace_part(Self::IDX_PREFIX, prefix.as_bytes());
+			if self.0.part_is_empty(Self::IDX_MSG_PRE) {
+				self.0.replace_part(Self::IDX_PREFIX_POST, RESET);
 			}
 			else {
-				self.0.replace_part(Msg::IDX_PREFIX_POST, PREFIX_POST);
+				self.0.replace_part(Self::IDX_PREFIX_POST, PREFIX_POST);
 			}
 		}
 	}
@@ -301,17 +301,17 @@ impl Msg {
 
 		// Remove the timestamp, if any.
 		if clear {
-			if ! self.0.part_is_empty(Msg::IDX_TIMESTAMP_PRE) {
-				self.0.clear_part(Msg::IDX_TIMESTAMP_PRE);
-				self.0.clear_part(Msg::IDX_TIMESTAMP);
-				self.0.clear_part(Msg::IDX_TIMESTAMP_POST);
+			if ! self.0.part_is_empty(Self::IDX_TIMESTAMP_PRE) {
+				self.0.clear_part(Self::IDX_TIMESTAMP_PRE);
+				self.0.clear_part(Self::IDX_TIMESTAMP);
+				self.0.clear_part(Self::IDX_TIMESTAMP_POST);
 			}
 		}
 		else {
 			// The pre and post need to be populated too.
-			if self.0.part_is_empty(Msg::IDX_TIMESTAMP_PRE) {
-				self.0.extend_part(Msg::IDX_TIMESTAMP_PRE, TIMESTAMP_PRE);
-				self.0.extend_part(Msg::IDX_TIMESTAMP_POST, TIMESTAMP_POST);
+			if self.0.part_is_empty(Self::IDX_TIMESTAMP_PRE) {
+				self.0.extend_part(Self::IDX_TIMESTAMP_PRE, TIMESTAMP_PRE);
+				self.0.extend_part(Self::IDX_TIMESTAMP_POST, TIMESTAMP_POST);
 			}
 
 			// And of course, the timestamp.
@@ -362,6 +362,6 @@ impl Msg {
 		buf[14..16].copy_from_slice(time_format_dd(now.minute()));
 		buf[17..19].copy_from_slice(time_format_dd(now.second()));
 
-		self.0.replace_part(Msg::IDX_TIMESTAMP, &buf);
+		self.0.replace_part(Self::IDX_TIMESTAMP, &buf);
 	}
 }

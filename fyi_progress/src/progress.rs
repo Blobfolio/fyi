@@ -132,7 +132,7 @@ bitflags::bitflags! {
 impl Default for ProgressFlags {
 	/// Default.
 	fn default() -> Self {
-		ProgressFlags::NONE
+		Self::NONE
 	}
 }
 
@@ -171,7 +171,7 @@ struct ProgressInner {
 impl Default for ProgressInner {
 	/// Default.
 	fn default() -> Self {
-		ProgressInner {
+		Self {
 			buf: MsgBuf::from_many(&[
 				// Title.
 				&[],
@@ -236,10 +236,10 @@ impl ProgressInner {
 	/// Start a new progress bar for `total` items.
 	pub fn new(total: u64) -> Self {
 		if 0 == total {
-			ProgressInner::default()
+			Self::default()
 		}
 		else {
-			ProgressInner {
+			Self {
 				buf: MsgBuf::from_many(&[
 					// Title.
 					&[],
@@ -266,7 +266,7 @@ impl ProgressInner {
 				]),
 				total,
 				flags: ProgressFlags::PROGRESSED,
-				..ProgressInner::default()
+				..Self::default()
 			}
 		}
 	}
@@ -279,7 +279,7 @@ impl ProgressInner {
 
 	#[must_use]
 	/// Is running?
-	pub fn is_running(&self) -> bool {
+	pub const fn is_running(&self) -> bool {
 		self.done < self.total
 	}
 
@@ -364,11 +364,11 @@ impl ProgressInner {
 
 		// Empty message?
 		if title.is_empty() {
-			self.buf.clear_part(ProgressInner::IDX_TITLE);
+			self.buf.clear_part(Self::IDX_TITLE);
 		}
 		else {
 			self.buf.replace_part(
-				ProgressInner::IDX_TITLE,
+				Self::IDX_TITLE,
 				&title.as_bytes().iter()
 					.chain(&[10])
 					.copied()
@@ -409,13 +409,13 @@ impl ProgressInner {
 
 		if self.last_lines > 0 {
 			match self.last_lines.cmp(&10) {
-				Ordering::Equal => { ProgressInner::print(CLS10); },
+				Ordering::Equal => { Self::print(CLS10); },
 				Ordering::Less => {
 					let end: usize = 10 + 14 * self.last_lines;
-					ProgressInner::print(&CLS10[0..end]);
+					Self::print(&CLS10[0..end]);
 				},
 				Ordering::Greater => {
-					ProgressInner::print(
+					Self::print(
 						&CLS10.iter()
 							.chain(&CLS10[14..28].repeat(self.last_lines - 10))
 							.copied()
@@ -435,7 +435,7 @@ impl ProgressInner {
 	/// message after progress has finished.
 	pub fn finished_in(&self) {
 		if ! self.is_running() {
-			ProgressInner::print(&Msg::crunched([
+			Self::print(&Msg::crunched([
 				"Finished in ",
 				unsafe { std::str::from_utf8_unchecked(&human_elapsed(self.last_secs)) },
 				".\n",
@@ -481,7 +481,7 @@ impl ProgressInner {
 		#[cfg(feature = "bench_sink")] let mut handle = io::sink();
 
 		// If there is a title, we might have to crunch it.
-		let title: &[u8] = self.buf.get_part(ProgressInner::IDX_TITLE);
+		let title: &[u8] = self.buf.get_part(Self::IDX_TITLE);
 		if ! title.is_empty() {
 			let line_len: usize = title.len();
 			// It fits just fine.
@@ -505,14 +505,14 @@ impl ProgressInner {
 
 		// Go ahead and write the progress bits. We've already sized those.
 		handle.write_all(self.buf.get_parts(
-			ProgressInner::IDX_ELAPSED_PRE,
-			ProgressInner::IDX_PERCENT_POST,
+			Self::IDX_ELAPSED_PRE,
+			Self::IDX_PERCENT_POST,
 		)).unwrap();
 		self.last_lines += 1;
 
 		// Tasks are the worst. Haha.
 		if ! self.tasks.is_empty() {
-			let tasks: &[u8] = self.buf.get_part(ProgressInner::IDX_TASKS);
+			let tasks: &[u8] = self.buf.get_part(Self::IDX_TASKS);
 			let max_idx: usize = tasks.len();
 			let mut last_idx: usize = 0;
 			self.last_lines += self.tasks.len();
@@ -588,20 +588,20 @@ impl ProgressInner {
 
 		// Update our done amount.
 		if self.flags.contains(ProgressFlags::TICK_DONE) {
-			self.buf.replace_part(ProgressInner::IDX_DONE, &int_as_bytes(self.done)[..]);
+			self.buf.replace_part(Self::IDX_DONE, &int_as_bytes(self.done)[..]);
 			self.flags &= !ProgressFlags::TICK_DONE;
 		}
 
 		// Did the total change? Probably not, but just in case...
 		if self.flags.contains(ProgressFlags::TICK_TOTAL) {
-			self.buf.replace_part(ProgressInner::IDX_TOTAL, &int_as_bytes(self.total)[..]);
+			self.buf.replace_part(Self::IDX_TOTAL, &int_as_bytes(self.total)[..]);
 			self.flags &= !ProgressFlags::TICK_TOTAL;
 		}
 
 		// The percent?
 		if self.flags.contains(ProgressFlags::TICK_PERCENT) {
 			self.buf.replace_part(
-				ProgressInner::IDX_PERCENT,
+				Self::IDX_PERCENT,
 				format!("{:>3.*}%", 2, self.percent() * 100.0).as_bytes(),
 			);
 			self.flags &= !ProgressFlags::TICK_PERCENT;
@@ -649,10 +649,10 @@ impl ProgressInner {
 		// 2: the spaces after the bar itself (should there be one);
 		let total: usize = usize::min(255, width.saturating_sub(
 			11 +
-			self.buf.get_part_len(ProgressInner::IDX_ELAPSED) +
-			self.buf.get_part_len(ProgressInner::IDX_DONE) +
-			self.buf.get_part_len(ProgressInner::IDX_TOTAL) +
-			self.buf.get_part_len(ProgressInner::IDX_PERCENT)
+			self.buf.get_part_len(Self::IDX_ELAPSED) +
+			self.buf.get_part_len(Self::IDX_DONE) +
+			self.buf.get_part_len(Self::IDX_TOTAL) +
+			self.buf.get_part_len(Self::IDX_PERCENT)
 		));
 
 		if total >= 10 { total }
@@ -685,7 +685,7 @@ impl ProgressInner {
 		// We don't have room for it.
 		let bar_len: usize = self.bar_space(width);
 		if bar_len < 10 {
-			self.buf.clear_part(ProgressInner::IDX_BAR);
+			self.buf.clear_part(Self::IDX_BAR);
 		}
 		else {
 			let mut tmp: Vec<u8> = BAR.to_vec();
@@ -698,7 +698,7 @@ impl ProgressInner {
 			tmp.drain(chop..269);
 
 			// Copy the completed bar on over.
-			self.buf.replace_part(ProgressInner::IDX_BAR, &tmp);
+			self.buf.replace_part(Self::IDX_BAR, &tmp);
 		}
 	}
 
@@ -712,10 +712,10 @@ impl ProgressInner {
 			buf[..2].copy_from_slice(time_format_dd(c[0]));
 			buf[3..5].copy_from_slice(time_format_dd(c[1]));
 			buf[6..].copy_from_slice(time_format_dd(c[2]));
-			self.buf.replace_part(ProgressInner::IDX_ELAPSED, &buf);
+			self.buf.replace_part(Self::IDX_ELAPSED, &buf);
 		}
 		else {
-			self.buf.replace_part(ProgressInner::IDX_ELAPSED, b"23:59:59");
+			self.buf.replace_part(Self::IDX_ELAPSED, b"23:59:59");
 		}
 	}
 
@@ -724,11 +724,11 @@ impl ProgressInner {
 	/// This method updates the "tasks" slice.
 	fn redraw_tasks(&mut self) {
 		if self.tasks.is_empty() {
-			self.buf.clear_part(ProgressInner::IDX_TASKS);
+			self.buf.clear_part(Self::IDX_TASKS);
 		}
 		else {
 			self.buf.replace_part(
-				ProgressInner::IDX_TASKS,
+				Self::IDX_TASKS,
 				&self.tasks.iter()
 					.flat_map(|s|
 						[32, 32, 32, 32, 27, 91, 51, 53, 109, 226, 134, 179, 32].iter()
@@ -761,10 +761,10 @@ impl Progress {
 		if let Some(title) = title {
 			let mut inner = ProgressInner::new(total);
 			inner.set_title(title);
-			Progress(Mutex::new(inner))
+			Self(Mutex::new(inner))
 		}
 		else {
-			Progress(Mutex::new(ProgressInner::new(total)))
+			Self(Mutex::new(ProgressInner::new(total)))
 		}
 	}
 
@@ -777,7 +777,7 @@ impl Progress {
 	/// join the handle when you're through with your own loop.
 	///
 	/// See the "progress" example for usage.
-	pub fn steady_tick(me: &Arc<Progress>, rate: Option<u64>) -> JoinHandle<()> {
+	pub fn steady_tick(me: &Arc<Self>, rate: Option<u64>) -> JoinHandle<()> {
 		let sleep = Duration::from_millis(u64::max(60, rate.unwrap_or(60)));
 
 		let me2 = me.clone();

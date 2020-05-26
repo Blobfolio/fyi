@@ -143,7 +143,7 @@ impl Witcher {
 		R: Borrow<str> {
 		let pattern: Regex = Regex::new(pattern.borrow()).expect("Invalid Regex.");
 
-		Witcher(paths.iter()
+		Self(paths.iter()
 			.filter_map(|p| fs::canonicalize(p.as_ref()).ok())
 			.collect::<IndexSet<PathBuf>>()
 			.into_par_iter()
@@ -183,7 +183,7 @@ impl Witcher {
 		P: AsRef<Path>,
 		R: Borrow<str> {
 			if let Ok(file) = File::open(path.as_ref()) {
-				Witcher::new(
+				Self::new(
 					&io::BufReader::new(file).lines()
 						.filter_map(|x| match x {
 							Ok(x) => {
@@ -197,7 +197,7 @@ impl Witcher {
 					pattern,
 				)
 			}
-    		else { Witcher::default() }
+    		else { Self::default() }
 	}
 
 	#[must_use]

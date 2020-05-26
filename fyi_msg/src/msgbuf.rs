@@ -34,7 +34,7 @@ impl Borrow<[u8]> for MsgBuf {
 impl Default for MsgBuf {
 	/// Default.
 	fn default() -> Self {
-		MsgBuf {
+		Self {
 			buf: BytesMut::with_capacity(1024),
 			parts: SmallVec::<[(usize, usize); 16]>::new(),
 		}
@@ -69,7 +69,7 @@ impl MsgBuf {
 	/// Like `from()`, except you can supply a partitioning scheme to apply to
 	/// the stream.
 	pub fn new(buf: &[u8], parts: &[(usize, usize)]) -> Self {
-		let mut out = MsgBuf::default();
+		let mut out = Self::default();
 
 		if ! buf.is_empty() {
 			out.buf.extend_from_slice(buf);
@@ -86,7 +86,7 @@ impl MsgBuf {
 	///
 	/// For an unpartitioned, empty buffer, use `MsgBuf::default()`.
 	pub fn from(buf: &[u8]) -> Self {
-		MsgBuf {
+		Self {
 			buf: BytesMut::from(buf),
 			parts: SmallVec::from_slice(&[(0, buf.len())]),
 		}
@@ -103,7 +103,7 @@ impl MsgBuf {
 	pub fn from_many(bufs: &[&[u8]]) -> Self {
 		assert!(! bufs.is_empty());
 
-		let mut out = MsgBuf::default();
+		let mut out = Self::default();
 		let mut start: usize = 0;
 		bufs.iter().for_each(|b| {
 			if b.is_empty() {
@@ -126,7 +126,7 @@ impl MsgBuf {
 	/// This creates an empty buffer, but with X number of empty parts that can
 	/// later be written to.
 	pub fn with_parts(num: usize) -> Self {
-		MsgBuf {
+		Self {
 			buf: BytesMut::with_capacity(1024),
 			parts: SmallVec::from_elem((0, 0), usize::max(1, num)),
 		}
@@ -511,7 +511,7 @@ impl MsgBuf {
 	/// Loop through the `MsgBuf` part-by-part, including empty ones.
 	///
 	/// Returns `None` for unpartitioned buffers.
-	pub fn parts(&'_ self) -> MsgBufPartsIter<'_> {
+	pub const fn parts(&'_ self) -> MsgBufPartsIter<'_> {
 		MsgBufPartsIter {
 			buf: self,
 			pos: 0,
