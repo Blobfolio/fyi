@@ -520,7 +520,7 @@ impl MsgBuf {
 		if self.parts.len() == 1 {
 			self.buf.clear();
 			self.parts[0].0 = 0;
-			self.parts[1].1 = 0;
+			self.parts[0].1 = 0;
 		}
 		else {
 			let adj: usize = self.get_part_len(idx);
