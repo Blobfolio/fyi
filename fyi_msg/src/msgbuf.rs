@@ -262,6 +262,17 @@ impl MsgBuf {
 		self.parts[idx]
 	}
 
+	#[must_use]
+	/// Get Paritition
+	///
+	/// Return the start position of `idx1` and the end position of `idx2`.
+	///
+	/// Panics if `idx1` or `idx2` are out of bounds or out of order.
+	pub fn get_partitions(&self, idx1: usize, idx2: usize) -> (usize, usize) {
+		assert!(idx1 < idx2 && idx2 < self.parts.len());
+		(self.parts[idx1].0, self.parts[idx2].1)
+	}
+
 	/// Insert (Empty) Partition
 	///
 	/// Insert an empty partition at the specified index.
