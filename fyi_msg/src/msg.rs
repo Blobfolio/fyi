@@ -50,9 +50,11 @@ macro_rules! new_prefix {
 
 
 
-static MSG_PRE: &[u8] = &[27, 91, 49, 109];
-static RESET: &[u8] = &[27, 91, 48, 109];
-static PREFIX_POST: &[u8] = &[58, 27, 91, 48, 109, 32];
+const LBL_MSG_PRE: &[u8] = &[27, 91, 49, 109];
+const LBL_PREFIX_POST: &[u8] = &[58, 27, 91, 48, 109, 32];
+const LBL_RESET: &[u8] = &[27, 91, 48, 109];
+const LBL_TIMESTAMP_POST: &[u8] = &[27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32];
+const LBL_TIMESTAMP_PRE: &[u8] = &[27, 91, 50, 109, 91, 27, 91, 48, 59, 51, 52, 109];
 
 
 
@@ -180,10 +182,10 @@ impl Msg {
 			&[], &[], &[], &[],
 			prefix_pre,
 			prefix,
-			PREFIX_POST,
-			MSG_PRE,
+			LBL_PREFIX_POST,
+			LBL_MSG_PRE,
 			msg,
-			RESET,
+			LBL_RESET,
 		]))
 	}
 
@@ -196,7 +198,7 @@ impl Msg {
 			&[], &[], &[], &[],
 			prefix_pre,
 			prefix,
-			RESET,
+			LBL_RESET,
 			// Message.
 			&[], &[], &[],
 		]))
@@ -211,9 +213,9 @@ impl Msg {
 			&[], &[], &[], &[],
 			// Prefix.
 			&[], &[], &[],
-			MSG_PRE,
+			LBL_MSG_PRE,
 			msg,
-			RESET,
+			LBL_RESET,
 		]))
 	}
 
@@ -249,22 +251,22 @@ impl Msg {
 
 			// We might need to change the end of the prefix too.
 			if ! self.0.part_is_empty(Self::IDX_PREFIX_POST) {
-				self.0.replace_part(Self::IDX_PREFIX_POST, RESET);
+				self.0.replace_part(Self::IDX_PREFIX_POST, LBL_RESET);
 			}
 		}
 		// Add or change it.
 		else {
 			// The opening and closing needs to be taken care of.
 			if self.0.part_is_empty(Self::IDX_MSG_PRE) {
-				self.0.extend_part(Self::IDX_MSG_PRE, MSG_PRE);
-				self.0.extend_part(Self::IDX_MSG_POST, RESET);
+				self.0.extend_part(Self::IDX_MSG_PRE, LBL_MSG_PRE);
+				self.0.extend_part(Self::IDX_MSG_POST, LBL_RESET);
 			}
 
 			self.0.replace_part(Self::IDX_MSG, msg.as_bytes());
 
 			// We might need to change the end of the prefix too.
 			if ! self.0.part_is_empty(Self::IDX_PREFIX_POST) {
-				self.0.replace_part(Self::IDX_PREFIX_POST, PREFIX_POST);
+				self.0.replace_part(Self::IDX_PREFIX_POST, LBL_PREFIX_POST);
 			}
 		}
 	}
@@ -286,19 +288,16 @@ impl Msg {
 			self.0.replace_part(Self::IDX_PREFIX_PRE, ansi_code_bold(prefix_color));
 			self.0.replace_part(Self::IDX_PREFIX, prefix.as_bytes());
 			if self.0.part_is_empty(Self::IDX_MSG_PRE) {
-				self.0.replace_part(Self::IDX_PREFIX_POST, RESET);
+				self.0.replace_part(Self::IDX_PREFIX_POST, LBL_RESET);
 			}
 			else {
-				self.0.replace_part(Self::IDX_PREFIX_POST, PREFIX_POST);
+				self.0.replace_part(Self::IDX_PREFIX_POST, LBL_PREFIX_POST);
 			}
 		}
 	}
 
 	/// Timestamp.
 	pub fn set_timestamp(&mut self, clear: bool) {
-		static TIMESTAMP_PRE: &[u8] = &[27, 91, 50, 109, 91, 27, 91, 48, 59, 51, 52, 109];
-		static TIMESTAMP_POST: &[u8] = &[27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32];
-
 		// Remove the timestamp, if any.
 		if clear {
 			if ! self.0.part_is_empty(Self::IDX_TIMESTAMP_PRE) {
@@ -310,8 +309,8 @@ impl Msg {
 		else {
 			// The pre and post need to be populated too.
 			if self.0.part_is_empty(Self::IDX_TIMESTAMP_PRE) {
-				self.0.extend_part(Self::IDX_TIMESTAMP_PRE, TIMESTAMP_PRE);
-				self.0.extend_part(Self::IDX_TIMESTAMP_POST, TIMESTAMP_POST);
+				self.0.extend_part(Self::IDX_TIMESTAMP_PRE, LBL_TIMESTAMP_PRE);
+				self.0.extend_part(Self::IDX_TIMESTAMP_POST, LBL_TIMESTAMP_POST);
 			}
 
 			// And of course, the timestamp.
