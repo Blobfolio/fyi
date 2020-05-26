@@ -426,6 +426,18 @@ impl MsgBuf {
 	}
 
 	#[must_use]
+	/// Get Part.
+	///
+	/// If you want all parts, use `parts()` instead. This returns the slice
+	/// of the buffer beginning with part `idx1` and ending with part `idx2`.
+	///
+	/// Panics if `idx1` or `idx2` are out of bounds or out of order.
+	pub fn get_parts(&self, idx1: usize, idx2: usize) -> &[u8] {
+		assert!(idx1 < idx2 && idx2 < self.parts.len());
+		&self.buf[self.parts[idx1].0..self.parts[idx2].1]
+	}
+
+	#[must_use]
 	/// Get Part Length.
 	///
 	/// Return the byte length of the partition.

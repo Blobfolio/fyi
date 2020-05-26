@@ -504,9 +504,10 @@ impl ProgressInner {
 		}
 
 		// Go ahead and write the progress bits. We've already sized those.
-		let part1 = self.buf.get_partition(ProgressInner::IDX_ELAPSED_PRE);
-		let part2 = self.buf.get_partition(ProgressInner::IDX_PERCENT_POST);
-		handle.write_all(self.buf.get_range(part1.0, part2.1)).unwrap();
+		handle.write_all(self.buf.get_parts(
+			ProgressInner::IDX_ELAPSED_PRE,
+			ProgressInner::IDX_PERCENT_POST,
+		)).unwrap();
 		self.last_lines += 1;
 
 		// Tasks are the worst. Haha.
