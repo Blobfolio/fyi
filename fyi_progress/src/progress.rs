@@ -659,27 +659,16 @@ impl ProgressInner {
 		else { 0 }
 	}
 
-	#[cfg(not(feature = "bench_sink"))]
 	/// Print!
 	///
 	/// Print some arbitrary data to the write place.
 	fn print(buf: &[u8]) {
 		use io::Write;
-		let writer = io::stderr();
-		let mut handle = writer.lock();
-		handle.write_all(buf).unwrap();
-		handle.flush().unwrap();
-	}
 
-	#[cfg(feature = "bench_sink")]
-	/// Print!
-	///
-	/// This is an alternate version of the printing method used for
-	/// benchmarks. Rather than printing to `Stderr` — which gets noisy fast —
-	/// this prints to `Sink`.
-	fn print(buf: &[u8]) {
-		use io::Write;
-		let mut handle = io::sink();
+		#[cfg(not(feature = "bench_sink"))] let writer = io::stderr();
+		#[cfg(not(feature = "bench_sink"))] let mut handle = writer.lock();
+		#[cfg(feature = "bench_sink")] let mut handle = io::sink();
+
 		handle.write_all(buf).unwrap();
 		handle.flush().unwrap();
 	}
