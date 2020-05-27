@@ -9,14 +9,13 @@ use crate::utility::inflect;
 use fyi_msg::Msg;
 use fyi_progress::{
 	Progress,
-	utility::human_elapsed,
+	utility::{
+		human_elapsed,
+		int_as_bytes,
+	},
 };
 use indexmap::set::IndexSet;
 use jwalk::WalkDir;
-use num_format::{
-	Locale,
-	ToFormattedString,
-};
 use rayon::prelude::*;
 use regex::Regex;
 use std::{
@@ -28,11 +27,9 @@ use std::{
 	io::{
 		self,
 		BufRead,
+		Write,
 	},
-	ops::{
-		Deref,
-		DerefMut,
-	},
+	ops::Deref,
 	path::{
 		Path,
 		PathBuf,
@@ -42,6 +39,7 @@ use std::{
 
 
 
+// Helper: Make an Arc<Progress> for the loops.
 macro_rules! make_progress {
 	($name:expr, $len:expr) => (
 		Arc::new(Progress::new(
@@ -51,6 +49,7 @@ macro_rules! make_progress {
 	);
 }
 
+// Helper: Loop the progress loop inline.
 macro_rules! make_progress_loop {
 	($witcher:ident, $progress:ident, $cb:ident) => {
 		let handle = Progress::steady_tick(&$progress, None);
@@ -64,50 +63,6 @@ macro_rules! make_progress_loop {
 	};
 }
 
-macro_rules! crunched_in {
-	($total:expr, $secs:expr) => (
-		eprintln!("{}",
-		Msg::crunched(unsafe {
-			std::str::from_utf8_unchecked(&[
-				&inflect($total, "file in ", "files in "),
-				&human_elapsed($secs),
-				&b"."[..],
-			].concat())
-		})
-		);
-	);
-
-	($total:expr, $secs:expr, $before:expr, $after:expr) => (
-		if 0 == $after || $before <= $after {
-			eprintln!("{}",
-			Msg::crunched(unsafe {
-				std::str::from_utf8_unchecked(&[
-					&inflect($total, "file in ", "files in "),
-					&human_elapsed($secs),
-					&b", but nothing doing."[..],
-				].concat())
-			})
-			);
-		}
-		else {
-			eprintln!("{}",
-			Msg::crunched(unsafe {
-				std::str::from_utf8_unchecked(&[
-					&inflect($total, "file in ", "files in "),
-					&human_elapsed($secs),
-					&b", saving "[..],
-					($before - $after).to_formatted_string(&Locale::en).as_bytes(),
-					format!(
-						" bytes ({:3.*}%).",
-						2,
-						(1.0 - ($after as f64 / $before as f64)) * 100.0
-					).as_bytes()
-				].concat())
-			})
-			);
-		}
-	);
-}
 
 
 #[derive(Debug, Default, Clone)]
@@ -120,13 +75,6 @@ impl Deref for Witcher {
 	/// Deref.
 	fn deref(&self) -> &Self::Target {
 		&self.0
-	}
-}
-
-impl DerefMut for Witcher {
-	/// Deref Mut.
-	fn deref_mut(&mut self) -> &mut IndexSet<PathBuf> {
-		&mut self.0
 	}
 }
 
@@ -249,10 +197,7 @@ impl Witcher {
 
 		make_progress_loop!(self, pbar, cb);
 
-		crunched_in!(
-			pbar.total(),
-			pbar.time().elapsed().as_secs() as u32
-		);
+		Self::crunched_in(pbar.total(), pbar.time().elapsed().as_secs() as u32);
 	}
 
 	/// Parallel Loop w/ Progress.
@@ -273,11 +218,67 @@ impl Witcher {
 
 		make_progress_loop!(self, pbar, cb);
 
-		crunched_in!(
+		Self::crunched_in_saved(
 			pbar.total(),
 			pbar.time().elapsed().as_secs() as u32,
 			before,
 			self.du()
 		);
+	}
+
+	/// Crunched In Msg (Simple)
+	///
+	/// Print a simple summary message after looping.
+	fn crunched_in(total: u64, time: u32) {
+		io::stderr().write_all(
+			&Msg::crunched(unsafe {
+				std::str::from_utf8_unchecked(
+					&inflect(total, "file in ", "files in ").iter()
+						.chain(human_elapsed(time).as_ref())
+						.chain(&[46])
+						.copied()
+						.collect::<Vec<u8>>()
+				)
+			})
+		).unwrap();
+	}
+
+	/// Crunched In Msg (With Sizes)
+	///
+	/// Print a simple summary message after looping.
+	fn crunched_in_saved(total: u64, time: u32, before: u64, after: u64) {
+		if 0 == after || before <= after {
+			io::stderr().write_all(
+				&Msg::crunched(unsafe {
+					std::str::from_utf8_unchecked(
+						&inflect(total, "file in ", "files in ").iter()
+							.chain(human_elapsed(time).as_ref())
+							.chain(b", but nothing doing.")
+							.copied()
+							.collect::<Vec<u8>>()
+
+					)
+				})
+			).unwrap();
+		}
+		else {
+			io::stderr().write_all(
+				&Msg::crunched(unsafe {
+					std::str::from_utf8_unchecked(
+						&inflect(total, "file in ", "files in ").iter()
+							.chain(human_elapsed(time).as_ref())
+							.chain(b", saving ")
+							.chain(&int_as_bytes(before - after))
+							.chain(format!(
+								" bytes ({:3.*}%).",
+								2,
+								(1.0 - (after as f64 / before as f64)) * 100.0
+							).as_bytes())
+							.copied()
+							.collect::<Vec<u8>>()
+					)
+				})
+			).unwrap();
+		}
 	}
 }
