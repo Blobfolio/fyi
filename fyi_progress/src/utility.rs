@@ -18,6 +18,8 @@ const LBL_MINUTES: &[u8] = &[32, 109, 105, 110, 117, 116, 101, 115];
 const LBL_SECOND: &[u8] = &[32, 115, 101, 99, 111, 110, 100];
 const LBL_SECONDS: &[u8] = &[32, 115, 101, 99, 111, 110, 100, 115];
 
+// Helper: Generate method for producing a single unit of time's time, e.g.
+// "2 minutes".
 macro_rules! one_time {
 	($fn:ident, $one1:expr, $many1:expr) => {
 		/// Gloop One Time Together.
@@ -33,6 +35,8 @@ macro_rules! one_time {
 	};
 }
 
+// Helper: Generate method for producing two units of times' times, e.g.
+// "2 minutes and 30 seconds".
 macro_rules! time_and_time {
 	($fn:ident, $one1:expr, $many1:expr, $one2:expr, $many2:expr) => {
 		/// Gloop Two Times Together.
