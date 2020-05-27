@@ -3,6 +3,11 @@
 
 `Witcher` stores the results of a recursive file-search with all paths
 canonicalized, deduplicated, and validated against a regular expression.
+
+It provides several multi-threaded looping helpers — `process()`, `progress()`,
+and `progress_crunch()` — to easily work through files with optional progress
+bar output, or you can dereference the object to work directly with its inner
+`IndexSet`.
 */
 
 use crate::utility::inflect;
@@ -82,7 +87,8 @@ impl Witcher {
 	/// New.
 	///
 	/// Recursively search for files within the specified paths, filtered
-	/// according to a regular expression, and store the results.
+	/// according to a regular expression — applied against the canonical path
+	/// — and store the results.
 	///
 	/// All results are canonicalized and deduped for minimum confusion.
 	pub fn new<P, R> (paths: &[P], pattern: R) -> Self
@@ -123,9 +129,8 @@ impl Witcher {
 
 	/// From File.
 	///
-	/// Read the contents of a text file containing a list of paths to search,
-	/// one per line. The paths are parsed from that file, then fed into the
-	/// `new()` method, so ends up working the same way.
+	/// This works just like `new()`, except the list of paths to search are
+	/// read from the text file at `path`.
 	pub fn from_file<P, R> (path: P, pattern: R) -> Self
 	where
 		P: AsRef<Path>,
@@ -151,7 +156,8 @@ impl Witcher {
 	#[must_use]
 	/// Get Disk Size.
 	///
-	/// Add up all the file sizes in the result set.
+	/// Add up all the file sizes in the result set, using multiple threads
+	/// when possible.
 	///
 	/// Note: this value is not cached; you should be able to call it once, do
 	/// some stuff, then call it again and get a different result.
@@ -166,14 +172,18 @@ impl Witcher {
 
 
 
-	// -----------------------------------------------------------------
+	// ------------------------------------------------------------------------
 	// Loopers
-	// -----------------------------------------------------------------
+	// ------------------------------------------------------------------------
 
 	/// Parallel Loop.
 	///
 	/// Execute your callback once for each file in the result set. Calls will
 	/// not necessarily be in a predictable order, but everything will be hit.
+	///
+	/// As the source code betrays, this literally just forwards your callback
+	/// to `par_iter().for_each()`, but it saves you having to import `rayon`
+	/// into the local scope.
 	pub fn process<F> (&self, cb: F)
 	where F: Fn(&PathBuf) + Send + Sync {
 		self.0.par_iter().for_each(cb);
@@ -181,10 +191,12 @@ impl Witcher {
 
 	/// Parallel Loop w/ Progress.
 	///
-	/// Execute your callback once for each file while displaying a `Progress`.
+	/// Execute your callback once for each file while displaying a `Progress`
+	/// progress bar from `fyi_progress`.
+	///
 	/// Each thread automatically adds the current file name as a "task" at the
-	/// start and removes it at the end, so i.e. the progress bar will show the
-	/// active entries.
+	/// start and removes it at the end, so i.e. the progress bar will show
+	/// which entries are actively being worked on.
 	///
 	/// At the end, the progress bar will be cleared and a message will be
 	/// printed like: "Crunched: Finished 30 files in 1 minute and 3 seconds."
@@ -197,7 +209,7 @@ impl Witcher {
 
 		make_progress_loop!(self, pbar, cb);
 
-		Self::crunched_in(pbar.total(), pbar.time().elapsed().as_secs() as u32);
+		Self::finished_in(pbar.total(), pbar.time().elapsed().as_secs() as u32);
 	}
 
 	/// Parallel Loop w/ Progress.
@@ -206,8 +218,9 @@ impl Witcher {
 	/// the total disk size of files before and after and report any savings
 	/// in the final message.
 	///
-	/// If your operation doesn't affect file sizes, or doesn't need reporting
-	/// of this manner, use one of the other loops (or write your own).
+	/// If your operation doesn't affect file sizes, or doesn't need a size
+	/// summary at the end, use one of the other loops (or write your own)
+	/// instead.
 	pub fn progress_crunch<S, F> (&self, name: S, cb: F)
 	where
 		S: Borrow<str>,
@@ -218,7 +231,7 @@ impl Witcher {
 
 		make_progress_loop!(self, pbar, cb);
 
-		Self::crunched_in_saved(
+		Self::crunched_in(
 			pbar.total(),
 			pbar.time().elapsed().as_secs() as u32,
 			before,
@@ -226,10 +239,12 @@ impl Witcher {
 		);
 	}
 
-	/// Crunched In Msg (Simple)
+	/// Finished In Msg
 	///
-	/// Print a simple summary message after looping.
-	fn crunched_in(total: u64, time: u32) {
+	/// Print a simple summary like "Crunched: 1 file in 2 seconds.".
+	///
+	/// Like the progress bar, this prints to `Stderr`.
+	fn finished_in(total: u64, time: u32) {
 		io::stderr().write_all(
 			&Msg::crunched(unsafe {
 				std::str::from_utf8_unchecked(
@@ -243,10 +258,14 @@ impl Witcher {
 		).unwrap();
 	}
 
-	/// Crunched In Msg (With Sizes)
+	/// Crunched In Msg
 	///
-	/// Print a simple summary message after looping.
-	fn crunched_in_saved(total: u64, time: u32, before: u64, after: u64) {
+	/// This is similar to `finished_in()`, except before/after disk usage is
+	/// included in the summary. If no bytes are saved, the message will end
+	/// with "…but nothing doing" instead of "…saving X bytes".
+	///
+	/// Like the progress bar, this prints to `Stderr`.
+	fn crunched_in(total: u64, time: u32, before: u64, after: u64) {
 		if 0 == after || before <= after {
 			io::stderr().write_all(
 				&Msg::crunched(unsafe {

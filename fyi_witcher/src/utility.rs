@@ -11,11 +11,11 @@ use std::{
 
 
 
-/// Ergonomical file extension.
+/// Ergonomical File Extension.
 ///
-/// This one-liner returns the file extension as a `String`, in lower case, if
-/// the path is the path of a file and it has an extension. Otherwise an empty
-/// `String` is returned.
+/// This one-liner returns the file extension as a lower-cased `String` for
+/// easier comparisons. If the path is not a file or has no extension, an empty
+/// string is returned instead.
 pub fn file_extension<P> (path: P) -> String
 where P: AsRef<Path> {
 	let path = path.as_ref();
@@ -32,9 +32,10 @@ where P: AsRef<Path> {
 	}
 }
 
-/// Ergonomical file size.
+/// Ergonomical File Size.
 ///
-/// If the path is a file path, return the size of that file, otherwise `0`.
+/// This method always returns a `u64`, either the file's size or `0` if the
+/// path is invalid.
 pub fn file_size<P> (path: P) -> u64
 where P: AsRef<Path> {
 	if let Ok(meta) = path.as_ref().metadata() {
@@ -46,7 +47,7 @@ where P: AsRef<Path> {
 
 /// String Inflection
 ///
-/// Given a number, come up with a string like "1 thing" or "2 things".
+/// Given a number, come up with a byte string like "1 thing" or "2 things".
 pub fn inflect<T1, T2> (num: u64, one: T1, many: T2) -> Vec<u8>
 where
 	T1: Borrow<str>,
@@ -79,7 +80,7 @@ where
 /// Is File Executable?
 ///
 /// This method attempts to determine whether or not a file has executable
-/// permissions. If the path is not a file, `false` is returned.
+/// permissions (generally). If the path is not a file, `false` is returned.
 pub fn is_executable<P> (path: P) -> bool
 where P: AsRef<Path> {
 	use std::os::unix::fs::PermissionsExt;
