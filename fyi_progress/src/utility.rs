@@ -169,16 +169,15 @@ pub fn human_elapsed(num: u32) -> Cow<'static, [u8]> {
 	else if num < 86400 {
 		let c = secs_chunks(num);
 
-		match (c[0] == 0, c[1] == 0, c[2] == 0) {
+		match (c[1] == 0, c[2] == 0) {
 			// All Three.
-			(false, false, false) => human_hms(c[0], c[1], c[2]),
+			(false, false) => human_hms(c[0], c[1], c[2]),
 			// Hour, Minute.
-			(false, false, true) => human_hm(c[0], c[1]),
+			(false, true) => human_hm(c[0], c[1]),
 			// Hour, Second.
-			(false, true, false) => human_hs(c[0], c[2]),
+			(true, false) => human_hs(c[0], c[2]),
 			// Only Hours.
-			(false, true, true) => human_h(c[0]),
-			_ => unreachable!(),
+			(true, true) => human_h(c[0]),
 		}
 	}
 	// Too long.
