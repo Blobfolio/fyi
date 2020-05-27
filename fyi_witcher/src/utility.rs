@@ -4,15 +4,8 @@
 This mod contains miscellaneous utility functions for the crate.
 */
 
-use num_format::{
-	Locale,
-	WriteFormatted,
-};
 use std::{
-	borrow::{
-		Borrow,
-		Cow,
-	},
+	borrow::Borrow,
 	path::Path,
 };
 
@@ -54,31 +47,32 @@ where P: AsRef<Path> {
 /// String Inflection
 ///
 /// Given a number, come up with a string like "1 thing" or "2 things".
-pub fn inflect<T1, T2> (num: u64, one: T1, many: T2) -> Cow<'static, [u8]>
+pub fn inflect<T1, T2> (num: u64, one: T1, many: T2) -> Vec<u8>
 where
 	T1: Borrow<str>,
 	T2: Borrow<str> {
 	if 1 == num {
-		Cow::Owned([
-			b"1 ",
-			one.borrow().as_bytes(),
-		].concat())
+		[49, 32].iter()
+			.chain(one.borrow().as_bytes())
+			.copied()
+			.collect::<Vec<u8>>()
 	}
 	else if num < 1000 {
-		let noun = many.borrow();
-		let mut buf: Vec<u8> = Vec::with_capacity(noun.len() + 4);
-		itoa::write(&mut buf, num).expect("Invalid number.");
-		buf.push(b' ');
-		buf.extend_from_slice(noun.as_bytes());
-		Cow::Owned(buf)
+		let mut buf = itoa::Buffer::new();
+		buf.format(num).as_bytes().iter()
+			.chain(&[32])
+			.chain(many.borrow().as_bytes())
+			.copied()
+			.collect::<Vec<u8>>()
 	}
 	else {
-		let noun = many.borrow();
-		let mut buf: Vec<u8> = Vec::with_capacity(noun.len() + 4);
-		buf.write_formatted(&num, &Locale::en).expect("Invalid number.");
-		buf.push(b' ');
-		buf.extend_from_slice(noun.as_bytes());
-		Cow::Owned(buf)
+		let mut buf = num_format::Buffer::default();
+		buf.write_formatted(&num, &num_format::Locale::en);
+		buf.as_bytes().iter()
+			.chain(&[32])
+			.chain(many.borrow().as_bytes())
+			.copied()
+			.collect::<Vec<u8>>()
 	}
 }
 
