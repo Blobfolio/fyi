@@ -480,28 +480,7 @@ impl ProgressInner {
 		#[cfg(not(feature = "bench_sink"))] let mut handle = writer.lock();
 		#[cfg(feature = "bench_sink")] let mut handle = io::sink();
 
-		// If there is a title, we might have to crunch it.
-		let title: &[u8] = self.buf.get_part(Self::IDX_TITLE);
-		if ! title.is_empty() {
-			let line_len: usize = title.len();
-			// It fits just fine.
-			if line_len <= width {
-				handle.write_all(title).unwrap();
-			}
-			// It might fit, but we have to calculate.
-			else {
-				let fit_len: usize = chopped_len(title, width);
-				if fit_len == line_len {
-					handle.write_all(title).unwrap();
-				}
-				else {
-					handle.write_all(&title[..fit_len]).unwrap();
-					handle.write_all(&[27, 91, 48, 109, 10]).unwrap();
-				}
-			}
-
-			self.last_lines = 1;
-		}
+		self.print_title(&mut handle, width);
 
 		// Go ahead and write the progress bits. We've already sized those.
 		handle.write_all(self.buf.get_parts(
@@ -510,46 +489,7 @@ impl ProgressInner {
 		)).unwrap();
 		self.last_lines += 1;
 
-		// Tasks are the worst. Haha.
-		if ! self.tasks.is_empty() {
-			let tasks: &[u8] = self.buf.get_part(Self::IDX_TASKS);
-			let max_idx: usize = tasks.len();
-			let mut last_idx: usize = 0;
-			self.last_lines += self.tasks.len();
-
-			for idx in Memchr::new(10_u8, tasks) {
-				let line_len: usize = idx - last_idx;
-
-				// It fits just fine.
-				if line_len <= width {
-					let next_idx = usize::min(max_idx, idx + 1);
-					handle.write_all(&tasks[last_idx..next_idx]).unwrap();
-					last_idx = next_idx;
-				}
-				else {
-					let fit_len: usize = chopped_len(&tasks[last_idx..idx], width);
-
-					// It all fits.
-					if fit_len + 1 == line_len {
-						let next_idx = usize::min(max_idx, idx + 1);
-						handle.write_all(&tasks[last_idx..next_idx]).unwrap();
-						last_idx = next_idx;
-					}
-					// We need to chop between fit-len and the end.
-					else {
-						handle.write_all(&tasks[last_idx..fit_len]).unwrap();
-
-						// We need to keep the last five bytes of the line.
-						let next_idx = usize::min(max_idx, idx + 1);
-						let last_idx2 = next_idx - 5;
-						handle.write_all(&tasks[last_idx2..next_idx]).unwrap();
-						last_idx = next_idx;
-					}
-				}
-
-				if last_idx == max_idx { break; }
-			}
-		}
+		self.print_tasks(&mut handle, width);
 
 		// Flush our work and call it a day!
 		handle.flush().unwrap();
@@ -671,6 +611,86 @@ impl ProgressInner {
 
 		handle.write_all(buf).unwrap();
 		handle.flush().unwrap();
+	}
+
+	/// Print Tasks
+	///
+	/// Split up the code a little.
+	fn print_tasks<W: io::Write>(&mut self, writer: &mut W, width: usize) {
+		// Tasks are the worst. Haha.
+		if ! self.tasks.is_empty() {
+			let tasks: &[u8] = self.buf.get_part(Self::IDX_TASKS);
+			let max_idx: usize = tasks.len();
+			let mut last_idx: usize = 0;
+
+			// Go ahead and bump the lines. We're assuming tasks don't have
+			// line breaks within them because that would be stupid.
+			self.last_lines += self.tasks.len();
+
+			// Split the buffer by line.
+			for idx in Memchr::new(10_u8, tasks) {
+				let line_len: usize = idx - last_idx;
+
+				// It fits just fine.
+				if line_len <= width {
+					let next_idx = usize::min(max_idx, idx + 1);
+					writer.write_all(&tasks[last_idx..next_idx]).unwrap();
+					last_idx = next_idx;
+				}
+				else {
+					let fit_len: usize = chopped_len(&tasks[last_idx..idx], width);
+
+					// It all fits. (The +1 is because the last character —
+					// the new line — is missing from the chunk being tested.
+					if fit_len + 1 == line_len {
+						let next_idx = usize::min(max_idx, idx + 1);
+						writer.write_all(&tasks[last_idx..next_idx]).unwrap();
+						last_idx = next_idx;
+					}
+					// We need to chop between fit-len and the end.
+					else {
+						writer.write_all(&tasks[last_idx..fit_len]).unwrap();
+
+						// We need to keep the last five bytes of the line.
+						let next_idx = usize::min(max_idx, idx + 1);
+						let last_idx2 = next_idx - 5;
+						writer.write_all(&tasks[last_idx2..next_idx]).unwrap();
+						last_idx = next_idx;
+					}
+				}
+
+				if last_idx == max_idx { break; }
+			}
+		}
+	}
+
+	/// Print Title
+	///
+	/// Split up the code a little.
+	fn print_title<W: io::Write>(&mut self, writer: &mut W, width: usize) {
+		// If there is a title, we might have to crunch it.
+		let title: &[u8] = self.buf.get_part(Self::IDX_TITLE);
+		if ! title.is_empty() {
+			let line_len: usize = title.len();
+			// It fits just fine.
+			if line_len <= width {
+				writer.write_all(title).unwrap();
+			}
+			// It might fit, but we have to calculate.
+			else {
+				let fit_len: usize = chopped_len(title, width);
+				if fit_len == line_len {
+					writer.write_all(title).unwrap();
+				}
+				else {
+					writer.write_all(&title[..fit_len]).unwrap();
+					writer.write_all(&[27, 91, 48, 109, 10]).unwrap();
+				}
+			}
+
+			// This always comes first, and is presumed to be one line.
+			self.last_lines = 1;
+		}
 	}
 
 	/// Redraw Bar
