@@ -48,11 +48,21 @@ fn new(c: &mut Criterion) {
 	group.finish();
 }
 
+fn set_indent(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_msg::Msg");
+
+	group.bench_function("set_indent(1)", move |b| {
+		b.iter_with_setup(|| Msg::success("This is an example message!"), |mut msg| msg.set_indent(black_box(1)))
+	});
+
+	group.finish();
+}
+
 fn set_timestamp(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::Msg");
 
 	group.bench_function("set_timestamp(false)", move |b| {
-		b.iter_with_setup(|| Msg::success("This is an example message!"), |mut msg| msg.set_timestamp(false))
+		b.iter_with_setup(|| Msg::success("This is an example message!"), |mut msg| msg.set_timestamp(black_box(false)))
 	});
 
 	group.finish();
@@ -63,6 +73,7 @@ fn set_timestamp(c: &mut Criterion) {
 criterion_group!(
 	benches,
 	new,
+	set_indent,
 	set_timestamp,
 );
 criterion_main!(benches);
