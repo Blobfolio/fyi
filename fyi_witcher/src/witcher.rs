@@ -250,7 +250,7 @@ impl Witcher {
 				std::str::from_utf8_unchecked(
 					&inflect(total, "file in ", "files in ").iter()
 						.chain(human_elapsed(time).as_ref())
-						.chain(&[46])
+						.chain(&[46, 10])
 						.copied()
 						.collect::<Vec<u8>>()
 				)
@@ -272,7 +272,7 @@ impl Witcher {
 					std::str::from_utf8_unchecked(
 						&inflect(total, "file in ", "files in ").iter()
 							.chain(human_elapsed(time).as_ref())
-							.chain(b", but nothing doing.")
+							.chain(b", but nothing doing.\n")
 							.copied()
 							.collect::<Vec<u8>>()
 
@@ -289,7 +289,7 @@ impl Witcher {
 							.chain(b", saving ")
 							.chain(&int_as_bytes(before - after))
 							.chain(format!(
-								" bytes ({:3.*}%).",
+								" bytes ({:3.*}%).\n",
 								2,
 								(1.0 - (after as f64 / before as f64)) * 100.0
 							).as_bytes())
