@@ -3,8 +3,10 @@
 */
 
 use fyi_witcher::Witcher;
-use std::thread;
-use std::time::Duration;
+use std::{
+	thread,
+	time::Duration,
+};
 
 
 
