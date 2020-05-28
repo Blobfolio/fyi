@@ -147,6 +147,7 @@ impl MsgBuf {
 		self.parts.clear();
 	}
 
+	#[allow(clippy::comparison_chain)]
 	/// Replace the Buffer and Repartition.
 	///
 	/// Replace the buffer and partitioning table on the instance to e.g. open
@@ -155,7 +156,7 @@ impl MsgBuf {
 	/// If the new buffer is empty, a single zero-length partition will be
 	/// created. To fully reset the instance, use `clear()` instead.
 	pub fn replace(&mut self, buf: &[u8], parts: &[(usize, usize)]) {
-		// If the new part is empty, clear the buffer.
+		// If the new part is empty, clear the whole buffer.
 		if buf.is_empty() {
 			self.buf.clear();
 		}
@@ -168,20 +169,17 @@ impl MsgBuf {
 			let old_len: usize = self.buf.len();
 			let new_len: usize = buf.len();
 
-			// The new buffer is larger.
+			// The new buffer is bigger.
 			if new_len > old_len {
-				self.buf.copy_from_slice(&buf[0..old_len]);
-				self.buf.extend_from_slice(&buf[old_len..]);
+				self.buf.resize(new_len, 0);
 			}
-			else {
-				// If the old buffer is bigger, shrink it.
-				if old_len > new_len {
-					self.buf.truncate(new_len);
-				}
+			// The new buffer is smaller.
+			else if old_len > new_len {
+				self.buf.truncate(new_len);
+			}
 
-				// Now that they're sized the same, we can copy it all.
-				self.buf.copy_from_slice(buf);
-			}
+			// Now that everything's the same size, copy!
+			self.buf.copy_from_slice(buf);
 		}
 
 		// Handle the partitioning and we're done!
@@ -372,16 +370,8 @@ impl MsgBuf {
 	pub fn clear_part(&mut self, idx: usize) {
 		assert!(idx < self.parts.len());
 
-		let adj: usize = self.get_part_len(idx);
-		if 0 < adj {
-			// Split the buffer, remove the part, reglue the buffer.
-			let b = self.buf.split_off(self.parts[idx].1);
-			self.buf.truncate(self.parts[idx].0);
-			self.buf.unsplit(b);
-
-			// Update the parts.
-			self.parts[idx].1 = self.parts[idx].0;
-			self.shift_partitions_left(idx + 1, adj);
+		if ! self.part_is_empty(idx) {
+			self.resize_clear_part(idx);
 		}
 	}
 
@@ -402,9 +392,13 @@ impl MsgBuf {
 			else {
 				let adj: usize = buf.len();
 
-				// Split the buffer, extend the part, reglue the buffer.
+				// Split at the part's end.
 				let b = self.buf.split_off(self.parts[idx].1);
+
+				// Append the new bit.
 				self.buf.extend_from_slice(buf);
+
+				// Glue it back together.
 				self.buf.unsplit(b);
 
 				// Shift the indexes.
@@ -498,24 +492,12 @@ impl MsgBuf {
 	pub fn insert_part(&mut self, idx: usize, buf: &[u8]) {
 		assert!(idx < self.parts.len());
 
-		// Nothing? Just insert the partition. The other partitions don't
-		// even shift as a result!
-		if buf.is_empty() {
-			self.insert_partition(idx);
-		}
-		// Some surgery is required.
-		else {
-			// How much data are we adding?
-			let adj: usize = buf.len();
+		self.insert_partition(idx);
 
-			// Split the buffer, add the part, reglue the buffer.
-			let b = self.buf.split_off(self.parts[idx].0);
-			self.buf.extend_from_slice(buf);
-			self.buf.unsplit(b);
-
-			// Shift the indexes.
-			self.parts.insert_from_slice(idx, &[(self.parts[idx].0, self.parts[idx].0 + adj)]);
-			self.shift_partitions_right(idx + 1, adj);
+		// Anything to fill?
+		if ! buf.is_empty() {
+			self.resize_grow_part(idx, buf.len());
+			self.get_part_mut(idx).copy_from_slice(buf);
 		}
 	}
 
@@ -552,29 +534,19 @@ impl MsgBuf {
 	pub fn remove_part(&mut self, idx: usize) {
 		assert!(idx < self.parts.len());
 
-		if self.parts.len() == 1 {
+		if self.has_one_partition() {
 			self.buf.clear();
-			self.parts[0].0 = 0;
 			self.parts[0].1 = 0;
 		}
 		else {
-			let adj: usize = self.get_part_len(idx);
-			if 0 < adj {
-				// Split the buffer, remove the part, reglue the buffer.
-				let b = self.buf.split_off(self.parts[idx].1);
-				self.buf.truncate(self.parts[idx].0);
-				self.buf.unsplit(b);
-
-				// Update the parts.
-				self.parts.remove(idx);
-				self.shift_partitions_left(idx, adj);
+			if ! self.part_is_empty(idx) {
+				self.resize_clear_part(idx);
 			}
-			else {
-				self.parts.remove(idx);
-			}
+			self.parts.remove(idx);
 		}
 	}
 
+	#[allow(clippy::comparison_chain)]
 	/// Replace Part
 	///
 	/// Replace an existing part with the new data. The partition table bounds
@@ -584,55 +556,25 @@ impl MsgBuf {
 	pub fn replace_part(&mut self, idx: usize, buf: &[u8]) {
 		assert!(idx < self.parts.len());
 
-		// If the replacement is empty, we can use `clear_part()`.
-		if buf.is_empty() {
-			self.clear_part(idx);
+		let new_len: usize = buf.len();
+		if new_len == 0 {
+			self.resize_clear_part(idx);
+			return;
 		}
-		// If there's only one part, we can use `replace()`.
-		else if 1 == self.parts.len() {
-			self.replace(buf, &[(0, buf.len())]);
+
+		let old_len: usize = self.get_part_len(idx);
+
+		// The new part is bigger.
+		if new_len > old_len {
+			self.resize_grow_part(idx, new_len - old_len);
 		}
-		// We need to do some figuring.
-		else {
-			// If the old part was empty, we can just extend it.
-			let old_len: usize = self.get_part_len(idx);
-			if 0 == old_len {
-				self.extend_part(idx, buf);
-				return;
-			}
-
-			let new_len: usize = buf.len();
-			if new_len > old_len {
-				// Copy what we can, overwriting the original.
-				self.buf[self.parts[idx].0..self.parts[idx].1].copy_from_slice(&buf[0..old_len]);
-
-				// Extend the rest.
-				let b = self.buf.split_off(self.parts[idx].1);
-				self.buf.extend_from_slice(&buf[old_len..]);
-				self.buf.unsplit(b);
-
-				// Shift the indexes.
-				let adj: usize = new_len - old_len;
-				self.parts[idx].1 += adj;
-				self.shift_partitions_right(idx + 1, adj);
-			}
-			else {
-				// Shrink the old buffer to match the new buffer's length.
-				if old_len > new_len {
-					let adj: usize = old_len - new_len;
-
-					let b = self.buf.split_off(self.parts[idx].1);
-					self.buf.truncate(self.buf.len() - adj);
-					self.buf.unsplit(b);
-
-					self.parts[idx].1 -= adj;
-					self.shift_partitions_left(idx + 1, adj);
-				}
-
-				// And let's not forget to copy the data! Haha.
-				self.buf[self.parts[idx].0..self.parts[idx].1].copy_from_slice(buf);
-			}
+		// The new part is smaller.
+		else if old_len > new_len {
+			self.resize_shrink_part(idx, old_len - new_len);
 		}
+
+		// Now that everything's the same size, copy!
+		self.get_part_mut(idx).copy_from_slice(buf);
 	}
 
 
@@ -640,6 +582,21 @@ impl MsgBuf {
 	// ------------------------------------------------------------------------
 	// Internal Helpers
 	// ------------------------------------------------------------------------
+
+	/// Is Only Part.
+	fn has_one_partition(&self) -> bool {
+		self.parts.len() == 1
+	}
+
+	/// Is Trailing Part.
+	///
+	/// Whether or not this part's chunk falls at the end of the buffer.
+	///
+	/// Panics if `idx` is out of bounds.
+	fn is_trailing_part(&self, idx: usize) -> bool {
+		assert!(idx < self.parts.len());
+		self.parts[idx].1 == self.buf.len()
+	}
 
 	/// Partition.
 	///
@@ -683,6 +640,139 @@ impl MsgBuf {
 		// If the last part falls short of `len()`, add one more.
 		if last_idx < max {
 			self.parts.push((last_idx, max));
+		}
+	}
+
+	#[allow(clippy::suspicious_else_formatting)]
+	/// Resize Part (Clear)
+	///
+	/// Clear the part and fix up the partitioning.
+	///
+	/// Panics if `idx` is out of bounds.
+	fn resize_clear_part(&mut self, idx: usize) {
+		assert!(idx < self.parts.len());
+
+		// Only children are super easy.
+		if self.has_one_partition() {
+			self.buf.clear();
+			self.parts[0].1 = 0;
+		}
+		// It is at the end.
+		else if self.is_trailing_part(idx) {
+			self.buf.truncate(self.parts[idx].0);
+			self.parts[idx].1 = self.parts[idx].0;
+
+			// Push all remaining partitions to this one's start/end.
+			self.shift_partitions_abs(idx + 1, self.parts[idx].1);
+		}
+		// Anywhere else we need to do some surgery.
+		else {
+			let adj = self.get_part_len(idx);
+
+			// Split the buffer at the part's end.
+			let b = self.buf.split_off(self.parts[idx].1);
+
+			// Truncate the stub to the part's start.
+			self.buf.truncate(self.parts[idx].0);
+
+			// Glue it back together.
+			self.buf.unsplit(b);
+
+			// Update the parts.
+			self.parts[idx].1 = self.parts[idx].0;
+			self.shift_partitions_left(idx + 1, adj);
+		}
+	}
+
+	#[allow(clippy::suspicious_else_formatting)]
+	/// Resize Part (Grow)
+	///
+	/// Grow a part by the specified amount. This will fill the space with
+	/// random data.
+	///
+	/// Panics if `idx` is out of bounds.
+	fn resize_grow_part(&mut self, idx: usize, adj: usize) {
+		assert!(idx < self.parts.len());
+
+		// Only children are super easy.
+		if self.has_one_partition() {
+			self.parts[0].1 += adj;
+			self.buf.resize(self.parts[0].1, 0);
+		}
+		// If it trails, grow the buffer, but adjust as needed.
+		else if self.is_trailing_part(idx) {
+			self.parts[idx].1 += adj;
+			self.buf.resize(self.parts[idx].1, 0);
+
+			// Push all remaining partitions to this one's start/end.
+			self.shift_partitions_abs(idx + 1, self.parts[idx].1);
+		}
+		// Anywhere else we need to do some surgery.
+		else {
+			// Split the buffer at the part's end.
+			let b = self.buf.split_off(self.parts[idx].1);
+
+			// Grow the stub to the adjusted length.
+			self.parts[idx].1 += adj;
+			self.buf.resize(self.parts[idx].1, 0);
+
+			// Glue it back together.
+			self.buf.unsplit(b);
+			self.shift_partitions_right(idx + 1, adj);
+		}
+	}
+
+	#[allow(clippy::suspicious_else_formatting)]
+	/// Resize Part (Shrink)
+	///
+	/// Shrink a part by the specified amount.
+	///
+	/// Panics if `idx` is out of bounds.
+	fn resize_shrink_part(&mut self, idx: usize, adj: usize) {
+		assert!(idx < self.parts.len());
+
+		// Only children are super easy.
+		if self.has_one_partition() {
+			self.buf.truncate(self.buf.len() - adj);
+			self.parts[0].1 -= adj;
+		}
+		// If it trails, shrink the buffer, but adjust as needed.
+		else if self.is_trailing_part(idx) {
+			self.parts[idx].1 -= adj;
+			self.buf.truncate(self.parts[idx].1);
+
+			// Push all remaining partitions to this one's start/end.
+			self.shift_partitions_abs(idx + 1, self.parts[idx].1);
+		}
+		// Anywhere else we need to do some surgery.
+		else {
+			// Split the buffer at the part's end.
+			let b = self.buf.split_off(self.parts[idx].1);
+
+			// Truncate the stub to the adjusted length.
+			self.parts[idx].1 -= adj;
+			self.buf.truncate(self.parts[idx].1);
+
+			// Glue it back together.
+			self.buf.unsplit(b);
+
+			// Shift all remaining parts left by the amount lost.
+			self.shift_partitions_left(idx + 1, adj);
+		}
+	}
+
+	/// Shift Parts Absolute.
+	///
+	/// This is an internal helper that shifts the indexes of all partitions
+	/// beginning at `idx` to `num`.
+	///
+	/// This is used when a partition in the middle has shrunk or been removed.
+	fn shift_partitions_abs(&mut self, mut idx: usize, num: usize) {
+		let len: usize = self.parts.len();
+		while idx < len {
+			self.parts[idx].0 = num;
+			self.parts[idx].1 = num;
+			idx += 1;
 		}
 	}
 
