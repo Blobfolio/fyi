@@ -108,6 +108,18 @@ use std::{
 
 
 
+// Helper: Unlock the inner Mutex, handling poisonings inasmuch as is possible.
+macro_rules! mutex_ptr {
+	($lhs:ident) => (
+		match $lhs.0.lock() {
+			Ok(guard) => guard,
+			Err(poisoned) => poisoned.into_inner(),
+		}
+	);
+}
+
+
+
 bitflags::bitflags! {
 	/// Progress Bar flags.
 	///
@@ -824,7 +836,7 @@ impl Progress {
 	///
 	/// Return the amount done.
 	pub fn done(&self) -> u64 {
-		let ptr = self.0.lock().unwrap();
+		let ptr = mutex_ptr!(self);
 		ptr.done
 	}
 
@@ -834,7 +846,7 @@ impl Progress {
 	/// Whether or not progress is underway. For the purposes of this library,
 	/// that means done is less than total.
 	pub fn is_running(&self) -> bool {
-		let ptr = self.0.lock().unwrap();
+		let ptr = mutex_ptr!(self);
 		ptr.is_running()
 	}
 
@@ -844,7 +856,7 @@ impl Progress {
 	/// This is literally an expression of `done / total`, returned as a float
 	/// between 0.0 and 1.0.
 	pub fn percent(&self) -> f64 {
-		let ptr = self.0.lock().unwrap();
+		let ptr = mutex_ptr!(self);
 		ptr.percent()
 	}
 
@@ -852,7 +864,7 @@ impl Progress {
 	///
 	/// Return the `Instant` the `Progress` struct was instantiated.
 	pub fn time(&self) -> Instant {
-		let ptr = self.0.lock().unwrap();
+		let ptr = mutex_ptr!(self);
 		ptr.time
 	}
 
@@ -860,7 +872,7 @@ impl Progress {
 	///
 	/// Return the total.
 	pub fn total(&self) -> u64 {
-		let ptr = self.0.lock().unwrap();
+		let ptr = mutex_ptr!(self);
 		ptr.total
 	}
 
@@ -877,7 +889,7 @@ impl Progress {
 	/// such is being actively worked on in Thread #2" or whatever, but there
 	/// are no hard and fast rules.
 	pub fn add_task<T: Borrow<str>> (&self, task: T) {
-		let mut ptr = self.0.lock().unwrap();
+		let mut ptr = mutex_ptr!(self);
 		ptr.add_task(task)
 	}
 
@@ -886,7 +898,7 @@ impl Progress {
 	/// This method can be used to print a quick "Finished in XYZ" summary
 	/// message after progress has finished.
 	pub fn finished_in(&self) {
-		let ptr = self.0.lock().unwrap();
+		let ptr = mutex_ptr!(self);
 		ptr.finished_in()
 	}
 
@@ -898,7 +910,7 @@ impl Progress {
 	/// order in which instructions will arrive, but if both are just "add
 	/// one to the current", it all works out.
 	pub fn increment(&self, num: u64) {
-		let mut ptr = self.0.lock().unwrap();
+		let mut ptr = mutex_ptr!(self);
 		ptr.increment(num)
 	}
 
@@ -907,7 +919,7 @@ impl Progress {
 	/// If you're thinking of tasks as a list of "this is happening now" stuff,
 	/// `remove_task()` is the conclusion to `add_task()`.
 	pub fn remove_task<T: Borrow<str>> (&self, task: T) {
-		let mut ptr = self.0.lock().unwrap();
+		let mut ptr = mutex_ptr!(self);
 		ptr.remove_task(task)
 	}
 
@@ -916,7 +928,7 @@ impl Progress {
 	/// Set the "done" amount to this absolute value. See also `increment()`,
 	/// which instead works relative to the current value.
 	pub fn set_done(&self, done: u64) {
-		let mut ptr = self.0.lock().unwrap();
+		let mut ptr = mutex_ptr!(self);
 		ptr.set_done(done)
 	}
 
@@ -925,13 +937,13 @@ impl Progress {
 	/// Update or unset the message, which if present, prints pinned above the
 	/// progress line.
 	pub fn set_title<T: Borrow<str>> (&self, title: T) {
-		let mut ptr = self.0.lock().unwrap();
+		let mut ptr = mutex_ptr!(self);
 		ptr.set_title(title)
 	}
 
 	/// Set total.
 	pub fn set_total(&self, total: u64) {
-		let mut ptr = self.0.lock().unwrap();
+		let mut ptr = mutex_ptr!(self);
 		ptr.set_total(total)
 	}
 
@@ -941,13 +953,13 @@ impl Progress {
 	/// the message, and clearing the last bit that was printed to the terminal
 	/// if any.
 	pub fn stop(&self) {
-		let mut ptr = self.0.lock().unwrap();
+		let mut ptr = mutex_ptr!(self);
 		ptr.stop()
 	}
 
 	/// Tick.
 	pub fn tick(&self) {
-		let mut ptr = self.0.lock().unwrap();
+		let mut ptr = mutex_ptr!(self);
 		ptr.tick()
 	}
 
@@ -962,7 +974,7 @@ impl Progress {
 	where
 	T1: Borrow<str>,
 	T2: Borrow<str> {
-		let mut ptr = self.0.lock().unwrap();
+		let mut ptr = mutex_ptr!(self);
 		if num > 0 {
 			ptr.increment(num);
 		}
