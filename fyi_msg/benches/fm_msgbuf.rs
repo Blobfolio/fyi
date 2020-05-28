@@ -122,6 +122,72 @@ fn with_parts(c: &mut Criterion) {
 	group.finish();
 }
 
+fn replace_part(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_msg::MsgBuf");
+
+	// First with just one part.
+	group.bench_function("replace_part::<1/1>() clear", move |b| {
+		b.iter_with_setup(||
+			MsgBuf::from(b"The hills are alive with the sound of music."),
+			|mut buf| buf.replace_part(black_box(0), black_box(b""))
+		)
+	});
+
+	group.bench_function("replace_part::<1/1>() shorten", move |b| {
+		b.iter_with_setup(||
+			MsgBuf::from(b"The hills are alive with the sound of music."),
+			|mut buf| buf.replace_part(black_box(0), black_box(b"The hills have eyes!"))
+		)
+	});
+
+	group.bench_function("replace_part::<1/1>() same-size", move |b| {
+		b.iter_with_setup(||
+			MsgBuf::from(b"The hills are alive with the sound of music."),
+			|mut buf| buf.replace_part(black_box(0), black_box(b"The hills prefer country-and-western, y'all."))
+		)
+	});
+
+	group.bench_function("replace_part::<1/1>() extend", move |b| {
+		b.iter_with_setup(||
+			MsgBuf::from(b"The hills are alive with the sound of music."),
+			|mut buf| buf.replace_part(black_box(0), black_box(b"The hills are a little bit howly if you ask me. No thank you!"))
+		)
+	});
+
+	// Now try it out in each position of a 3-parted buffer.
+	for i in 1..4 {
+		group.bench_function(&format!("replace_part::<{}/3>() clear", i), move |b| {
+			b.iter_with_setup(||
+				MsgBuf::from_many(&vec![&b"The hills are alive with the sound of music."[..]; i][..]),
+				|mut buf| buf.replace_part(black_box(i - 1), black_box(b""))
+			)
+		});
+
+		group.bench_function(&format!("replace_part::<{}/3>() shorten", i), move |b| {
+			b.iter_with_setup(||
+				MsgBuf::from_many(&vec![&b"The hills are alive with the sound of music."[..]; i][..]),
+				|mut buf| buf.replace_part(black_box(i - 1), black_box(b"The hills have eyes!"))
+			)
+		});
+
+		group.bench_function(&format!("replace_part::<{}/3>() same-size", i), move |b| {
+			b.iter_with_setup(||
+				MsgBuf::from_many(&vec![&b"The hills are alive with the sound of music."[..]; i][..]),
+				|mut buf| buf.replace_part(black_box(i - 1), black_box(b"The hills prefer country-and-western, y'all."))
+			)
+		});
+
+		group.bench_function(&format!("replace_part::<{}/3>() extend", i), move |b| {
+			b.iter_with_setup(||
+				MsgBuf::from_many(&vec![&b"The hills are alive with the sound of music."[..]; i][..]),
+				|mut buf| buf.replace_part(black_box(i - 1), black_box(b"The hills are a little bit howly if you ask me. No thank you!"))
+			)
+		});
+	}
+
+	group.finish();
+}
+
 
 
 criterion_group!(
@@ -130,5 +196,6 @@ criterion_group!(
 	from,
 	from_many,
 	with_parts,
+	replace_part,
 );
 criterion_main!(benches);
