@@ -106,15 +106,12 @@ impl MsgBuf {
 		let mut out = Self::default();
 		let mut start: usize = 0;
 		bufs.iter().for_each(|b| {
-			if b.is_empty() {
-				out.parts.push((start, start));
-			}
-			else {
-				let end: usize = start + b.len();
+			let end: usize = start + b.len();
+			if end != start {
 				out.buf.extend_from_slice(b);
-				out.parts.push((start, end));
-				start = end;
 			}
+			out.parts.push((start, end));
+			start = end;
 		});
 
 		out
@@ -348,15 +345,12 @@ impl MsgBuf {
 
 		let mut start: usize = self.buf.len();
 		bufs.iter().for_each(|b| {
-			if b.is_empty() {
-				self.parts.push((start, start));
-			}
-			else {
-				let end: usize = start + b.len();
+			let end: usize = start + b.len();
+			if end != start {
 				self.buf.extend_from_slice(b);
-				self.parts.push((start, end));
-				start = end;
 			}
+			self.parts.push((start, end));
+			start = end;
 		});
 
 		self.parts.len() - 1
