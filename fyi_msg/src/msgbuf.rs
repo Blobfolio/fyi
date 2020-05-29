@@ -27,7 +27,7 @@ pub struct MsgBuf {
 impl Borrow<[u8]> for MsgBuf {
 	#[inline]
 	fn borrow(&self) -> &[u8] {
-		self
+		self.buf.deref()
 	}
 }
 
@@ -46,7 +46,7 @@ impl Deref for MsgBuf {
 
 	/// Deref.
 	fn deref(&self) -> &Self::Target {
-		&self.buf
+		self.buf.deref()
 	}
 }
 
@@ -54,7 +54,7 @@ impl fmt::Display for MsgBuf {
 	#[inline]
 	/// Display.
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str(unsafe { std::str::from_utf8_unchecked(self) })
+		f.write_str(unsafe { std::str::from_utf8_unchecked(self.deref()) })
 	}
 }
 
