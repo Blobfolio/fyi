@@ -140,7 +140,7 @@ impl MsgBuf {
 	/// Clear both the buffer and partitioning table. This restores the
 	/// instance to the equivalent of `default()`, but does not re-allocate.
 	pub fn clear(&mut self) {
-		self.buf.clear();
+		self.buf.truncate(0);
 		self.parts.clear();
 	}
 
@@ -155,7 +155,7 @@ impl MsgBuf {
 	pub fn replace(&mut self, buf: &[u8], parts: &[(usize, usize)]) {
 		// If the new part is empty, clear the whole buffer.
 		if buf.is_empty() {
-			self.buf.clear();
+			self.buf.truncate(0);
 		}
 		// If the old part was empty, push the whole thing.
 		else if self.buf.is_empty() {
@@ -540,7 +540,7 @@ impl MsgBuf {
 		assert!(idx < self.parts.len());
 
 		if self.has_one_partition() {
-			self.buf.clear();
+			self.buf.truncate(0);
 			self.parts[0].1 = 0;
 		}
 		else {
@@ -659,7 +659,7 @@ impl MsgBuf {
 
 		// Only children are super easy.
 		if self.has_one_partition() {
-			self.buf.clear();
+			self.buf.truncate(0);
 			self.parts[0].1 = 0;
 		}
 		// It is at the end.
