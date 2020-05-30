@@ -10,16 +10,17 @@ use criterion::{
 	criterion_main,
 };
 use fyi_msg::MsgBuf;
+use packed_simd::usizex2;
 
 
 
 fn new(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::MsgBuf");
 
-	let blank_part: &[(usize, usize)] = black_box(&[]);
+	let blank_part: &[usizex2] = black_box(&[]);
 	let hello_buf = black_box(b"Hello World");
-	let hello_part = black_box((0, 11));
-	let hello_2parts = black_box(&[(0, 6), (6, 11)]);
+	let hello_part = black_box(usizex2::new(0, 11));
+	let hello_2parts = black_box([usizex2::new(0, 6), usizex2::new(6, 11)]);
 
 	group.bench_function("default()", move |b| {
 		b.iter(|| MsgBuf::default())
@@ -34,7 +35,7 @@ fn new(c: &mut Criterion) {
 	});
 
 	group.bench_function("new(b\"Hello World\", [(0, 6), (6, 11)])", move |b| {
-		b.iter(|| MsgBuf::new(hello_buf, hello_2parts))
+		b.iter(|| MsgBuf::new(hello_buf, &hello_2parts))
 	});
 
 	group.finish();

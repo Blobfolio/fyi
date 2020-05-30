@@ -354,12 +354,12 @@ impl Msg {
 		// 2000-00-00 00:00:00
 		let mut buf: [u8; 19] = [50, 48, 48, 48, 45, 48, 48, 45, 48, 48, 32, 48, 48, 58, 48, 48, 58, 48, 48];
 		let now = Local::now();
-		buf[2..4].copy_from_slice(time_format_dd((now.year() as u32).saturating_sub(2000)));
-		buf[5..7].copy_from_slice(time_format_dd(now.month()));
-		buf[8..10].copy_from_slice(time_format_dd(now.day()));
-		buf[11..13].copy_from_slice(time_format_dd(now.hour()));
-		buf[14..16].copy_from_slice(time_format_dd(now.minute()));
-		buf[17..19].copy_from_slice(time_format_dd(now.second()));
+		buf[2..4].copy_from_slice(&time_format_dd((now.year() as usize).saturating_sub(2000)));
+		buf[5..7].copy_from_slice(&time_format_dd(now.month() as usize));
+		buf[8..10].copy_from_slice(&time_format_dd(now.day() as usize));
+		buf[11..13].copy_from_slice(&time_format_dd(now.hour() as usize));
+		buf[14..16].copy_from_slice(&time_format_dd(now.minute() as usize));
+		buf[17..19].copy_from_slice(&time_format_dd(now.second() as usize));
 
 		self.0.replace_part(Self::IDX_TIMESTAMP, &buf);
 	}
