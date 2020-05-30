@@ -220,7 +220,6 @@ impl MsgBuf {
 			}
 
 			// Replace the part.
-			self.parts[0].0 = 0;
 			self.parts[0].1 = self.buf.len();
 		}
 		else {
