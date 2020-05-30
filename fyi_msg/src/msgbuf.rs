@@ -5,7 +5,6 @@
 partition table to logically slices within the buffer.
 */
 
-use crate::partitions::Partition;
 use bytes::BytesMut;
 use smallvec::SmallVec;
 use std::{
@@ -358,7 +357,7 @@ impl MsgBuf {
 	///
 	/// Panics if `idx` is out of bounds.
 	pub fn clear_part(&mut self, idx: usize) {
-		if ! self.parts[idx].partition_is_empty() {
+		if ! self.part_is_empty(idx) {
 			self.resize_clear_part(idx);
 		}
 	}
@@ -443,7 +442,7 @@ impl MsgBuf {
 	///
 	/// Panics if `idx` is out of bounds.
 	pub fn get_part_len(&self, idx: usize) -> usize {
-		self.parts[idx].partition_len()
+		self.parts[idx].1 - self.parts[idx].0
 	}
 
 	#[must_use]
@@ -494,7 +493,7 @@ impl MsgBuf {
 	///
 	/// Panics if `idx` is out of bounds.
 	pub fn part_is_empty(&self, idx: usize) -> bool {
-		self.parts[idx].partition_is_empty()
+		self.parts[idx].0 == self.parts[idx].1
 	}
 
 	#[must_use]
@@ -524,7 +523,7 @@ impl MsgBuf {
 			self.parts[0].1 = 0;
 		}
 		else {
-			if ! self.parts[idx].partition_is_empty() {
+			if ! self.part_is_empty(idx) {
 				self.resize_clear_part(idx);
 			}
 			self.parts.remove(idx);
@@ -545,7 +544,7 @@ impl MsgBuf {
 			return;
 		}
 
-		let old_len: usize = self.parts[idx].partition_len();
+		let old_len: usize = self.get_part_len(idx);
 
 		// The new part is bigger.
 		if new_len > old_len {
@@ -606,7 +605,7 @@ impl MsgBuf {
 			// The range must be in order of itself.
 			// The range cannot go past the buffer boundaries.
 			// The range cannot begin before the previous end.
-			assert!(last_idx <= p.0 && p.partition_check() && p.1 <= max);
+			assert!(last_idx <= p.0 && p.0 <= p.1 && p.1 <= max);
 
 			// We might need to inject one.
 			if p.0 > last_idx {
@@ -640,7 +639,7 @@ impl MsgBuf {
 		}
 		// Anywhere else we need to do some surgery.
 		else {
-			let adj = self.parts[idx].partition_len();
+			let adj = self.get_part_len(idx);
 
 			// Split the buffer at the part's end.
 			let b = self.buf.split_off(self.parts[idx].1);
@@ -733,7 +732,8 @@ impl MsgBuf {
 	fn shift_partitions_abs(&mut self, mut idx: usize, num: usize) {
 		let len: usize = self.parts.len();
 		while idx < len {
-			self.parts[idx].partition_slop(num);
+			self.parts[idx].0 = num;
+			self.parts[idx].1 = num;
 			idx += 1;
 		}
 	}
@@ -747,7 +747,8 @@ impl MsgBuf {
 	fn shift_partitions_left(&mut self, mut idx: usize, num: usize) {
 		let len: usize = self.parts.len();
 		while idx < len {
-			self.parts[idx].partition_nudge_left(num);
+			self.parts[idx].0 -= num;
+			self.parts[idx].1 -= num;
 			idx += 1;
 		}
 	}
@@ -761,7 +762,8 @@ impl MsgBuf {
 	fn shift_partitions_right(&mut self, mut idx: usize, num: usize) {
 		let len: usize = self.parts.len();
 		while idx < len {
-			self.parts[idx].partition_nudge_right(num);
+			self.parts[idx].0 += num;
+			self.parts[idx].1 += num;
 			idx += 1;
 		}
 	}
