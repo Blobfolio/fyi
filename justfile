@@ -19,7 +19,7 @@ cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
 pgo_dir     := "/tmp/pgo-data"
 release_dir := justfile_directory() + "/release"
 
-rustflags   := "-C llvm-args=--vectorize-slp -Ctarget-feature=+sse3,+avx -Clinker-plugin-lto -Clinker=clang-10 -Clink-args=-fuse-ld=lld-10 -C link-arg=-s"
+rustflags   := "-C llvm-args=--vectorize-slp -Ctarget-features=+sse3,+avx -Clinker-plugin-lto -Clinker=clang-9 -Clink-args=-fuse-ld=lld-9 -C link-arg=-s"
 
 
 
@@ -30,14 +30,14 @@ bench BENCH="" FILTER="":
 	clear
 
 	if [ -z "{{ BENCH }}" ]; then
-		cargo +nightly bench \
+		cargo bench \
 			-q \
 			--workspace \
 			--all-features \
 			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}" -- "{{ FILTER }}"
 	else
-		cargo +nightly bench \
+		cargo bench \
 			-q \
 			--bench "{{ BENCH }}" \
 			--workspace \
@@ -51,7 +51,7 @@ bench BENCH="" FILTER="":
 # Build Release!
 @build:
 	# First let's build the Rust bit.
-	RUSTFLAGS="{{ rustflags }}" cargo +nightly build \
+	RUSTFLAGS="{{ rustflags }}" cargo build \
 		--bin "{{ pkg_id }}" \
 		--release \
 		--target x86_64-unknown-linux-gnu \
@@ -97,7 +97,7 @@ bench BENCH="" FILTER="":
 @build-pgo: clean
 	# First let's build the Rust bit.
 	RUSTFLAGS="{{ rustflags }} -Cprofile-generate={{ pgo_dir }}" \
-		cargo +nightly build \
+		cargo build \
 			--bin "{{ pkg_id }}" \
 			--release \
 			--target x86_64-unknown-linux-gnu \
@@ -138,11 +138,11 @@ bench BENCH="" FILTER="":
 	clear
 
 	# Merge the data back in.
-	llvm-profdata-10 \
+	llvm-profdata-9 \
 		merge -o "{{ pgo_dir }}/merged.profdata" "{{ pgo_dir }}"
 
 	RUSTFLAGS="{{ rustflags }} -Cprofile-use={{ pgo_dir }}/merged.profdata" \
-		cargo +nightly build \
+		cargo build \
 			--bin "{{ pkg_id }}" \
 			--release \
 			--target x86_64-unknown-linux-gnu \
@@ -152,7 +152,7 @@ bench BENCH="" FILTER="":
 # Check Release!
 @check:
 	# First let's build the Rust bit.
-	RUSTFLAGS="{{ rustflags }}" cargo +nightly check \
+	RUSTFLAGS="{{ rustflags }}" cargo check \
 		--release \
 		--all-features \
 		--target x86_64-unknown-linux-gnu \
@@ -177,7 +177,7 @@ bench BENCH="" FILTER="":
 # Clippy.
 @clippy:
 	clear
-	RUSTFLAGS="{{ rustflags }}" cargo +nightly clippy \
+	RUSTFLAGS="{{ rustflags }}" cargo clippy \
 		--workspace \
 		--release \
 		--all-features \
@@ -191,7 +191,7 @@ example-progress:
 
 	clear
 
-	cargo +nightly run \
+	cargo run \
 		-q \
 		-p fyi_progress \
 		--example progress \
@@ -205,7 +205,7 @@ example-witcher:
 
 	clear
 
-	cargo +nightly run \
+	cargo run \
 		-q \
 		-p fyi_witcher \
 		--example witcher \
@@ -216,7 +216,7 @@ example-witcher:
 # Unit tests!
 @test:
 	clear
-	RUST_TEST_THREADS=1 cargo +nightly test \
+	RUST_TEST_THREADS=1 cargo test \
 		--tests \
 		--all-features \
 		--release \
@@ -264,9 +264,7 @@ version:
 # Init dependencies.
 @_init:
 	[ ! -f "{{ justfile_directory() }}/Cargo.lock" ] || rm "{{ justfile_directory() }}/Cargo.lock"
-	rustup default nightly
-	rustup component add clippy
-	cargo +nightly update
+	cargo update
 
 
 # Fix file/directory permissions.

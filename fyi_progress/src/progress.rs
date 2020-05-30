@@ -741,9 +741,9 @@ impl ProgressInner {
 		if self.last_secs < 86400 {
 			let c = secs_chunks(self.last_secs);
 			let buf = self.buf.get_part_mut(Self::IDX_ELAPSED);
-			buf[..2].copy_from_slice(&time_format_dd(c[0] as usize));
-			buf[3..5].copy_from_slice(&time_format_dd(c[1] as usize));
-			buf[6..].copy_from_slice(&time_format_dd(c[2] as usize));
+			buf[..2].copy_from_slice(time_format_dd(c[0]));
+			buf[3..5].copy_from_slice(time_format_dd(c[1]));
+			buf[6..].copy_from_slice(time_format_dd(c[2]));
 		}
 		else {
 			self.buf.get_part_mut(Self::IDX_ELAPSED)
