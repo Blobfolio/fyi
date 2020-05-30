@@ -47,6 +47,7 @@ fn main() {
 	// Make the message.
 	match opts.subcommand() {
 		("blank", Some(o)) => do_blank(o),
+		("confirm", Some(o)) => do_confirm(o),
 		(name, Some(o)) => do_msg(name, o),
 		_ => {},
 	}
@@ -64,6 +65,20 @@ fn do_blank(opts: &ArgMatches) {
 	}
 	else {
 		io::stdout().write_all(&[10].repeat(count as usize)).unwrap();
+	}
+}
+
+/// Confirmation prompt.
+fn do_confirm(opts: &ArgMatches) {
+	let mut msg: Msg = Msg::confirm(opts.value_of("msg").unwrap_or(""));
+
+	// Indent it?
+	if opts.is_present("indent") {
+		msg.set_indent(1);
+	}
+
+	if ! casual::confirm(msg) {
+		process::exit(1);
 	}
 }
 
@@ -89,21 +104,12 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 		},
 	};
 
-	// Build and print!
+	// Indent it?
 	if opts.is_present("indent") {
 		msg.set_indent(1);
 	}
 
-	// Prompt.
-	if "confirm" == name {
-		if casual::confirm(msg) {
-			return;
-		}
-		else {
-			process::exit(1);
-		}
-	}
-
+	// Add a timestamp?
 	if opts.is_present("time") {
 		msg.set_timestamp(false);
 	}
@@ -137,8 +143,6 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 /// Validate CLI numeric inputs.
 fn parse_cli_u8<S> (val: S) -> u8
 where S: Into<String> {
-	match val.into().parse::<u8>() {
-		Ok(x) => x,
-		Err(_) => 0,
-	}
+	if let Ok(x) = val.into().parse::<u8>() { x }
+	else { 0 }
 }
