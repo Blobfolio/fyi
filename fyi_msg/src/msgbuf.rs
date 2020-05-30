@@ -382,7 +382,7 @@ impl MsgBuf {
 	///
 	/// Panics if `idx` is out of bounds.
 	pub fn get_part(&self, idx: usize) -> &[u8] {
-		&self.buf[self.parts[idx].0..self.parts[idx].1]
+		self.get_slice(self.parts[idx].0, self.parts[idx].1)
 	}
 
 	#[must_use]
@@ -392,7 +392,7 @@ impl MsgBuf {
 	///
 	/// Panics if `idx` is out of bounds.
 	pub fn get_part_mut(&mut self, idx: usize) -> &mut [u8] {
-		&mut self.buf[self.parts[idx].0..self.parts[idx].1]
+		self.get_slice_mut(self.parts[idx].0, self.parts[idx].1)
 	}
 
 	#[must_use]
@@ -403,7 +403,7 @@ impl MsgBuf {
 	///
 	/// Panics if `idx1` or `idx2` are out of bounds or out of order.
 	pub fn get_parts(&self, idx1: usize, idx2: usize) -> &[u8] {
-		&self.buf[self.parts[idx1].0..self.parts[idx2].1]
+		self.get_slice(self.parts[idx1].0, self.parts[idx2].1)
 	}
 
 	#[must_use]
@@ -414,7 +414,7 @@ impl MsgBuf {
 	///
 	/// Panics if `idx1` or `idx2` are out of bounds or out of order.
 	pub fn get_parts_mut(&mut self, idx1: usize, idx2: usize) -> &mut [u8] {
-		&mut self.buf[self.parts[idx1].0..self.parts[idx2].1]
+		self.get_slice_mut(self.parts[idx1].0, self.parts[idx2].1)
 	}
 
 	#[must_use]
@@ -443,7 +443,7 @@ impl MsgBuf {
 	/// Return an arbitrary buffer slice. Equivalent to `buf[start..end]`.
 	///
 	/// Panics if `start` or `end` are out of bounds.
-	pub fn get_slice_mut(&mut self, start: usize, end: usize) -> &[u8] {
+	pub fn get_slice_mut(&mut self, start: usize, end: usize) -> &mut [u8] {
 		&mut self.buf[start..end]
 	}
 
