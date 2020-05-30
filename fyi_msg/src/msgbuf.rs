@@ -186,24 +186,6 @@ impl MsgBuf {
 
 
 	// ------------------------------------------------------------------------
-	// Working With Lines
-	// ------------------------------------------------------------------------
-
-	#[must_use]
-	/// Line count.
-	///
-	/// This returns `n + 1` where `n` is the number of `\n` characters stored
-	/// in the buffer.
-	///
-	/// This crate doesn't do carriage returns! Haha.
-	pub fn count_lines(&self) -> usize {
-		if self.buf.is_empty() { 0 }
-		else { bytecount::count(&self.buf, b'\n') + 1 }
-	}
-
-
-
-	// ------------------------------------------------------------------------
 	// Partitioning
 	// ------------------------------------------------------------------------
 

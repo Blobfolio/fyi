@@ -11,11 +11,6 @@ bytes = "0.5.*"
 chrono = "0.4.*"
 smallvec = "1.4.*"
 
-[dependencies.bytecount]
-version = "0.6.*"
-default-features = false
-features = [ "runtime-dispatch-simd" ]
-
 [dev-dependencies]
 criterion = "*"
 
