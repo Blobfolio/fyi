@@ -5,6 +5,7 @@
 partition table to logically slices within the buffer.
 */
 
+use crate::partitions::Partition;
 use bytes::BytesMut;
 use smallvec::SmallVec;
 use std::{
@@ -253,7 +254,6 @@ impl MsgBuf {
 	///
 	/// Panics if `idx` is out of bounds.
 	pub fn get_partition(&self, idx: usize) -> (usize, usize) {
-		assert!(idx < self.parts.len());
 		self.parts[idx]
 	}
 
@@ -264,7 +264,6 @@ impl MsgBuf {
 	///
 	/// Panics if `idx1` or `idx2` are out of bounds or out of order.
 	pub fn get_partitions(&self, idx1: usize, idx2: usize) -> (usize, usize) {
-		assert!(idx1 < idx2 && idx2 < self.parts.len());
 		(self.parts[idx1].0, self.parts[idx2].1)
 	}
 
@@ -278,7 +277,6 @@ impl MsgBuf {
 			self.parts.push((0, 0));
 		}
 		else {
-			assert!(idx < self.parts.len());
 			self.parts.insert_from_slice(idx, &[(self.parts[idx].0, self.parts[idx].0)]);
 		}
 	}
@@ -324,7 +322,7 @@ impl MsgBuf {
 	pub fn add_part(&mut self, buf: &[u8]) -> usize {
 		let start: usize = self.buf.len();
 		let end: usize = start + buf.len();
-		if end > start {
+		if start < end {
 			self.buf.extend_from_slice(buf);
 		}
 		self.parts.push((start, end));
@@ -341,8 +339,6 @@ impl MsgBuf {
 	///
 	/// Panics if `bufs` is empty (though it may contain empty values).
 	pub fn add_parts(&mut self, bufs: &[&[u8]]) -> usize {
-		assert!(! bufs.is_empty());
-
 		let mut start: usize = self.buf.len();
 		bufs.iter().for_each(|b| {
 			let end: usize = start + b.len();
@@ -362,9 +358,7 @@ impl MsgBuf {
 	///
 	/// Panics if `idx` is out of bounds.
 	pub fn clear_part(&mut self, idx: usize) {
-		assert!(idx < self.parts.len());
-
-		if ! self.part_is_empty(idx) {
+		if ! self.parts[idx].partition_is_empty() {
 			self.resize_clear_part(idx);
 		}
 	}
@@ -375,8 +369,6 @@ impl MsgBuf {
 	///
 	/// Panics if `idx` is out of bounds.
 	pub fn extend_part(&mut self, idx: usize, buf: &[u8]) {
-		assert!(idx < self.parts.len());
-
 		if ! buf.is_empty() {
 			// The last part is special.
 			if idx == self.parts.len() - 1 {
@@ -409,7 +401,6 @@ impl MsgBuf {
 	///
 	/// Panics if `idx` is out of bounds.
 	pub fn get_part(&self, idx: usize) -> &[u8] {
-		assert!(idx < self.parts.len());
 		&self.buf[self.parts[idx].0..self.parts[idx].1]
 	}
 
@@ -420,7 +411,6 @@ impl MsgBuf {
 	///
 	/// Panics if `idx` is out of bounds.
 	pub fn get_part_mut(&mut self, idx: usize) -> &mut [u8] {
-		assert!(idx < self.parts.len());
 		&mut self.buf[self.parts[idx].0..self.parts[idx].1]
 	}
 
@@ -432,7 +422,6 @@ impl MsgBuf {
 	///
 	/// Panics if `idx1` or `idx2` are out of bounds or out of order.
 	pub fn get_parts(&self, idx1: usize, idx2: usize) -> &[u8] {
-		assert!(idx1 < idx2 && idx2 < self.parts.len());
 		&self.buf[self.parts[idx1].0..self.parts[idx2].1]
 	}
 
@@ -444,7 +433,6 @@ impl MsgBuf {
 	///
 	/// Panics if `idx1` or `idx2` are out of bounds or out of order.
 	pub fn get_parts_mut(&mut self, idx1: usize, idx2: usize) -> &mut [u8] {
-		assert!(idx1 < idx2 && idx2 < self.parts.len());
 		&mut self.buf[self.parts[idx1].0..self.parts[idx2].1]
 	}
 
@@ -455,8 +443,7 @@ impl MsgBuf {
 	///
 	/// Panics if `idx` is out of bounds.
 	pub fn get_part_len(&self, idx: usize) -> usize {
-		assert!(idx < self.parts.len());
-		self.parts[idx].1 - self.parts[idx].0
+		self.parts[idx].partition_len()
 	}
 
 	#[must_use]
@@ -466,7 +453,6 @@ impl MsgBuf {
 	///
 	/// Panics if `start` or `end` are out of bounds.
 	pub fn get_slice(&self, start: usize, end: usize) -> &[u8] {
-		assert!(start <= end && end <= self.buf.len());
 		&self.buf[start..end]
 	}
 
@@ -477,7 +463,6 @@ impl MsgBuf {
 	///
 	/// Panics if `start` or `end` are out of bounds.
 	pub fn get_slice_mut(&mut self, start: usize, end: usize) -> &[u8] {
-		assert!(start <= end && end <= self.buf.len());
 		&mut self.buf[start..end]
 	}
 
@@ -495,8 +480,6 @@ impl MsgBuf {
 	///
 	/// Panics if `idx` is out of bounds.
 	pub fn insert_part(&mut self, idx: usize, buf: &[u8]) {
-		assert!(idx < self.parts.len());
-
 		self.insert_partition(idx);
 
 		// Anything to fill?
@@ -511,8 +494,7 @@ impl MsgBuf {
 	///
 	/// Panics if `idx` is out of bounds.
 	pub fn part_is_empty(&self, idx: usize) -> bool {
-		assert!(idx < self.parts.len());
-		self.parts[idx].0 == self.parts[idx].1
+		self.parts[idx].partition_is_empty()
 	}
 
 	#[must_use]
@@ -537,14 +519,12 @@ impl MsgBuf {
 	///
 	/// Panics if `idx` is out of bounds.
 	pub fn remove_part(&mut self, idx: usize) {
-		assert!(idx < self.parts.len());
-
 		if self.has_one_partition() {
 			self.buf.truncate(0);
 			self.parts[0].1 = 0;
 		}
 		else {
-			if ! self.part_is_empty(idx) {
+			if ! self.parts[idx].partition_is_empty() {
 				self.resize_clear_part(idx);
 			}
 			self.parts.remove(idx);
@@ -559,15 +539,13 @@ impl MsgBuf {
 	///
 	/// Panics if `idx` is out of bounds.
 	pub fn replace_part(&mut self, idx: usize, buf: &[u8]) {
-		assert!(idx < self.parts.len());
-
 		let new_len: usize = buf.len();
 		if new_len == 0 {
 			self.resize_clear_part(idx);
 			return;
 		}
 
-		let old_len: usize = self.get_part_len(idx);
+		let old_len: usize = self.parts[idx].partition_len();
 
 		// The new part is bigger.
 		if new_len > old_len {
@@ -599,7 +577,6 @@ impl MsgBuf {
 	///
 	/// Panics if `idx` is out of bounds.
 	fn is_trailing_part(&self, idx: usize) -> bool {
-		assert!(idx < self.parts.len());
 		self.parts[idx].1 == self.buf.len()
 	}
 
@@ -612,18 +589,16 @@ impl MsgBuf {
 	/// This method will panic if the buffer is already partitioned or any of
 	/// the new partitions are out of range or out of order.
 	unsafe fn partition(&mut self, parts: &[(usize, usize)]) {
-		assert!(! self.is_partitioned());
+		// How much buffer we got?
+		let max: usize = self.buf.len();
 
 		// If the buffer is empty, we don't have to actually read `parts` to
 		// partition; just enter however many `(0,0)` entries it takes. If
 		// `parts` is empty, a single `(0,0)` will be created.
-		if self.buf.is_empty() {
+		if 0 == max {
 			self.parts.extend_from_slice(&[(0, 0)].repeat(usize::max(1, parts.len())));
 			return;
 		}
-
-		// How much buffer we got?
-		let max: usize = self.buf.len();
 
 		// Loop through the provided parts, filling in the gaps as needed.
 		let mut last_idx: usize = 0;
@@ -631,7 +606,7 @@ impl MsgBuf {
 			// The range must be in order of itself.
 			// The range cannot go past the buffer boundaries.
 			// The range cannot begin before the previous end.
-			assert!(p.0 <= p.1 && p.1 <= max && p.0 >= last_idx);
+			assert!(last_idx <= p.0 && p.partition_check() && p.1 <= max);
 
 			// We might need to inject one.
 			if p.0 > last_idx {
@@ -655,15 +630,8 @@ impl MsgBuf {
 	///
 	/// Panics if `idx` is out of bounds.
 	fn resize_clear_part(&mut self, idx: usize) {
-		assert!(idx < self.parts.len());
-
-		// Only children are super easy.
-		if self.has_one_partition() {
-			self.buf.truncate(0);
-			self.parts[0].1 = 0;
-		}
 		// It is at the end.
-		else if self.is_trailing_part(idx) {
+		if self.is_trailing_part(idx) {
 			self.buf.truncate(self.parts[idx].0);
 			self.parts[idx].1 = self.parts[idx].0;
 
@@ -672,7 +640,7 @@ impl MsgBuf {
 		}
 		// Anywhere else we need to do some surgery.
 		else {
-			let adj = self.get_part_len(idx);
+			let adj = self.parts[idx].partition_len();
 
 			// Split the buffer at the part's end.
 			let b = self.buf.split_off(self.parts[idx].1);
@@ -685,6 +653,8 @@ impl MsgBuf {
 
 			// Update the parts.
 			self.parts[idx].1 = self.parts[idx].0;
+
+			// And shift remaining slices.
 			self.shift_partitions_left(idx + 1, adj);
 		}
 	}
@@ -697,19 +667,12 @@ impl MsgBuf {
 	///
 	/// Panics if `idx` is out of bounds.
 	fn resize_grow_part(&mut self, idx: usize, adj: usize) {
-		assert!(idx < self.parts.len());
-
-		// Only children are super easy.
-		if self.has_one_partition() {
-			self.parts[0].1 += adj;
-			self.buf.resize(self.parts[0].1, 0);
-		}
-		// If it trails, grow the buffer, but adjust as needed.
-		else if self.is_trailing_part(idx) {
+		// It is at the end.
+		if self.is_trailing_part(idx) {
 			self.parts[idx].1 += adj;
 			self.buf.resize(self.parts[idx].1, 0);
 
-			// Push all remaining partitions to this one's start/end.
+			// And shift remaining slices.
 			self.shift_partitions_abs(idx + 1, self.parts[idx].1);
 		}
 		// Anywhere else we need to do some surgery.
@@ -723,6 +686,8 @@ impl MsgBuf {
 
 			// Glue it back together.
 			self.buf.unsplit(b);
+
+			// And shift remaining slices.
 			self.shift_partitions_right(idx + 1, adj);
 		}
 	}
@@ -734,15 +699,8 @@ impl MsgBuf {
 	///
 	/// Panics if `idx` is out of bounds.
 	fn resize_shrink_part(&mut self, idx: usize, adj: usize) {
-		assert!(idx < self.parts.len());
-
-		// Only children are super easy.
-		if self.has_one_partition() {
-			self.buf.truncate(self.buf.len() - adj);
-			self.parts[0].1 -= adj;
-		}
-		// If it trails, shrink the buffer, but adjust as needed.
-		else if self.is_trailing_part(idx) {
+		// It is at the end.
+		if self.is_trailing_part(idx) {
 			self.parts[idx].1 -= adj;
 			self.buf.truncate(self.parts[idx].1);
 
@@ -775,8 +733,7 @@ impl MsgBuf {
 	fn shift_partitions_abs(&mut self, mut idx: usize, num: usize) {
 		let len: usize = self.parts.len();
 		while idx < len {
-			self.parts[idx].0 = num;
-			self.parts[idx].1 = num;
+			self.parts[idx].partition_slop(num);
 			idx += 1;
 		}
 	}
@@ -790,8 +747,7 @@ impl MsgBuf {
 	fn shift_partitions_left(&mut self, mut idx: usize, num: usize) {
 		let len: usize = self.parts.len();
 		while idx < len {
-			self.parts[idx].0 -= num;
-			self.parts[idx].1 -= num;
+			self.parts[idx].partition_nudge_left(num);
 			idx += 1;
 		}
 	}
@@ -805,8 +761,7 @@ impl MsgBuf {
 	fn shift_partitions_right(&mut self, mut idx: usize, num: usize) {
 		let len: usize = self.parts.len();
 		while idx < len {
-			self.parts[idx].0 += num;
-			self.parts[idx].1 += num;
+			self.parts[idx].partition_nudge_right(num);
 			idx += 1;
 		}
 	}
