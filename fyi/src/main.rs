@@ -83,7 +83,7 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 				parse_cli_u8(opts.value_of("prefix_color").unwrap_or("199")),
 				opts.value_of("msg").unwrap_or("")
 			),
-			_ => Msg::new("", 0, opts.value_of("msg").unwrap_or("")),
+			None => Msg::new("", 0, opts.value_of("msg").unwrap_or("")),
 		},
 	};
 
@@ -137,6 +137,6 @@ fn parse_cli_u8<S> (val: S) -> u8
 where S: Into<String> {
 	match val.into().parse::<u8>() {
 		Ok(x) => x,
-		_ => 0,
+		Err(_) => 0,
 	}
 }

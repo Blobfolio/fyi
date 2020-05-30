@@ -144,7 +144,7 @@ impl Witcher {
 								if x.is_empty() { None }
 								else { Some(PathBuf::from(x)) }
 							},
-							_ => None,
+							Err(_) => None,
 						})
 						.collect::<Vec<PathBuf>>(),
 					pattern,
@@ -165,7 +165,7 @@ impl Witcher {
 		self.0.par_iter()
 			.map(|x| match x.metadata() {
 				Ok(meta) => meta.len(),
-				_ => 0,
+				Err(_) => 0,
 			})
 			.sum()
 	}
