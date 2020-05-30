@@ -70,12 +70,14 @@ fn do_blank(opts: &ArgMatches) {
 /// Print message.
 fn do_msg(name: &str, opts: &ArgMatches) {
 	let mut msg: Msg = match name {
-		"confirm" => Msg::confirm(opts.value_of("msg").unwrap_or("")),
+		"crunched" => Msg::crunched(opts.value_of("msg").unwrap_or("")),
 		"debug" => Msg::debug(opts.value_of("msg").unwrap_or("")),
+		"done" => Msg::done(opts.value_of("msg").unwrap_or("")),
 		"error" => Msg::error(opts.value_of("msg").unwrap_or("")),
 		"info" => Msg::info(opts.value_of("msg").unwrap_or("")),
 		"notice" => Msg::notice(opts.value_of("msg").unwrap_or("")),
 		"success" => Msg::success(opts.value_of("msg").unwrap_or("")),
+		"task" => Msg::task(opts.value_of("msg").unwrap_or("")),
 		"warning" => Msg::warning(opts.value_of("msg").unwrap_or("")),
 		_ => match opts.value_of("prefix") {
 			Some(p) => Msg::new(
