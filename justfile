@@ -19,7 +19,7 @@ cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
 pgo_dir     := "/tmp/pgo-data"
 release_dir := justfile_directory() + "/release"
 
-rustflags   := "-C llvm-args=--vectorize-slp -Ctarget-features=+sse3,+avx -Clinker-plugin-lto -Clinker=clang-9 -Clink-args=-fuse-ld=lld-9 -C link-arg=-s"
+rustflags   := "-Clinker-plugin-lto -Clinker=clang-9 -Clink-args=-fuse-ld=lld-9 -C link-arg=-s"
 
 
 
