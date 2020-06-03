@@ -222,19 +222,19 @@ impl Default for ProgressInner {
 }
 
 impl ProgressInner {
-	const IDX_TITLE: usize = 0;
-	const IDX_ELAPSED_PRE: usize = 1;
-	const IDX_ELAPSED: usize = 2;
-	// const IDX_ELAPSED_POST: usize = 3;
-	const IDX_BAR: usize = 4;
-	// const IDX_DONE_PRE: usize = 5;
-	const IDX_DONE: usize = 6;
-	// const IDX_DONE_POST: usize = 7;
-	const IDX_TOTAL: usize = 8;
-	// const IDX_TOTAL_POST: usize = 9;
-	const IDX_PERCENT: usize = 10;
-	const IDX_PERCENT_POST: usize = 11;
-	const IDX_TASKS: usize = 12;
+	const IDX_TITLE: usize = 1;
+	const IDX_ELAPSED_PRE: usize = 2;
+	const IDX_ELAPSED: usize = 3;
+	// const IDX_ELAPSED_POST: usize = 4;
+	const IDX_BAR: usize = 5;
+	// const IDX_DONE_PRE: usize = 6;
+	const IDX_DONE: usize = 7;
+	// const IDX_DONE_POST: usize = 8;
+	const IDX_TOTAL: usize = 9;
+	// const IDX_TOTAL_POST: usize = 10;
+	const IDX_PERCENT: usize = 11;
+	const IDX_PERCENT_POST: usize = 12;
+	const IDX_TASKS: usize = 13;
 
 
 
@@ -495,7 +495,7 @@ impl ProgressInner {
 		self.print_title(&mut handle, width);
 
 		// Go ahead and write the progress bits. We've already sized those.
-		handle.write_all(self.buf.get_parts(
+		handle.write_all(self.buf.spread(
 			Self::IDX_ELAPSED_PRE,
 			Self::IDX_PERCENT_POST,
 		)).unwrap();
@@ -601,10 +601,10 @@ impl ProgressInner {
 		// 2: the spaces after the bar itself (should there be one);
 		let total: usize = usize::min(255, width.saturating_sub(
 			11 +
-			self.buf.get_part_len(Self::IDX_ELAPSED) +
-			self.buf.get_part_len(Self::IDX_DONE) +
-			self.buf.get_part_len(Self::IDX_TOTAL) +
-			self.buf.get_part_len(Self::IDX_PERCENT)
+			self.buf.part_len(Self::IDX_ELAPSED) +
+			self.buf.part_len(Self::IDX_DONE) +
+			self.buf.part_len(Self::IDX_TOTAL) +
+			self.buf.part_len(Self::IDX_PERCENT)
 		));
 
 		if total >= 10 { total }
@@ -631,7 +631,7 @@ impl ProgressInner {
 	fn print_tasks<W: io::Write>(&mut self, writer: &mut W, width: usize) {
 		// Tasks are the worst. Haha.
 		if ! self.tasks.is_empty() {
-			let tasks: &[u8] = self.buf.get_part(Self::IDX_TASKS);
+			let tasks: &[u8] = self.buf.part(Self::IDX_TASKS);
 			let max_idx: usize = tasks.len();
 			let mut last_idx: usize = 0;
 
@@ -681,7 +681,7 @@ impl ProgressInner {
 	/// Split up the code a little.
 	fn print_title<W: io::Write>(&mut self, writer: &mut W, width: usize) {
 		// If there is a title, we might have to crunch it.
-		let title: &[u8] = self.buf.get_part(Self::IDX_TITLE);
+		let title: &[u8] = self.buf.part(Self::IDX_TITLE);
 		if ! title.is_empty() {
 			let line_len: usize = title.len();
 			// It fits just fine.
@@ -740,13 +740,13 @@ impl ProgressInner {
 	fn redraw_elapsed(&mut self) {
 		if self.last_secs < 86400 {
 			let c = secs_chunks(self.last_secs);
-			let buf = self.buf.get_part_mut(Self::IDX_ELAPSED);
+			let buf = self.buf.part_mut(Self::IDX_ELAPSED);
 			buf[..2].copy_from_slice(time_format_dd(c[0]));
 			buf[3..5].copy_from_slice(time_format_dd(c[1]));
 			buf[6..].copy_from_slice(time_format_dd(c[2]));
 		}
 		else {
-			self.buf.get_part_mut(Self::IDX_ELAPSED)
+			self.buf.part_mut(Self::IDX_ELAPSED)
 				.copy_from_slice(&[50, 51, 58, 53, 57, 58, 53, 57]);
 		}
 	}

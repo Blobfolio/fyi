@@ -27,7 +27,9 @@
 
 mod msg;
 mod msgbuf;
+mod partitions;
 pub mod utility;
 
 pub use msg::Msg;
 pub use msgbuf::MsgBuf;
+pub use partitions::Partitions;

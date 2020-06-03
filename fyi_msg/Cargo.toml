@@ -9,7 +9,6 @@ publish = false
 [dependencies]
 bytes = "0.5.*"
 chrono = "0.4.*"
-smallvec = "1.4.*"
 
 [dev-dependencies]
 criterion = "*"
@@ -20,6 +19,10 @@ harness = false
 
 [[bench]]
 name = "fm_msgbuf"
+harness = false
+
+[[bench]]
+name = "fm_partitions"
 harness = false
 
 [[bench]]

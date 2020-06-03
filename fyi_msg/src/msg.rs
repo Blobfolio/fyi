@@ -41,9 +41,11 @@ macro_rules! new_prefix {
 		#[must_use]
 		/// New Prefix + Msg
 		pub fn $fn<T: Borrow<str>> (msg: T) -> Self {
-			let msg = msg.borrow();
-			if msg.is_empty() { Self::new_prefix_unchecked($pre, $prefix) }
-			else { Self::new_prefix_msg_unchecked($pre, $prefix, msg.as_bytes()) }
+			unsafe {
+				let msg = msg.borrow();
+				if msg.is_empty() { Self::new_prefix_unchecked($pre, $prefix) }
+				else { Self::new_prefix_msg_unchecked($pre, $prefix, msg.as_bytes()) }
+			}
 		}
 	};
 }
@@ -66,36 +68,36 @@ impl AsRef<str> for Msg {
 	#[inline]
 	/// As Str.
 	fn as_ref(&self) -> &str {
-		unsafe { std::str::from_utf8_unchecked(self) }
+		unsafe { std::str::from_utf8_unchecked(&*self.0) }
 	}
 }
 
 impl AsRef<[u8]> for Msg {
 	#[inline]
-	/// As Str.
+	/// As Bytes.
 	fn as_ref(&self) -> &[u8] {
-		self
+		&*self.0
 	}
 }
 
 impl Borrow<str> for Msg {
 	#[inline]
 	fn borrow(&self) -> &str {
-		unsafe { std::str::from_utf8_unchecked(self) }
+		unsafe { std::str::from_utf8_unchecked(&*self.0) }
 	}
 }
 
 impl Borrow<[u8]> for Msg {
 	#[inline]
 	fn borrow(&self) -> &[u8] {
-		self
+		&*self.0
 	}
 }
 
 impl Default for Msg {
 	/// Default.
 	fn default() -> Self {
-		Self(MsgBuf::with_parts(10))
+		Self(MsgBuf::splat(10))
 	}
 }
 
@@ -122,16 +124,16 @@ impl fmt::Display for Msg {
 
 impl Msg {
 	/// The Message Partition!
-	const IDX_INDENT: usize = 0;
-	const IDX_TIMESTAMP_PRE: usize = 1;  // ANSI.
-	const IDX_TIMESTAMP: usize = 2;
-	const IDX_TIMESTAMP_POST: usize = 3; // ANSI.
-	const IDX_PREFIX_PRE: usize = 4;     // ANSI.
-	const IDX_PREFIX: usize = 5;
-	const IDX_PREFIX_POST: usize = 6;    // ANSI.
-	const IDX_MSG_PRE: usize = 7;        // ANSI.
-	const IDX_MSG: usize = 8;
-	const IDX_MSG_POST: usize = 9;       // ANSI.
+	const IDX_INDENT: usize = 1;
+	const IDX_TIMESTAMP_PRE: usize = 2;  // ANSI.
+	const IDX_TIMESTAMP: usize = 3;
+	const IDX_TIMESTAMP_POST: usize = 4; // ANSI.
+	const IDX_PREFIX_PRE: usize = 5;     // ANSI.
+	const IDX_PREFIX: usize = 6;
+	const IDX_PREFIX_POST: usize = 7;    // ANSI.
+	const IDX_MSG_PRE: usize = 8;        // ANSI.
+	const IDX_MSG: usize = 9;
+	const IDX_MSG_POST: usize = 10;      // ANSI.
 
 
 
@@ -152,18 +154,22 @@ impl Msg {
 			// Neither.
 			(true, true) => Self::default(),
 			// Both.
-			(false, false) => Self::new_prefix_msg_unchecked(
-				ansi_code_bold(prefix_color),
-				prefix.as_bytes(),
-				msg.as_bytes()
-			),
+			(false, false) => unsafe {
+				Self::new_prefix_msg_unchecked(
+					ansi_code_bold(prefix_color),
+					prefix.as_bytes(),
+					msg.as_bytes()
+				)
+			},
 			// Message only.
-			(true, false) => Self::new_msg_unchecked(msg.as_bytes()),
+			(true, false) => unsafe { Self::new_msg_unchecked(msg.as_bytes()) },
 			// Prefix only.
-			(false, true) => Self::new_prefix_unchecked(
-				ansi_code_bold(prefix_color),
-				prefix.as_bytes()
-			),
+			(false, true) => unsafe {
+				Self::new_prefix_unchecked(
+					ansi_code_bold(prefix_color),
+					prefix.as_bytes()
+				)
+			},
 		}
 	}
 
@@ -175,9 +181,8 @@ impl Msg {
 
 	#[must_use]
 	/// New Prefix + Msg (Unchecked)
-	///
-	fn new_prefix_msg_unchecked(prefix_pre: &[u8], prefix: &[u8], msg: &[u8]) -> Self {
-		Self(MsgBuf::from_many(&[
+	unsafe fn new_prefix_msg_unchecked(prefix_pre: &[u8], prefix: &[u8], msg: &[u8]) -> Self {
+		Self(MsgBuf::from_many_unchecked(&[
 			// Indentation and timestamp.
 			&[], &[], &[], &[],
 			prefix_pre,
@@ -191,9 +196,8 @@ impl Msg {
 
 	#[must_use]
 	/// New Prefix (Unchecked)
-	///
-	fn new_prefix_unchecked(prefix_pre: &[u8], prefix: &[u8]) -> Self {
-		Self(MsgBuf::from_many(&[
+	unsafe fn new_prefix_unchecked(prefix_pre: &[u8], prefix: &[u8]) -> Self {
+		Self(MsgBuf::from_many_unchecked(&[
 			// Indentation and timestamp.
 			&[], &[], &[], &[],
 			prefix_pre,
@@ -206,9 +210,8 @@ impl Msg {
 
 	#[must_use]
 	/// New Message (Unchecked)
-	///
-	fn new_msg_unchecked(msg: &[u8]) -> Self {
-		Self(MsgBuf::from_many(&[
+	unsafe fn new_msg_unchecked(msg: &[u8]) -> Self {
+		Self(MsgBuf::from_many_unchecked(&[
 			// Indentation and timestamp.
 			&[], &[], &[], &[],
 			// Prefix.
@@ -228,93 +231,101 @@ impl Msg {
 	/// Indent.
 	pub fn set_indent(&mut self, indent: usize) {
 		let len: usize = usize::min(10, indent) * 4;
-		if self.0.get_part_len(Self::IDX_INDENT) != len {
-			// Clear it.
-			if 0 == len { self.0.clear_part(Self::IDX_INDENT); }
-			else {
-				self.0.replace_part(Self::IDX_INDENT, whitespace(len));
+		unsafe {
+			if self.0.part_len_unchecked(Self::IDX_INDENT) != len {
+				// Clear it.
+				if 0 == len { self.0.clear_part_unchecked(Self::IDX_INDENT); }
+				else {
+					self.0.replace_part_unchecked(Self::IDX_INDENT, whitespace(len));
+				}
 			}
 		}
 	}
 
 	/// Set Message.
 	pub fn set_msg<T: Borrow<str>>(&mut self, msg: T) {
-		let msg = msg.borrow();
+		unsafe {
+			let msg = msg.borrow();
 
-		// Remove the message.
-		if msg.is_empty() {
-			if ! self.0.part_is_empty(Self::IDX_MSG_PRE) {
-				self.0.clear_part(Self::IDX_MSG_PRE);
-				self.0.clear_part(Self::IDX_MSG);
-				self.0.clear_part(Self::IDX_MSG_POST);
+			// Remove the message.
+			if msg.is_empty() {
+				if ! self.0.part_is_empty_unchecked(Self::IDX_MSG_PRE) {
+					self.0.clear_part_unchecked(Self::IDX_MSG_PRE);
+					self.0.clear_part_unchecked(Self::IDX_MSG);
+					self.0.clear_part_unchecked(Self::IDX_MSG_POST);
+				}
+
+				// We might need to change the end of the prefix too.
+				if ! self.0.part_is_empty_unchecked(Self::IDX_PREFIX_POST) {
+					self.0.replace_part_unchecked(Self::IDX_PREFIX_POST, LBL_RESET);
+				}
 			}
+			// Add or change it.
+			else {
+				// The opening and closing needs to be taken care of.
+				if self.0.part_is_empty_unchecked(Self::IDX_MSG_PRE) {
+					self.0.replace_part_unchecked(Self::IDX_MSG_PRE, LBL_MSG_PRE);
+					self.0.replace_part_unchecked(Self::IDX_MSG_POST, LBL_RESET);
+				}
 
-			// We might need to change the end of the prefix too.
-			if ! self.0.part_is_empty(Self::IDX_PREFIX_POST) {
-				self.0.replace_part(Self::IDX_PREFIX_POST, LBL_RESET);
-			}
-		}
-		// Add or change it.
-		else {
-			// The opening and closing needs to be taken care of.
-			if self.0.part_is_empty(Self::IDX_MSG_PRE) {
-				self.0.extend_part(Self::IDX_MSG_PRE, LBL_MSG_PRE);
-				self.0.extend_part(Self::IDX_MSG_POST, LBL_RESET);
-			}
+				self.0.replace_part_unchecked(Self::IDX_MSG, msg.as_bytes());
 
-			self.0.replace_part(Self::IDX_MSG, msg.as_bytes());
-
-			// We might need to change the end of the prefix too.
-			if ! self.0.part_is_empty(Self::IDX_PREFIX_POST) {
-				self.0.replace_part(Self::IDX_PREFIX_POST, LBL_PREFIX_POST);
+				// We might need to change the end of the prefix too.
+				if ! self.0.part_is_empty_unchecked(Self::IDX_PREFIX_POST) {
+					self.0.replace_part_unchecked(Self::IDX_PREFIX_POST, LBL_PREFIX_POST);
+				}
 			}
 		}
 	}
 
 	/// Set Prefix.
 	pub fn set_prefix<T: Borrow<str>>(&mut self, prefix: T, prefix_color: u8) {
-		let prefix = prefix.borrow();
+		unsafe {
+			let prefix = prefix.borrow();
 
-		// Remove the prefix.
-		if prefix.is_empty() {
-			if ! self.0.part_is_empty(Self::IDX_PREFIX_PRE) {
-				self.0.clear_part(Self::IDX_PREFIX_PRE);
-				self.0.clear_part(Self::IDX_PREFIX);
-				self.0.clear_part(Self::IDX_PREFIX_POST);
+			// Remove the prefix.
+			if prefix.is_empty() {
+				if ! self.0.part_is_empty_unchecked(Self::IDX_PREFIX_PRE) {
+					self.0.clear_part_unchecked(Self::IDX_PREFIX_PRE);
+					self.0.clear_part_unchecked(Self::IDX_PREFIX);
+					self.0.clear_part_unchecked(Self::IDX_PREFIX_POST);
+				}
 			}
-		}
-		// Add or change it.
-		else {
-			self.0.replace_part(Self::IDX_PREFIX_PRE, ansi_code_bold(prefix_color));
-			self.0.replace_part(Self::IDX_PREFIX, prefix.as_bytes());
-			if self.0.part_is_empty(Self::IDX_MSG_PRE) {
-				self.0.replace_part(Self::IDX_PREFIX_POST, LBL_RESET);
-			}
+			// Add or change it.
 			else {
-				self.0.replace_part(Self::IDX_PREFIX_POST, LBL_PREFIX_POST);
+				self.0.replace_part_unchecked(Self::IDX_PREFIX_PRE, ansi_code_bold(prefix_color));
+				self.0.replace_part_unchecked(Self::IDX_PREFIX, prefix.as_bytes());
+				if self.0.part_is_empty_unchecked(Self::IDX_MSG_PRE) {
+					self.0.replace_part_unchecked(Self::IDX_PREFIX_POST, LBL_RESET);
+				}
+				else {
+					self.0.replace_part_unchecked(Self::IDX_PREFIX_POST, LBL_PREFIX_POST);
+				}
 			}
 		}
 	}
 
 	/// Timestamp.
 	pub fn set_timestamp(&mut self, clear: bool) {
-		// Remove the timestamp, if any.
-		if clear {
-			if ! self.0.part_is_empty(Self::IDX_TIMESTAMP_PRE) {
-				self.0.clear_part(Self::IDX_TIMESTAMP_PRE);
-				self.0.clear_part(Self::IDX_TIMESTAMP);
-				self.0.clear_part(Self::IDX_TIMESTAMP_POST);
+		unsafe {
+			// Remove the timestamp, if any.
+			if clear {
+				if ! self.0.part_is_empty_unchecked(Self::IDX_TIMESTAMP_PRE) {
+					self.0.clear_part_unchecked(Self::IDX_TIMESTAMP_PRE);
+					self.0.clear_part_unchecked(Self::IDX_TIMESTAMP);
+					self.0.clear_part_unchecked(Self::IDX_TIMESTAMP_POST);
+				}
 			}
-		}
-		else {
-			// The pre and post need to be populated too.
-			if self.0.part_is_empty(Self::IDX_TIMESTAMP_PRE) {
-				self.0.extend_part(Self::IDX_TIMESTAMP_PRE, LBL_TIMESTAMP_PRE);
-				self.0.extend_part(Self::IDX_TIMESTAMP_POST, LBL_TIMESTAMP_POST);
-			}
+			else {
+				// The pre and post need to be populated too.
+				if self.0.part_is_empty_unchecked(Self::IDX_TIMESTAMP_PRE) {
+					self.0.replace_part_unchecked(Self::IDX_TIMESTAMP_PRE, LBL_TIMESTAMP_PRE);
+					self.0.replace_part_unchecked(Self::IDX_TIMESTAMP_POST, LBL_TIMESTAMP_POST);
+				}
 
-			// And of course, the timestamp.
-			self.write_timestamp();
+				// And of course, the timestamp.
+				self.write_timestamp();
+			}
 		}
 	}
 

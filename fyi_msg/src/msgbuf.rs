@@ -6,7 +6,7 @@ partition table to logically slices within the buffer.
 */
 
 use bytes::BytesMut;
-use smallvec::SmallVec;
+use crate::Partitions;
 use std::{
 	borrow::Borrow,
 	fmt,
@@ -21,7 +21,7 @@ use std::{
 /// This handles the actual data.
 pub struct MsgBuf {
 	buf: BytesMut,
-	parts: SmallVec<[(usize, usize); 16]>,
+	parts: Partitions,
 }
 
 impl Borrow<[u8]> for MsgBuf {
@@ -36,7 +36,7 @@ impl Default for MsgBuf {
 	fn default() -> Self {
 		Self {
 			buf: BytesMut::with_capacity(1024),
-			parts: SmallVec::<[(usize, usize); 16]>::new(),
+			parts: Partitions::default(),
 		}
 	}
 }
@@ -60,484 +60,420 @@ impl fmt::Display for MsgBuf {
 
 impl MsgBuf {
 	// ------------------------------------------------------------------------
-	// Static Methods
+	// Instantiation
 	// ------------------------------------------------------------------------
 
 	#[must_use]
-	/// New Buffer With Partitioning.
+	/// New
 	///
-	/// Like `from()`, except you can supply a partitioning scheme to apply to
-	/// the stream.
-	pub fn new(buf: &[u8], parts: &[(usize, usize)]) -> Self {
-		let mut out = Self::default();
-
-		if ! buf.is_empty() {
-			out.buf.extend_from_slice(buf);
+	/// Create a new `MsgBuf` from a single buffer with pre-calculated
+	/// partition sizes. If the chunk total is lower than the buffer's length,
+	/// an additional chunk will be created to fill the gap.
+	///
+	/// Panics if more than 15 parts are constructed or the chunks add up to
+	/// more than the buffer's length.
+	pub fn new(buf: &[u8], parts: &[usize]) -> Self {
+		assert!(
+			Partitions::MAX_USED >= parts.len(),
+			"MsgBufs may not have more than {} parts.",
+			Partitions::MAX_USED
+		);
+		Self {
+			buf: BytesMut::from(buf),
+			parts: Partitions::new_bounded(parts, buf.len()),
 		}
-		unsafe { out.partition(parts); }
-
-		out
 	}
 
 	#[must_use]
-	/// New Buffer From Slice.
+	/// From
 	///
-	/// Create a new buffer from the slice with a single partition.
-	///
-	/// For an unpartitioned, empty buffer, use `MsgBuf::default()`.
+	/// Create a new `MsgBuf` from a single buffer with a single partition.
 	pub fn from(buf: &[u8]) -> Self {
 		Self {
 			buf: BytesMut::from(buf),
-			parts: SmallVec::from_slice(&[(0, buf.len())]),
+			parts: Partitions::one(buf.len()),
 		}
 	}
 
 	#[must_use]
-	/// New Buffer From Slices.
+	/// From Many
 	///
-	/// Build a new buffer from an array of slices, assigning partitioning
-	/// around each part.
+	/// Create a new `MsgBuf` from multiple buffers, storing each in its own
+	/// partitioning table.
 	///
-	/// Panics if `bufs` is empty. (The parts within `bufs` can, however, be
-	/// empty).
+	/// Panics if more than `15` parts are needed.
 	pub fn from_many(bufs: &[&[u8]]) -> Self {
-		assert!(! bufs.is_empty());
+		assert!(
+			Partitions::MAX_USED >= bufs.len(),
+			"MsgBufs may not have more than {} parts.",
+			Partitions::MAX_USED
+		);
+		unsafe { Self::from_many_unchecked(bufs) }
+	}
 
+	#[must_use]
+	/// From Many (Unchecked)
+	///
+	/// Same as `from_many()` but without the length assertion.
+	///
+	/// # Safety
+	///
+	/// This method does not check index sanity.
+	pub unsafe fn from_many_unchecked(bufs: &[&[u8]]) -> Self {
 		let mut out = Self::default();
-		let mut start: usize = 0;
+
 		bufs.iter().for_each(|b| {
-			let end: usize = start + b.len();
-			if end != start {
-				out.buf.extend_from_slice(b);
-			}
-			out.parts.push((start, end));
-			start = end;
+			out.buf.extend_from_slice(b);
+			out.parts.add_part_unchecked(b.len());
 		});
 
 		out
 	}
 
 	#[must_use]
-	/// Empty With Parts
+	/// Splat
 	///
-	/// This creates an empty buffer, but with X number of empty parts that can
-	/// later be written to.
-	pub fn with_parts(num: usize) -> Self {
+	/// Create a new `MsgBuf` with `num` empty parts.
+	///
+	/// Panics if there are more than `15` parts.
+	pub fn splat(num: usize) -> Self {
 		Self {
 			buf: BytesMut::with_capacity(1024),
-			parts: SmallVec::from_elem((0, 0), usize::max(1, num)),
+			parts: Partitions::splat(num),
 		}
 	}
 
 
 
 	// ------------------------------------------------------------------------
-	// Working on the Total
+	// Working on the Whole
 	// ------------------------------------------------------------------------
 
-	/// Clear.
+	/// Clear
 	///
-	/// Clear both the buffer and partitioning table. This restores the
-	/// instance to the equivalent of `default()`, but does not re-allocate.
+	/// Clear the buffer and partitioning table, restoring the instance to the
+	/// equivalent of `default()` (save for any allocations that already
+	/// happened).
+	///
+	/// See also `zero()`, which leaves behind one zero-length partition.
 	pub fn clear(&mut self) {
-		self.buf.truncate(0);
+		self.buf.clear();
 		self.parts.clear();
 	}
 
-	#[allow(clippy::comparison_chain)]
-	/// Replace the Buffer and Repartition.
+	/// Flatten
 	///
-	/// Replace the buffer and partitioning table on the instance to e.g. open
-	/// it up to a second life and higher purpose.
-	///
-	/// If the new buffer is empty, a single zero-length partition will be
-	/// created. To fully reset the instance, use `clear()` instead.
-	pub fn replace(&mut self, buf: &[u8], parts: &[(usize, usize)]) {
-		// If the new part is empty, clear the whole buffer.
-		if buf.is_empty() {
-			self.buf.truncate(0);
-		}
-		// If the old part was empty, push the whole thing.
-		else if self.buf.is_empty() {
-			self.buf.extend_from_slice(buf);
-		}
-		// We have to do a little more figuring.
-		else {
-			let old_len: usize = self.buf.len();
-			let new_len: usize = buf.len();
-
-			// The new buffer is bigger.
-			if new_len > old_len {
-				self.buf.resize(new_len, 0);
-			}
-			// The new buffer is smaller.
-			else if old_len > new_len {
-				self.buf.truncate(new_len);
-			}
-
-			// Now that everything's the same size, copy!
-			self.buf.copy_from_slice(buf);
-		}
-
-		// Handle the partitioning and we're done!
-		self.repartition(parts);
-	}
-
-
-
-	// ------------------------------------------------------------------------
-	// Partitioning
-	// ------------------------------------------------------------------------
-
-	/// Add (Empty) Partition
-	///
-	/// Add an empty partition to the end of the table.
-	pub fn add_partition(&mut self) {
-		let from: usize = self.buf.len();
-		self.parts.push((from, from));
+	/// Keep the buffer, but drop to a single, spanning partition.
+	pub fn flatten(&mut self) {
+		self.parts.flatten();
 	}
 
 	#[must_use]
-	/// Partitions count.
+	/// Buffer Is Empty.
+	pub fn is_empty(&self) -> bool {
+		self.buf.is_empty()
+	}
+
+	#[must_use]
+	/// Buffer length.
+	pub fn len(&self) -> usize {
+		self.buf.len()
+	}
+
+	/// Zero
 	///
-	/// Return the number of partitions. Empty buffers can return values other
-	/// than zero if they've been partitioned, however an unpartitioned buffer
-	/// will always return `0`.
-	pub fn count_partitions(&self) -> usize {
+	/// Clear the buffer, but keep one empty partition.
+	pub fn zero(&mut self) {
+		self.buf.clear();
+		self.parts.zero();
+	}
+
+
+
+	// ------------------------------------------------------------------------
+	// Fetching Parts
+	// ------------------------------------------------------------------------
+
+	#[must_use]
+	/// Number of Parts.
+	pub const fn parts_len(&self) -> usize {
 		self.parts.len()
 	}
 
-	/// Flatten Partitions.
+	#[must_use]
+	/// Part.
 	///
-	/// Replace the partitioning table with a single `0..len()` partition.
+	/// Return the portion of the buffer corresponding to the part.
 	///
-	/// If the buffer is unpartitioned, a partition will be added.
-	pub fn flatten_partitions(&mut self) {
-		if self.is_partitioned() {
-			// Reduce to one part if we're over that.
-			if self.parts.len() > 1 {
-				self.parts.truncate(1);
-			}
-
-			// Replace the part.
-			self.parts[0].1 = self.buf.len();
-		}
-		else {
-			self.parts.push((0, 0));
-		}
+	/// Panics if `idx` is out of range.
+	pub fn part(&self, idx: usize) -> &[u8] {
+		&self.buf[self.parts.part(idx)]
 	}
 
 	#[must_use]
-	/// Get Paritition
+	/// Part (Unchecked).
 	///
-	/// Return the start and end positions of the partition.
+	/// # Safety
 	///
-	/// Panics if `idx` is out of bounds.
-	pub fn get_partition(&self, idx: usize) -> (usize, usize) {
-		self.parts[idx]
+	/// This method does not check index sanity.
+	pub unsafe fn part_unchecked(&self, idx: usize) -> &[u8] {
+		&self.buf[self.parts.part_unchecked(idx)]
 	}
 
 	#[must_use]
-	/// Get Paritition
+	/// Part Mut.
 	///
-	/// Return the start position of `idx1` and the end position of `idx2`.
+	/// Mutably return the portion of the buffer corresponding to the part.
 	///
-	/// Panics if `idx1` or `idx2` are out of bounds or out of order.
-	pub fn get_partitions(&self, idx1: usize, idx2: usize) -> (usize, usize) {
-		(self.parts[idx1].0, self.parts[idx2].1)
-	}
-
-	/// Insert (Empty) Partition
-	///
-	/// Insert an empty partition at the specified index.
-	///
-	/// Panics if `idx` is out of bounds (and non-zero).
-	pub fn insert_partition(&mut self, idx: usize) {
-		if self.parts.is_empty() {
-			self.parts.push((0, 0));
-		}
-		else {
-			self.parts.insert_from_slice(idx, &[(self.parts[idx].0, self.parts[idx].0)]);
-		}
+	/// Panics if `idx` is out of range.
+	pub fn part_mut(&mut self, idx: usize) -> &mut [u8] {
+		&mut self.buf[self.parts.part(idx)]
 	}
 
 	#[must_use]
-	/// Is Partitioned?
+	/// Part Mut (Unchecked).
 	///
-	/// This is only `true` after calling `default()` or `clear()`, otherwise
-	/// even empty buffers will generally have a zero-length partition.
-	pub fn is_partitioned(&self) -> bool {
-		! self.parts.is_empty()
+	/// # Safety
+	///
+	/// This method does not check index sanity.
+	pub unsafe fn part_mut_unchecked(&mut self, idx: usize) -> &mut [u8] {
+		&mut self.buf[self.parts.part_unchecked(idx)]
 	}
 
-	/// Repartition
+	#[must_use]
+	/// Spread.
 	///
-	/// Replace the current partition table with the the provided ranges.
+	/// Return the contiguous spread of two parts.
 	///
-	/// Ranges must run contiguously from `0..len()`. If the provided ranges
-	/// have gaps, additional parts will be inserted and sized to fit. Ranges
-	/// must not overlap unless they are zero-length and begin where the
-	/// previous range ends.
+	/// Panics if `idx1` or `idx2` are out of range.
+	pub fn spread(&self, idx1: usize, idx2: usize) -> &[u8] {
+		&self.buf[self.parts.spread(idx1, idx2)]
+	}
+
+	#[must_use]
+	/// Spread Unchecked.
 	///
-	/// This method panics if any value is out of bounds or out of order.
-	pub fn repartition(&mut self, parts: &[(usize, usize)]) {
-		// Remove the old table.
-		self.parts.clear();
-		// Push the new one.
-		unsafe { self.partition(parts); }
+	/// # Safety
+	///
+	/// This method does not check index sanity.
+	pub unsafe fn spread_unchecked(&self, idx1: usize, idx2: usize) -> &[u8] {
+		&self.buf[self.parts.spread_unchecked(idx1, idx2)]
+	}
+
+	#[must_use]
+	/// Spread Mut.
+	///
+	/// Return the contiguous spread of two parts.
+	///
+	/// Panics if `idx1` or `idx2` are out of range.
+	pub fn spread_mut(&mut self, idx1: usize, idx2: usize) -> &mut [u8] {
+		&mut self.buf[self.parts.spread(idx1, idx2)]
+	}
+
+	#[must_use]
+	/// Spread Mut Unchecked.
+	///
+	/// # Safety
+	///
+	/// This method does not check index sanity.
+	pub unsafe fn spread_mut_unchecked(&mut self, idx1: usize, idx2: usize) -> &mut [u8] {
+		&mut self.buf[self.parts.spread_unchecked(idx1, idx2)]
+	}
+
+	#[must_use]
+	/// Is Part Empty
+	///
+	/// Panics if `idx` is out of range.
+	pub fn part_is_empty(&self, idx: usize) -> bool {
+		self.parts.part_is_empty(idx)
+	}
+
+	#[must_use]
+	/// Is Part Empty (Unchecked)
+	///
+	/// # Safety
+	///
+	/// This method does not check index sanity.
+	pub const unsafe fn part_is_empty_unchecked(&self, idx: usize) -> bool {
+		self.parts.part_is_empty_unchecked(idx)
+	}
+
+	#[must_use]
+	/// Get Part Length
+	///
+	/// Panics if `idx` is out of range.
+	pub fn part_len(&self, idx: usize) -> usize {
+		self.parts.part_len(idx)
+	}
+
+	#[must_use]
+	/// Get Part Length (Unchecked)
+	///
+	/// # Safety
+	///
+	/// This method does not check index sanity.
+	pub const unsafe fn part_len_unchecked(&self, idx: usize) -> usize {
+		self.parts.part_len_unchecked(idx)
 	}
 
 
 
 	// ------------------------------------------------------------------------
-	// Parts
+	// Adding/Removing Parts
 	// ------------------------------------------------------------------------
 
-	/// Add Part.
+	/// Add Part
 	///
-	/// Extend the buffer with a slice, creating a new partition around it. The
-	/// resulting partition's index is returned.
-	///
-	/// If the buffer is empty, an empty partition is added.
-	pub fn add_part(&mut self, buf: &[u8]) -> usize {
-		let start: usize = self.buf.len();
-		let end: usize = start + buf.len();
-		if start < end {
+	/// Panics if the partition table is full.
+	pub fn add_part(&mut self, buf: &[u8]) {
+		let len: usize = buf.len();
+		if 0 != len {
 			self.buf.extend_from_slice(buf);
 		}
-		self.parts.push((start, end));
-		self.parts.len() - 1
+		self.parts.add_part(len);
 	}
 
-	/// Add Parts.
+	/// Insert Part
 	///
-	/// This is an optimized version of `add_part()` for adding multiple parts
-	/// in one go. The behavior is identical to calling `add_part()` separately
-	/// for each part, so see that method's documentation for more details.
-	///
-	/// The last inserted partition index is returned.
-	///
-	/// Panics if `bufs` is empty (though it may contain empty values).
-	pub fn add_parts(&mut self, bufs: &[&[u8]]) -> usize {
-		let mut start: usize = self.buf.len();
-		bufs.iter().for_each(|b| {
-			let end: usize = start + b.len();
-			if end != start {
-				self.buf.extend_from_slice(b);
-			}
-			self.parts.push((start, end));
-			start = end;
-		});
-
-		self.parts.len() - 1
-	}
-
-	/// Clear Part.
-	///
-	/// Remove the part from the buffer and shrink the partition to zero.
-	///
-	/// Panics if `idx` is out of bounds.
-	pub fn clear_part(&mut self, idx: usize) {
-		if ! self.part_is_empty(idx) {
-			self.resize_clear_part(idx);
-		}
-	}
-
-	/// Extend Part.
-	///
-	/// Add data to an existing part, expanding the partition as needed.
-	///
-	/// Panics if `idx` is out of bounds.
-	pub fn extend_part(&mut self, idx: usize, buf: &[u8]) {
-		if ! buf.is_empty() {
-			// The last part is special.
-			if idx == self.parts.len() - 1 {
-				self.buf.extend_from_slice(buf);
-				self.parts[idx].1 += buf.len();
-			}
-			else {
-				let adj: usize = buf.len();
-
-				// Split at the part's end.
-				let b = self.buf.split_off(self.parts[idx].1);
-
-				// Append the new bit.
-				self.buf.extend_from_slice(buf);
-
-				// Glue it back together.
-				self.buf.unsplit(b);
-
-				// Shift the indexes.
-				self.parts[idx].1 += adj;
-				self.shift_partitions_right(idx + 1, adj);
-			}
-		}
-	}
-
-	#[must_use]
-	/// Get Part.
-	///
-	/// Return the buffer slice corresponding to the partition.
-	///
-	/// Panics if `idx` is out of bounds.
-	pub fn get_part(&self, idx: usize) -> &[u8] {
-		self.get_slice(self.parts[idx].0, self.parts[idx].1)
-	}
-
-	#[must_use]
-	/// Get Part (Mut).
-	///
-	/// Return the buffer slice corresponding to the partition.
-	///
-	/// Panics if `idx` is out of bounds.
-	pub fn get_part_mut(&mut self, idx: usize) -> &mut [u8] {
-		self.get_slice_mut(self.parts[idx].0, self.parts[idx].1)
-	}
-
-	#[must_use]
-	/// Get Part.
-	///
-	/// If you want all parts, use `parts()` instead. This returns the slice
-	/// of the buffer beginning with part `idx1` and ending with part `idx2`.
-	///
-	/// Panics if `idx1` or `idx2` are out of bounds or out of order.
-	pub fn get_parts(&self, idx1: usize, idx2: usize) -> &[u8] {
-		self.get_slice(self.parts[idx1].0, self.parts[idx2].1)
-	}
-
-	#[must_use]
-	/// Get Part.
-	///
-	/// If you want all parts, use `parts()` instead. This returns the slice
-	/// of the buffer beginning with part `idx1` and ending with part `idx2`.
-	///
-	/// Panics if `idx1` or `idx2` are out of bounds or out of order.
-	pub fn get_parts_mut(&mut self, idx1: usize, idx2: usize) -> &mut [u8] {
-		self.get_slice_mut(self.parts[idx1].0, self.parts[idx2].1)
-	}
-
-	#[must_use]
-	/// Get Part Length.
-	///
-	/// Return the byte length of the partition.
-	///
-	/// Panics if `idx` is out of bounds.
-	pub fn get_part_len(&self, idx: usize) -> usize {
-		self.parts[idx].1 - self.parts[idx].0
-	}
-
-	#[must_use]
-	/// Get Range.
-	///
-	/// Return an arbitrary buffer slice. Equivalent to `buf[start..end]`.
-	///
-	/// Panics if `start` or `end` are out of bounds.
-	pub fn get_slice(&self, start: usize, end: usize) -> &[u8] {
-		&self.buf[start..end]
-	}
-
-	#[must_use]
-	/// Get Range.
-	///
-	/// Return an arbitrary buffer slice. Equivalent to `buf[start..end]`.
-	///
-	/// Panics if `start` or `end` are out of bounds.
-	pub fn get_slice_mut(&mut self, start: usize, end: usize) -> &mut [u8] {
-		&mut self.buf[start..end]
-	}
-
-	/// Insert Part.
-	///
-	/// Insert a part into the partition table (and the data into the
-	/// corresponding part of the buffer), shifting all subsequent partitions
-	/// to the right.
-	///
-	/// To insert a part into an *unpartitioned* table, you must use
-	/// `add_part()`.
-	///
-	/// If you just wish to insert a partition (no data), use
-	/// `insert_partition()` instead.
-	///
-	/// Panics if `idx` is out of bounds.
+	/// Panics if `idx` is out of bounds or the table is full.
 	pub fn insert_part(&mut self, idx: usize, buf: &[u8]) {
-		self.insert_partition(idx);
+		let len: usize = buf.len();
+		if 0 != len {
+			// Grow before the start of the position.
+			let start: usize = self.parts.part_start(idx);
+			let adj: usize = buf.len();
+			self.grow_buffer_at(start, adj);
 
-		// Anything to fill?
-		if ! buf.is_empty() {
-			self.resize_grow_part(idx, buf.len());
-			self.get_part_mut(idx).copy_from_slice(buf);
+			// Copy the new data to that spot.
+			let end: usize = start + adj;
+			self.buf[start..end].copy_from_slice(buf);
 		}
-	}
 
-	#[must_use]
-	/// Part Is Empty?
-	///
-	/// Panics if `idx` is out of bounds.
-	pub fn part_is_empty(&self, idx: usize) -> bool {
-		self.parts[idx].0 == self.parts[idx].1
-	}
-
-	#[must_use]
-	/// Parts Iterator.
-	///
-	/// Loop through the `MsgBuf` part-by-part, including empty ones.
-	///
-	/// Returns `None` for unpartitioned buffers.
-	pub const fn parts(&'_ self) -> MsgBufPartsIter<'_> {
-		MsgBufPartsIter {
-			buf: self,
-			pos: 0,
-		}
+		// Realign the partitions.
+		self.parts.insert_part(idx, buf.len());
 	}
 
 	/// Remove Part
 	///
-	/// This is like `clear_part()` except the partition is also removed.
-	///
-	/// If this is the last and only part, a zero-length buffer will remain. To
-	/// fully unpartition a buffer, use `clear()` instead.
-	///
 	/// Panics if `idx` is out of bounds.
 	pub fn remove_part(&mut self, idx: usize) {
-		if self.has_one_partition() {
-			self.buf.truncate(0);
-			self.parts[0].1 = 0;
-		}
-		else {
-			if ! self.part_is_empty(idx) {
-				self.resize_clear_part(idx);
+		let len: usize = self.parts.part_len(idx);
+		if 0 != len {
+			unsafe {
+				// Shrink the buffer.
+				let end: usize = self.parts.part_end_unchecked(idx);
+				self.shrink_buffer_at(end, len);
 			}
-			self.parts.remove(idx);
+		}
+
+		// Realign the partitions.
+		unsafe { self.parts.remove_part_unchecked(idx); }
+	}
+
+
+
+	// ------------------------------------------------------------------------
+	// Changing Parts
+	// ------------------------------------------------------------------------
+
+	/// Clear Part
+	///
+	/// Panics if `idx` is out of bounds.
+	pub fn clear_part(&mut self, idx: usize) {
+		let len: usize = self.parts.part_len(idx);
+		if 0 != len {
+			unsafe {
+				// Shrink the buffer.
+				let end: usize = self.parts.part_end_unchecked(idx);
+				self.shrink_buffer_at(end, len);
+
+				// Realign the partitions.
+				self.parts.shrink_part_unchecked(idx, len);
+			}
+		}
+	}
+
+	/// Clear Part (Unchecked)
+	///
+	/// # Safety
+	///
+	/// This method does not check index sanity.
+	pub unsafe fn clear_part_unchecked(&mut self, idx: usize) {
+		let len: usize = self.parts.part_len_unchecked(idx);
+		if 0 != len {
+			// Shrink the buffer.
+			let end: usize = self.parts.part_end_unchecked(idx);
+			self.shrink_buffer_at(end, len);
+
+			// Realign the partitions.
+			self.parts.shrink_part_unchecked(idx, len);
 		}
 	}
 
 	#[allow(clippy::comparison_chain)]
 	/// Replace Part
 	///
-	/// Replace an existing part with the new data. The partition table bounds
-	/// will be updated accordingly.
-	///
 	/// Panics if `idx` is out of bounds.
 	pub fn replace_part(&mut self, idx: usize, buf: &[u8]) {
+		// Check the new size first; we might just need to clear the buffer.
 		let new_len: usize = buf.len();
-		if new_len == 0 {
-			self.resize_clear_part(idx);
+		if 0 == new_len {
+			self.clear_part(idx);
 			return;
 		}
 
-		let old_len: usize = self.get_part_len(idx);
+		unsafe {
+			let old_len: usize = self.parts.part_len(idx);
 
-		// The new part is bigger.
+			// Grow the part to size.
+			if new_len > old_len {
+				let adj: usize = new_len - old_len;
+				self.grow_buffer_at(self.parts.part_end_unchecked(idx), adj);
+				self.parts.grow_part_unchecked(idx, adj);
+			}
+			// Shrink the part to size.
+			else if old_len > new_len {
+				let adj: usize = old_len - new_len;
+				self.shrink_buffer_at(self.parts.part_end_unchecked(idx), adj);
+				self.parts.shrink_part_unchecked(idx, adj);
+			}
+
+			// Sizes match, now we can copy!
+			self.buf[self.parts.part_unchecked(idx)].copy_from_slice(buf);
+		}
+	}
+
+	#[allow(clippy::comparison_chain)]
+	/// Replace Part (Unchecked)
+	///
+	/// # Safety
+	///
+	/// This method does not check index sanity.
+	pub unsafe fn replace_part_unchecked(&mut self, idx: usize, buf: &[u8]) {
+		// Check the new size first; we might just need to clear the buffer.
+		let new_len: usize = buf.len();
+		if 0 == new_len {
+			self.clear_part_unchecked(idx);
+			return;
+		}
+
+		let old_len: usize = self.parts.part_len_unchecked(idx);
+
+		// Grow the part to size.
 		if new_len > old_len {
-			self.resize_grow_part(idx, new_len - old_len);
+			let adj: usize = new_len - old_len;
+			self.grow_buffer_at(self.parts.part_end_unchecked(idx), adj);
+			self.parts.grow_part_unchecked(idx, adj);
 		}
-		// The new part is smaller.
+		// Shrink the part to size.
 		else if old_len > new_len {
-			self.resize_shrink_part(idx, old_len - new_len);
+			let adj: usize = old_len - new_len;
+			self.shrink_buffer_at(self.parts.part_end_unchecked(idx), adj);
+			self.parts.shrink_part_unchecked(idx, adj);
 		}
 
-		// Now that everything's the same size, copy!
-		self.get_part_mut(idx).copy_from_slice(buf);
+		// Sizes match, now we can copy!
+		self.buf[self.parts.part_unchecked(idx)].copy_from_slice(buf);
 	}
 
 
@@ -546,234 +482,52 @@ impl MsgBuf {
 	// Internal Helpers
 	// ------------------------------------------------------------------------
 
-	/// Is Only Part.
-	fn has_one_partition(&self) -> bool {
-		self.parts.len() == 1
-	}
-
-	/// Is Trailing Part.
+	/// Grow Buffer At/By
 	///
-	/// Whether or not this part's chunk falls at the end of the buffer.
-	///
-	/// Panics if `idx` is out of bounds.
-	fn is_trailing_part(&self, idx: usize) -> bool {
-		self.parts[idx].1 == self.buf.len()
-	}
-
-	/// Partition.
-	///
-	/// Set up the partition table.
+	/// Insert `adj` zeroes into the buffer at `pos - 1`.
 	///
 	/// # Safety
 	///
-	/// This method will panic if the buffer is already partitioned or any of
-	/// the new partitions are out of range or out of order.
-	unsafe fn partition(&mut self, parts: &[(usize, usize)]) {
-		// How much buffer we got?
-		let max: usize = self.buf.len();
+	/// It is up to the parent method to adjust the partitions accordingly.
+	/// At the very least, the method will panic if the position is out of
+	/// range.
+	fn grow_buffer_at(&mut self, pos: usize, adj: usize) {
+		let len: usize = self.buf.len();
 
-		// If the buffer is empty, we don't have to actually read `parts` to
-		// partition; just enter however many `(0,0)` entries it takes. If
-		// `parts` is empty, a single `(0,0)` will be created.
-		if 0 == max {
-			self.parts.extend_from_slice(&[(0, 0)].repeat(usize::max(1, parts.len())));
-			return;
+		// If it is at the end, we can just work straight on the buffer.
+		if pos == len {
+			self.buf.resize(pos + adj, 0);
 		}
-
-		// Loop through the provided parts, filling in the gaps as needed.
-		let mut last_idx: usize = 0;
-		parts.iter().for_each(|p| {
-			// The range must be in order of itself.
-			// The range cannot go past the buffer boundaries.
-			// The range cannot begin before the previous end.
-			assert!(last_idx <= p.0 && p.0 <= p.1 && p.1 <= max);
-
-			// We might need to inject one.
-			if p.0 > last_idx {
-				self.parts.push((last_idx, p.0));
-			}
-
-			last_idx = p.1;
-			self.parts.push((p.0, p.1));
-		});
-
-		// If the last part falls short of `len()`, add one more.
-		if last_idx < max {
-			self.parts.push((last_idx, max));
-		}
-	}
-
-	#[allow(clippy::suspicious_else_formatting)]
-	/// Resize Part (Clear)
-	///
-	/// Clear the part and fix up the partitioning.
-	///
-	/// Panics if `idx` is out of bounds.
-	fn resize_clear_part(&mut self, idx: usize) {
-		// It is at the end.
-		if self.is_trailing_part(idx) {
-			self.buf.truncate(self.parts[idx].0);
-			self.parts[idx].1 = self.parts[idx].0;
-
-			// Push all remaining partitions to this one's start/end.
-			self.shift_partitions_abs(idx + 1, self.parts[idx].1);
-		}
-		// Anywhere else we need to do some surgery.
+		// Otherwise we need split, fiddle, and glue it up.
 		else {
-			let adj = self.get_part_len(idx);
-
-			// Split the buffer at the part's end.
-			let b = self.buf.split_off(self.parts[idx].1);
-
-			// Truncate the stub to the part's start.
-			self.buf.truncate(self.parts[idx].0);
-
-			// Glue it back together.
+			let b = self.buf.split_off(pos);
+			self.buf.resize(pos + adj, 0);
 			self.buf.unsplit(b);
-
-			// Update the parts.
-			self.parts[idx].1 = self.parts[idx].0;
-
-			// And shift remaining slices.
-			self.shift_partitions_left(idx + 1, adj);
 		}
 	}
 
-	#[allow(clippy::suspicious_else_formatting)]
-	/// Resize Part (Grow)
+	/// Shrink Buffer At/By
 	///
-	/// Grow a part by the specified amount. This will fill the space with
-	/// random data.
+	/// Remove the previous `adj` bytes preceding position `pos`.
 	///
-	/// Panics if `idx` is out of bounds.
-	fn resize_grow_part(&mut self, idx: usize, adj: usize) {
-		// It is at the end.
-		if self.is_trailing_part(idx) {
-			self.parts[idx].1 += adj;
-			self.buf.resize(self.parts[idx].1, 0);
+	/// # Safety
+	///
+	/// It is up to the parent method to adjust the partitions accordingly.
+	/// At the very least, the method will panic if the position is out of
+	/// range.
+	fn shrink_buffer_at(&mut self, pos: usize, adj: usize) {
+		let len: usize = self.buf.len();
 
-			// And shift remaining slices.
-			self.shift_partitions_abs(idx + 1, self.parts[idx].1);
+		// If it is at the end, we can just work straight on the buffer.
+		if pos == len {
+			self.buf.truncate(pos - adj);
 		}
-		// Anywhere else we need to do some surgery.
+		// Otherwise we need split, fiddle, and glue it up.
 		else {
-			// Split the buffer at the part's end.
-			let b = self.buf.split_off(self.parts[idx].1);
-
-			// Grow the stub to the adjusted length.
-			self.parts[idx].1 += adj;
-			self.buf.resize(self.parts[idx].1, 0);
-
-			// Glue it back together.
+			let b = self.buf.split_off(pos);
+			self.buf.truncate(pos - adj);
 			self.buf.unsplit(b);
-
-			// And shift remaining slices.
-			self.shift_partitions_right(idx + 1, adj);
 		}
-	}
-
-	#[allow(clippy::suspicious_else_formatting)]
-	/// Resize Part (Shrink)
-	///
-	/// Shrink a part by the specified amount.
-	///
-	/// Panics if `idx` is out of bounds.
-	fn resize_shrink_part(&mut self, idx: usize, adj: usize) {
-		// It is at the end.
-		if self.is_trailing_part(idx) {
-			self.parts[idx].1 -= adj;
-			self.buf.truncate(self.parts[idx].1);
-
-			// Push all remaining partitions to this one's start/end.
-			self.shift_partitions_abs(idx + 1, self.parts[idx].1);
-		}
-		// Anywhere else we need to do some surgery.
-		else {
-			// Split the buffer at the part's end.
-			let b = self.buf.split_off(self.parts[idx].1);
-
-			// Truncate the stub to the adjusted length.
-			self.parts[idx].1 -= adj;
-			self.buf.truncate(self.parts[idx].1);
-
-			// Glue it back together.
-			self.buf.unsplit(b);
-
-			// Shift all remaining parts left by the amount lost.
-			self.shift_partitions_left(idx + 1, adj);
-		}
-	}
-
-	/// Shift Parts Absolute.
-	///
-	/// This is an internal helper that shifts the indexes of all partitions
-	/// beginning at `idx` to `num`.
-	///
-	/// This is used when a partition in the middle has shrunk or been removed.
-	fn shift_partitions_abs(&mut self, mut idx: usize, num: usize) {
-		let len: usize = self.parts.len();
-		while idx < len {
-			self.parts[idx].0 = num;
-			self.parts[idx].1 = num;
-			idx += 1;
-		}
-	}
-
-	/// Shift Parts Left.
-	///
-	/// This is an internal helper that shifts the indexes of all partitions
-	/// beginning at `idx` left by `num` amount.
-	///
-	/// This is used when a partition in the middle has shrunk or been removed.
-	fn shift_partitions_left(&mut self, mut idx: usize, num: usize) {
-		let len: usize = self.parts.len();
-		while idx < len {
-			self.parts[idx].0 -= num;
-			self.parts[idx].1 -= num;
-			idx += 1;
-		}
-	}
-
-	/// Shift Parts Right.
-	///
-	/// This is an internal helper that shifts the indexes of all partitions
-	/// beginning at `idx` right by `num` amount.
-	///
-	/// This is used when a partition in the middle has been added or expanded.
-	fn shift_partitions_right(&mut self, mut idx: usize, num: usize) {
-		let len: usize = self.parts.len();
-		while idx < len {
-			self.parts[idx].0 += num;
-			self.parts[idx].1 += num;
-			idx += 1;
-		}
-	}
-}
-
-
-
-#[derive(Debug, Clone)]
-/// Parts Iterator
-///
-/// Loop through the `MsgBuf` part-by-part, including empty ones.
-///
-/// Returns `None` for unpartitioned buffers.
-pub struct MsgBufPartsIter<'mb> {
-	buf: &'mb MsgBuf,
-	pos: usize,
-}
-
-impl<'mb> Iterator for MsgBufPartsIter<'mb> {
-	type Item = &'mb [u8];
-
-	/// Next.
-	fn next(&mut self) -> Option<Self::Item> {
-		// We're still in range.
-		if self.pos < self.buf.count_partitions() {
-			self.pos += 1;
-			Some(self.buf.get_part(self.pos - 1))
-		}
-		else { None }
 	}
 }
 
@@ -783,383 +537,257 @@ impl<'mb> Iterator for MsgBufPartsIter<'mb> {
 mod tests {
 	use super::*;
 
-	// Assert something should be something via Display.
-	macro_rules! ass {
-		($label:expr, $found:expr, $expected:expr) => {
-			assert_eq!(
-				$found,
-				$expected,
-				"The {} should have been {} instead of {}.",
-				$label,
-				$expected,
-				$found
-			);
-		};
-	}
-
-	// Assert something should be something via Debug.
-	macro_rules! ass_dbg {
-		($label:expr, $found:expr, $expected:expr) => {
-			assert_eq!(
-				$found,
-				$expected,
-				"The {} should have been {:?} instead of {:?}.",
-				$label,
-				$expected,
-				$found
-			);
-		};
-	}
-
-	// We do so much [u8] it is handy to convert the failures to string before
-	// debug-printing it.
-	macro_rules! ass_u8 {
-		($label:expr, $found:expr, $expected:expr) => {
-			assert_eq!(
-				$found,
-				$expected,
-				"The {} should have been {:?} instead of {:?}.",
-				$label,
-				unsafe { std::str::from_utf8_unchecked($expected) },
-				unsafe { std::str::from_utf8_unchecked($found) }
-			);
-		};
-	}
-
-	const TEST1: &[u8] = &[32, 32, 32, 32];
-	const TEST2: &[u8] = &[32, 10, 32, 10];
-	const TEST3: &[u8] = &[10, 10, 10, 10, 10, 10];
-	const TEST4: &[u8] = &[68, 68, 68];
+	// Some strings of different lengths.
+	const SM1: &[u8] = b"cat";
+	const SM2: &[u8] = b"dog";
+	const MD1: &[u8] = b"pencil";
+	const MD2: &[u8] = b"yellow";
+	const LG1: &[u8] = b"dinosaurs";
+	const LG2: &[u8] = b"arcosaurs";
 
 	#[test]
-	fn t_default() {
-		// Test default.
-		let buf = MsgBuf::default();
-		ass_u8!("MsgBuf::default()", &buf[..], &[]);
-		ass!("MsgBuf::default().len()", buf.len(), 0);
-		ass!("MsgBuf::default().count_partitions()", buf.count_partitions(), 0);
+	fn t_new() {
+		// New empty.
+		let mut buf = MsgBuf::new(&[], &[]);
+		assert_eq!(buf.len(), 0);
+		assert_eq!(buf.parts_len(), 1);
+		assert_eq!(buf.part_len(1), 0);
+
+		// New filled, no parts.
+		buf = MsgBuf::new(SM1, &[]);
+		assert_eq!(buf.len(), SM1.len());
+		assert_eq!(buf.parts_len(), 1);
+		assert_eq!(buf.part_len(1), SM1.len());
+		assert_eq!(buf.part(1), SM1);
+
+		// New filled, spanning part.
+		buf = MsgBuf::new(SM1, &[SM1.len()]);
+		assert_eq!(buf.len(), SM1.len());
+		assert_eq!(buf.parts_len(), 1);
+		assert_eq!(buf.part_len(1), SM1.len());
+		assert_eq!(buf.part(1), SM1);
+
+		// New filled, 2 parts.
+		buf = MsgBuf::new(LG1, &[4, 5]);
+		assert_eq!(buf.len(), LG1.len());
+		assert_eq!(buf.parts_len(), 2);
+		assert_eq!(buf.part(1), &b"dino"[..]);
+		assert_eq!(buf.part(2), &b"saurs"[..]);
+
+		// New filled, 2 parts (implied).
+		buf = MsgBuf::new(LG1, &[4]);
+		assert_eq!(buf.len(), LG1.len());
+		assert_eq!(buf.parts_len(), 2);
+		assert_eq!(buf.part(1), &b"dino"[..]);
+		assert_eq!(buf.part(2), &b"saurs"[..]);
 	}
 
 	#[test]
 	fn t_from() {
-		// Get one from some data.
-		let mut buf = MsgBuf::from(TEST1);
-		ass_u8!("MsgBuf::from(…)", &buf[..], TEST1);
-		ass!("MsgBuf::from(…).len()", buf.len(), 4);
-		ass!("MsgBuf::from(…).count_partitions()", buf.count_partitions(), 1);
-		ass_u8!("MsgBuf::from(…)[..4]", &buf[0..4], TEST1);
-		ass_u8!("MsgBuf::from(…).part(0)", buf.get_part(0), TEST1);
-		ass_dbg!("MsgBuf::from(…).partition(0)", buf.get_partition(0), (0, 4));
+		// From empty.
+		let mut buf = MsgBuf::from(&[]);
+		assert_eq!(buf.len(), 0);
+		assert_eq!(buf.parts_len(), 1);
+		assert_eq!(buf.part_len(1), 0);
 
-		// Let's do a from_many now.
-		buf = MsgBuf::from_many(&[TEST1, TEST2]);
-		ass_u8!("from_many(…)", &buf[..], &[32, 32, 32, 32, 32, 10, 32, 10]);
-		ass!("from_many(…).len()", buf.len(), 8);
-		ass!("from_many(…).count_partitions()", buf.count_partitions(), 2);
-		ass_u8!("from_many(…)[..4]", &buf[0..4], TEST1);
-		ass_u8!("from_many(…).part(0)", buf.get_part(0), TEST1);
-		ass_u8!("from_many(…)[4..]", &buf[4..], TEST2);
-		ass_u8!("from_many(…).part(1)", buf.get_part(1), TEST2);
-		ass_dbg!("from_many(…).partition(0)", buf.get_partition(0), (0, 4));
-		ass_dbg!("from_many(…).partition(1)", buf.get_partition(1), (4, 8));
+		// From filled.
+		buf = MsgBuf::from(SM1);
+		assert_eq!(buf.len(), SM1.len());
+		assert_eq!(buf.parts_len(), 1);
+		assert_eq!(buf.part_len(1), SM1.len());
+		assert_eq!(buf.part(1), SM1);
+
+		// From Many empty.
+		buf = MsgBuf::from_many(&[]);
+		assert_eq!(buf.len(), 0);
+		assert_eq!(buf.parts_len(), 0);
+
+		// From many one.
+		buf = MsgBuf::from_many(&[SM1]);
+		assert_eq!(buf.len(), SM1.len());
+		assert_eq!(buf.parts_len(), 1);
+		assert_eq!(buf.part(1), SM1);
+
+		buf = MsgBuf::from_many(&[SM1, MD1, LG1]);
+		assert_eq!(buf.len(), 18);
+		assert_eq!(buf.parts_len(), 3);
+		assert_eq!(buf.part(1), SM1);
+		assert_eq!(buf.part(2), MD1);
+		assert_eq!(buf.part(3), LG1);
 	}
 
 	#[test]
-	fn t_new() {
-		// No partitions.
-		let mut buf = MsgBuf::new(TEST1, &[]);
-		ass_u8!("new(…)", &buf[..], TEST1);
-		ass!("new(…).len", buf.len(), 4);
-		ass!("new(…).count_partitions()", buf.count_partitions(), 1);
-		ass_u8!("new(…)[0..4]", &buf[0..], TEST1);
-		ass_u8!("new(…).part(0)", buf.get_part(0), TEST1);
-		ass_dbg!("new(…).partition(0)", buf.get_partition(0), (0, 4));
-
-		// One partition, left gap.
-		buf = MsgBuf::new(TEST1, &[(2, 4)]);
-		ass_u8!("new(…)", &buf[..], TEST1);
-		ass!("new(…).len", buf.len(), 4);
-		ass!("new(…).count_partitions()", buf.count_partitions(), 2);
-		ass_u8!("new(…)[0..4]", &buf[0..], TEST1);
-		ass_u8!("new(…).part(0)", buf.get_part(0), &TEST1[..2]);
-		ass_u8!("new(…).part(1)", buf.get_part(1), &TEST1[2..]);
-		ass_dbg!("new(…).partition(0)", buf.get_partition(0), (0, 2));
-		ass_dbg!("new(…).partition(1)", buf.get_partition(1), (2, 4));
-
-		// One partition, right gap.
-		buf = MsgBuf::new(TEST1, &[(0, 2)]);
-		ass_u8!("new(…)", &buf[..], TEST1);
-		ass!("new(…).len", buf.len(), 4);
-		ass!("new(…).count_partitions()", buf.count_partitions(), 2);
-		ass_u8!("new(…)[0..4]", &buf[0..], TEST1);
-		ass_u8!("new(…).part(0)", buf.get_part(0), &TEST1[..2]);
-		ass_u8!("new(…).part(1)", buf.get_part(1), &TEST1[2..]);
-		ass_dbg!("new(…).partition(0)", buf.get_partition(0), (0, 2));
-		ass_dbg!("new(…).partition(1)", buf.get_partition(1), (2, 4));
-
-		// One partition, left and right gap.
-		buf = MsgBuf::new(TEST1, &[(1, 2)]);
-		ass_u8!("new(…)", &buf[..], TEST1);
-		ass!("new(…).len", buf.len(), 4);
-		ass!("new(…).count_partitions()", buf.count_partitions(), 3);
-		ass_u8!("new(…)[0..4]", &buf[0..], TEST1);
-		ass_u8!("new(…).part(0)", buf.get_part(0), &TEST1[..1]);
-		ass_u8!("new(…).part(1)", buf.get_part(1), &TEST1[1..2]);
-		ass_u8!("new(…).part(2)", buf.get_part(2), &TEST1[2..]);
-		ass_dbg!("new(…).partition(0)", buf.get_partition(0), (0, 1));
-		ass_dbg!("new(…).partition(1)", buf.get_partition(1), (1, 2));
-		ass_dbg!("new(…).partition(2)", buf.get_partition(2), (2, 4));
-
-		// Two partitions, mid gap.
-		buf = MsgBuf::new(TEST1, &[(0, 1),(2, 4)]);
-		ass_u8!("new(…)", &buf[..], TEST1);
-		ass!("new(…).len", buf.len(), 4);
-		ass!("new(…).count_partitions()", buf.count_partitions(), 3);
-		ass_u8!("new(…)[0..4]", &buf[0..], TEST1);
-		ass_u8!("new(…).part(0)", buf.get_part(0), &TEST1[..1]);
-		ass_u8!("new(…).part(1)", buf.get_part(1), &TEST1[1..2]);
-		ass_u8!("new(…).part(2)", buf.get_part(2), &TEST1[2..]);
-		ass_dbg!("new(…).partition(0)", buf.get_partition(0), (0, 1));
-		ass_dbg!("new(…).partition(1)", buf.get_partition(1), (1, 2));
-		ass_dbg!("new(…).partition(2)", buf.get_partition(2), (2, 4));
-	}
-
-	#[test]
-	fn t_clear() {
-		let mut buf = MsgBuf::new(TEST1, &[(1, 2)]);
-		ass!("new(…).len", buf.len(), 4);
-		ass!("new(…).count_partitions()", buf.count_partitions(), 3);
-		buf.clear();
-		ass!("new(…).len", buf.len(), 0);
-		ass!("new(…).count_partitions()", buf.count_partitions(), 0);
-	}
-
-	#[test]
-	fn t_replace() {
-		let mut buf = MsgBuf::new(TEST1, &[(1, 2)]);
-		ass!("new(…).len", buf.len(), 4);
-		ass!("new(…).count_partitions()", buf.count_partitions(), 3);
-		buf.replace(TEST2, &[]);
-		ass_u8!("replaced buf", &buf[..], TEST2);
-		ass!("replaced buf.len()", buf.len(), 4);
-		ass!("replaced buf.count_partitions()", buf.count_partitions(), 1);
-	}
-
-	#[test]
-	fn t_partitions() {
-		let mut buf = MsgBuf::new(TEST1, &[(1, 2)]);
-		ass!("buf.count_partitions()", buf.count_partitions(), 3);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), &TEST1[..1]);
-
-		buf.flatten_partitions();
-		ass!("flattened.count_partitions()", buf.count_partitions(), 1);
-		ass_u8!("flattened.get_part(0)", buf.get_part(0), TEST1);
-
-		// Insert left.
-		buf.insert_partition(0);
-		ass!("inserted.count_partitions()", buf.count_partitions(), 2);
-		ass_u8!("inserted.get_part(0)", buf.get_part(0), &[]);
-		ass_u8!("inserted.get_part(1)", buf.get_part(1), TEST1);
-
-		// Insert Right.
-		buf.add_partition();
-		ass!("added.count_partitions()", buf.count_partitions(), 3);
-		ass_u8!("added.get_part(0)", buf.get_part(0), &[]);
-		ass_u8!("added.get_part(1)", buf.get_part(1), TEST1);
-		ass_u8!("added.get_part(2)", buf.get_part(2), &[]);
-
-		assert!(buf.is_partitioned());
-		assert!(! MsgBuf::default().is_partitioned());
-
-		// Repartition.
-		buf.repartition(&[(0, 2)]);
-		ass!("repartitioned.count_partitions()", buf.count_partitions(), 2);
-		ass_u8!("repartitioned.get_part(0)", buf.get_part(0), &TEST1[..2]);
-		ass_u8!("repartitioned.get_part(1)", buf.get_part(1), &TEST1[2..]);
-
-		buf.clear();
-		ass!("buf.len()", buf.len(), 0);
-		ass!("repartitioned.count_partitions()", buf.count_partitions(), 0);
-		buf.repartition(&[(0, 0), (0, 0), (0, 0)]);
-		ass!("repartitioned.count_partitions()", buf.count_partitions(), 3);
-	}
-
-	#[test]
-	fn t_parts() {
+	fn t_clear_splat_zero() {
+		// Clearing empty.
 		let mut buf = MsgBuf::default();
-		buf.add_part(TEST1);
-		ass!("buf.len()", buf.len(), 4);
-		ass!("buf.count_partitions()", buf.count_partitions(), 1);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), TEST1);
+		assert_eq!(buf.len(), 0);
+		assert_eq!(buf.parts_len(), 0);
+		buf.clear();
+		assert_eq!(buf.len(), 0);
+		assert_eq!(buf.parts_len(), 0);
 
-		buf.add_part(TEST2);
-		ass!("buf.len()", buf.len(), 8);
-		ass!("buf.count_partitions()", buf.count_partitions(), 2);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), TEST1);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST2);
+		// Clear filled.
+		buf = MsgBuf::from(SM1);
+		buf.clear();
+		assert_eq!(buf.len(), 0);
+		assert_eq!(buf.parts_len(), 0);
 
-		buf.add_parts(&[TEST1, TEST2]);
-		ass!("buf.len()", buf.len(), 16);
-		ass!("buf.count_partitions()", buf.count_partitions(), 4);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), TEST1);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST2);
-		ass_u8!("buf.get_part(2)", buf.get_part(2), TEST1);
-		ass_u8!("buf.get_part(3)", buf.get_part(3), TEST2);
+		// Zero empty.
+		buf = MsgBuf::default();
+		buf.zero();
+		assert_eq!(buf.len(), 0);
+		assert_eq!(buf.parts_len(), 1);
+		assert_eq!(buf.part_len(1), 0);
 
-		buf.clear_part(0);
-		ass!("buf.len()", buf.len(), 12);
-		ass!("buf.count_partitions()", buf.count_partitions(), 4);
-		ass!("buf.get_part_len(0)", buf.get_part_len(0), 0);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), &[]);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST2);
-		ass_u8!("buf.get_part(2)", buf.get_part(2), TEST1);
-		ass_u8!("buf.get_part(3)", buf.get_part(3), TEST2);
+		// Zero full.
+		buf = MsgBuf::from(SM1);
+		buf.zero();
+		assert_eq!(buf.len(), 0);
+		assert_eq!(buf.parts_len(), 1);
+		assert_eq!(buf.part_len(1), 0);
 
-		buf.clear_part(2);
-		ass!("buf.len()", buf.len(), 8);
-		ass!("buf.count_partitions()", buf.count_partitions(), 4);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), &[]);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST2);
-		ass_u8!("buf.get_part(2)", buf.get_part(2), &[]);
-		ass_u8!("buf.get_part(3)", buf.get_part(3), TEST2);
+		// Check a splat.
+		buf = MsgBuf::splat(3);
+		assert_eq!(buf.len(), 0);
+		assert_eq!(buf.parts_len(), 3);
+		assert_eq!(buf.part_len(1), 0);
+		assert_eq!(buf.part_len(2), 0);
+		assert_eq!(buf.part_len(3), 0);
+	}
 
-		buf.clear_part(3);
-		ass!("buf.len()", buf.len(), 4);
-		ass!("buf.count_partitions()", buf.count_partitions(), 4);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), &[]);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST2);
-		ass_u8!("buf.get_part(2)", buf.get_part(2), &[]);
-		ass_u8!("buf.get_part(3)", buf.get_part(3), &[]);
+	#[test]
+	fn t_add_remove_part() {
+		let mut buf = MsgBuf::default();
 
-		buf.extend_part(0, TEST1);
-		ass!("buf.len()", buf.len(), 8);
-		ass!("buf.count_partitions()", buf.count_partitions(), 4);
-		ass!("buf.get_part_len(0)", buf.get_part_len(0), 4);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), TEST1);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST2);
-		ass_u8!("buf.get_part(2)", buf.get_part(2), &[]);
-		ass_u8!("buf.get_part(3)", buf.get_part(3), &[]);
+		// Add empty.
+		buf.add_part(&[]);
+		assert_eq!(buf.len(), 0);
+		assert_eq!(buf.parts_len(), 1);
+		assert_eq!(buf.part_len(1), 0);
 
-		buf.extend_part(3, TEST1);
-		ass!("buf.len()", buf.len(), 12);
-		ass!("buf.count_partitions()", buf.count_partitions(), 4);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), TEST1);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST2);
-		ass_u8!("buf.get_part(2)", buf.get_part(2), &[]);
-		ass_u8!("buf.get_part(3)", buf.get_part(3), TEST1);
+		// Remove it.
+		buf.remove_part(1);
+		assert_eq!(buf.len(), 0);
+		assert_eq!(buf.parts_len(), 0);
 
-		buf.extend_part(2, TEST1);
-		ass!("buf.len()", buf.len(), 16);
-		ass!("buf.count_partitions()", buf.count_partitions(), 4);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), TEST1);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST2);
-		ass_u8!("buf.get_part(2)", buf.get_part(2), TEST1);
-		ass_u8!("buf.get_part(3)", buf.get_part(3), TEST1);
+		// Add something.
+		buf.add_part(SM1);
+		buf.add_part(MD1);
+		buf.add_part(LG1);
+		assert_eq!(buf.len(), 18);
+		assert_eq!(buf.parts_len(), 3);
+		assert_eq!(buf.part(1), SM1);
+		assert_eq!(buf.part(2), MD1);
+		assert_eq!(buf.part(3), LG1);
 
-		buf.insert_part(0, TEST3);
-		ass!("buf.len()", buf.len(), 22);
-		ass!("buf.count_partitions()", buf.count_partitions(), 5);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), TEST3);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST1);
-		ass_u8!("buf.get_part(2)", buf.get_part(2), TEST2);
-		ass_u8!("buf.get_part(3)", buf.get_part(3), TEST1);
-		ass_u8!("buf.get_part(4)", buf.get_part(4), TEST1);
+		// Try removing from each index.
+		buf = MsgBuf::from_many(&[SM1, MD1, LG1]);
+		buf.remove_part(1);
+		assert_eq!(buf.len(), 15);
+		assert_eq!(buf.parts_len(), 2);
+		assert_eq!(buf.part(1), MD1);
+		assert_eq!(buf.part(2), LG1);
 
-		buf.insert_part(4, TEST3);
-		ass!("buf.len()", buf.len(), 28);
-		ass!("buf.count_partitions()", buf.count_partitions(), 6);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), TEST3);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST1);
-		ass_u8!("buf.get_part(2)", buf.get_part(2), TEST2);
-		ass_u8!("buf.get_part(3)", buf.get_part(3), TEST1);
-		ass_u8!("buf.get_part(4)", buf.get_part(4), TEST3);
-		ass_u8!("buf.get_part(5)", buf.get_part(5), TEST1);
+		buf = MsgBuf::from_many(&[SM1, MD1, LG1]);
+		buf.remove_part(2);
+		assert_eq!(buf.len(), 12);
+		assert_eq!(buf.parts_len(), 2);
+		assert_eq!(buf.part(1), SM1);
+		assert_eq!(buf.part(2), LG1);
 
-		ass!("buf.parts().count()", buf.parts().count(), 6);
-
-		println!("{:?}", buf);
-		buf.remove_part(0);
-		println!("{:?}", buf);
-
-		ass!("buf.len()", buf.len(), 22);
-		ass!("buf.count_partitions()", buf.count_partitions(), 5);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), TEST1);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST2);
-		ass_u8!("buf.get_part(2)", buf.get_part(2), TEST1);
-		ass_u8!("buf.get_part(3)", buf.get_part(3), TEST3);
-		ass_u8!("buf.get_part(4)", buf.get_part(4), TEST1);
-
+		buf = MsgBuf::from_many(&[SM1, MD1, LG1]);
 		buf.remove_part(3);
-		ass!("buf.len()", buf.len(), 16);
-		ass!("buf.count_partitions()", buf.count_partitions(), 4);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), TEST1);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST2);
-		ass_u8!("buf.get_part(2)", buf.get_part(2), TEST1);
-		ass_u8!("buf.get_part(3)", buf.get_part(3), TEST1);
+		assert_eq!(buf.len(), 9);
+		assert_eq!(buf.parts_len(), 2);
+		assert_eq!(buf.part(1), SM1);
+		assert_eq!(buf.part(2), MD1);
 
+		// Now try to remove all parts, from the left.
+		buf = MsgBuf::from_many(&[SM1, MD1, LG1]);
+		buf.remove_part(1);
+		buf.remove_part(1);
+		buf.remove_part(1);
+		assert_eq!(buf.len(), 0);
+		assert_eq!(buf.parts_len(), 0);
+
+		// And again from the right.
+		buf = MsgBuf::from_many(&[SM1, MD1, LG1]);
 		buf.remove_part(3);
-		ass!("buf.len()", buf.len(), 12);
-		ass!("buf.count_partitions()", buf.count_partitions(), 3);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), TEST1);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST2);
-		ass_u8!("buf.get_part(2)", buf.get_part(2), TEST1);
+		buf.remove_part(2);
+		buf.remove_part(1);
+		assert_eq!(buf.len(), 0);
+		assert_eq!(buf.parts_len(), 0);
+	}
 
-		ass!("buf.parts().count()", buf.parts().count(), 3);
-		let mut parts = buf.parts();
-		ass_dbg!("parts.next()", parts.next(), Some(TEST1));
-		ass_dbg!("parts.next()", parts.next(), Some(TEST2));
-		ass_dbg!("parts.next()", parts.next(), Some(TEST1));
-		assert!(parts.next().is_none(), "parts.next() should be None.");
+	#[test]
+	fn t_insert_part() {
+		// Test insertion into a spread buffer.
+		for b in [&[], SM1].iter() {
+			let mut buf = MsgBuf::from(SM1);
+			buf.insert_part(1, b);
+			assert_eq!(buf.len(), SM1.len() + b.len());
+			assert_eq!(buf.parts_len(), 2);
+			assert_eq!(buf.part(1), *b);
+			assert_eq!(buf.part(2), SM1);
+		}
 
-		// Replace same.
-		buf = MsgBuf::from_many(&[TEST1, TEST1, TEST1]);
-		buf.replace_part(0, TEST2);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), TEST2);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST1);
-		ass_u8!("buf.get_part(2)", buf.get_part(2), TEST1);
+		// Test insertion into a multi-part buffer at each index.
+		for i in 1..4 {
+			for b in [&[], SM1].iter() {
+				let mut buf = MsgBuf::from_many(&[SM2, MD2, LG2]);
+				buf.insert_part(i, b);
+				assert_eq!(buf.len(), 18 + b.len());
+				assert_eq!(buf.parts_len(), 4);
+				assert_eq!(buf.part(i), *b);
+			}
+		}
+	}
 
-		buf.replace_part(1, TEST2);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), TEST2);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST2);
-		ass_u8!("buf.get_part(2)", buf.get_part(2), TEST1);
+	#[test]
+	// Can cover `clear()` as well.
+	fn t_replace_part() {
+		// Test replacement when there's just one part.
+		for b in [SM1, MD1, LG1].iter() {
+			let mut buf = MsgBuf::from(MD2);
+			buf.replace_part(1, b);
+			assert_eq!(buf.len(), b.len());
+			assert_eq!(buf.parts_len(), 1);
+			assert_eq!(&buf.part(1), b);
+		}
 
-		buf.replace_part(2, TEST2);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), TEST2);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST2);
-		ass_u8!("buf.get_part(2)", buf.get_part(2), TEST2);
+		// Test replacement at each index.
+		for i in 1..4 {
+			for b in [SM1, MD1, LG1].iter() {
+				let mut buf = MsgBuf::from_many(&[SM2, MD2, LG2]);
+				buf.replace_part(i, b);
+				assert_eq!(buf.parts_len(), 3);
+				assert_eq!(&buf.part(i), b);
+			}
+		}
 
-		// Replace bigger.
-		buf.replace_part(2, TEST3);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), TEST2);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST2);
-		ass_u8!("buf.get_part(2)", buf.get_part(2), TEST3);
+		// And real quick test an empty replacement.
+		let mut buf = MsgBuf::from_many(&[SM2, MD2, LG2]);
+		buf.replace_part(1, &[]);
+		assert_eq!(buf.parts_len(), 3);
+		assert_eq!(buf.len(), 15);
+	}
 
-		buf.replace_part(1, TEST3);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), TEST2);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST3);
-		ass_u8!("buf.get_part(2)", buf.get_part(2), TEST3);
+	#[test]
+	fn t_spread() {
+		let buf = MsgBuf::from_many(&[SM2, MD2, LG2]);
 
-		buf.replace_part(0, TEST3);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), TEST3);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST3);
-		ass_u8!("buf.get_part(2)", buf.get_part(2), TEST3);
+		assert_eq!(buf.spread(1, 2), b"dogyellow");
+		assert_eq!(buf.spread(2, 3), b"yellowarcosaurs");
+		assert_eq!(buf.spread(1, 3), b"dogyellowarcosaurs");
+	}
 
-		// Replace smaller.
-		buf.replace_part(0, TEST4);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), TEST4);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST3);
-		ass_u8!("buf.get_part(2)", buf.get_part(2), TEST3);
+	#[test]
+	fn t_deref() {
+		const SM2: &[u8] = b"dog";
+		const MD2: &[u8] = b"yellow";
+		const LG2: &[u8] = b"arcosaurs";
+		let buf = MsgBuf::from_many(&[SM2, MD2, LG2]);
 
-		// Replace smaller.
-		buf.replace_part(2, TEST4);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), TEST4);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST3);
-		ass_u8!("buf.get_part(2)", buf.get_part(2), TEST4);
-
-		// Replace smaller.
-		buf.replace_part(1, TEST4);
-		ass_u8!("buf.get_part(0)", buf.get_part(0), TEST4);
-		ass_u8!("buf.get_part(1)", buf.get_part(1), TEST4);
-		ass_u8!("buf.get_part(2)", buf.get_part(2), TEST4);
+		assert_eq!(buf.deref(), b"dogyellowarcosaurs");
 	}
 }
