@@ -631,7 +631,7 @@ impl ProgressInner {
 	fn print_tasks<W: io::Write>(&mut self, writer: &mut W, width: usize) {
 		// Tasks are the worst. Haha.
 		if ! self.tasks.is_empty() {
-			let tasks: &[u8] = self.buf.part(Self::IDX_TASKS);
+			let tasks = &self.buf[Self::IDX_TASKS];
 			let max_idx: usize = tasks.len();
 			let mut last_idx: usize = 0;
 
@@ -681,7 +681,7 @@ impl ProgressInner {
 	/// Split up the code a little.
 	fn print_title<W: io::Write>(&mut self, writer: &mut W, width: usize) {
 		// If there is a title, we might have to crunch it.
-		let title: &[u8] = self.buf.part(Self::IDX_TITLE);
+		let title = &self.buf[Self::IDX_TITLE];
 		if ! title.is_empty() {
 			let line_len: usize = title.len();
 			// It fits just fine.
@@ -740,13 +740,13 @@ impl ProgressInner {
 	fn redraw_elapsed(&mut self) {
 		if self.last_secs < 86400 {
 			let c = secs_chunks(self.last_secs);
-			let buf = self.buf.part_mut(Self::IDX_ELAPSED);
+			let buf = &mut self.buf[Self::IDX_ELAPSED];
 			buf[..2].copy_from_slice(time_format_dd(c[0]));
 			buf[3..5].copy_from_slice(time_format_dd(c[1]));
 			buf[6..].copy_from_slice(time_format_dd(c[2]));
 		}
 		else {
-			self.buf.part_mut(Self::IDX_ELAPSED)
+			self.buf[Self::IDX_ELAPSED]
 				.copy_from_slice(&[50, 51, 58, 53, 57, 58, 53, 57]);
 		}
 	}

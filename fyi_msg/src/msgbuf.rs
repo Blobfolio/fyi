@@ -10,7 +10,12 @@ use crate::Partitions;
 use std::{
 	borrow::Borrow,
 	fmt,
-	ops::Deref,
+	ops::{
+		AddAssign,
+		Deref,
+		Index,
+		IndexMut,
+	},
 };
 
 
@@ -22,6 +27,16 @@ use std::{
 pub struct MsgBuf {
 	buf: BytesMut,
 	parts: Partitions,
+}
+
+impl AddAssign<&[u8]> for MsgBuf {
+	fn add_assign(&mut self, other: &[u8]) {
+		let len: usize = other.len();
+		self.parts += len;
+		if 0 != len {
+			self.buf.extend_from_slice(other);
+		}
+	}
 }
 
 impl Borrow<[u8]> for MsgBuf {
@@ -55,6 +70,20 @@ impl fmt::Display for MsgBuf {
 	/// Display.
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_str(unsafe { std::str::from_utf8_unchecked(&*self.buf) })
+	}
+}
+
+impl Index<usize> for MsgBuf {
+	type Output = [u8];
+
+	fn index(&self, idx: usize) -> &Self::Output {
+		&self.buf[self.parts.part(idx)]
+	}
+}
+
+impl IndexMut<usize> for MsgBuf {
+	fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
+		&mut self.buf[self.parts.part(idx)]
 	}
 }
 
@@ -123,8 +152,7 @@ impl MsgBuf {
 		let mut out = Self::default();
 
 		bufs.iter().for_each(|b| {
-			out.buf.extend_from_slice(b);
-			out.parts.add_part_unchecked(b.len());
+			out += b;
 		});
 
 		out
@@ -198,46 +226,6 @@ impl MsgBuf {
 	/// Number of Parts.
 	pub const fn parts_len(&self) -> usize {
 		self.parts.len()
-	}
-
-	#[must_use]
-	/// Part.
-	///
-	/// Return the portion of the buffer corresponding to the part.
-	///
-	/// Panics if `idx` is out of range.
-	pub fn part(&self, idx: usize) -> &[u8] {
-		&self.buf[self.parts.part(idx)]
-	}
-
-	#[must_use]
-	/// Part (Unchecked).
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	pub unsafe fn part_unchecked(&self, idx: usize) -> &[u8] {
-		&self.buf[self.parts.part_unchecked(idx)]
-	}
-
-	#[must_use]
-	/// Part Mut.
-	///
-	/// Mutably return the portion of the buffer corresponding to the part.
-	///
-	/// Panics if `idx` is out of range.
-	pub fn part_mut(&mut self, idx: usize) -> &mut [u8] {
-		&mut self.buf[self.parts.part(idx)]
-	}
-
-	#[must_use]
-	/// Part Mut (Unchecked).
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	pub unsafe fn part_mut_unchecked(&mut self, idx: usize) -> &mut [u8] {
-		&mut self.buf[self.parts.part_unchecked(idx)]
 	}
 
 	#[must_use]
@@ -322,17 +310,6 @@ impl MsgBuf {
 	// Adding/Removing Parts
 	// ------------------------------------------------------------------------
 
-	/// Add Part
-	///
-	/// Panics if the partition table is full.
-	pub fn add_part(&mut self, buf: &[u8]) {
-		let len: usize = buf.len();
-		if 0 != len {
-			self.buf.extend_from_slice(buf);
-		}
-		self.parts.add_part(len);
-	}
-
 	/// Insert Part
 	///
 	/// Panics if `idx` is out of bounds or the table is full.
@@ -340,7 +317,7 @@ impl MsgBuf {
 		let len: usize = buf.len();
 		if 0 != len {
 			// Grow before the start of the position.
-			let start: usize = self.parts.part_start(idx);
+			let start: usize = self.parts[idx - 1];
 			let adj: usize = buf.len();
 			self.grow_buffer_at(start, adj);
 
@@ -358,12 +335,9 @@ impl MsgBuf {
 	/// Panics if `idx` is out of bounds.
 	pub fn remove_part(&mut self, idx: usize) {
 		let len: usize = self.parts.part_len(idx);
+		// Shrink the buffer.
 		if 0 != len {
-			unsafe {
-				// Shrink the buffer.
-				let end: usize = self.parts.part_end_unchecked(idx);
-				self.shrink_buffer_at(end, len);
-			}
+			self.shrink_buffer_at(self.parts[idx], len);
 		}
 
 		// Realign the partitions.
@@ -384,8 +358,7 @@ impl MsgBuf {
 		if 0 != len {
 			unsafe {
 				// Shrink the buffer.
-				let end: usize = self.parts.part_end_unchecked(idx);
-				self.shrink_buffer_at(end, len);
+				self.shrink_buffer_at(self.parts[idx], len);
 
 				// Realign the partitions.
 				self.parts.shrink_part_unchecked(idx, len);
@@ -402,8 +375,7 @@ impl MsgBuf {
 		let len: usize = self.parts.part_len_unchecked(idx);
 		if 0 != len {
 			// Shrink the buffer.
-			let end: usize = self.parts.part_end_unchecked(idx);
-			self.shrink_buffer_at(end, len);
+			self.shrink_buffer_at(self.parts[idx], len);
 
 			// Realign the partitions.
 			self.parts.shrink_part_unchecked(idx, len);
@@ -428,13 +400,13 @@ impl MsgBuf {
 			// Grow the part to size.
 			if new_len > old_len {
 				let adj: usize = new_len - old_len;
-				self.grow_buffer_at(self.parts.part_end_unchecked(idx), adj);
+				self.grow_buffer_at(self.parts[idx], adj);
 				self.parts.grow_part_unchecked(idx, adj);
 			}
 			// Shrink the part to size.
 			else if old_len > new_len {
 				let adj: usize = old_len - new_len;
-				self.shrink_buffer_at(self.parts.part_end_unchecked(idx), adj);
+				self.shrink_buffer_at(self.parts[idx], adj);
 				self.parts.shrink_part_unchecked(idx, adj);
 			}
 
@@ -462,13 +434,13 @@ impl MsgBuf {
 		// Grow the part to size.
 		if new_len > old_len {
 			let adj: usize = new_len - old_len;
-			self.grow_buffer_at(self.parts.part_end_unchecked(idx), adj);
+			self.grow_buffer_at(self.parts[idx], adj);
 			self.parts.grow_part_unchecked(idx, adj);
 		}
 		// Shrink the part to size.
 		else if old_len > new_len {
 			let adj: usize = old_len - new_len;
-			self.shrink_buffer_at(self.parts.part_end_unchecked(idx), adj);
+			self.shrink_buffer_at(self.parts[idx], adj);
 			self.parts.shrink_part_unchecked(idx, adj);
 		}
 
@@ -558,28 +530,28 @@ mod tests {
 		assert_eq!(buf.len(), SM1.len());
 		assert_eq!(buf.parts_len(), 1);
 		assert_eq!(buf.part_len(1), SM1.len());
-		assert_eq!(buf.part(1), SM1);
+		assert_eq!(&buf[1], SM1);
 
 		// New filled, spanning part.
 		buf = MsgBuf::new(SM1, &[SM1.len()]);
 		assert_eq!(buf.len(), SM1.len());
 		assert_eq!(buf.parts_len(), 1);
 		assert_eq!(buf.part_len(1), SM1.len());
-		assert_eq!(buf.part(1), SM1);
+		assert_eq!(&buf[1], SM1);
 
 		// New filled, 2 parts.
 		buf = MsgBuf::new(LG1, &[4, 5]);
 		assert_eq!(buf.len(), LG1.len());
 		assert_eq!(buf.parts_len(), 2);
-		assert_eq!(buf.part(1), &b"dino"[..]);
-		assert_eq!(buf.part(2), &b"saurs"[..]);
+		assert_eq!(&buf[1], &b"dino"[..]);
+		assert_eq!(&buf[2], &b"saurs"[..]);
 
 		// New filled, 2 parts (implied).
 		buf = MsgBuf::new(LG1, &[4]);
 		assert_eq!(buf.len(), LG1.len());
 		assert_eq!(buf.parts_len(), 2);
-		assert_eq!(buf.part(1), &b"dino"[..]);
-		assert_eq!(buf.part(2), &b"saurs"[..]);
+		assert_eq!(&buf[1], &b"dino"[..]);
+		assert_eq!(&buf[2], &b"saurs"[..]);
 	}
 
 	#[test]
@@ -595,7 +567,7 @@ mod tests {
 		assert_eq!(buf.len(), SM1.len());
 		assert_eq!(buf.parts_len(), 1);
 		assert_eq!(buf.part_len(1), SM1.len());
-		assert_eq!(buf.part(1), SM1);
+		assert_eq!(&buf[1], SM1);
 
 		// From Many empty.
 		buf = MsgBuf::from_many(&[]);
@@ -606,14 +578,14 @@ mod tests {
 		buf = MsgBuf::from_many(&[SM1]);
 		assert_eq!(buf.len(), SM1.len());
 		assert_eq!(buf.parts_len(), 1);
-		assert_eq!(buf.part(1), SM1);
+		assert_eq!(&buf[1], SM1);
 
 		buf = MsgBuf::from_many(&[SM1, MD1, LG1]);
 		assert_eq!(buf.len(), 18);
 		assert_eq!(buf.parts_len(), 3);
-		assert_eq!(buf.part(1), SM1);
-		assert_eq!(buf.part(2), MD1);
-		assert_eq!(buf.part(3), LG1);
+		assert_eq!(&buf[1], SM1);
+		assert_eq!(&buf[2], MD1);
+		assert_eq!(&buf[3], LG1);
 	}
 
 	#[test]
@@ -660,7 +632,7 @@ mod tests {
 		let mut buf = MsgBuf::default();
 
 		// Add empty.
-		buf.add_part(&[]);
+		buf += &[];
 		assert_eq!(buf.len(), 0);
 		assert_eq!(buf.parts_len(), 1);
 		assert_eq!(buf.part_len(1), 0);
@@ -671,36 +643,36 @@ mod tests {
 		assert_eq!(buf.parts_len(), 0);
 
 		// Add something.
-		buf.add_part(SM1);
-		buf.add_part(MD1);
-		buf.add_part(LG1);
+		buf += SM1;
+		buf += MD1;
+		buf += LG1;
 		assert_eq!(buf.len(), 18);
 		assert_eq!(buf.parts_len(), 3);
-		assert_eq!(buf.part(1), SM1);
-		assert_eq!(buf.part(2), MD1);
-		assert_eq!(buf.part(3), LG1);
+		assert_eq!(&buf[1], SM1);
+		assert_eq!(&buf[2], MD1);
+		assert_eq!(&buf[3], LG1);
 
 		// Try removing from each index.
 		buf = MsgBuf::from_many(&[SM1, MD1, LG1]);
 		buf.remove_part(1);
 		assert_eq!(buf.len(), 15);
 		assert_eq!(buf.parts_len(), 2);
-		assert_eq!(buf.part(1), MD1);
-		assert_eq!(buf.part(2), LG1);
+		assert_eq!(&buf[1], MD1);
+		assert_eq!(&buf[2], LG1);
 
 		buf = MsgBuf::from_many(&[SM1, MD1, LG1]);
 		buf.remove_part(2);
 		assert_eq!(buf.len(), 12);
 		assert_eq!(buf.parts_len(), 2);
-		assert_eq!(buf.part(1), SM1);
-		assert_eq!(buf.part(2), LG1);
+		assert_eq!(&buf[1], SM1);
+		assert_eq!(&buf[2], LG1);
 
 		buf = MsgBuf::from_many(&[SM1, MD1, LG1]);
 		buf.remove_part(3);
 		assert_eq!(buf.len(), 9);
 		assert_eq!(buf.parts_len(), 2);
-		assert_eq!(buf.part(1), SM1);
-		assert_eq!(buf.part(2), MD1);
+		assert_eq!(&buf[1], SM1);
+		assert_eq!(&buf[2], MD1);
 
 		// Now try to remove all parts, from the left.
 		buf = MsgBuf::from_many(&[SM1, MD1, LG1]);
@@ -727,8 +699,8 @@ mod tests {
 			buf.insert_part(1, b);
 			assert_eq!(buf.len(), SM1.len() + b.len());
 			assert_eq!(buf.parts_len(), 2);
-			assert_eq!(buf.part(1), *b);
-			assert_eq!(buf.part(2), SM1);
+			assert_eq!(&buf[1], *b);
+			assert_eq!(&buf[2], SM1);
 		}
 
 		// Test insertion into a multi-part buffer at each index.
@@ -738,7 +710,7 @@ mod tests {
 				buf.insert_part(i, b);
 				assert_eq!(buf.len(), 18 + b.len());
 				assert_eq!(buf.parts_len(), 4);
-				assert_eq!(buf.part(i), *b);
+				assert_eq!(&buf[i], *b);
 			}
 		}
 	}
@@ -752,7 +724,7 @@ mod tests {
 			buf.replace_part(1, b);
 			assert_eq!(buf.len(), b.len());
 			assert_eq!(buf.parts_len(), 1);
-			assert_eq!(&buf.part(1), b);
+			assert_eq!(&buf[1], *b);
 		}
 
 		// Test replacement at each index.
@@ -761,7 +733,7 @@ mod tests {
 				let mut buf = MsgBuf::from_many(&[SM2, MD2, LG2]);
 				buf.replace_part(i, b);
 				assert_eq!(buf.parts_len(), 3);
-				assert_eq!(&buf.part(i), b);
+				assert_eq!(&buf[i], *b);
 			}
 		}
 

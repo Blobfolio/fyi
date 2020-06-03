@@ -5,7 +5,11 @@ This is the partition scheme for the message buffer.
 */
 
 use std::{
-	ops::Range,
+	ops::{
+		AddAssign,
+		Index,
+		Range,
+	},
 	ptr,
 };
 
@@ -19,6 +23,32 @@ use std::{
 pub struct Partitions {
 	inner: [usize; 16],
 	used: usize,
+}
+
+impl AddAssign<usize> for Partitions {
+	fn add_assign(&mut self, other: usize) {
+		assert!(
+			self.used < Self::MAX_USED,
+			"Partitions are full."
+		);
+		self.used += 1;
+		unsafe {
+			ptr::copy_nonoverlapping(
+				&(other + self.inner[self.used - 1]),
+				&mut self.inner[self.used],
+				1
+			);
+		}
+	}
+}
+
+impl Index<usize> for Partitions {
+	type Output = usize;
+
+	fn index(&self, idx: usize) -> &Self::Output {
+		assert!(idx <= self.used);
+		&self.inner[idx]
+	}
 }
 
 
@@ -208,52 +238,6 @@ impl Partitions {
 	// ------------------------------------------------------------------------
 
 	#[must_use]
-	/// Get Part Start
-	///
-	/// Panics if `idx` is out of range.
-	pub fn part_start(&self, idx: usize) -> usize {
-		assert!(
-			0 < idx && idx <= self.used,
-			"Index {:?} is out of range.",
-			idx
-		);
-		unsafe { self.part_start_unchecked(idx) }
-	}
-
-	#[must_use]
-	/// Get Part Start (Unchecked)
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	pub const unsafe fn part_start_unchecked(&self, idx: usize) -> usize {
-		self.inner[idx - 1]
-	}
-
-	#[must_use]
-	/// Get Part End
-	///
-	/// Panics if `idx` is out of range.
-	pub fn part_end(&self, idx: usize) -> usize {
-		assert!(
-			0 < idx && idx <= self.used,
-			"Index {:?} is out of range.",
-			idx
-		);
-		unsafe { self.part_end_unchecked(idx) }
-	}
-
-	#[must_use]
-	/// Get Part End (Unchecked)
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	pub const unsafe fn part_end_unchecked(&self, idx: usize) -> usize {
-		self.inner[idx]
-	}
-
-	#[must_use]
 	/// Get Part
 	///
 	/// Panics if `idx` is out of range.
@@ -354,31 +338,6 @@ impl Partitions {
 	// ------------------------------------------------------------------------
 	// Adding Parts
 	// ------------------------------------------------------------------------
-
-	/// Add Part
-	///
-	/// Panics if the maximum number of parts has already been reached.
-	pub fn add_part(&mut self, len: usize) {
-		assert!(
-			self.used < Self::MAX_USED,
-			"Partitions are full."
-		);
-		unsafe { self.add_part_unchecked(len) }
-	}
-
-	/// Add Part (Unchecked)
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	pub unsafe fn add_part_unchecked(&mut self, len: usize) {
-		self.used += 1;
-		ptr::copy_nonoverlapping(
-			&(len + self.inner[self.used - 1]),
-			&mut self.inner[self.used],
-			1
-		);
-	}
 
 	/// Insert Part
 	///
@@ -681,7 +640,7 @@ mod tests {
 		assert_eq!(empty.max(), 0);
 
 		// Add zero length.
-		empty.add_part(0);
+		empty += 0;
 		assert_eq!(empty.len(), 1);
 		assert_eq!(empty.max(), 0);
 
@@ -691,7 +650,7 @@ mod tests {
 		assert_eq!(empty.max(), 0);
 
 		// Add lengthed.
-		empty.add_part(2);
+		empty += 2;
 		assert_eq!(empty.len(), 1);
 		assert_eq!(empty.max(), 2);
 
@@ -701,9 +660,9 @@ mod tests {
 		assert_eq!(empty.max(), 0);
 
 		// Add a few.
-		empty.add_part(1);
-		empty.add_part(2);
-		empty.add_part(3);
+		empty += 1;
+		empty += 2;
+		empty += 3;
 		assert_eq!(empty.len(), 3);
 		assert_eq!(empty.max(), 6);
 		assert_eq!(empty.part(1), 0..1);
