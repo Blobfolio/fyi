@@ -157,11 +157,11 @@ fn add_part(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::Partitions");
 
 	group.bench_function("add_part(0)", move |b| {
-		b.iter_with_setup(|| Partitions::default(), |mut parts| parts.add_part(black_box(0)))
+		b.iter_with_setup(|| Partitions::default(), |mut parts| parts += black_box(0))
 	});
 
 	group.bench_function("add_part(10)", move |b| {
-		b.iter_with_setup(|| Partitions::default(), |mut parts| parts.add_part(black_box(10)))
+		b.iter_with_setup(|| Partitions::default(), |mut parts| parts += black_box(10))
 	});
 
 	group.finish();
@@ -289,6 +289,19 @@ fn shrink_part(c: &mut Criterion) {
 	group.finish();
 }
 
+fn spread(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_msg::Partitions");
+
+	group.bench_function("[1, 10, 3, 4, 5, 6, 7, 8, 9, 1].spread(2, 5)", move |b| {
+		b.iter_with_setup(||
+			Partitions::new(&[1, 10, 3, 4, 5, 6, 7, 8, 9, 1]),
+			|parts| parts.spread(black_box(2), black_box(5))
+		)
+	});
+
+	group.finish();
+}
+
 
 
 criterion_group!(
@@ -305,5 +318,7 @@ criterion_group!(
 	insert_part,
 	remove_part,
 	shrink_part,
+
+	spread,
 );
 criterion_main!(benches);
