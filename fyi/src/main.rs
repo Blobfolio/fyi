@@ -111,7 +111,7 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 
 	// Add a timestamp?
 	if opts.is_present("time") {
-		msg.set_timestamp(false);
+		msg.set_timestamp();
 	}
 
 	// Print it to `Stderr`.

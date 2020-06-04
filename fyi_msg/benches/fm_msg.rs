@@ -61,8 +61,8 @@ fn set_indent(c: &mut Criterion) {
 fn set_timestamp(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::Msg");
 
-	group.bench_function("set_timestamp(false)", move |b| {
-		b.iter_with_setup(|| Msg::success("This is an example message!"), |mut msg| msg.set_timestamp(black_box(false)))
+	group.bench_function("set_timestamp()", move |b| {
+		b.iter_with_setup(|| Msg::success("This is an example message!"), |mut msg| msg.set_timestamp())
 	});
 
 	group.finish();

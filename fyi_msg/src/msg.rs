@@ -305,28 +305,40 @@ impl Msg {
 		}
 	}
 
-	/// Timestamp.
-	pub fn set_timestamp(&mut self, clear: bool) {
-		unsafe {
-			// Remove the timestamp, if any.
-			if clear {
-				if ! self.0.part_is_empty_unchecked(Self::IDX_TIMESTAMP_PRE) {
-					self.0.clear_part_unchecked(Self::IDX_TIMESTAMP_PRE);
-					self.0.clear_part_unchecked(Self::IDX_TIMESTAMP);
-					self.0.clear_part_unchecked(Self::IDX_TIMESTAMP_POST);
-				}
-			}
-			else {
-				// The pre and post need to be populated too.
-				if self.0.part_is_empty_unchecked(Self::IDX_TIMESTAMP_PRE) {
-					self.0.replace_part_unchecked(Self::IDX_TIMESTAMP_PRE, LBL_TIMESTAMP_PRE);
-					self.0.replace_part_unchecked(Self::IDX_TIMESTAMP_POST, LBL_TIMESTAMP_POST);
-				}
+	/// Clear Timestamp.
+	pub fn clear_timestamp(&mut self) {
+		self.0.clear_part(IDX_TIMESTAMP_PRE);
+		self.0.clear_part(IDX_TIMESTAMP);
+		self.0.clear_part(IDX_TIMESTAMP_POST);
+	}
 
-				// And of course, the timestamp.
-				self.write_timestamp();
-			}
+	/// Timestamp.
+	pub fn set_timestamp(&mut self) {
+		use chrono::{
+			Datelike,
+			Local,
+			Timelike,
+		};
+
+		// If there wasn't already a timestamp, we need to set the defaults.
+		if self.0.part_is_empty(IDX_TIMESTAMP_PRE) {
+			self.0.replace_part(IDX_TIMESTAMP_PRE, LBL_TIMESTAMP_PRE);
+			self.0.replace_part(IDX_TIMESTAMP_POST, LBL_TIMESTAMP_POST);
+			self.0.replace_part(IDX_TIMESTAMP, &[50, 48, 48, 48, 45, 48, 48, 45, 48, 48, 32, 48, 48, 58, 48, 48, 58, 48, 48]);
 		}
+
+		// And of course, the timestamp.
+		let buf = &mut self.0[IDX_TIMESTAMP];
+		let now = Local::now();
+
+		// Y2.1K!!! We're ignoring the century because, duh, but we'll need to
+		// implement something more robust over the next 80 years. Haha.
+		buf[2..4].copy_from_slice(time_format_dd((now.year() as u32).saturating_sub(2000)));
+		buf[5..7].copy_from_slice(time_format_dd(now.month()));
+		buf[8..10].copy_from_slice(time_format_dd(now.day()));
+		buf[11..13].copy_from_slice(time_format_dd(now.hour()));
+		buf[14..16].copy_from_slice(time_format_dd(now.minute()));
+		buf[17..19].copy_from_slice(time_format_dd(now.second()));
 	}
 
 
@@ -345,34 +357,4 @@ impl Msg {
 	new_prefix!(success, &[27, 91, 49, 59, 57, 50, 109], &[83, 117, 99, 99, 101, 115, 115]);
 	new_prefix!(task, &[27, 91, 49, 59, 51, 56, 59, 53, 59, 49, 57, 57, 109], &[84, 97, 115, 107]);
 	new_prefix!(warning, &[27, 91, 49, 59, 57, 51, 109], &[87, 97, 114, 110, 105, 110, 103]);
-
-
-
-	// ------------------------------------------------------------------------
-	// Private Methods
-	// ------------------------------------------------------------------------
-
-	/// Write the Timestamp
-	///
-	/// This is a little tedious, so gets its own method.
-	fn write_timestamp(&mut self) {
-		use chrono::{
-			Datelike,
-			Local,
-			Timelike,
-		};
-
-		// 2000-00-00 00:00:00
-		let mut buf: [u8; 19] = [50, 48, 48, 48, 45, 48, 48, 45, 48, 48, 32, 48, 48, 58, 48, 48, 58, 48, 48];
-		let now = Local::now();
-
-		buf[2..4].copy_from_slice(time_format_dd((now.year() as u32).saturating_sub(2000)));
-		buf[5..7].copy_from_slice(time_format_dd(now.month()));
-		buf[8..10].copy_from_slice(time_format_dd(now.day()));
-		buf[11..13].copy_from_slice(time_format_dd(now.hour()));
-		buf[14..16].copy_from_slice(time_format_dd(now.minute()));
-		buf[17..19].copy_from_slice(time_format_dd(now.second()));
-
-		unsafe { self.0.replace_part_unchecked(Self::IDX_TIMESTAMP, &buf); }
-	}
 }
