@@ -1,7 +1,8 @@
 /*!
 # FYI Message: Message Buffer Partitions
 
-This is the partition scheme for the message buffer.
+This is the partition scheme for the message buffer and is intended for use
+within the crate only; it does not implement safety checks on its own.
 */
 
 use std::{
@@ -27,10 +28,6 @@ pub struct Partitions {
 
 impl AddAssign<usize> for Partitions {
 	fn add_assign(&mut self, other: usize) {
-		assert!(
-			self.used < Self::MAX_USED,
-			"Partitions are full."
-		);
 		self.used += 1;
 		unsafe {
 			ptr::copy_nonoverlapping(
@@ -45,8 +42,8 @@ impl AddAssign<usize> for Partitions {
 impl Index<usize> for Partitions {
 	type Output = usize;
 
+	#[inline]
 	fn index(&self, idx: usize) -> &Self::Output {
-		assert!(idx <= self.used);
 		&self.inner[idx]
 	}
 }
@@ -122,21 +119,13 @@ impl Partitions {
 					);
 				}
 			}
-			else {
-				assert_eq!(
-					out.inner[out.used],
-					max,
-					"The partition boundaries ends at {:?} instead of {:?}",
-					out.inner[out.used],
-					max
-				);
-			}
 
 			out
 		}
 	}
 
 	#[must_use]
+	#[inline]
 	/// Single
 	///
 	/// Create a single partition with the specified length.
@@ -148,24 +137,14 @@ impl Partitions {
 	}
 
 	#[must_use]
+	#[inline]
 	/// Splat
 	///
 	/// Create `num` empty partitions, where `num` is between 1 and 16.
 	pub fn splat(num: usize) -> Self {
-		let num = usize::max(1, num);
-		unsafe { Self::splat_unchecked(usize::min(Self::MAX_USED, num)) }
-	}
-
-	#[must_use]
-	/// Splat (Unchecked)
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	pub const unsafe fn splat_unchecked(num: usize) -> Self {
 		Self {
 			inner: [0; 16],
-			used: num,
+			used: usize::max(1, num),
 		}
 	}
 
@@ -204,18 +183,21 @@ impl Partitions {
 		}
 	}
 
+	#[inline]
 	#[must_use]
 	/// Is Empty.
 	pub const fn is_empty(&self) -> bool {
 		0 == self.used
 	}
 
+	#[inline]
 	#[must_use]
 	/// Number of Partitions.
 	pub const fn len(&self) -> usize {
 		self.used
 	}
 
+	#[inline]
 	#[must_use]
 	/// Maximum Value.
 	pub const fn max(&self) -> usize {
@@ -237,99 +219,42 @@ impl Partitions {
 	// Fetching Parts
 	// ------------------------------------------------------------------------
 
+	#[inline]
 	#[must_use]
 	/// Get Part
 	///
 	/// Panics if `idx` is out of range.
-	pub fn part(&self, idx: usize) -> Range<usize> {
-		assert!(
-			0 < idx && idx <= self.used,
-			"Index {:?} is out of range.",
-			idx
-		);
-		unsafe { self.part_unchecked(idx) }
-	}
-
-	#[must_use]
-	/// Get Part (Unchecked)
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	pub const unsafe fn part_unchecked(&self, idx: usize) -> Range<usize> {
+	pub const fn part(&self, idx: usize) -> Range<usize> {
 		Range { start: self.inner[idx - 1], end: self.inner[idx] }
 	}
 
+	#[inline]
 	#[must_use]
 	/// Get Spanning Range Across Parts
 	///
 	/// Panics if `idx1` or `idx2` are out of range or out of order.
-	pub fn spread(&self, idx1: usize, idx2: usize) -> Range<usize> {
-		assert!(
-			0 < idx1 && idx1 < idx2 && idx2 <= self.used,
-			"Invalid spread range: {:?} to {:?}",
-			idx1,
-			idx2
-		);
-		unsafe { self.spread_unchecked(idx1, idx2) }
-	}
-
-	#[must_use]
-	/// Get Spanning Range Across Parts (Unchecked)
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	pub const unsafe fn spread_unchecked(&self, idx1: usize, idx2: usize) -> Range<usize> {
+	pub const fn spread(&self, idx1: usize, idx2: usize) -> Range<usize> {
 		Range {
 			start: self.inner[idx1 - 1],
 			end: self.inner[idx2],
 		}
 	}
 
+	#[inline]
 	#[must_use]
 	/// Get Part Length
 	///
 	/// Panics if `idx` is out of range.
-	pub fn part_len(&self, idx: usize) -> usize {
-		assert!(
-			0 < idx && idx <= self.used,
-			"Index {:?} is out of range.",
-			idx
-		);
-		unsafe { self.part_len_unchecked(idx) }
-	}
-
-	#[must_use]
-	/// Get Part Length (Unchecked)
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	pub const unsafe fn part_len_unchecked(&self, idx: usize) -> usize {
+	pub const fn part_len(&self, idx: usize) -> usize {
 		self.inner[idx] - self.inner[idx - 1]
 	}
 
+	#[inline]
 	#[must_use]
 	/// Part is Empty
 	///
 	/// Panics if `idx` is out of range.
-	pub fn part_is_empty(&self, idx: usize) -> bool {
-		assert!(
-			0 < idx && idx <= self.used,
-			"Index {:?} is out of range.",
-			idx
-		);
-		unsafe { self.part_is_empty_unchecked(idx) }
-	}
-
-	#[must_use]
-	/// Part is Empty (Unchecked)
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	pub const unsafe fn part_is_empty_unchecked(&self, idx: usize) -> bool {
+	pub const fn part_is_empty(&self, idx: usize) -> bool {
 		self.inner[idx] == self.inner[idx - 1]
 	}
 
@@ -344,111 +269,67 @@ impl Partitions {
 	/// Panics if the maximum number of parts has been reached or `idx` is out
 	/// of bounds.
 	pub fn insert_part(&mut self, idx: usize, len: usize) {
-		assert!(
-			0 < idx && idx <= self.used && self.used < Self::MAX_USED,
-			"Index {:?} is out of range, or the partitions are full.",
-			idx
-		);
-		unsafe { self.insert_part_unchecked(idx, len) }
-	}
-
-	/// Insert Part (Unchecked)
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	pub unsafe fn insert_part_unchecked(&mut self, idx: usize, len: usize) {
-		if 0 == len { self.insert_empty_part_unchecked(idx); }
+		if 0 == len { self.insert_empty_part(idx); }
 		else {
 			// Shift and nudge the tail, working backwards.
-			//
-			// This job would normally be well-suited to a blanket `ptr::copy()` of
-			// the entire tail one index up, but our array isn't big enough to
-			// benefit from that. Copying items over individually within a reverse
-			// loop is 2-25% faster.
-			let mut tail_idx: usize = self.used;
-			while tail_idx >= idx {
-				ptr::copy_nonoverlapping(
-					&(len + self.inner[tail_idx]),
-					&mut self.inner[tail_idx + 1],
-					1
-				);
-				tail_idx -= 1;
+			unsafe {
+				self.used += 1;
+				let mut tail_idx: usize = self.used;
+				while tail_idx >= idx {
+					ptr::copy_nonoverlapping(
+						&(len + self.inner[tail_idx - 1]),
+						&mut self.inner[tail_idx],
+						1
+					);
+					tail_idx -= 1;
+				}
 			}
-
-			// And finally, adjust our "new" value.
-			self.used += 1;
-			ptr::copy_nonoverlapping(
-				&(len + self.inner[idx - 1]),
-				&mut self.inner[idx],
-				1
-			);
 		}
 	}
 
 	/// Insert Empty Part (Unchecked)
 	///
 	/// This is the same as the main method, but skips the `len+` operations.
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	unsafe fn insert_empty_part_unchecked(&mut self, idx: usize) {
-		let mut tail_idx: usize = self.used;
-		while tail_idx >= idx {
-			ptr::copy_nonoverlapping(
-				&self.inner[tail_idx],
-				&mut self.inner[tail_idx + 1],
-				1
-			);
-			tail_idx -= 1;
+	fn insert_empty_part(&mut self, idx: usize) {
+		// Shift and nudge the tail, working backwards.
+		unsafe {
+			self.used += 1;
+			let mut tail_idx: usize = self.used;
+			while tail_idx >= idx {
+				ptr::copy_nonoverlapping(
+					&self.inner[tail_idx - 1],
+					&mut self.inner[tail_idx],
+					1
+				);
+				tail_idx -= 1;
+			}
 		}
-
-		// And finally, adjust our "new" value.
-		self.used += 1;
-		ptr::copy_nonoverlapping(
-			&self.inner[idx - 1],
-			&mut self.inner[idx],
-			1
-		);
 	}
 
 	/// Remove Part
 	///
 	/// Panics if `idx` is out of bounds.
-	pub fn remove_part(&mut self, idx: usize) {
-		assert!(
-			0 < idx && idx <= self.used,
-			"Index {:?} is out of range.",
-			idx
-		);
-		unsafe { self.remove_part_unchecked(idx) }
-	}
+	pub fn remove_part(&mut self, mut idx: usize) {
+		unsafe {
+			// Shift and nudge the tail.
+			let adj: usize = self.part_len(idx);
 
-	/// Remove Part (Unchecked)
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	pub unsafe fn remove_part_unchecked(&mut self, mut idx: usize) {
-		// Shift and nudge the tail.
-		let adj: usize = self.part_len_unchecked(idx);
+			while idx < self.used {
+				ptr::copy_nonoverlapping(
+					&(self.inner[idx + 1] - adj),
+					&mut self.inner[idx],
+					1
+				);
+				idx += 1;
+			}
 
-		while idx < self.used {
+			// Zero out the last part.
 			ptr::copy_nonoverlapping(
-				&(self.inner[idx + 1] - adj),
-				&mut self.inner[idx],
+				&self.inner[0],
+				&mut self.inner[self.used],
 				1
 			);
-			idx += 1;
 		}
-
-		// Zero out the last part.
-		ptr::copy_nonoverlapping(
-			&self.inner[0],
-			&mut self.inner[self.used],
-			1
-		);
 
 		self.used -= 1;
 	}
@@ -461,28 +342,10 @@ impl Partitions {
 
 	/// Grow Part
 	///
-	/// Panics if `idx` is out of range or `adj` is bigger than the part.
-	pub fn grow_part(&mut self, idx: usize, adj: usize) {
-		assert!(
-			0 < idx && idx <= self.used,
-			"Index {:?} is out of range.",
-			idx
-		);
-		unsafe { self.grow_part_unchecked(idx, adj) }
-	}
-
-	/// Grow Part (Unchecked)
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	pub unsafe fn grow_part_unchecked(&mut self, mut idx: usize, adj: usize) {
+	/// Panics if `idx` is out of range.
+	pub fn grow_part(&mut self, mut idx: usize, adj: usize) {
 		while idx <= self.used {
-			ptr::copy_nonoverlapping(
-				&(adj + self.inner[idx]),
-				&mut self.inner[idx],
-				1
-			);
+			self.inner[idx] += adj;
 			idx += 1;
 		}
 	}
@@ -490,22 +353,7 @@ impl Partitions {
 	/// Shrink Part
 	///
 	/// Panics if `idx` is out of range or `adj` is bigger than the part.
-	pub fn shrink_part(&mut self, idx: usize, adj: usize) {
-		assert!(
-			0 < idx && idx <= self.used && adj <= unsafe { self.part_len_unchecked(idx) },
-			"Index {:?} is out of range or the part isn't big enough to reduce by {:?}.",
-			idx,
-			adj
-		);
-		unsafe { self.shrink_part_unchecked(idx, adj) }
-	}
-
-	/// Shrink Part (Unchecked)
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	pub unsafe fn shrink_part_unchecked(&mut self, mut idx: usize, adj: usize) {
+	pub fn shrink_part(&mut self, mut idx: usize, adj: usize) {
 		while idx <= self.used {
 			self.inner[idx] -= adj;
 			idx += 1;

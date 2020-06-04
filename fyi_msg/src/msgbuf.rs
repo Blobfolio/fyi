@@ -3,6 +3,9 @@
 
 `MsgBuf` is a light wrapper containing a 1024-capacity `bytes::BytesMut` and a
 partition table to logically slices within the buffer.
+
+This is intended for use within the crate only; it does not implement safety
+checks on its own.
 */
 
 use bytes::BytesMut;
@@ -47,7 +50,7 @@ impl Borrow<[u8]> for MsgBuf {
 }
 
 impl Default for MsgBuf {
-	/// Default.
+	#[inline]
 	fn default() -> Self {
 		Self {
 			buf: BytesMut::with_capacity(1024),
@@ -59,7 +62,7 @@ impl Default for MsgBuf {
 impl Deref for MsgBuf {
 	type Target = [u8];
 
-	/// Deref.
+	#[inline]
 	fn deref(&self) -> &Self::Target {
 		&*self.buf
 	}
@@ -67,7 +70,6 @@ impl Deref for MsgBuf {
 
 impl fmt::Display for MsgBuf {
 	#[inline]
-	/// Display.
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_str(unsafe { std::str::from_utf8_unchecked(&*self.buf) })
 	}
@@ -76,12 +78,14 @@ impl fmt::Display for MsgBuf {
 impl Index<usize> for MsgBuf {
 	type Output = [u8];
 
+	#[inline]
 	fn index(&self, idx: usize) -> &Self::Output {
 		&self.buf[self.parts.part(idx)]
 	}
 }
 
 impl IndexMut<usize> for MsgBuf {
+	#[inline]
 	fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
 		&mut self.buf[self.parts.part(idx)]
 	}
@@ -92,6 +96,7 @@ impl MsgBuf {
 	// Instantiation
 	// ------------------------------------------------------------------------
 
+	#[inline]
 	#[must_use]
 	/// New
 	///
@@ -102,17 +107,13 @@ impl MsgBuf {
 	/// Panics if more than 15 parts are constructed or the chunks add up to
 	/// more than the buffer's length.
 	pub fn new(buf: &[u8], parts: &[usize]) -> Self {
-		assert!(
-			Partitions::MAX_USED >= parts.len(),
-			"MsgBufs may not have more than {} parts.",
-			Partitions::MAX_USED
-		);
 		Self {
 			buf: BytesMut::from(buf),
 			parts: Partitions::new_bounded(parts, buf.len()),
 		}
 	}
 
+	#[inline]
 	#[must_use]
 	/// From
 	///
@@ -132,23 +133,6 @@ impl MsgBuf {
 	///
 	/// Panics if more than `15` parts are needed.
 	pub fn from_many(bufs: &[&[u8]]) -> Self {
-		assert!(
-			Partitions::MAX_USED >= bufs.len(),
-			"MsgBufs may not have more than {} parts.",
-			Partitions::MAX_USED
-		);
-		unsafe { Self::from_many_unchecked(bufs) }
-	}
-
-	#[must_use]
-	/// From Many (Unchecked)
-	///
-	/// Same as `from_many()` but without the length assertion.
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	pub unsafe fn from_many_unchecked(bufs: &[&[u8]]) -> Self {
 		let mut out = Self::default();
 
 		bufs.iter().for_each(|b| {
@@ -158,6 +142,7 @@ impl MsgBuf {
 		out
 	}
 
+	#[inline]
 	#[must_use]
 	/// Splat
 	///
@@ -189,6 +174,7 @@ impl MsgBuf {
 		self.parts.clear();
 	}
 
+	#[inline]
 	/// Flatten
 	///
 	/// Keep the buffer, but drop to a single, spanning partition.
@@ -196,16 +182,24 @@ impl MsgBuf {
 		self.parts.flatten();
 	}
 
+	#[inline]
 	#[must_use]
 	/// Buffer Is Empty.
-	pub fn is_empty(&self) -> bool {
-		self.buf.is_empty()
+	///
+	/// Technically, we're testing the parts rather than the buffer since that
+	/// lets us make this a `const fn`.
+	pub const fn is_empty(&self) -> bool {
+		0 == self.parts.max()
 	}
 
+	#[inline]
 	#[must_use]
 	/// Buffer length.
-	pub fn len(&self) -> usize {
-		self.buf.len()
+	///
+	/// Same as with `is_empty()`, we're technically checking the parts rather
+	/// than the buffer since that lets us make this a `const fn`.
+	pub const fn len(&self) -> usize {
+		self.parts.max()
 	}
 
 	/// Zero
@@ -222,12 +216,14 @@ impl MsgBuf {
 	// Fetching Parts
 	// ------------------------------------------------------------------------
 
+	#[inline]
 	#[must_use]
 	/// Number of Parts.
 	pub const fn parts_len(&self) -> usize {
 		self.parts.len()
 	}
 
+	#[inline]
 	#[must_use]
 	/// Spread.
 	///
@@ -238,16 +234,7 @@ impl MsgBuf {
 		&self.buf[self.parts.spread(idx1, idx2)]
 	}
 
-	#[must_use]
-	/// Spread Unchecked.
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	pub unsafe fn spread_unchecked(&self, idx1: usize, idx2: usize) -> &[u8] {
-		&self.buf[self.parts.spread_unchecked(idx1, idx2)]
-	}
-
+	#[inline]
 	#[must_use]
 	/// Spread Mut.
 	///
@@ -258,50 +245,22 @@ impl MsgBuf {
 		&mut self.buf[self.parts.spread(idx1, idx2)]
 	}
 
-	#[must_use]
-	/// Spread Mut Unchecked.
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	pub unsafe fn spread_mut_unchecked(&mut self, idx1: usize, idx2: usize) -> &mut [u8] {
-		&mut self.buf[self.parts.spread_unchecked(idx1, idx2)]
-	}
-
+	#[inline]
 	#[must_use]
 	/// Is Part Empty
 	///
 	/// Panics if `idx` is out of range.
-	pub fn part_is_empty(&self, idx: usize) -> bool {
+	pub const fn part_is_empty(&self, idx: usize) -> bool {
 		self.parts.part_is_empty(idx)
 	}
 
-	#[must_use]
-	/// Is Part Empty (Unchecked)
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	pub const unsafe fn part_is_empty_unchecked(&self, idx: usize) -> bool {
-		self.parts.part_is_empty_unchecked(idx)
-	}
-
+	#[inline]
 	#[must_use]
 	/// Get Part Length
 	///
 	/// Panics if `idx` is out of range.
-	pub fn part_len(&self, idx: usize) -> usize {
+	pub const fn part_len(&self, idx: usize) -> usize {
 		self.parts.part_len(idx)
-	}
-
-	#[must_use]
-	/// Get Part Length (Unchecked)
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	pub const unsafe fn part_len_unchecked(&self, idx: usize) -> usize {
-		self.parts.part_len_unchecked(idx)
 	}
 
 
@@ -341,7 +300,7 @@ impl MsgBuf {
 		}
 
 		// Realign the partitions.
-		unsafe { self.parts.remove_part_unchecked(idx); }
+		self.parts.remove_part(idx);
 	}
 
 
@@ -356,29 +315,11 @@ impl MsgBuf {
 	pub fn clear_part(&mut self, idx: usize) {
 		let len: usize = self.parts.part_len(idx);
 		if 0 != len {
-			unsafe {
-				// Shrink the buffer.
-				self.shrink_buffer_at(self.parts[idx], len);
-
-				// Realign the partitions.
-				self.parts.shrink_part_unchecked(idx, len);
-			}
-		}
-	}
-
-	/// Clear Part (Unchecked)
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	pub unsafe fn clear_part_unchecked(&mut self, idx: usize) {
-		let len: usize = self.parts.part_len_unchecked(idx);
-		if 0 != len {
 			// Shrink the buffer.
 			self.shrink_buffer_at(self.parts[idx], len);
 
 			// Realign the partitions.
-			self.parts.shrink_part_unchecked(idx, len);
+			self.parts.shrink_part(idx, len);
 		}
 	}
 
@@ -394,58 +335,23 @@ impl MsgBuf {
 			return;
 		}
 
-		unsafe {
-			let old_len: usize = self.parts.part_len(idx);
-
-			// Grow the part to size.
-			if new_len > old_len {
-				let adj: usize = new_len - old_len;
-				self.grow_buffer_at(self.parts[idx], adj);
-				self.parts.grow_part_unchecked(idx, adj);
-			}
-			// Shrink the part to size.
-			else if old_len > new_len {
-				let adj: usize = old_len - new_len;
-				self.shrink_buffer_at(self.parts[idx], adj);
-				self.parts.shrink_part_unchecked(idx, adj);
-			}
-
-			// Sizes match, now we can copy!
-			self.buf[self.parts.part_unchecked(idx)].copy_from_slice(buf);
-		}
-	}
-
-	#[allow(clippy::comparison_chain)]
-	/// Replace Part (Unchecked)
-	///
-	/// # Safety
-	///
-	/// This method does not check index sanity.
-	pub unsafe fn replace_part_unchecked(&mut self, idx: usize, buf: &[u8]) {
-		// Check the new size first; we might just need to clear the buffer.
-		let new_len: usize = buf.len();
-		if 0 == new_len {
-			self.clear_part_unchecked(idx);
-			return;
-		}
-
-		let old_len: usize = self.parts.part_len_unchecked(idx);
+		let old_len: usize = self.parts.part_len(idx);
 
 		// Grow the part to size.
 		if new_len > old_len {
 			let adj: usize = new_len - old_len;
 			self.grow_buffer_at(self.parts[idx], adj);
-			self.parts.grow_part_unchecked(idx, adj);
+			self.parts.grow_part(idx, adj);
 		}
 		// Shrink the part to size.
 		else if old_len > new_len {
 			let adj: usize = old_len - new_len;
 			self.shrink_buffer_at(self.parts[idx], adj);
-			self.parts.shrink_part_unchecked(idx, adj);
+			self.parts.shrink_part(idx, adj);
 		}
 
 		// Sizes match, now we can copy!
-		self.buf[self.parts.part_unchecked(idx)].copy_from_slice(buf);
+		self.buf[self.parts.part(idx)].copy_from_slice(buf);
 	}
 
 
@@ -457,12 +363,6 @@ impl MsgBuf {
 	/// Grow Buffer At/By
 	///
 	/// Insert `adj` zeroes into the buffer at `pos - 1`.
-	///
-	/// # Safety
-	///
-	/// It is up to the parent method to adjust the partitions accordingly.
-	/// At the very least, the method will panic if the position is out of
-	/// range.
 	fn grow_buffer_at(&mut self, pos: usize, adj: usize) {
 		let len: usize = self.buf.len();
 
@@ -481,12 +381,6 @@ impl MsgBuf {
 	/// Shrink Buffer At/By
 	///
 	/// Remove the previous `adj` bytes preceding position `pos`.
-	///
-	/// # Safety
-	///
-	/// It is up to the parent method to adjust the partitions accordingly.
-	/// At the very least, the method will panic if the position is out of
-	/// range.
 	fn shrink_buffer_at(&mut self, pos: usize, adj: usize) {
 		let len: usize = self.buf.len();
 

@@ -41,17 +41,28 @@ macro_rules! new_prefix {
 		#[must_use]
 		/// New Prefix + Msg
 		pub fn $fn<T: Borrow<str>> (msg: T) -> Self {
-			unsafe {
-				let msg = msg.borrow();
-				if msg.is_empty() { Self::new_prefix_unchecked($pre, $prefix) }
-				else { Self::new_prefix_msg_unchecked($pre, $prefix, msg.as_bytes()) }
-			}
+			let msg = msg.borrow();
+			if msg.is_empty() { Self::new_prefix_unchecked($pre, $prefix) }
+			else { Self::new_prefix_msg_unchecked($pre, $prefix, msg.as_bytes()) }
 		}
 	};
 }
 
 
 
+/// The Message Partitions!
+const IDX_INDENT: usize = 1;
+const IDX_TIMESTAMP_PRE: usize = 2;  // ANSI.
+const IDX_TIMESTAMP: usize = 3;
+const IDX_TIMESTAMP_POST: usize = 4; // ANSI.
+const IDX_PREFIX_PRE: usize = 5;     // ANSI.
+const IDX_PREFIX: usize = 6;
+const IDX_PREFIX_POST: usize = 7;    // ANSI.
+const IDX_MSG_PRE: usize = 8;        // ANSI.
+const IDX_MSG: usize = 9;
+const IDX_MSG_POST: usize = 10;      // ANSI.
+
+/// Other repeated bits.
 const LBL_MSG_PRE: &[u8] = &[27, 91, 49, 109];
 const LBL_PREFIX_POST: &[u8] = &[58, 27, 91, 48, 109, 32];
 const LBL_RESET: &[u8] = &[27, 91, 48, 109];
@@ -66,7 +77,6 @@ pub struct Msg(MsgBuf);
 
 impl AsRef<str> for Msg {
 	#[inline]
-	/// As Str.
 	fn as_ref(&self) -> &str {
 		unsafe { std::str::from_utf8_unchecked(&*self.0) }
 	}
@@ -74,7 +84,6 @@ impl AsRef<str> for Msg {
 
 impl AsRef<[u8]> for Msg {
 	#[inline]
-	/// As Bytes.
 	fn as_ref(&self) -> &[u8] {
 		&*self.0
 	}
@@ -95,7 +104,7 @@ impl Borrow<[u8]> for Msg {
 }
 
 impl Default for Msg {
-	/// Default.
+	#[inline]
 	fn default() -> Self {
 		Self(MsgBuf::splat(10))
 	}
@@ -104,9 +113,7 @@ impl Default for Msg {
 impl Deref for Msg {
 	type Target = [u8];
 
-	/// Deref.
-	///
-	/// We deref to `&[u8]` as most contexts want bytes.
+	#[inline]
 	fn deref(&self) -> &Self::Target {
 		&self.0
 	}
@@ -114,7 +121,6 @@ impl Deref for Msg {
 
 impl fmt::Display for Msg {
 	#[inline]
-	/// Display.
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_str(self.as_ref())
 	}
@@ -123,20 +129,6 @@ impl fmt::Display for Msg {
 
 
 impl Msg {
-	/// The Message Partition!
-	const IDX_INDENT: usize = 1;
-	const IDX_TIMESTAMP_PRE: usize = 2;  // ANSI.
-	const IDX_TIMESTAMP: usize = 3;
-	const IDX_TIMESTAMP_POST: usize = 4; // ANSI.
-	const IDX_PREFIX_PRE: usize = 5;     // ANSI.
-	const IDX_PREFIX: usize = 6;
-	const IDX_PREFIX_POST: usize = 7;    // ANSI.
-	const IDX_MSG_PRE: usize = 8;        // ANSI.
-	const IDX_MSG: usize = 9;
-	const IDX_MSG_POST: usize = 10;      // ANSI.
-
-
-
 	// ------------------------------------------------------------------------
 	// Public Static Methods
 	// ------------------------------------------------------------------------
@@ -154,22 +146,18 @@ impl Msg {
 			// Neither.
 			(true, true) => Self::default(),
 			// Both.
-			(false, false) => unsafe {
-				Self::new_prefix_msg_unchecked(
-					ansi_code_bold(prefix_color),
-					prefix.as_bytes(),
-					msg.as_bytes()
-				)
-			},
+			(false, false) => Self::new_prefix_msg_unchecked(
+				ansi_code_bold(prefix_color),
+				prefix.as_bytes(),
+				msg.as_bytes()
+			),
 			// Message only.
-			(true, false) => unsafe { Self::new_msg_unchecked(msg.as_bytes()) },
+			(true, false) => Self::new_msg_unchecked(msg.as_bytes()),
 			// Prefix only.
-			(false, true) => unsafe {
-				Self::new_prefix_unchecked(
-					ansi_code_bold(prefix_color),
-					prefix.as_bytes()
-				)
-			},
+			(false, true) => Self::new_prefix_unchecked(
+				ansi_code_bold(prefix_color),
+				prefix.as_bytes()
+			),
 		}
 	}
 
@@ -181,8 +169,8 @@ impl Msg {
 
 	#[must_use]
 	/// New Prefix + Msg (Unchecked)
-	unsafe fn new_prefix_msg_unchecked(prefix_pre: &[u8], prefix: &[u8], msg: &[u8]) -> Self {
-		Self(MsgBuf::from_many_unchecked(&[
+	fn new_prefix_msg_unchecked(prefix_pre: &[u8], prefix: &[u8], msg: &[u8]) -> Self {
+		Self(MsgBuf::from_many(&[
 			// Indentation and timestamp.
 			&[], &[], &[], &[],
 			prefix_pre,
@@ -196,8 +184,8 @@ impl Msg {
 
 	#[must_use]
 	/// New Prefix (Unchecked)
-	unsafe fn new_prefix_unchecked(prefix_pre: &[u8], prefix: &[u8]) -> Self {
-		Self(MsgBuf::from_many_unchecked(&[
+	fn new_prefix_unchecked(prefix_pre: &[u8], prefix: &[u8]) -> Self {
+		Self(MsgBuf::from_many(&[
 			// Indentation and timestamp.
 			&[], &[], &[], &[],
 			prefix_pre,
@@ -210,8 +198,8 @@ impl Msg {
 
 	#[must_use]
 	/// New Message (Unchecked)
-	unsafe fn new_msg_unchecked(msg: &[u8]) -> Self {
-		Self(MsgBuf::from_many_unchecked(&[
+	fn new_msg_unchecked(msg: &[u8]) -> Self {
+		Self(MsgBuf::from_many(&[
 			// Indentation and timestamp.
 			&[], &[], &[], &[],
 			// Prefix.
@@ -231,76 +219,69 @@ impl Msg {
 	/// Indent.
 	pub fn set_indent(&mut self, indent: usize) {
 		let len: usize = usize::min(10, indent) * 4;
-		unsafe {
-			if self.0.part_len_unchecked(Self::IDX_INDENT) != len {
-				// Clear it.
-				if 0 == len { self.0.clear_part_unchecked(Self::IDX_INDENT); }
-				else {
-					self.0.replace_part_unchecked(Self::IDX_INDENT, whitespace(len));
-				}
-			}
+		if 0 == len {
+			self.0.clear_part(IDX_INDENT);
+		}
+		else {
+			self.0.replace_part(IDX_INDENT, whitespace(len));
 		}
 	}
 
 	/// Set Message.
 	pub fn set_msg<T: Borrow<str>>(&mut self, msg: T) {
-		unsafe {
-			let msg = msg.borrow();
+		let msg = msg.borrow();
 
-			// Remove the message.
-			if msg.is_empty() {
-				if ! self.0.part_is_empty_unchecked(Self::IDX_MSG_PRE) {
-					self.0.clear_part_unchecked(Self::IDX_MSG_PRE);
-					self.0.clear_part_unchecked(Self::IDX_MSG);
-					self.0.clear_part_unchecked(Self::IDX_MSG_POST);
-				}
-
-				// We might need to change the end of the prefix too.
-				if ! self.0.part_is_empty_unchecked(Self::IDX_PREFIX_POST) {
-					self.0.replace_part_unchecked(Self::IDX_PREFIX_POST, LBL_RESET);
-				}
+		// Remove the message.
+		if msg.is_empty() {
+			if ! self.0.part_is_empty(IDX_MSG_PRE) {
+				self.0.clear_part(IDX_MSG_PRE);
+				self.0.clear_part(IDX_MSG);
+				self.0.clear_part(IDX_MSG_POST);
 			}
-			// Add or change it.
-			else {
-				// The opening and closing needs to be taken care of.
-				if self.0.part_is_empty_unchecked(Self::IDX_MSG_PRE) {
-					self.0.replace_part_unchecked(Self::IDX_MSG_PRE, LBL_MSG_PRE);
-					self.0.replace_part_unchecked(Self::IDX_MSG_POST, LBL_RESET);
-				}
 
-				self.0.replace_part_unchecked(Self::IDX_MSG, msg.as_bytes());
+			// We might need to change the end of the prefix too.
+			if ! self.0.part_is_empty(IDX_PREFIX_POST) {
+				self.0.replace_part(IDX_PREFIX_POST, LBL_RESET);
+			}
+		}
+		// Add or change it.
+		else {
+			// The opening and closing needs to be taken care of.
+			if self.0.part_is_empty(IDX_MSG_PRE) {
+				self.0.replace_part(IDX_MSG_PRE, LBL_MSG_PRE);
+				self.0.replace_part(IDX_MSG_POST, LBL_RESET);
+			}
 
-				// We might need to change the end of the prefix too.
-				if ! self.0.part_is_empty_unchecked(Self::IDX_PREFIX_POST) {
-					self.0.replace_part_unchecked(Self::IDX_PREFIX_POST, LBL_PREFIX_POST);
-				}
+			self.0.replace_part(IDX_MSG, msg.as_bytes());
+
+			// We might need to change the end of the prefix too.
+			if ! self.0.part_is_empty(IDX_PREFIX_POST) {
+				self.0.replace_part(IDX_PREFIX_POST, LBL_PREFIX_POST);
 			}
 		}
 	}
 
 	/// Set Prefix.
 	pub fn set_prefix<T: Borrow<str>>(&mut self, prefix: T, prefix_color: u8) {
-		unsafe {
-			let prefix = prefix.borrow();
+		let prefix = prefix.borrow();
 
-			// Remove the prefix.
-			if prefix.is_empty() {
-				if ! self.0.part_is_empty_unchecked(Self::IDX_PREFIX_PRE) {
-					self.0.clear_part_unchecked(Self::IDX_PREFIX_PRE);
-					self.0.clear_part_unchecked(Self::IDX_PREFIX);
-					self.0.clear_part_unchecked(Self::IDX_PREFIX_POST);
-				}
+		// Remove the prefix.
+		if prefix.is_empty() {
+			if ! self.0.part_is_empty(IDX_PREFIX_PRE) {
+				self.0.clear_part(IDX_PREFIX_PRE);
+				self.0.clear_part(IDX_PREFIX);
+				self.0.clear_part(IDX_PREFIX_POST);
 			}
-			// Add or change it.
+		}
+		// Add or change it.
+		else {
+			self.0.replace_part(IDX_PREFIX_PRE, ansi_code_bold(prefix_color));
+			self.0.replace_part(IDX_PREFIX, prefix.as_bytes());
+			if self.0.part_is_empty(IDX_MSG_PRE) {
+				self.0.replace_part(IDX_PREFIX_POST, LBL_RESET);
+			}
 			else {
-				self.0.replace_part_unchecked(Self::IDX_PREFIX_PRE, ansi_code_bold(prefix_color));
-				self.0.replace_part_unchecked(Self::IDX_PREFIX, prefix.as_bytes());
-				if self.0.part_is_empty_unchecked(Self::IDX_MSG_PRE) {
-					self.0.replace_part_unchecked(Self::IDX_PREFIX_POST, LBL_RESET);
-				}
-				else {
-					self.0.replace_part_unchecked(Self::IDX_PREFIX_POST, LBL_PREFIX_POST);
-				}
+				self.0.replace_part(IDX_PREFIX_POST, LBL_PREFIX_POST);
 			}
 		}
 	}

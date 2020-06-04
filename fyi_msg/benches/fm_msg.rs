@@ -25,22 +25,18 @@ fn new(c: &mut Criterion) {
 		b.iter(|| Msg::default())
 	});
 
-	println!("{}", Msg::new(blank_str, zero_u8, example_str));
 	group.bench_function("new(\"\", 0, \"This is an example message!\")", move |b| {
 		b.iter(|| Msg::new(blank_str, zero_u8, example_str))
 	});
 
-	println!("{}", Msg::new(prefix_str, one99_u8, example_str));
 	group.bench_function("new(\"Prefix:\", 199, \"This is an example message!\")", move |b| {
 		b.iter(|| Msg::new(prefix_str, one99_u8, example_str))
 	});
 
-	println!("{}", Msg::error(example_str));
 	group.bench_function("error(\"This is an example message!\")", move |b| {
 		b.iter(|| Msg::error(example_str))
 	});
 
-	println!("{}", Msg::debug(example_str));
 	group.bench_function("debug(\"This is an example message!\")", move |b| {
 		b.iter(|| Msg::debug(example_str))
 	});
