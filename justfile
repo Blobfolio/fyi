@@ -49,7 +49,7 @@ bench BENCH="" FILTER="":
 
 
 # Build Release!
-@build:
+@build: clean
 	# First let's build the Rust bit.
 	RUSTFLAGS="{{ rustflags }}" cargo build \
 		--bin "{{ pkg_id }}" \
