@@ -184,7 +184,7 @@ impl Default for ProgressInner {
 	/// Default.
 	fn default() -> Self {
 		Self {
-			buf: MsgBuf::from_many(&[
+			buf: <MsgBuf as From<&[&[u8]; 13]>>::from(&[
 				// Title.
 				&[],
 				// Elapsed.
@@ -252,7 +252,7 @@ impl ProgressInner {
 		}
 		else {
 			Self {
-				buf: MsgBuf::from_many(&[
+				buf: <MsgBuf as From<&[&[u8]; 13]>>::from(&[
 					// Title.
 					&[],
 					// Elapsed.

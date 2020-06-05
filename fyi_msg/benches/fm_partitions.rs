@@ -25,7 +25,7 @@ fn new(c: &mut Criterion) {
 		BenchmarkId::from_parameter("new(&[])"),
 		&[],
 		|b, &parts| {
-			b.iter(|| Partitions::new(&parts));
+			b.iter(|| Partitions::from(&parts));
 		}
 	);
 
@@ -33,7 +33,7 @@ fn new(c: &mut Criterion) {
 		BenchmarkId::from_parameter("new(&[2])"),
 		&[2],
 		|b, &parts| {
-			b.iter(|| Partitions::new(&parts));
+			b.iter(|| Partitions::from(&parts));
 		}
 	);
 
@@ -41,7 +41,7 @@ fn new(c: &mut Criterion) {
 		BenchmarkId::from_parameter("new(&[2, 10])"),
 		&[2, 10],
 		|b, &parts| {
-			b.iter(|| Partitions::new(&parts));
+			b.iter(|| Partitions::from(&parts));
 		}
 	);
 
@@ -49,7 +49,7 @@ fn new(c: &mut Criterion) {
 		BenchmarkId::from_parameter("new(&[1, 2, 5, 4, 3, 3, 0, 8, 9, 1])"),
 		&[1, 2, 5, 4, 3, 3, 0, 8, 9, 1],
 		|b, &parts| {
-			b.iter(|| Partitions::new(&parts));
+			b.iter(|| Partitions::from(&parts));
 		}
 	);
 
@@ -128,7 +128,7 @@ fn clear(c: &mut Criterion) {
 	});
 	group.bench_function("[10, 11, 11, 15, 20, 30, 35, 50, 50, 51].clear()", move |b| {
 		b.iter_with_setup(||
-			Partitions::new(&[10, 1, 0, 4, 5, 10, 5, 15, 0, 1]),
+			Partitions::from(&[10, 1, 0, 4, 5, 10, 5, 15, 0, 1]),
 			|mut parts| parts.clear()
 		)
 	});
@@ -145,7 +145,7 @@ fn flatten(c: &mut Criterion) {
 
 	group.bench_function("[10, 11, 11, 15, 20, 30, 35, 50, 50, 51].flatten()", move |b| {
 		b.iter_with_setup(||
-			Partitions::new(&[10, 1, 0, 4, 5, 10, 5, 15, 0, 1]),
+			Partitions::from(&[10, 1, 0, 4, 5, 10, 5, 15, 0, 1]),
 			|mut parts| parts.flatten()
 		)
 	});
@@ -179,7 +179,7 @@ fn grow_part(c: &mut Criterion) {
 
 	group.bench_function("[1, 2, 3, 4, 5, 6, 7, 8, 9, 1].grow_part(2, 10)", move |b| {
 		b.iter_with_setup(||
-			Partitions::new(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 1]),
+			Partitions::from(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 1]),
 			|mut parts| parts.grow_part(black_box(2), black_box(10))
 		)
 	});
@@ -199,7 +199,7 @@ fn insert_part(c: &mut Criterion) {
 
 	group.bench_function("[1, 2, 3, 4, 5, 6, 7, 8, 9, 1].insert_part(1, 0)", move |b| {
 		b.iter_with_setup(||
-			Partitions::new(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 1]),
+			Partitions::from(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 1]),
 			|mut parts| parts.insert_part(black_box(1), black_box(0))
 		)
 	});
@@ -213,7 +213,7 @@ fn insert_part(c: &mut Criterion) {
 
 	group.bench_function("[1, 2, 3, 4, 5, 6, 7, 8, 9, 1].insert_part(1, 15)", move |b| {
 		b.iter_with_setup(||
-			Partitions::new(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 1]),
+			Partitions::from(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 1]),
 			|mut parts| parts.insert_part(black_box(1), black_box(15))
 		)
 	});
@@ -233,21 +233,21 @@ fn remove_part(c: &mut Criterion) {
 
 	group.bench_function("[1, 2, 0, 4, 5, 6, 7, 8, 9, 1].remove_part(1)", move |b| {
 		b.iter_with_setup(||
-			Partitions::new(&[1, 2, 0, 4, 5, 6, 7, 8, 9, 1]),
+			Partitions::from(&[1, 2, 0, 4, 5, 6, 7, 8, 9, 1]),
 			|mut parts| parts.remove_part(black_box(1))
 		)
 	});
 
 	group.bench_function("[1, 2, 0, 4, 5, 6, 7, 8, 9, 1].remove_part(3)", move |b| {
 		b.iter_with_setup(||
-			Partitions::new(&[1, 2, 0, 4, 5, 6, 7, 8, 9, 1]),
+			Partitions::from(&[1, 2, 0, 4, 5, 6, 7, 8, 9, 1]),
 			|mut parts| parts.remove_part(black_box(3))
 		)
 	});
 
 	group.bench_function("[1, 2, 0, 4, 5, 6, 7, 8, 9, 1].remove_part(5)", move |b| {
 		b.iter_with_setup(||
-			Partitions::new(&[1, 2, 0, 4, 5, 6, 7, 8, 9, 1]),
+			Partitions::from(&[1, 2, 0, 4, 5, 6, 7, 8, 9, 1]),
 			|mut parts| parts.remove_part(black_box(5))
 		)
 	});
@@ -274,14 +274,14 @@ fn shrink_part(c: &mut Criterion) {
 
 	group.bench_function("[1, 10, 3, 4, 5, 6, 7, 8, 9, 1].shrink_part(2, 10)", move |b| {
 		b.iter_with_setup(||
-			Partitions::new(&[1, 10, 3, 4, 5, 6, 7, 8, 9, 1]),
+			Partitions::from(&[1, 10, 3, 4, 5, 6, 7, 8, 9, 1]),
 			|mut parts| parts.shrink_part(black_box(2), black_box(10))
 		)
 	});
 
 	group.bench_function("[1, 10, 3, 4, 5, 6, 7, 8, 9, 1].shrink_part(2, 5)", move |b| {
 		b.iter_with_setup(||
-			Partitions::new(&[1, 10, 3, 4, 5, 6, 7, 8, 9, 1]),
+			Partitions::from(&[1, 10, 3, 4, 5, 6, 7, 8, 9, 1]),
 			|mut parts| parts.shrink_part(black_box(2), black_box(5))
 		)
 	});
@@ -294,7 +294,7 @@ fn spread(c: &mut Criterion) {
 
 	group.bench_function("[1, 10, 3, 4, 5, 6, 7, 8, 9, 1].spread(2, 5)", move |b| {
 		b.iter_with_setup(||
-			Partitions::new(&[1, 10, 3, 4, 5, 6, 7, 8, 9, 1]),
+			Partitions::from(&[1, 10, 3, 4, 5, 6, 7, 8, 9, 1]),
 			|parts| parts.spread(black_box(2), black_box(5))
 		)
 	});

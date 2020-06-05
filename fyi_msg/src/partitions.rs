@@ -39,6 +39,83 @@ impl AddAssign<usize> for Partitions {
 	}
 }
 
+/// Handle Rust's stupid slice-size concerns for all possible sizes. Thankfully
+/// we max out at 15. Haha.
+macro_rules! from_many {
+	($size:literal) => {
+		impl<'a> From<&'a [usize; $size]> for Partitions {
+			fn from(parts: &'a [usize; $size]) -> Self {
+				let mut out = Self::default();
+
+				unsafe {
+					let mut last: usize = 0;
+					parts.iter().for_each(|p| {
+						last += p;
+						out.used += 1;
+						ptr::copy_nonoverlapping(
+							&last,
+							&mut out.inner[out.used],
+							1
+						);
+					});
+				}
+
+				out
+			}
+		}
+	};
+}
+
+impl<'a> From<&'a [usize; 0]> for Partitions {
+	#[inline]
+	fn from(_parts: &'a [usize; 0]) -> Self {
+		Self::default()
+	}
+}
+
+impl<'a> From<&'a [usize; 1]> for Partitions {
+	#[inline]
+	fn from(parts: &'a [usize; 1]) -> Self {
+		Self::one(parts[0])
+	}
+}
+
+from_many!(2);
+from_many!(3);
+from_many!(4);
+from_many!(5);
+from_many!(6);
+from_many!(7);
+from_many!(8);
+from_many!(9);
+from_many!(10);
+from_many!(11);
+from_many!(12);
+from_many!(13);
+from_many!(14);
+from_many!(15);
+
+impl<'a> From<&'a [usize]> for Partitions {
+	fn from(parts: &'a [usize]) -> Self {
+		let mut out = Self::default();
+
+		unsafe {
+			let mut last: usize = 0;
+			parts.iter().for_each(|p| {
+				last += p;
+				out.used += 1;
+				ptr::copy_nonoverlapping(
+					&last,
+					&mut out.inner[out.used],
+					1
+				);
+			});
+		}
+
+		out
+	}
+}
+
 impl Index<usize> for Partitions {
 	type Output = usize;
 
@@ -62,34 +139,6 @@ impl Partitions {
 	// ------------------------------------------------------------------------
 
 	#[must_use]
-	/// New
-	///
-	/// Create a new instance using pre-calculated part lengths.
-	///
-	/// If you pass an empty parts partition, this is equivalent to calling
-	/// `default()`, which you should do instead.
-	///
-	/// Panics if there are more than `15` slices.
-	pub fn new(parts: &[usize]) -> Self {
-		let mut out = Self::default();
-
-		unsafe {
-			let mut last: usize = 0;
-			parts.iter().for_each(|p| {
-				last += p;
-				out.used += 1;
-				ptr::copy_nonoverlapping(
-					&last,
-					&mut out.inner[out.used],
-					1
-				);
-			});
-		}
-
-		out
-	}
-
-	#[must_use]
 	/// New (Bounded)
 	///
 	/// Create a new instance using pre-calculated part lengths, ensuring the
@@ -106,7 +155,7 @@ impl Partitions {
 			Self::one(max)
 		}
 		else {
-			let mut out = Self::new(parts);
+			let mut out = Self::from(parts);
 
 			// If the last part falls short of `max`, add one more.
 			if out.inner[out.used] < max {
@@ -370,17 +419,17 @@ mod tests {
 	#[test]
 	fn t_new() {
 		// Empty should have one empty part.
-		let empty = Partitions::new(&[]);
+		let empty = Partitions::from(&[]);
 		assert_eq!(empty.len(), 0);
 		assert_eq!(empty.max(), 0);
 
 		// Check with one part.
-		let one = Partitions::new(&[5]);
+		let one = Partitions::from(&[5]);
 		assert_eq!(one.len(), 1);
 		assert_eq!(one.max(), 5);
 
 		// Check with many parts
-		let many = Partitions::new(&[5, 4, 3, 2, 1]);
+		let many = Partitions::from(&[5, 4, 3, 2, 1]);
 		assert_eq!(many.len(), 5);
 		assert_eq!(many.max(), 15);
 		for (k, v) in [5, 4, 3, 2, 1].iter().enumerate() {
@@ -451,7 +500,7 @@ mod tests {
 
 	#[test]
 	fn t_part() {
-		let many = Partitions::new(&[5, 4, 3, 2, 1]);
+		let many = Partitions::from(&[5, 4, 3, 2, 1]);
 		assert_eq!(many.part(1), 0..5);
 		assert_eq!(many.part(2), 5..9);
 		assert_eq!(many.part(3), 9..12);
@@ -461,20 +510,20 @@ mod tests {
 
 	#[test]
 	fn t_part_is_empty() {
-		let many = Partitions::new(&[5, 0, 5, 0]);
+		let many = Partitions::from(&[5, 0, 5, 0]);
 		assert!(! many.part_is_empty(1));
 		assert!(many.part_is_empty(2));
 		assert!(! many.part_is_empty(3));
 		assert!(many.part_is_empty(4));
 
-		let many = Partitions::new(&[0, 5]);
+		let many = Partitions::from(&[0, 5]);
 		assert!(many.part_is_empty(1));
 		assert!(! many.part_is_empty(2));
 	}
 
 	#[test]
 	fn t_spread() {
-		let many = Partitions::new(&[5, 4, 3, 2, 1]);
+		let many = Partitions::from(&[5, 4, 3, 2, 1]);
 		assert_eq!(many.spread(1, 2), 0..9);
 		assert_eq!(many.spread(1, 5), 0..15);
 		assert_eq!(many.spread(2, 3), 5..12);
@@ -530,7 +579,7 @@ mod tests {
 		assert_eq!(empty.part(1), 0..3);
 
 		// Remove second twice.
-		empty = Partitions::new(&[1, 2, 3]);
+		empty = Partitions::from(&[1, 2, 3]);
 		empty.remove_part(2);
 		assert_eq!(empty.len(), 2);
 		assert_eq!(empty.max(), 4);
@@ -546,7 +595,7 @@ mod tests {
 	#[test]
 	fn t_grow_shrink_part() {
 		// Working on many.
-		let mut parts = Partitions::new(&[1, 2, 3]);
+		let mut parts = Partitions::from(&[1, 2, 3]);
 
 		// Fake growth, fake shrink.
 		let starts = [0, 1, 3];
@@ -561,7 +610,7 @@ mod tests {
 		}
 
 		// Growth x2.
-		parts = Partitions::new(&[1, 2, 3]);
+		parts = Partitions::from(&[1, 2, 3]);
 		let starts2 = [0, 3, 7];
 		for (k, v) in [1, 2, 3].iter().enumerate() {
 			// Grow by nothing.
@@ -597,10 +646,10 @@ mod tests {
 
 		for i in 1..4 {
 			// Add empty to beginning, middle, end.
-			let mut parts = Partitions::new(&many);
+			let mut parts = Partitions::from(&many);
 			parts.insert_part(i, 0);
 			assert_eq!(parts.len(), 4);
-			assert_eq!(parts.max(), 6, "{:?}\n{:?}", Partitions::new(&many), parts);
+			assert_eq!(parts.max(), 6, "{:?}\n{:?}", Partitions::from(&many), parts);
 			assert_eq!(parts.part_len(i), 0);
 			assert_eq!(parts.part_len(i + 1), many[i - 1]);
 		}

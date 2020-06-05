@@ -75,6 +75,66 @@ impl fmt::Display for MsgBuf {
 	}
 }
 
+impl<'a> From<&'a [u8]> for MsgBuf {
+	#[inline]
+	fn from(buf: &'a [u8]) -> Self {
+		Self {
+			buf: BytesMut::from(buf),
+			parts: Partitions::one(buf.len()),
+		}
+	}
+}
+
+/// Handle Rust's stupid slice-size concerns for all possible sizes. Thankfully
+/// we max out at 15. Haha.
+macro_rules! from_many {
+	($size:literal) => {
+		impl<'a> From<&'a [&'a [u8]; $size]> for MsgBuf {
+			fn from(bufs: &'a [&'a [u8]; $size]) -> Self {
+				let mut out = Self::default();
+
+				bufs.iter().for_each(|b| {
+					out += b;
+				});
+
+				out
+			}
+		}
+	};
+}
+
+impl<'a> From<&'a [&'a [u8]; 0]> for MsgBuf {
+	#[inline]
+	fn from(_bufs: &'a [&'a [u8]; 0]) -> Self {
+		Self::default()
+	}
+}
+
+impl<'a> From<&'a [&'a [u8]; 1]> for MsgBuf {
+	#[inline]
+	fn from(bufs: &'a [&'a [u8]; 1]) -> Self {
+		Self {
+			buf: BytesMut::from(bufs[0]),
+			parts: Partitions::one(bufs[0].len()),
+		}
+	}
+}
+
+from_many!(2);
+from_many!(3);
+from_many!(4);
+from_many!(5);
+from_many!(6);
+from_many!(7);
+from_many!(8);
+from_many!(9);
+from_many!(10);
+from_many!(11);
+from_many!(12);
+from_many!(13);
+from_many!(14);
+from_many!(15);
+
 impl Index<usize> for MsgBuf {
 	type Output = [u8];
 
@@ -111,35 +171,6 @@ impl MsgBuf {
 			buf: BytesMut::from(buf),
 			parts: Partitions::new_bounded(parts, buf.len()),
 		}
-	}
-
-	#[inline]
-	#[must_use]
-	/// From
-	///
-	/// Create a new `MsgBuf` from a single buffer with a single partition.
-	pub fn from(buf: &[u8]) -> Self {
-		Self {
-			buf: BytesMut::from(buf),
-			parts: Partitions::one(buf.len()),
-		}
-	}
-
-	#[must_use]
-	/// From Many
-	///
-	/// Create a new `MsgBuf` from multiple buffers, storing each in its own
-	/// partitioning table.
-	///
-	/// Panics if more than `15` parts are needed.
-	pub fn from_many(bufs: &[&[u8]]) -> Self {
-		let mut out = Self::default();
-
-		bufs.iter().for_each(|b| {
-			out += b;
-		});
-
-		out
 	}
 
 	#[inline]
@@ -451,7 +482,7 @@ mod tests {
 	#[test]
 	fn t_from() {
 		// From empty.
-		let mut buf = MsgBuf::from(&[]);
+		let mut buf = <MsgBuf as From<&[u8]>>::from(&[]);
 		assert_eq!(buf.len(), 0);
 		assert_eq!(buf.parts_len(), 1);
 		assert_eq!(buf.part_len(1), 0);
@@ -464,17 +495,17 @@ mod tests {
 		assert_eq!(&buf[1], SM1);
 
 		// From Many empty.
-		buf = MsgBuf::from_many(&[]);
+		buf = MsgBuf::from(&[]);
 		assert_eq!(buf.len(), 0);
 		assert_eq!(buf.parts_len(), 0);
 
 		// From many one.
-		buf = MsgBuf::from_many(&[SM1]);
+		buf = MsgBuf::from(&[SM1]);
 		assert_eq!(buf.len(), SM1.len());
 		assert_eq!(buf.parts_len(), 1);
 		assert_eq!(&buf[1], SM1);
 
-		buf = MsgBuf::from_many(&[SM1, MD1, LG1]);
+		buf = MsgBuf::from(&[SM1, MD1, LG1]);
 		assert_eq!(buf.len(), 18);
 		assert_eq!(buf.parts_len(), 3);
 		assert_eq!(&buf[1], SM1);
@@ -547,21 +578,21 @@ mod tests {
 		assert_eq!(&buf[3], LG1);
 
 		// Try removing from each index.
-		buf = MsgBuf::from_many(&[SM1, MD1, LG1]);
+		buf = MsgBuf::from(&[SM1, MD1, LG1]);
 		buf.remove_part(1);
 		assert_eq!(buf.len(), 15);
 		assert_eq!(buf.parts_len(), 2);
 		assert_eq!(&buf[1], MD1);
 		assert_eq!(&buf[2], LG1);
 
-		buf = MsgBuf::from_many(&[SM1, MD1, LG1]);
+		buf = MsgBuf::from(&[SM1, MD1, LG1]);
 		buf.remove_part(2);
 		assert_eq!(buf.len(), 12);
 		assert_eq!(buf.parts_len(), 2);
 		assert_eq!(&buf[1], SM1);
 		assert_eq!(&buf[2], LG1);
 
-		buf = MsgBuf::from_many(&[SM1, MD1, LG1]);
+		buf = MsgBuf::from(&[SM1, MD1, LG1]);
 		buf.remove_part(3);
 		assert_eq!(buf.len(), 9);
 		assert_eq!(buf.parts_len(), 2);
@@ -569,7 +600,7 @@ mod tests {
 		assert_eq!(&buf[2], MD1);
 
 		// Now try to remove all parts, from the left.
-		buf = MsgBuf::from_many(&[SM1, MD1, LG1]);
+		buf = MsgBuf::from(&[SM1, MD1, LG1]);
 		buf.remove_part(1);
 		buf.remove_part(1);
 		buf.remove_part(1);
@@ -577,7 +608,7 @@ mod tests {
 		assert_eq!(buf.parts_len(), 0);
 
 		// And again from the right.
-		buf = MsgBuf::from_many(&[SM1, MD1, LG1]);
+		buf = MsgBuf::from(&[SM1, MD1, LG1]);
 		buf.remove_part(3);
 		buf.remove_part(2);
 		buf.remove_part(1);
@@ -600,7 +631,7 @@ mod tests {
 		// Test insertion into a multi-part buffer at each index.
 		for i in 1..4 {
 			for b in [&[], SM1].iter() {
-				let mut buf = MsgBuf::from_many(&[SM2, MD2, LG2]);
+				let mut buf = MsgBuf::from(&[SM2, MD2, LG2]);
 				buf.insert_part(i, b);
 				assert_eq!(buf.len(), 18 + b.len());
 				assert_eq!(buf.parts_len(), 4);
@@ -624,7 +655,7 @@ mod tests {
 		// Test replacement at each index.
 		for i in 1..4 {
 			for b in [SM1, MD1, LG1].iter() {
-				let mut buf = MsgBuf::from_many(&[SM2, MD2, LG2]);
+				let mut buf = MsgBuf::from(&[SM2, MD2, LG2]);
 				buf.replace_part(i, b);
 				assert_eq!(buf.parts_len(), 3);
 				assert_eq!(&buf[i], *b);
@@ -632,7 +663,7 @@ mod tests {
 		}
 
 		// And real quick test an empty replacement.
-		let mut buf = MsgBuf::from_many(&[SM2, MD2, LG2]);
+		let mut buf = MsgBuf::from(&[SM2, MD2, LG2]);
 		buf.replace_part(1, &[]);
 		assert_eq!(buf.parts_len(), 3);
 		assert_eq!(buf.len(), 15);
@@ -640,7 +671,7 @@ mod tests {
 
 	#[test]
 	fn t_spread() {
-		let buf = MsgBuf::from_many(&[SM2, MD2, LG2]);
+		let buf = MsgBuf::from(&[SM2, MD2, LG2]);
 
 		assert_eq!(buf.spread(1, 2), b"dogyellow");
 		assert_eq!(buf.spread(2, 3), b"yellowarcosaurs");
@@ -652,7 +683,7 @@ mod tests {
 		const SM2: &[u8] = b"dog";
 		const MD2: &[u8] = b"yellow";
 		const LG2: &[u8] = b"arcosaurs";
-		let buf = MsgBuf::from_many(&[SM2, MD2, LG2]);
+		let buf = MsgBuf::from(&[SM2, MD2, LG2]);
 
 		assert_eq!(buf.deref(), b"dogyellowarcosaurs");
 	}

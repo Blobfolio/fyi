@@ -58,7 +58,7 @@ fn from(c: &mut Criterion) {
 		BenchmarkId::from_parameter("from(b\"Hello World\")"),
 		b"Hello World",
 		|b, &buf| {
-			b.iter(|| MsgBuf::from(&buf));
+			b.iter(|| <MsgBuf as From<&[u8]>>::from(&buf));
 		}
 	);
 
@@ -66,7 +66,7 @@ fn from(c: &mut Criterion) {
 		BenchmarkId::from_parameter("from(b\"Twinkle Twinkle...\")"),
 		b"Twinkle twinkle little star, how I wonder what you are!",
 		|b, &buf| {
-			b.iter(|| MsgBuf::from(&buf));
+			b.iter(|| <MsgBuf as From<&[u8]>>::from(&buf));
 		}
 	);
 
@@ -82,7 +82,7 @@ fn from_many(c: &mut Criterion) {
 			&b"Don't you know what duplicates are?"[..],
 		],
 		|b, &bufs| {
-			b.iter(|| MsgBuf::from_many(&bufs));
+			b.iter(|| MsgBuf::from(&bufs));
 		}
 	);
 
@@ -93,7 +93,7 @@ fn from_many(c: &mut Criterion) {
 			&b"what duplicates are?"[..],
 		],
 		|b, &bufs| {
-			b.iter(|| MsgBuf::from_many(&bufs));
+			b.iter(|| MsgBuf::from(&bufs));
 		}
 	);
 
@@ -108,7 +108,7 @@ fn from_many(c: &mut Criterion) {
 			&b"are?"[..],
 		],
 		|b, &bufs| {
-			b.iter(|| MsgBuf::from_many(&bufs));
+			b.iter(|| MsgBuf::from(&bufs));
 		}
 	);
 
@@ -153,7 +153,7 @@ fn clear_part(c: &mut Criterion) {
 	for i in 1..4 {
 		group.bench_function(format!("[3].clear_part({})", i), move |b| {
 			b.iter_with_setup(||
-				MsgBuf::from_many(&[SM1, MD1, LG1]),
+				MsgBuf::from(&[SM1, MD1, LG1]),
 				|mut parts| parts.clear_part(black_box(i))
 			)
 		});
@@ -180,7 +180,7 @@ fn remove_part(c: &mut Criterion) {
 	for i in 1..4 {
 		group.bench_function(format!("[3].remove_part({})", i), move |b| {
 			b.iter_with_setup(||
-				MsgBuf::from_many(&[SM1, MD1, LG1]),
+				MsgBuf::from(&[SM1, MD1, LG1]),
 				|mut parts| parts.remove_part(black_box(i))
 			)
 		});
@@ -220,7 +220,7 @@ fn replace_part(c: &mut Criterion) {
 			unsafe { std::str::from_utf8_unchecked(buf) }
 		), move |b| {
 			b.iter_with_setup(||
-				MsgBuf::from_many(&[SM2, MD2, LG2]),
+				MsgBuf::from(&[SM2, MD2, LG2]),
 				|mut parts| parts.replace_part(black_box(2), black_box(buf))
 			)
 		});

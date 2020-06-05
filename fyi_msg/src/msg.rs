@@ -170,7 +170,7 @@ impl Msg {
 	#[must_use]
 	/// New Prefix + Msg (Unchecked)
 	fn new_prefix_msg_unchecked(prefix_pre: &[u8], prefix: &[u8], msg: &[u8]) -> Self {
-		Self(MsgBuf::from_many(&[
+		Self(MsgBuf::from(&[
 			// Indentation and timestamp.
 			&[], &[], &[], &[],
 			prefix_pre,
@@ -185,7 +185,7 @@ impl Msg {
 	#[must_use]
 	/// New Prefix (Unchecked)
 	fn new_prefix_unchecked(prefix_pre: &[u8], prefix: &[u8]) -> Self {
-		Self(MsgBuf::from_many(&[
+		Self(MsgBuf::from(&[
 			// Indentation and timestamp.
 			&[], &[], &[], &[],
 			prefix_pre,
@@ -199,7 +199,7 @@ impl Msg {
 	#[must_use]
 	/// New Message (Unchecked)
 	fn new_msg_unchecked(msg: &[u8]) -> Self {
-		Self(MsgBuf::from_many(&[
+		Self(MsgBuf::from(&[
 			// Indentation and timestamp.
 			&[], &[], &[], &[],
 			// Prefix.
