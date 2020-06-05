@@ -75,7 +75,7 @@ bench BENCH="" FILTER="":
 
 
 # Build Man.
-@build-man: build-pgo
+@build-man: build
 	# Pre-clean.
 	find "{{ release_dir }}/man" -type f -delete
 
@@ -103,50 +103,81 @@ bench BENCH="" FILTER="":
 			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}"
 
-	clear
-
-	# Instrumentation!
-	"{{ cargo_bin }}" print "This is a message."
-	"{{ cargo_bin }}" print -p "Prefix" "This is a message."
-	"{{ cargo_bin }}" print -p "Prefix" -c 10 "This is a message."
-	"{{ cargo_bin }}" print -t "This is a message."
-	"{{ cargo_bin }}" print -i "This is a message."
-	"{{ cargo_bin }}" print --stderr "This is a message."
-
-	"{{ cargo_bin }}" crunched "This is a crunch method."
-	"{{ cargo_bin }}" debug "This is a debug method."
-	"{{ cargo_bin }}" done "This is a done method."
-	"{{ cargo_bin }}" error "This is a error method."
-	"{{ cargo_bin }}" info "This is a info method."
-	"{{ cargo_bin }}" notice "This is a notice method."
-	"{{ cargo_bin }}" success "This is a success method."
-	"{{ cargo_bin }}" task "This is a task method."
-	"{{ cargo_bin }}" warning "This is a warning method."
-
-	clear
-	"{{ cargo_bin }}" debug "Fine-tune the prompt:"
-	"{{ cargo_bin }}" confirm "Type 'Y':" || true
-	"{{ cargo_bin }}" confirm "Type 'e' and then 'n':" || true
-	"{{ cargo_bin }}" confirm "Just hit <ENTER>:" || true
-	"{{ cargo_bin }}" blank
-	"{{ cargo_bin }}" blank -c 1
-	"{{ cargo_bin }}" blank -c 2
-	"{{ cargo_bin }}" print -t "This is a message."
-	"{{ cargo_bin }}" -h
-	"{{ cargo_bin }}" -V
-	"{{ cargo_bin }}" badanswer || true
-	clear
+	just _build-pgo-instrumentation
 
 	# Merge the data back in.
 	llvm-profdata-9 \
 		merge -o "{{ pgo_dir }}/merged.profdata" "{{ pgo_dir }}"
 
-	RUSTFLAGS="{{ rustflags }} -Cprofile-use={{ pgo_dir }}/merged.profdata" \
+	RUSTFLAGS="{{ rustflags }} -Cllvm-args=-pgo-warn-missing-function -Cprofile-use={{ pgo_dir }}/merged.profdata" \
 		cargo build \
 			--bin "{{ pkg_id }}" \
 			--release \
 			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}"
+
+
+_build-pgo-instrumentation:
+	#!/usr/bin/env bash
+
+	_msg1="This is a message."
+	_msg2="I am a little teapot, short and stout, unlike this message, which is rather long."
+	_prefix1="Prefix"
+	_prefix2="Something Else"
+	_defs=( "crunched" "debug" "done" "error" "info" "notice" "success" "task" "warning" )
+
+	clear
+
+	# Loop to handle the common tasks.
+	for i in ${_defs[@]}; do
+		"{{ cargo_bin }}" $i "${_msg1}"
+		"{{ cargo_bin }}" $i --indent "${_msg1}"
+		"{{ cargo_bin }}" $i -i "${_msg1}"
+		"{{ cargo_bin }}" $i --stderr "${_msg1}"
+		"{{ cargo_bin }}" $i -t "${_msg1}"
+		"{{ cargo_bin }}" $i --timestamp "${_msg1}"
+		"{{ cargo_bin }}" $i --time "${_msg1}"
+		"{{ cargo_bin }}" $i -i -t --stderr "${_msg2}"
+	done
+
+	# Error can also have a special exit codes.
+	"{{ cargo_bin }}" error -e 1 "${_msg1}" || true
+	"{{ cargo_bin }}" error --exit 1 "${_msg1}" || true
+	"{{ cargo_bin }}" error -t -e 1 "${_msg1}" || true
+
+	# Now laboriously handle the same thing for custom prefixes.
+	"{{ cargo_bin }}" print "${_msg1}"
+	"{{ cargo_bin }}" print -p "${_prefix1}" "${_msg1}"
+	"{{ cargo_bin }}" print --prefix "${_prefix1}" "${_msg1}"
+	"{{ cargo_bin }}" print -p "${_prefix1}" -c 199 "${_msg1}"
+	"{{ cargo_bin }}" print -p "${_prefix1}" --prefix-color 12 "${_msg1}"
+	"{{ cargo_bin }}" print --indent "${_msg1}"
+	"{{ cargo_bin }}" print -i "${_msg1}"
+	"{{ cargo_bin }}" print --stderr "${_msg1}"
+	"{{ cargo_bin }}" print -t "${_msg1}"
+	"{{ cargo_bin }}" print --timestamp "${_msg1}"
+	"{{ cargo_bin }}" print --time "${_msg1}"
+	"{{ cargo_bin }}" print -p "${_prefix2}" -c 13 -i -t --stderr "${_msg2}"
+
+	# Blanks
+	"{{ cargo_bin }}" blank
+	"{{ cargo_bin }}" blank -c 1
+	"{{ cargo_bin }}" blank -c 2
+	"{{ cargo_bin }}" blank -c 1 --stderr
+
+	clear
+
+	# Confirmations.
+	"{{ cargo_bin }}" confirm "Type 'Y':" || true
+	"{{ cargo_bin }}" confirm "Type 'e' and then 'n':" || true
+	"{{ cargo_bin }}" confirm "Just hit <ENTER>:" || true
+
+	# Miscellaneous crap.
+	"{{ cargo_bin }}" -h
+	"{{ cargo_bin }}" -V
+	"{{ cargo_bin }}" badanswer || true
+
+	clear
 
 
 # Check Release!
