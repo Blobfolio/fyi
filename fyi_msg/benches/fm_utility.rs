@@ -15,7 +15,7 @@ use fyi_msg::utility;
 fn ansi_code_bold(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::utility");
 
-	for color in [0, 50, 100].iter() {
+	for color in [1, 50, 100].iter() {
 		group.bench_with_input(
 			BenchmarkId::from_parameter(format!(
 				"ansi_code_bold({})",
