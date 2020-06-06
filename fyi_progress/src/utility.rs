@@ -18,6 +18,15 @@ const LBL_MINUTES: &[u8] = &[32, 109, 105, 110, 117, 116, 101, 115];
 const LBL_SECOND: &[u8] = &[32, 115, 101, 99, 111, 110, 100];
 const LBL_SECONDS: &[u8] = &[32, 115, 101, 99, 111, 110, 100, 115];
 
+// Helper: Write inflected time unit to buffer.
+macro_rules! write_time {
+	($buf:ident, $val:expr, $one:expr, $many:expr) => {
+		itoa::write(&mut $buf, $val).unwrap();
+		if $val == 1 { $buf.extend_from_slice($one); }
+		else { $buf.extend_from_slice($many); }
+	};
+}
+
 // Helper: Generate method for producing a single unit of time's time, e.g.
 // "2 minutes".
 macro_rules! one_time {
@@ -25,11 +34,7 @@ macro_rules! one_time {
 		/// Gloop One Time Together.
 		fn $fn(val1: u32) -> Cow<'static, [u8]> {
 			let mut buf: Vec<u8> = Vec::with_capacity(10);
-
-			itoa::write(&mut buf, val1).unwrap();
-			if val1 == 1 { buf.extend_from_slice($one1); }
-			else { buf.extend_from_slice($many1); }
-
+			write_time!(buf, val1, $one1, $many1);
 			Cow::Owned(buf)
 		}
 	};
@@ -43,15 +48,9 @@ macro_rules! time_and_time {
 		fn $fn(val1: u32, val2: u32) -> Cow<'static, [u8]> {
 			let mut buf: Vec<u8> = Vec::with_capacity(25);
 
-			itoa::write(&mut buf, val1).unwrap();
-			if val1 == 1 { buf.extend_from_slice($one1); }
-			else { buf.extend_from_slice($many1); }
-
+			write_time!(buf, val1, $one1, $many1);
 			buf.extend_from_slice(LBL_AND);
-
-			itoa::write(&mut buf, val2).unwrap();
-			if val2 == 1 { buf.extend_from_slice($one2); }
-			else { buf.extend_from_slice($many2); }
+			write_time!(buf, val2, $one2, $many2);
 
 			Cow::Owned(buf)
 		}
@@ -123,17 +122,9 @@ time_and_time!(human_ms, LBL_MINUTE, LBL_MINUTES, LBL_SECOND, LBL_SECONDS);
 fn human_hms(val1: u32, val2: u32, val3: u32) -> Cow<'static, [u8]> {
 	let mut buf: Vec<u8> = Vec::with_capacity(36);
 
-	itoa::write(&mut buf, val1).unwrap();
-	if val1 == 1 { buf.extend_from_slice(&[32, 104, 111, 117, 114, 44, 32]); }
-	else { buf.extend_from_slice(&[32, 104, 111, 117, 114, 115, 44, 32]); }
-
-	itoa::write(&mut buf, val2).unwrap();
-	if val2 == 1 { buf.extend_from_slice(&[32, 109, 105, 110, 117, 116, 101, 44, 32, 97, 110, 100, 32]); }
-	else { buf.extend_from_slice(&[32, 109, 105, 110, 117, 116, 101, 115, 44, 32, 97, 110, 100, 32]); }
-
-	itoa::write(&mut buf, val3).unwrap();
-	if val3 == 1 { buf.extend_from_slice(&[32, 115, 101, 99, 111, 110, 100]); }
-	else { buf.extend_from_slice(&[32, 115, 101, 99, 111, 110, 100, 115]); }
+	write_time!(buf, val1, &[32, 104, 111, 117, 114, 44, 32], &[32, 104, 111, 117, 114, 115, 44, 32]);
+	write_time!(buf, val2, &[32, 109, 105, 110, 117, 116, 101, 44, 32, 97, 110, 100, 32], &[32, 109, 105, 110, 117, 116, 101, 115, 44, 32, 97, 110, 100, 32]);
+	write_time!(buf, val3, LBL_SECOND, LBL_SECONDS);
 
 	Cow::Owned(buf)
 }
