@@ -85,8 +85,7 @@ impl<'a> From<&'a [u8]> for MsgBuf {
 	}
 }
 
-/// Handle Rust's stupid slice-size concerns for all possible sizes. Thankfully
-/// we max out at 15. Haha.
+/// Handle all the stupid slice sizes since this doesn't coerce. Haha.
 macro_rules! from_many {
 	($size:literal) => {
 		impl<'a> From<&'a [&'a [u8]; $size]> for MsgBuf {
@@ -103,6 +102,7 @@ macro_rules! from_many {
 	};
 }
 
+/// Optimized From Empty.
 impl<'a> From<&'a [&'a [u8]; 0]> for MsgBuf {
 	#[inline]
 	fn from(_bufs: &'a [&'a [u8]; 0]) -> Self {
@@ -110,6 +110,7 @@ impl<'a> From<&'a [&'a [u8]; 0]> for MsgBuf {
 	}
 }
 
+/// Optimized From One.
 impl<'a> From<&'a [&'a [u8]; 1]> for MsgBuf {
 	#[inline]
 	fn from(bufs: &'a [&'a [u8]; 1]) -> Self {
