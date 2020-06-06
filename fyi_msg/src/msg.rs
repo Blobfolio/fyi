@@ -126,6 +126,21 @@ impl fmt::Display for Msg {
 	}
 }
 
+impl<'a> From<&'a [u8]> for Msg {
+	#[inline]
+	fn from(msg: &'a [u8]) -> Self {
+		Self(MsgBuf::from(&[
+			// Indentation and timestamp.
+			&[], &[], &[], &[],
+			// Prefix.
+			&[], &[], &[],
+			LBL_MSG_PRE,
+			msg,
+			LBL_RESET,
+		]))
+	}
+}
+
 
 
 impl Msg {
@@ -152,7 +167,7 @@ impl Msg {
 				msg.as_bytes()
 			),
 			// Message only.
-			(true, false) => Self::new_msg_unchecked(msg.as_bytes()),
+			(true, false) => Self::from(msg.as_bytes()),
 			// Prefix only.
 			(false, true) => Self::new_prefix_unchecked(
 				ansi_code_bold(prefix_color),
@@ -193,20 +208,6 @@ impl Msg {
 			LBL_RESET,
 			// Message.
 			&[], &[], &[],
-		]))
-	}
-
-	#[must_use]
-	/// New Message (Unchecked)
-	fn new_msg_unchecked(msg: &[u8]) -> Self {
-		Self(MsgBuf::from(&[
-			// Indentation and timestamp.
-			&[], &[], &[], &[],
-			// Prefix.
-			&[], &[], &[],
-			LBL_MSG_PRE,
-			msg,
-			LBL_RESET,
 		]))
 	}
 
