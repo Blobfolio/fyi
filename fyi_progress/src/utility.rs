@@ -255,11 +255,28 @@ mod tests {
 		_human_elapsed(0, "0 seconds");
 		_human_elapsed(1, "1 second");
 		_human_elapsed(50, "50 seconds");
+
+		_human_elapsed(60, "1 minute");
+		_human_elapsed(61, "1 minute and 1 second");
 		_human_elapsed(100, "1 minute and 40 seconds");
+		_human_elapsed(2101, "35 minutes and 1 second");
 		_human_elapsed(2121, "35 minutes and 21 seconds");
+
+		_human_elapsed(3600, "1 hour");
+		_human_elapsed(3601, "1 hour and 1 second");
+		_human_elapsed(3602, "1 hour and 2 seconds");
+		_human_elapsed(3660, "1 hour and 1 minute");
+		_human_elapsed(3661, "1 hour, 1 minute, and 1 second");
+		_human_elapsed(3662, "1 hour, 1 minute, and 2 seconds");
+		_human_elapsed(3720, "1 hour and 2 minutes");
+		_human_elapsed(3721, "1 hour, 2 minutes, and 1 second");
+		_human_elapsed(3723, "1 hour, 2 minutes, and 3 seconds");
+		_human_elapsed(36001, "10 hours and 1 second");
 		_human_elapsed(36015, "10 hours and 15 seconds");
+		_human_elapsed(36060, "10 hours and 1 minute");
 		_human_elapsed(37732, "10 hours, 28 minutes, and 52 seconds");
 		_human_elapsed(37740, "10 hours and 29 minutes");
+
 		_human_elapsed(428390, "1+ days");
 	}
 
