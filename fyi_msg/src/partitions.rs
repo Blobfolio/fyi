@@ -11,7 +11,6 @@ use std::{
 		Index,
 		Range,
 	},
-	ptr,
 };
 
 
@@ -30,17 +29,13 @@ impl AddAssign<usize> for Partitions {
 	fn add_assign(&mut self, other: usize) {
 		self.used += 1;
 		unsafe {
-			ptr::copy_nonoverlapping(
-				&(other + self.inner[self.used - 1]),
-				&mut self.inner[self.used],
-				1
-			);
+			let ptr = self.inner.as_mut_ptr();
+			ptr.add(self.used).write(*ptr.add(self.used - 1) + other);
 		}
 	}
 }
 
-/// Handle Rust's stupid slice-size concerns for all possible sizes. Thankfully
-/// we max out at 15. Haha.
+/// Handle all the stupid slice sizes since this doesn't coerce. Haha.
 macro_rules! from_many {
 	($size:literal) => {
 		impl<'a> From<&'a [usize; $size]> for Partitions {
@@ -48,15 +43,10 @@ macro_rules! from_many {
 				let mut out = Self::default();
 
 				unsafe {
-					let mut last: usize = 0;
+					let ptr = out.inner.as_mut_ptr();
 					parts.iter().for_each(|p| {
-						last += p;
 						out.used += 1;
-						ptr::copy_nonoverlapping(
-							&last,
-							&mut out.inner[out.used],
-							1
-						);
+						ptr.add(out.used).write(*ptr.add(out.used - 1) + p);
 					});
 				}
 
@@ -66,6 +56,7 @@ macro_rules! from_many {
 	};
 }
 
+/// Optimized From Empty.
 impl<'a> From<&'a [usize; 0]> for Partitions {
 	#[inline]
 	fn from(_parts: &'a [usize; 0]) -> Self {
@@ -73,6 +64,7 @@ impl<'a> From<&'a [usize; 0]> for Partitions {
 	}
 }
 
+/// Optimized From One.
 impl<'a> From<&'a [usize; 1]> for Partitions {
 	#[inline]
 	fn from(parts: &'a [usize; 1]) -> Self {
@@ -100,15 +92,10 @@ impl<'a> From<&'a [usize]> for Partitions {
 		let mut out = Self::default();
 
 		unsafe {
-			let mut last: usize = 0;
+			let ptr = out.inner.as_mut_ptr();
 			parts.iter().for_each(|p| {
-				last += p;
 				out.used += 1;
-				ptr::copy_nonoverlapping(
-					&last,
-					&mut out.inner[out.used],
-					1
-				);
+				ptr.add(out.used).write(*ptr.add(out.used - 1) + p);
 			});
 		}
 
@@ -161,11 +148,7 @@ impl Partitions {
 			if out.inner[out.used] < max {
 				out.used += 1;
 				unsafe {
-					ptr::copy_nonoverlapping(
-						&max,
-						&mut out.inner[out.used],
-						1
-					);
+					out.inner.as_mut_ptr().add(out.used).copy_from_nonoverlapping(&max, 1);
 				}
 			}
 
@@ -219,11 +202,8 @@ impl Partitions {
 		else if 1 < self.used {
 			// Copy the last value to the first user index.
 			unsafe {
-				ptr::copy_nonoverlapping(
-					&self.inner[self.used],
-					&mut self.inner[1],
-					1
-				);
+				let ptr = self.inner.as_mut_ptr();
+				ptr.add(1).copy_from_nonoverlapping(ptr.add(self.used), 1);
 			}
 
 			// Zero out everything else.
@@ -323,13 +303,10 @@ impl Partitions {
 			// Shift and nudge the tail, working backwards.
 			unsafe {
 				self.used += 1;
+				let ptr = self.inner.as_mut_ptr();
 				let mut tail_idx: usize = self.used;
 				while tail_idx >= idx {
-					ptr::copy_nonoverlapping(
-						&(len + self.inner[tail_idx - 1]),
-						&mut self.inner[tail_idx],
-						1
-					);
+					ptr.add(tail_idx).write(*ptr.add(tail_idx - 1) + len);
 					tail_idx -= 1;
 				}
 			}
@@ -343,13 +320,10 @@ impl Partitions {
 		// Shift and nudge the tail, working backwards.
 		unsafe {
 			self.used += 1;
+			let ptr = self.inner.as_mut_ptr();
 			let mut tail_idx: usize = self.used;
 			while tail_idx >= idx {
-				ptr::copy_nonoverlapping(
-					&self.inner[tail_idx - 1],
-					&mut self.inner[tail_idx],
-					1
-				);
+				ptr.add(tail_idx).copy_from_nonoverlapping(ptr.add(tail_idx - 1), 1);
 				tail_idx -= 1;
 			}
 		}
@@ -362,22 +336,15 @@ impl Partitions {
 		unsafe {
 			// Shift and nudge the tail.
 			let adj: usize = self.part_len(idx);
+			let ptr = self.inner.as_mut_ptr();
 
 			while idx < self.used {
-				ptr::copy_nonoverlapping(
-					&(self.inner[idx + 1] - adj),
-					&mut self.inner[idx],
-					1
-				);
+				ptr.add(idx).write(*ptr.add(idx + 1) - adj);
 				idx += 1;
 			}
 
 			// Zero out the last part.
-			ptr::copy_nonoverlapping(
-				&self.inner[0],
-				&mut self.inner[self.used],
-				1
-			);
+			ptr.add(self.used).copy_from_nonoverlapping(ptr, 1);
 		}
 
 		self.used -= 1;
@@ -393,9 +360,12 @@ impl Partitions {
 	///
 	/// Panics if `idx` is out of range.
 	pub fn grow_part(&mut self, mut idx: usize, adj: usize) {
-		while idx <= self.used {
-			self.inner[idx] += adj;
-			idx += 1;
+		unsafe {
+			let ptr = self.inner.as_mut_ptr();
+			while idx <= self.used {
+				*ptr.add(idx) += adj;
+				idx += 1;
+			}
 		}
 	}
 
@@ -403,9 +373,12 @@ impl Partitions {
 	///
 	/// Panics if `idx` is out of range or `adj` is bigger than the part.
 	pub fn shrink_part(&mut self, mut idx: usize, adj: usize) {
-		while idx <= self.used {
-			self.inner[idx] -= adj;
-			idx += 1;
+		unsafe {
+			let ptr = self.inner.as_mut_ptr();
+			while idx <= self.used {
+				*ptr.add(idx) -= adj;
+				idx += 1;
+			}
 		}
 	}
 }
