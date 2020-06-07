@@ -12,7 +12,7 @@ use std::{
 
 
 
-#[derive(Debug, Clone, Copy, Default, Hash, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq)]
 /// Nice Integer
 pub struct NiceInt {
 	inner: [u8; 15],
@@ -27,6 +27,16 @@ impl Deref for NiceInt {
 	#[inline]
 	fn deref(&self) -> &Self::Target {
 		&self.inner[..self.len]
+	}
+}
+
+impl Default for NiceInt {
+	#[inline]
+	fn default() -> Self {
+		Self {
+			inner: [48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			len: 1,
+		}
 	}
 }
 
