@@ -111,7 +111,8 @@ use std::{
 
 
 
-// Helper: Unlock the inner Mutex, handling poisonings inasmuch as is possible.
+/// Helper: Unlock the inner Mutex, handling poisonings inasmuch as is
+/// possible.
 macro_rules! mutex_ptr {
 	($lhs:ident) => (
 		match $lhs.0.lock() {
@@ -120,6 +121,34 @@ macro_rules! mutex_ptr {
 		}
 	);
 }
+
+/// Helper: Push chunk to `ProgressBar`.
+macro_rules! pb_push {
+	($lhs:ident, $len:expr, $buf:expr) => {{
+		let end: usize = $lhs.len + $len;
+		$lhs.inner[$lhs.len..end].copy_from_slice($buf);
+		$lhs.len = end;
+	}};
+}
+
+
+
+static DONE:   &[u8; 255] = &[61; 255];
+static UNDONE: &[u8; 255] = &[45; 255];
+
+const IDX_TITLE: usize = 1;
+const IDX_ELAPSED_PRE: usize = 2;
+const IDX_ELAPSED: usize = 3;
+// const IDX_ELAPSED_POST: usize = 4;
+const IDX_BAR: usize = 5;
+// const IDX_DONE_PRE: usize = 6;
+const IDX_DONE: usize = 7;
+// const IDX_DONE_POST: usize = 8;
+const IDX_TOTAL: usize = 9;
+// const IDX_TOTAL_POST: usize = 10;
+const IDX_PERCENT: usize = 11;
+const IDX_PERCENT_POST: usize = 12;
+const IDX_TASKS: usize = 13;
 
 
 
@@ -310,24 +339,42 @@ impl Default for ProgressInner {
 			buf: <MsgBuf as From<&[&[u8]; 13]>>::from(&[
 				// Title.
 				&[],
+
 				// Elapsed.
+				//\e   [   2    m   [   \e  [   0   ;   1    m
 				&[27, 91, 50, 109, 91, 27, 91, 48, 59, 49, 109],
+				// 0   0   :   0   0   :   0   0
 				&[48, 48, 58, 48, 48, 58, 48, 48],
+				//\e   [   0   ;   2    m   ]  \e   [   0    m   •   •
 				&[27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32],
+
 				// Bar.
 				&[],
+
 				// Done.
+				//\e   [   1   ;   9   6    m
 				&[27, 91, 49, 59, 57, 54, 109],
+				// 0
 				&[48],
+
 				// The slash between Done and Total.
+				//\e   [   0   ;   2    m   /  \e   [   0   ;   1   ;   3   4    m
 				&[27, 91, 48, 59, 50, 109, 47, 27, 91, 48, 59, 49, 59, 51, 52, 109],
+
 				// Total.
+				// 0
 				&[48],
+
 				// The bit between Total and Percent.
+				//\e   [   0   ;   1    m   •   •
 				&[27, 91, 48, 59, 49, 109, 32, 32],
+
 				// Percent.
+				// 0   .   0   0   %
 				&[48, 46, 48, 48, 37],
-				&[27, 91, 48, 109],
+				//\e   [   0    m  \n
+				&[27, 91, 48, 109, 10],
+
 				// Tasks.
 				&[],
 			]),
@@ -345,22 +392,6 @@ impl Default for ProgressInner {
 }
 
 impl ProgressInner {
-	const IDX_TITLE: usize = 1;
-	const IDX_ELAPSED_PRE: usize = 2;
-	const IDX_ELAPSED: usize = 3;
-	// const IDX_ELAPSED_POST: usize = 4;
-	const IDX_BAR: usize = 5;
-	// const IDX_DONE_PRE: usize = 6;
-	const IDX_DONE: usize = 7;
-	// const IDX_DONE_POST: usize = 8;
-	const IDX_TOTAL: usize = 9;
-	// const IDX_TOTAL_POST: usize = 10;
-	const IDX_PERCENT: usize = 11;
-	const IDX_PERCENT_POST: usize = 12;
-	const IDX_TASKS: usize = 13;
-
-
-
 	// ------------------------------------------------------------------------
 	// Public Static Methods
 	// ------------------------------------------------------------------------
@@ -378,24 +409,41 @@ impl ProgressInner {
 				buf: <MsgBuf as From<&[&[u8]; 13]>>::from(&[
 					// Title.
 					&[],
+
 					// Elapsed.
+					//\e   [   2    m   [   \e  [   0   ;   1    m
 					&[27, 91, 50, 109, 91, 27, 91, 48, 59, 49, 109],
+					// 0   0   :   0   0   :   0   0
 					&[48, 48, 58, 48, 48, 58, 48, 48],
+					//\e   [   0   ;   2    m   ]  \e   [   0    m   •   •
 					&[27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32],
+
 					// Bar.
 					&[],
+
 					// Done.
+					//\e   [   1   ;   9   6    m
 					&[27, 91, 49, 59, 57, 54, 109],
+					// 0
 					&[48],
+
 					// The slash between Done and Total.
+					//\e   [   0   ;   2    m   /  \e   [   0   ;   1   ;   3   4    m
 					&[27, 91, 48, 59, 50, 109, 47, 27, 91, 48, 59, 49, 59, 51, 52, 109],
+
 					// Total.
 					&*NiceInt::from(total),
+
 					// The bit between Total and Percent.
+					//\e   [   0   ;   1    m   •   •
 					&[27, 91, 48, 59, 49, 109, 32, 32],
+
 					// Percent.
+					// 0   .   0   0   %
 					&[48, 46, 48, 48, 37],
+					//\e   [   0    m  \n
 					&[27, 91, 48, 109, 10],
+
 					// Tasks.
 					&[],
 				]),
@@ -499,11 +547,11 @@ impl ProgressInner {
 
 		// Empty message?
 		if title.is_empty() {
-			self.buf.clear_part(Self::IDX_TITLE);
+			self.buf.clear_part(IDX_TITLE);
 		}
 		else {
 			self.buf.replace_part(
-				Self::IDX_TITLE,
+				IDX_TITLE,
 				&title.as_bytes().iter()
 					.chain(&[10])
 					.copied()
@@ -549,6 +597,9 @@ impl ProgressInner {
 					let end: usize = 10 + 14 * self.last_lines;
 					Self::print(&CLS10[0..end]);
 				},
+				// To clear more lines, print our pre-calculated buffer (which
+				// covers the first 10), and duplicate the line-up chunk (n-10)
+				// times to cover the rest.
 				Ordering::Greater => {
 					Self::print(
 						&CLS10.iter()
@@ -618,8 +669,8 @@ impl ProgressInner {
 
 		// Go ahead and write the progress bits. We've already sized those.
 		handle.write_all(self.buf.spread(
-			Self::IDX_ELAPSED_PRE,
-			Self::IDX_PERCENT_POST,
+			IDX_ELAPSED_PRE,
+			IDX_PERCENT_POST,
 		)).unwrap();
 		self.last_lines += 1;
 
@@ -662,20 +713,20 @@ impl ProgressInner {
 
 		// Update our done amount.
 		if self.flags.contains(ProgressFlags::TICK_DONE) {
-			self.buf.replace_part(Self::IDX_DONE, &*NiceInt::from(self.done));
+			self.buf.replace_part(IDX_DONE, &*NiceInt::from(self.done));
 			self.flags &= !ProgressFlags::TICK_DONE;
 		}
 
 		// Did the total change? Probably not, but just in case...
 		if self.flags.contains(ProgressFlags::TICK_TOTAL) {
-			self.buf.replace_part(Self::IDX_TOTAL, &*NiceInt::from(self.total));
+			self.buf.replace_part(IDX_TOTAL, &*NiceInt::from(self.total));
 			self.flags &= !ProgressFlags::TICK_TOTAL;
 		}
 
 		// The percent?
 		if self.flags.contains(ProgressFlags::TICK_PERCENT) {
 			self.buf.replace_part(
-				Self::IDX_PERCENT,
+				IDX_PERCENT,
 				format!("{:>3.*}%", 2, self.percent() * 100.0).as_bytes(),
 			);
 			self.flags &= !ProgressFlags::TICK_PERCENT;
@@ -723,10 +774,10 @@ impl ProgressInner {
 		// 2: the spaces after the bar itself (should there be one);
 		let total: usize = usize::min(255, width.saturating_sub(
 			11 +
-			self.buf.part_len(Self::IDX_ELAPSED) +
-			self.buf.part_len(Self::IDX_DONE) +
-			self.buf.part_len(Self::IDX_TOTAL) +
-			self.buf.part_len(Self::IDX_PERCENT)
+			self.buf.part_len(IDX_ELAPSED) +
+			self.buf.part_len(IDX_DONE) +
+			self.buf.part_len(IDX_TOTAL) +
+			self.buf.part_len(IDX_PERCENT)
 		));
 
 		if total >= 10 { total }
@@ -753,7 +804,7 @@ impl ProgressInner {
 	fn print_tasks<W: io::Write>(&mut self, writer: &mut W, width: usize) {
 		// Tasks are the worst. Haha.
 		if ! self.tasks.is_empty() {
-			let tasks = &self.buf[Self::IDX_TASKS];
+			let tasks = &self.buf[IDX_TASKS];
 			let max_idx: usize = tasks.len();
 			let mut last_idx: usize = 0;
 
@@ -803,7 +854,7 @@ impl ProgressInner {
 	/// Split up the code a little.
 	fn print_title<W: io::Write>(&mut self, writer: &mut W, width: usize) {
 		// If there is a title, we might have to crunch it.
-		let title = &self.buf[Self::IDX_TITLE];
+		let title = &self.buf[IDX_TITLE];
 		if ! title.is_empty() {
 			let line_len: usize = title.len();
 			// It fits just fine.
@@ -818,6 +869,7 @@ impl ProgressInner {
 				}
 				else {
 					writer.write_all(&title[..fit_len]).unwrap();
+					//                 \e   [   0    m  \n
 					writer.write_all(&[27, 91, 48, 109, 10]).unwrap();
 				}
 			}
@@ -850,14 +902,14 @@ impl ProgressInner {
 	fn redraw_elapsed(&mut self) {
 		if self.last_secs < 86400 {
 			let c = secs_chunks(self.last_secs);
-			let buf = &mut self.buf[Self::IDX_ELAPSED];
+			let buf = &mut self.buf[IDX_ELAPSED];
 			buf[..2].copy_from_slice(time_format_dd(c[0]));
 			buf[3..5].copy_from_slice(time_format_dd(c[1]));
 			buf[6..].copy_from_slice(time_format_dd(c[2]));
 		}
 		else {
-			self.buf[Self::IDX_ELAPSED]
-				.copy_from_slice(&[50, 51, 58, 53, 57, 58, 53, 57]);
+			//                                       2   3   :   5   9   :   5   9
+			self.buf[IDX_ELAPSED].copy_from_slice(&[50, 51, 58, 53, 57, 58, 53, 57]);
 		}
 	}
 
@@ -866,15 +918,17 @@ impl ProgressInner {
 	/// This method updates the "tasks" slice.
 	fn redraw_tasks(&mut self) {
 		if self.tasks.is_empty() {
-			self.buf.clear_part(Self::IDX_TASKS);
+			self.buf.clear_part(IDX_TASKS);
 		}
 		else {
 			self.buf.replace_part(
-				Self::IDX_TASKS,
+				IDX_TASKS,
 				&self.tasks.iter()
 					.flat_map(|s|
+						//•   •   •   •  \e   [	  3   5    m    ↳ ---  ---   •
 						[32, 32, 32, 32, 27, 91, 51, 53, 109, 226, 134, 179, 32].iter()
 							.chain(s.as_bytes())
+							//       \e   [   0    m  \n
 							.chain(&[27, 91, 48, 109, 10])
 							.copied()
 					)
