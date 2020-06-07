@@ -29,7 +29,11 @@ criterion = "*"
 rayon = "*"
 
 [[bench]]
-name = "fp_niceint"
+name = "fp_nice_elapsed"
+harness = false
+
+[[bench]]
+name = "fp_nice_int"
 harness = false
 
 [[bench]]

@@ -39,27 +39,6 @@ fn chopped_len(c: &mut Criterion) {
 	group.finish();
 }
 
-fn human_elapsed(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_progress::utility");
-
-	for secs in [1, 50, 100, 2121, 37732, 428390].iter() {
-		group.bench_with_input(
-			BenchmarkId::from_parameter(format!(
-				"human_elapsed({})",
-				secs
-			)),
-			secs,
-			|b, &secs| {
-				b.iter(||
-					utility::human_elapsed(secs)
-				);
-			}
-		);
-	}
-
-	group.finish();
-}
-
 fn secs_chunks(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_progress::utility");
 
@@ -86,7 +65,6 @@ fn secs_chunks(c: &mut Criterion) {
 criterion_group!(
 	benches,
 	chopped_len,
-	human_elapsed,
 	secs_chunks,
 );
 criterion_main!(benches);

@@ -1,8 +1,8 @@
 /*!
 # FYI Progress: "Nice" Integer
 
-This is a quick way to convert an integer into a formatted byte string. That's
-it!
+This is a quick way to convert an integer — any unsigned value under a trillion
+— into a formatted byte string. That's it!
 */
 
 use std::{
@@ -14,9 +14,6 @@ use std::{
 
 #[derive(Debug, Clone, Copy, Default, Hash, PartialEq)]
 /// Nice Integer
-///
-/// This is a very simple partitioning table, each index — up to 15 —
-/// representing an Exclude(end). The first "end" is always zero.
 pub struct NiceInt {
 	inner: [u8; 15],
 	len: usize,
@@ -67,7 +64,7 @@ impl From<u64> for NiceInt {
 	#[inline]
 	fn from(num: u64) -> Self {
 		if num < 1000 { Self::from_small(num) }
-		else { Self::from_big(num) }
+		else { Self::from_big(u64::min(999_999_999_999, num)) }
 	}
 }
 
@@ -83,7 +80,7 @@ impl From<usize> for NiceInt {
 	#[inline]
 	fn from(num: usize) -> Self {
 		if num < 1000 { Self::from_small(num as u64) }
-		else { Self::from_big(num as u64) }
+		else { Self::from_big(u64::min(999_999_999_999, num as u64)) }
 	}
 }
 
@@ -110,9 +107,42 @@ impl NiceInt {
 
 #[test]
 fn t_nice_int() {
-	assert_eq!(&*NiceInt::from(1_u64), &b"1"[..]);
-	assert_eq!(&*NiceInt::from(10_u64), &b"10"[..]);
-	assert_eq!(&*NiceInt::from(1_000_u64), &b"1,000"[..]);
-	assert_eq!(&*NiceInt::from(1_000_000_u64), &b"1,000,000"[..]);
-	assert_eq!(&*NiceInt::from(6_884_372_993_u64), &b"6,884,372,993"[..]);
+	use num_format::{ToFormattedString, Locale};
+
+	for i in [
+		1_u64,
+		10_u64,
+		99_u64,
+		100_u64,
+		101_u64,
+		999_u64,
+		1000_u64,
+		1001_u64,
+		9999_u64,
+		10000_u64,
+		10001_u64,
+		99999_u64,
+		100000_u64,
+		100001_u64,
+		999999_u64,
+		1000000_u64,
+		1000001_u64,
+		9999999_u64,
+		10000000_u64,
+		10000001_u64,
+		99999999_u64,
+		100000000_u64,
+		100000001_u64,
+		999999999_u64,
+		1000000000_u64,
+		1000000001_u64,
+		9999999999_u64,
+		10000000000_u64,
+		10000000001_u64,
+		99999999999_u64,
+		100000000000_u64,
+		100000000001_u64,
+	].iter() {
+		assert_eq!(&*NiceInt::from(*i), i.to_formatted_string(&Locale::en).as_bytes());
+	}
 }

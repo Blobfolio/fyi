@@ -13,9 +13,9 @@ bar output, or you can dereference the object to work directly with its inner
 use crate::utility::inflect;
 use fyi_msg::Msg;
 use fyi_progress::{
+	NiceElapsed,
 	NiceInt,
 	Progress,
-	utility::human_elapsed,
 };
 use indexmap::set::IndexSet;
 use jwalk::WalkDir;
@@ -247,7 +247,7 @@ impl Witcher {
 			&Msg::crunched(unsafe {
 				std::str::from_utf8_unchecked(
 					&inflect(total, "file in ", "files in ").iter()
-						.chain(human_elapsed(time).as_ref())
+						.chain(&*NiceElapsed::from(time))
 						.chain(&[46, 10])
 						.copied()
 						.collect::<Vec<u8>>()
@@ -269,7 +269,7 @@ impl Witcher {
 				&Msg::crunched(unsafe {
 					std::str::from_utf8_unchecked(
 						&inflect(total, "file in ", "files in ").iter()
-							.chain(human_elapsed(time).as_ref())
+							.chain(&*NiceElapsed::from(time))
 							.chain(b", but nothing doing.\n")
 							.copied()
 							.collect::<Vec<u8>>()
@@ -283,7 +283,7 @@ impl Witcher {
 				&Msg::crunched(unsafe {
 					std::str::from_utf8_unchecked(
 						&inflect(total, "file in ", "files in ").iter()
-							.chain(human_elapsed(time).as_ref())
+							.chain(&*NiceElapsed::from(time))
 							.chain(b", saving ")
 							.chain(&*NiceInt::from(before - after))
 							.chain(format!(

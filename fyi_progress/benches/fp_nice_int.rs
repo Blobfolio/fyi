@@ -1,5 +1,5 @@
 /*!
-# Benchmark: `fyi_progress::lapsed`
+# Benchmark: `fyi_progress::nice_int`
 */
 
 use criterion::{

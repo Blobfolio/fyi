@@ -5,13 +5,6 @@ This mod contains miscellaneous utility functions for the crate.
 */
 
 use unicode_width::UnicodeWidthChar;
-mod time;
-
-/// Re-exports.
-pub use time::{
-	human_elapsed,
-	secs_chunks,
-};
 
 
 
@@ -68,6 +61,33 @@ pub fn chopped_len(buf: &[u8], width: usize) -> usize {
 }
 
 #[must_use]
+/// Chunked Seconds
+///
+/// This method converts seconds into hours, minutes, and seconds, returning
+/// a fixed-length array with each value in order, e.g. `[h, m, s]`.
+///
+/// As with the rest of the methods in this module, days and beyond are not
+/// considered. Large values are simply truncated to `86399`, i.e. one second
+/// shy of a full day.
+pub fn secs_chunks(num: u32) -> [u32; 3] {
+	let mut out: [u32; 3] = [0, 0, u32::min(86399, num)];
+
+	// Hours.
+	if out[2] >= 3600 {
+		out[0] = num_integer::div_floor(out[2], 3600);
+		out[2] -= out[0] * 3600;
+	}
+
+	// Minutes.
+	if out[2] >= 60 {
+		out[1] = num_integer::div_floor(out[2], 60);
+		out[2] -= out[1] * 60;
+	}
+
+	out
+}
+
+#[must_use]
 /// Term Width
 ///
 /// This is a simple wrapper around `term_size::dimensions()` to provide
@@ -90,5 +110,13 @@ mod tests {
 		assert_eq!(chopped_len(b"Hello World", 15), 11);
 		assert_eq!(chopped_len(b"Hello \x1b[1mWorld\x1b[0m", 15), 19);
 		assert_eq!(chopped_len(b"Hello \x1b[1mWorld\x1b[0m", 7), 11);
+	}
+
+	#[test]
+	fn t_secs_chunks() {
+		assert_eq!(secs_chunks(1), [0, 0, 1]);
+		assert_eq!(secs_chunks(30), [0, 0, 30]);
+		assert_eq!(secs_chunks(90), [0, 1, 30]);
+		assert_eq!(secs_chunks(3600), [1, 0, 0]);
 	}
 }

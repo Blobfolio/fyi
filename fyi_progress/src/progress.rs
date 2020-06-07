@@ -75,10 +75,10 @@ assert_eq!(1000, bar.done());
 */
 
 use crate::{
+	NiceElapsed,
 	NiceInt,
 	utility::{
 		chopped_len,
-		human_elapsed,
 		secs_chunks,
 		term_width,
 	},
@@ -451,7 +451,7 @@ impl ProgressInner {
 		if ! self.is_running() {
 			Self::print(&Msg::crunched([
 				"Finished in ",
-				unsafe { std::str::from_utf8_unchecked(&human_elapsed(self.last_secs)) },
+				unsafe { std::str::from_utf8_unchecked(&*NiceElapsed::from(self.last_secs)) },
 				".\n",
 			].concat()));
 		}
