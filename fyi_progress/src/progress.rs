@@ -94,6 +94,7 @@ use std::{
 	borrow::Borrow,
 	cmp::Ordering,
 	io,
+	ops::Deref,
 	sync::{
 		Arc,
 		Mutex,
@@ -147,6 +148,126 @@ impl Default for ProgressFlags {
 	/// Default.
 	fn default() -> Self {
 		Self::NONE
+	}
+}
+
+
+
+#[derive(Copy, Clone)]
+/// The progress bar is big and variable compared to the rest of the
+/// `ProgressInner` pieces. It is faster to handle its slicing in a specialized
+/// struct with a fixed-length buffer.
+struct ProgressBar {
+	inner: [u8; 289],
+	len: usize,
+}
+
+impl Default for ProgressBar {
+	#[inline]
+	fn default() -> Self {
+		Self {
+			inner: [0; 289],
+			len: 0,
+		}
+	}
+}
+
+impl Deref for ProgressBar {
+	type Target = [u8];
+
+	#[inline]
+	fn deref(&self) -> &Self::Target {
+		&self.inner[..self.len]
+	}
+}
+
+impl ProgressBar {
+	/// New
+	pub fn new(done: u64, total: u64, width: usize) -> Self {
+		if done == 0 { Self::new_unstarted(width) }
+		else if done == total { Self::new_finished(width) }
+		else {
+			let done_width: usize = f64::floor((done as f64 / total as f64) * width as f64) as usize;
+			let undone_width: usize = width - done_width;
+			let mut out = Self::default();
+
+			// Opener.
+			pb_push!(
+				out, 14,
+				//\e   [   2    m   [  \e   [   0   ;   9   6   ;   1    m
+				&[27, 91, 50, 109, 91, 27, 91, 48, 59, 57, 54, 59, 49, 109]
+			);
+
+			// Done.
+			pb_push!(out, done_width, &DONE[..done_width]);
+
+			// The bit in between.
+			pb_push!(
+				out, 7,
+				//\e   [   0   ;   3   4    m
+				&[27, 91, 48, 59, 51, 52, 109]
+			);
+
+			// Undone.
+			pb_push!(out, undone_width, &UNDONE[..undone_width]);
+
+			// Close it.
+			pb_push!(
+				out, 13,
+				//\e   [   0   ;   2    m   ]  \e   [   0    m   •   •
+				&[27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32]
+			);
+
+			out
+		}
+	}
+
+	/// New, only undone.
+	fn new_unstarted(width: usize) -> Self {
+		let mut out = Self::default();
+
+		// Opener.
+		pb_push!(
+			out, 12,
+			//\e   [   2    m   [  \e   [   0   ;   3   4    m
+			&[27, 91, 50, 109, 91, 27, 91, 48, 59, 51, 52, 109]
+		);
+
+		// Undone.
+		pb_push!(out, width, &UNDONE[..width]);
+
+		// Close it.
+		pb_push!(
+			out, 13,
+			//\e   [   0   ;   2    m   ]  \e   [   0    m   •   •
+			&[27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32]
+		);
+
+		out
+	}
+
+	/// New, only done.
+	fn new_finished(width: usize) -> Self {
+		let mut out = Self::default();
+
+		// Opener.
+		pb_push!(
+			out, 14,
+			//\e   [   2    m   [  \e   [   0   ;   9   6   ;   1    m
+			&[27, 91, 50, 109, 91, 27, 91, 48, 59, 57, 54, 59, 49, 109]
+		);
+
+		// Done.
+		pb_push!(out, width, &DONE[..width]);
+
+		// Close it.
+		pb_push!(
+			out, 13,
+			//\e   [   0   ;   2    m   ]  \e   [   0    m   •   •
+			&[27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32]
+		);
+
+		out
 	}
 }
 
@@ -711,28 +832,16 @@ impl ProgressInner {
 	///
 	/// This method updates the "bar" slice.
 	fn redraw_bar(&mut self, width: usize) {
-		// The bar bits.
-		// The "done" portion is in range 14..269.
-		// The "undone" portion is in range 276..531.
-		static BAR: &[u8] = &[27, 91, 50, 109, 91, 27, 91, 48, 59, 57, 54, 59, 49, 109, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 27, 91, 48, 59, 51, 52, 109, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32];
-
 		// We don't have room for it.
 		let bar_len: usize = self.bar_space(width);
 		if bar_len < 10 {
-			self.buf.clear_part(Self::IDX_BAR);
+			self.buf.clear_part(IDX_BAR);
 		}
 		else {
-			let mut tmp: Vec<u8> = BAR.to_vec();
-			let done_width: usize = f64::floor(self.percent() * bar_len as f64) as usize;
-
-			// Chop out the parts we don't need.
-			let mut chop: usize = 276 + bar_len - done_width;
-			tmp.drain(chop..531);
-			chop = 14 + done_width;
-			tmp.drain(chop..269);
-
-			// Copy the completed bar on over.
-			self.buf.replace_part(Self::IDX_BAR, &tmp);
+			self.buf.replace_part(
+				IDX_BAR,
+				&*ProgressBar::new(self.done, self.total, bar_len)
+			);
 		}
 	}
 
