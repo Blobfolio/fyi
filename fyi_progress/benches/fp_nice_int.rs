@@ -26,6 +26,8 @@ fn from(c: &mut Criterion) {
 	group.finish();
 }
 
+
+
 criterion_group!(
 	benches,
 	from,
