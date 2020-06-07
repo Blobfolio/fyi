@@ -570,11 +570,10 @@ impl ProgressInner {
 	/// message after progress has finished.
 	pub fn finished_in(&self) {
 		if ! self.is_running() {
-			Self::print(&Msg::crunched([
-				"Finished in ",
+			Self::print(&Msg::crunched(format!(
+				"Finished in {}.\n",
 				unsafe { std::str::from_utf8_unchecked(&*NiceElapsed::from(self.last_secs)) },
-				".\n",
-			].concat()));
+			)));
 		}
 	}
 
