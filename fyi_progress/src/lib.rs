@@ -26,6 +26,8 @@
 #![allow(clippy::missing_errors_doc)]
 
 mod progress;
+mod niceint;
 pub mod utility;
 
+pub use niceint::NiceInt;
 pub use progress::Progress;

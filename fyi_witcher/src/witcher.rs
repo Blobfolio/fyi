@@ -13,11 +13,9 @@ bar output, or you can dereference the object to work directly with its inner
 use crate::utility::inflect;
 use fyi_msg::Msg;
 use fyi_progress::{
+	NiceInt,
 	Progress,
-	utility::{
-		human_elapsed,
-		int_as_bytes,
-	},
+	utility::human_elapsed,
 };
 use indexmap::set::IndexSet;
 use jwalk::WalkDir;
@@ -287,7 +285,7 @@ impl Witcher {
 						&inflect(total, "file in ", "files in ").iter()
 							.chain(human_elapsed(time).as_ref())
 							.chain(b", saving ")
-							.chain(&int_as_bytes(before - after))
+							.chain(&*NiceInt::from(before - after))
 							.chain(format!(
 								" bytes ({:3.*}%).\n",
 								2,

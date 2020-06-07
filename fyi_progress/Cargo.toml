@@ -20,11 +20,6 @@ unicode-width = "0.1.*"
 [dependencies.fyi_msg]
 path = "../fyi_msg"
 
-[dependencies.smallvec]
-version = "1.4.*"
-default-features = false
-features = [ "write" ]
-
 [features]
 default = []
 bench_sink = []
@@ -32,6 +27,10 @@ bench_sink = []
 [dev-dependencies]
 criterion = "*"
 rayon = "*"
+
+[[bench]]
+name = "fp_niceint"
+harness = false
 
 [[bench]]
 name = "fp_progress"

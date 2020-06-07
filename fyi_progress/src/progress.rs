@@ -74,12 +74,14 @@ assert_eq!(1000, bar.done());
 ```
 */
 
-use crate::utility::{
-	chopped_len,
-	human_elapsed,
-	int_as_bytes,
-	secs_chunks,
-	term_width,
+use crate::{
+	NiceInt,
+	utility::{
+		chopped_len,
+		human_elapsed,
+		secs_chunks,
+		term_width,
+	},
 };
 use fyi_msg::{
 	Msg,
@@ -267,7 +269,7 @@ impl ProgressInner {
 					// The slash between Done and Total.
 					&[27, 91, 48, 59, 50, 109, 47, 27, 91, 48, 59, 49, 59, 51, 52, 109],
 					// Total.
-					&int_as_bytes(total)[..],
+					&*NiceInt::from(total),
 					// The bit between Total and Percent.
 					&[27, 91, 48, 59, 49, 109, 32, 32],
 					// Percent.
@@ -540,13 +542,13 @@ impl ProgressInner {
 
 		// Update our done amount.
 		if self.flags.contains(ProgressFlags::TICK_DONE) {
-			self.buf.replace_part(Self::IDX_DONE, &int_as_bytes(self.done)[..]);
+			self.buf.replace_part(Self::IDX_DONE, &*NiceInt::from(self.done));
 			self.flags &= !ProgressFlags::TICK_DONE;
 		}
 
 		// Did the total change? Probably not, but just in case...
 		if self.flags.contains(ProgressFlags::TICK_TOTAL) {
-			self.buf.replace_part(Self::IDX_TOTAL, &int_as_bytes(self.total)[..]);
+			self.buf.replace_part(Self::IDX_TOTAL, &*NiceInt::from(self.total));
 			self.flags &= !ProgressFlags::TICK_TOTAL;
 		}
 

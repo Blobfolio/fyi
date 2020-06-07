@@ -1,5 +1,5 @@
 /*!
-# Benchmark: `fyi_progress::lapsed`
+# Benchmark: `fyi_progress::utility`
 */
 
 use criterion::{
@@ -60,27 +60,6 @@ fn human_elapsed(c: &mut Criterion) {
 	group.finish();
 }
 
-fn int_as_bytes(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_progress::utility");
-
-	for ints in [10, 113, 10502].iter() {
-		group.bench_with_input(
-			BenchmarkId::from_parameter(format!(
-				"int_as_bytes({})",
-				ints,
-			)),
-			ints,
-			|b, &ints| {
-				b.iter(||
-					utility::int_as_bytes(ints)
-				);
-			}
-		);
-	}
-
-	group.finish();
-}
-
 fn secs_chunks(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_progress::utility");
 
@@ -107,7 +86,6 @@ fn secs_chunks(c: &mut Criterion) {
 criterion_group!(
 	benches,
 	chopped_len,
-	int_as_bytes,
 	human_elapsed,
 	secs_chunks,
 );
