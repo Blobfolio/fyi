@@ -77,8 +77,8 @@ assert_eq!(1000, bar.done());
 use crate::{
 	NiceElapsed,
 	NiceInt,
+	traits::FittedRange,
 	utility::{
-		chopped_len,
 		secs_chunks,
 		term_width,
 	},
@@ -89,7 +89,6 @@ use fyi_msg::{
 	utility::time_format_dd,
 };
 use indexmap::set::IndexSet;
-use memchr::Memchr;
 use std::{
 	borrow::Borrow,
 	cmp::Ordering,
@@ -137,7 +136,7 @@ static DONE:   &[u8; 255] = &[61; 255];
 static UNDONE: &[u8; 255] = &[45; 255];
 
 const IDX_TITLE: usize = 1;
-const IDX_ELAPSED_PRE: usize = 2;
+// const IDX_ELAPSED_PRE: usize = 2;
 const IDX_ELAPSED: usize = 3;
 // const IDX_ELAPSED_POST: usize = 4;
 const IDX_BAR: usize = 5;
@@ -147,7 +146,7 @@ const IDX_DONE: usize = 7;
 const IDX_TOTAL: usize = 9;
 // const IDX_TOTAL_POST: usize = 10;
 const IDX_PERCENT: usize = 11;
-const IDX_PERCENT_POST: usize = 12;
+// const IDX_PERCENT_POST: usize = 12;
 const IDX_TASKS: usize = 13;
 
 
@@ -163,6 +162,7 @@ bitflags::bitflags! {
 		const NONE =         0b0000_0000;
 		const ALL =          0b0111_1111;
 		const PROGRESSED =   0b0000_0111;
+		const RESIZED    =   0b0011_0001;
 
 		const TICK_BAR =     0b0000_0001;
 		const TICK_DONE =    0b0000_0010;
@@ -310,6 +310,8 @@ impl ProgressBar {
 struct ProgressInner {
 	/// Buffer.
 	buf: MsgBuf,
+	/// The title.
+	title: String,
 	/// The creation time.
 	time: Instant,
 	/// The amount "done".
@@ -378,6 +380,7 @@ impl Default for ProgressInner {
 				// Tasks.
 				&[],
 			]),
+			title: String::new(),
 			time: Instant::now(),
 			done: 0,
 			total: 0,
@@ -544,19 +547,9 @@ impl ProgressInner {
 	/// progress line.
 	pub fn set_title<T: Borrow<str>> (&mut self, title: T) {
 		let title = title.borrow();
-
-		// Empty message?
-		if title.is_empty() {
-			self.buf.clear_part(IDX_TITLE);
-		}
-		else {
-			self.buf.replace_part(
-				IDX_TITLE,
-				&title.as_bytes().iter()
-					.chain(&[10])
-					.copied()
-					.collect::<Vec<u8>>(),
-			);
+		if title != self.title {
+			self.title = title.to_string();
+			self.flags |= ProgressFlags::TICK_TITLE;
 		}
 	}
 
@@ -628,58 +621,6 @@ impl ProgressInner {
 		}
 	}
 
-	/// Maybe Print?
-	///
-	/// After a tick has made its changes, check and see if it is worth
-	/// painting, and if so, make it happen.
-	pub fn maybe_print(&mut self, width: usize) {
-		// Check the hash and width if we've done stuff before.
-		let hash: u64 = seahash::hash(&self.buf);
-		if hash == self.last_hash && width == self.last_width {
-			return;
-		}
-
-		// Otherwise go ahead and update those things.
-		self.last_width = width;
-		self.last_hash = hash;
-
-		// Do we need to clear anything?
-		if self.last_lines > 0 {
-			self.cls();
-		}
-
-		self.print_chopped(width);
-	}
-
-	/// Print Chopped.
-	///
-	/// It is surprisingly difficult to chop strings to fit a given "width".
-	pub fn print_chopped(&mut self, width: usize) {
-		use io::Write;
-
-		if self.buf.is_empty() {
-			return;
-		}
-
-		#[cfg(not(feature = "bench_sink"))] let writer = io::stderr();
-		#[cfg(not(feature = "bench_sink"))] let mut handle = writer.lock();
-		#[cfg(feature = "bench_sink")] let mut handle = io::sink();
-
-		self.print_title(&mut handle, width);
-
-		// Go ahead and write the progress bits. We've already sized those.
-		handle.write_all(self.buf.spread(
-			IDX_ELAPSED_PRE,
-			IDX_PERCENT_POST,
-		)).unwrap();
-		self.last_lines += 1;
-
-		self.print_tasks(&mut handle, width);
-
-		// Flush our work and call it a day!
-		handle.flush().unwrap();
-	}
-
 	/// Stop
 	///
 	/// Stop the progress bar, setting done to total, clearing tasks, emptying
@@ -703,6 +644,13 @@ impl ProgressInner {
 	pub fn tick(&mut self) {
 		// Easy bail.
 		if ! self.is_running() { return; }
+
+		// Some things depend on the width, which might be changing.
+		let width: usize = term_width();
+		if width != self.last_width {
+			self.flags |= ProgressFlags::RESIZED;
+			self.last_width = width;
+		}
 
 		// Update our elapsed time.
 		let secs: u32 = u32::min(86400, self.time.elapsed().as_secs() as u32);
@@ -732,6 +680,12 @@ impl ProgressInner {
 			self.flags &= !ProgressFlags::TICK_PERCENT;
 		}
 
+		// The title changed?
+		if self.flags.contains(ProgressFlags::TICK_TITLE) {
+			self.redraw_title();
+			self.flags &= !ProgressFlags::TICK_TITLE;
+		}
+
 		// Update our tasks.
 		if self.flags.contains(ProgressFlags::TICK_TASKS) {
 			self.redraw_tasks();
@@ -739,14 +693,30 @@ impl ProgressInner {
 		}
 
 		// The bar might independently need redrawing if the width has changed.
-		let width: usize = term_width();
-		if width != self.last_width || self.flags.contains(ProgressFlags::TICK_BAR) {
-			self.redraw_bar(width);
+		if self.flags.contains(ProgressFlags::TICK_BAR) {
+			self.redraw_bar();
 			self.flags &= !ProgressFlags::TICK_BAR;
 		}
 
-		// If anything changed, print it!
-		self.maybe_print(width);
+		// Check the hash and see if we did something worth printing!
+		let hash: u64 = seahash::hash(&self.buf);
+		if hash == self.last_hash {
+			return;
+		}
+		self.last_hash = hash;
+
+		// Do we need to clear anything?
+		if self.last_lines > 0 {
+			self.cls();
+		}
+
+		// How many lines do we have now?
+		self.last_lines = 1 + self.tasks.len();
+		if ! self.title.is_empty() {
+			self.last_lines += 1;
+		}
+
+		Self::print(&self.buf);
 	}
 
 
@@ -798,93 +768,12 @@ impl ProgressInner {
 		handle.flush().unwrap();
 	}
 
-	/// Print Tasks
-	///
-	/// Split up the code a little.
-	fn print_tasks<W: io::Write>(&mut self, writer: &mut W, width: usize) {
-		// Tasks are the worst. Haha.
-		if ! self.tasks.is_empty() {
-			let tasks = &self.buf[IDX_TASKS];
-			let max_idx: usize = tasks.len();
-			let mut last_idx: usize = 0;
-
-			// Go ahead and bump the lines. We're assuming tasks don't have
-			// line breaks within them because that would be stupid.
-			self.last_lines += self.tasks.len();
-
-			// Split the buffer by line.
-			for idx in Memchr::new(10_u8, tasks) {
-				let line_len: usize = idx - last_idx;
-
-				// It fits just fine.
-				if line_len <= width {
-					let next_idx = usize::min(max_idx, idx + 1);
-					writer.write_all(&tasks[last_idx..next_idx]).unwrap();
-					last_idx = next_idx;
-				}
-				else {
-					let fit_len: usize = chopped_len(&tasks[last_idx..idx], width);
-
-					// It all fits. (The +1 is because the last character —
-					// the new line — is missing from the chunk being tested.
-					if fit_len + 1 == line_len {
-						let next_idx = usize::min(max_idx, idx + 1);
-						writer.write_all(&tasks[last_idx..next_idx]).unwrap();
-						last_idx = next_idx;
-					}
-					// We need to chop between fit-len and the end.
-					else {
-						writer.write_all(&tasks[last_idx..fit_len]).unwrap();
-
-						// We need to keep the last five bytes of the line.
-						let next_idx = usize::min(max_idx, idx + 1);
-						let last_idx2 = next_idx - 5;
-						writer.write_all(&tasks[last_idx2..next_idx]).unwrap();
-						last_idx = next_idx;
-					}
-				}
-
-				if last_idx == max_idx { break; }
-			}
-		}
-	}
-
-	/// Print Title
-	///
-	/// Split up the code a little.
-	fn print_title<W: io::Write>(&mut self, writer: &mut W, width: usize) {
-		// If there is a title, we might have to crunch it.
-		let title = &self.buf[IDX_TITLE];
-		if ! title.is_empty() {
-			let line_len: usize = title.len();
-			// It fits just fine.
-			if line_len <= width {
-				writer.write_all(title).unwrap();
-			}
-			// It might fit, but we have to calculate.
-			else {
-				let fit_len: usize = chopped_len(title, width);
-				if fit_len == line_len {
-					writer.write_all(title).unwrap();
-				}
-				else {
-					writer.write_all(&title[..fit_len]).unwrap();
-					//                 \e   [   0    m  \n
-					writer.write_all(&[27, 91, 48, 109, 10]).unwrap();
-				}
-			}
-
-			// This always comes first, and is presumed to be one line.
-			self.last_lines = 1;
-		}
-	}
-
 	/// Redraw Bar
 	///
 	/// This method updates the "bar" slice.
-	fn redraw_bar(&mut self, width: usize) {
+	fn redraw_bar(&mut self) {
 		// We don't have room for it.
-		let bar_len: usize = self.bar_space(width);
+		let bar_len: usize = self.bar_space(self.last_width);
 		if bar_len < 10 {
 			self.buf.clear_part(IDX_BAR);
 		}
@@ -921,19 +810,58 @@ impl ProgressInner {
 			self.buf.clear_part(IDX_TASKS);
 		}
 		else {
+			// Our formatting eats up 7 printable spaces; the task can use up
+			// whatever else.
+			let width: usize = self.last_width - 7;
 			self.buf.replace_part(
 				IDX_TASKS,
 				&self.tasks.iter()
 					.flat_map(|s|
 						//•   •   •   •  \e   [	  3   5    m    ↳ ---  ---   •
 						[32, 32, 32, 32, 27, 91, 51, 53, 109, 226, 134, 179, 32].iter()
-							.chain(s.as_bytes())
+							.chain(&s.as_bytes()[s.fitted_range(width)])
 							//       \e   [   0    m  \n
 							.chain(&[27, 91, 48, 109, 10])
 							.copied()
 					)
 					.collect::<Vec<u8>>()
 			);
+		}
+	}
+
+	/// Redraw Title
+	///
+	/// This method updates the "title" slice.
+	fn redraw_title(&mut self) {
+		if self.title.is_empty() {
+			self.buf.clear_part(IDX_TITLE);
+		}
+		else {
+			let fit = self.title.fitted_range(self.last_width);
+
+			// The whole thing fits; just add a line break.
+			if fit.end == self.title.len() {
+				self.buf.replace_part(
+					IDX_TITLE,
+					&self.title.as_bytes().iter()
+						//       \n
+						.chain(&[10])
+						.copied()
+						.collect::<Vec<u8>>()
+				);
+			}
+			// It has to be chopped; add an ANSI clear in addition to the line
+			// break to be safe.
+			else {
+				self.buf.replace_part(
+					IDX_TITLE,
+					&self.title.as_bytes()[fit].iter()
+						//       \e   [   0    m  \n
+						.chain(&[27, 91, 48, 109, 10])
+						.copied()
+						.collect::<Vec<u8>>()
+				);
+			}
 		}
 	}
 }

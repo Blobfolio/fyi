@@ -10,7 +10,6 @@ publish = false
 bitflags = "1.2.*"
 indexmap = "1.3.*"
 itoa = "0.4.*"
-memchr = "2.3.*"
 num-format = "0.4.*"
 num-integer = "0.1.*"
 seahash = "4.0.*"

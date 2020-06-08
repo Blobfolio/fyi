@@ -28,6 +28,7 @@
 mod progress;
 mod nice_elapsed;
 mod nice_int;
+pub mod traits;
 pub mod utility;
 
 pub use nice_elapsed::NiceElapsed;
