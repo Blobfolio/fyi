@@ -29,6 +29,9 @@ fn main() {
 	println!("");
 
 	println!("{}", Msg::confirm("Choose your own adventure."));
+
+	println!("");
+
 	println!("{}", Msg::crunched("Some hard work just happened."));
 	println!("{}", Msg::done("As the French say, «FIN»."));
 
@@ -38,15 +41,20 @@ fn main() {
 	tmp.set_timestamp();
 	println!("{}", tmp);
 
-	tmp = Msg::info("Messages can be indented.");
+	println!("");
+
+	tmp = Msg::info("Messages can be indented (0).");
+	println!("{}", tmp);
+
+	tmp = Msg::info("Messages can be indented (1).");
 	tmp.set_indent(1);
 	println!("{}", tmp);
 
-	tmp = Msg::info("Messages can be indented.");
+	tmp = Msg::info("Messages can be indented (2).");
 	tmp.set_indent(2);
 	println!("{}", tmp);
 
-	tmp = Msg::info("Messages can be indented.");
+	tmp = Msg::info("Messages can be indented (3).");
 	tmp.set_indent(3);
 	println!("{}", tmp);
 
