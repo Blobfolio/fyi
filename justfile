@@ -16,7 +16,6 @@ pkg_dir4    := justfile_directory() + "/fyi_witcher"
 
 cargo_dir   := "/tmp/" + pkg_id + "-cargo"
 cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
-pgo_dir     := "/tmp/pgo-data"
 release_dir := justfile_directory() + "/release"
 
 rustflags   := "-Clinker-plugin-lto -Clinker=clang-9 -Clink-args=-fuse-ld=lld-9 -C link-arg=-s"
@@ -93,93 +92,6 @@ bench BENCH="" FILTER="":
 	just _fix-chown "{{ release_dir }}/man"
 
 
-# Build PGO.
-@build-pgo: clean
-	# First let's build the Rust bit.
-	RUSTFLAGS="{{ rustflags }} -Cprofile-generate={{ pgo_dir }}" \
-		cargo build \
-			--bin "{{ pkg_id }}" \
-			--release \
-			--target x86_64-unknown-linux-gnu \
-			--target-dir "{{ cargo_dir }}"
-
-	just _build-pgo-instrumentation
-
-	# Merge the data back in.
-	llvm-profdata-9 \
-		merge -o "{{ pgo_dir }}/merged.profdata" "{{ pgo_dir }}"
-
-	RUSTFLAGS="{{ rustflags }} -Cllvm-args=-pgo-warn-missing-function -Cprofile-use={{ pgo_dir }}/merged.profdata" \
-		cargo build \
-			--bin "{{ pkg_id }}" \
-			--release \
-			--target x86_64-unknown-linux-gnu \
-			--target-dir "{{ cargo_dir }}"
-
-
-_build-pgo-instrumentation:
-	#!/usr/bin/env bash
-
-	_msg1="This is a message."
-	_msg2="I am a little teapot, short and stout, unlike this message, which is rather long."
-	_prefix1="Prefix"
-	_prefix2="Something Else"
-	_defs=( "crunched" "debug" "done" "error" "info" "notice" "success" "task" "warning" )
-
-	clear
-
-	# Loop to handle the common tasks.
-	for i in ${_defs[@]}; do
-		"{{ cargo_bin }}" $i "${_msg1}"
-		"{{ cargo_bin }}" $i --indent "${_msg1}"
-		"{{ cargo_bin }}" $i -i "${_msg1}"
-		"{{ cargo_bin }}" $i --stderr "${_msg1}"
-		"{{ cargo_bin }}" $i -t "${_msg1}"
-		"{{ cargo_bin }}" $i --timestamp "${_msg1}"
-		"{{ cargo_bin }}" $i --time "${_msg1}"
-		"{{ cargo_bin }}" $i -i -t --stderr "${_msg2}"
-	done
-
-	# Error can also have a special exit codes.
-	"{{ cargo_bin }}" error -e 1 "${_msg1}" || true
-	"{{ cargo_bin }}" error --exit 1 "${_msg1}" || true
-	"{{ cargo_bin }}" error -t -e 1 "${_msg1}" || true
-
-	# Now laboriously handle the same thing for custom prefixes.
-	"{{ cargo_bin }}" print "${_msg1}"
-	"{{ cargo_bin }}" print -p "${_prefix1}" "${_msg1}"
-	"{{ cargo_bin }}" print --prefix "${_prefix1}" "${_msg1}"
-	"{{ cargo_bin }}" print -p "${_prefix1}" -c 199 "${_msg1}"
-	"{{ cargo_bin }}" print -p "${_prefix1}" --prefix-color 12 "${_msg1}"
-	"{{ cargo_bin }}" print --indent "${_msg1}"
-	"{{ cargo_bin }}" print -i "${_msg1}"
-	"{{ cargo_bin }}" print --stderr "${_msg1}"
-	"{{ cargo_bin }}" print -t "${_msg1}"
-	"{{ cargo_bin }}" print --timestamp "${_msg1}"
-	"{{ cargo_bin }}" print --time "${_msg1}"
-	"{{ cargo_bin }}" print -p "${_prefix2}" -c 13 -i -t --stderr "${_msg2}"
-
-	# Blanks
-	"{{ cargo_bin }}" blank
-	"{{ cargo_bin }}" blank -c 1
-	"{{ cargo_bin }}" blank -c 2
-	"{{ cargo_bin }}" blank -c 1 --stderr
-
-	clear
-
-	# Confirmations.
-	"{{ cargo_bin }}" confirm "Type 'Y':" || true
-	"{{ cargo_bin }}" confirm "Type 'e' and then 'n':" || true
-	"{{ cargo_bin }}" confirm "Just hit <ENTER>:" || true
-
-	# Miscellaneous crap.
-	"{{ cargo_bin }}" -h
-	"{{ cargo_bin }}" -V
-	"{{ cargo_bin }}" badanswer || true
-
-	clear
-
-
 # Check Release!
 @check:
 	# First let's build the Rust bit.
@@ -194,7 +106,6 @@ _build-pgo-instrumentation:
 @clean:
 	# Most things go here.
 	[ ! -d "{{ cargo_dir }}" ] || rm -rf "{{ cargo_dir }}"
-	[ ! -d "{{ pgo_dir }}" ] || rm -rf "{{ pgo_dir }}"
 
 	# But some Cargo apps place shit in subdirectories even if
 	# they place *other* shit in the designated target dir. Haha.
