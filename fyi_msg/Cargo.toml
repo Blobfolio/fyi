@@ -28,3 +28,6 @@ harness = false
 [[bench]]
 name = "fm_utility"
 harness = false
+
+[[example]]
+name = "msg"
