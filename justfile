@@ -216,30 +216,12 @@ _build-pgo-instrumentation:
 		--target-dir "{{ cargo_dir }}"
 
 
-# Example: Progress Bar
-example-progress:
-	#!/usr/bin/env bash
-
+# Build and Run Example.
+@ex DEMO:
 	clear
-
 	cargo run \
 		-q \
-		-p fyi_progress \
-		--example progress \
-		--target x86_64-unknown-linux-gnu \
-		--target-dir "{{ cargo_dir }}"
-
-
-# Example: Witcher Find/Progress
-example-witcher:
-	#!/usr/bin/env bash
-
-	clear
-
-	cargo run \
-		-q \
-		-p fyi_witcher \
-		--example witcher \
+		--example "{{ DEMO }}" \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
