@@ -126,6 +126,21 @@ impl fmt::Display for Msg {
 	}
 }
 
+impl<'a> From<&'a str> for Msg {
+	#[inline]
+	fn from(msg: &'a str) -> Self {
+		Self(MsgBuf::from(&[
+			// Indentation and timestamp.
+			&[], &[], &[], &[],
+			// Prefix.
+			&[], &[], &[],
+			LBL_MSG_PRE,
+			msg.as_bytes(),
+			LBL_RESET,
+		]))
+	}
+}
+
 impl<'a> From<&'a [u8]> for Msg {
 	#[inline]
 	fn from(msg: &'a [u8]) -> Self {
