@@ -355,7 +355,7 @@ impl MsgBuf {
 		}
 	}
 
-	#[allow(clippy::comparison_chain)]
+	#[allow(clippy::comparison_chain)] // False positive: match len.cmp()
 	/// Replace Part
 	///
 	/// Panics if `idx` is out of bounds.
