@@ -56,10 +56,10 @@ macro_rules! make_progress {
 macro_rules! make_progress_loop {
 	($witcher:ident, $progress:ident, $cb:ident) => {
 		let handle = Progress::steady_tick(&$progress, None);
-		$witcher.par_iter().for_each(|x| {
+		$witcher.0.par_iter().for_each(|x| {
 			let file: &str = x.to_str().unwrap_or("");
 			$progress.clone().add_task(file);
-			$cb(&Arc::new(x.clone()));
+			$cb(x);
 			$progress.clone().update(1, None::<String>, Some(file));
 		});
 		handle.join().unwrap();
@@ -201,7 +201,7 @@ impl Witcher {
 	pub fn progress<S, F> (&self, name: S, cb: F)
 	where
 		S: Borrow<str>,
-		F: Fn(&Arc<PathBuf>) + Send + Sync
+		F: Fn(&PathBuf) + Send + Sync
 	{
 		let pbar = make_progress!(name, self.0.len() as u64);
 
@@ -222,7 +222,7 @@ impl Witcher {
 	pub fn progress_crunch<S, F> (&self, name: S, cb: F)
 	where
 		S: Borrow<str>,
-		F: Fn(&Arc<PathBuf>) + Send + Sync
+		F: Fn(&PathBuf) + Send + Sync
 	{
 		let pbar = make_progress!(name, self.0.len() as u64);
 		let before: u64 = self.du();
