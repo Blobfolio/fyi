@@ -19,6 +19,9 @@ _fyi() {
             confirm)
                 cmd+="__confirm"
                 ;;
+            crunched)
+                cmd+="__crunched"
+                ;;
             debug)
                 cmd+="__debug"
                 ;;
@@ -59,7 +62,7 @@ _fyi() {
 
     case "${cmd}" in
         fyi)
-            opts=" -h -V  --help --version   blank print confirm debug done error info notice success task warning help  prompt"
+            opts=" -h -V  --help --version   blank print confirm crunched debug done error info notice success task warning help  prompt"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -75,7 +78,7 @@ _fyi() {
             ;;
         
         fyi__blank)
-            opts=" -e -h -V -c  --stderr --help --version --count  "
+            opts=" -h -V -c  --stderr --help --version --count  "
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -112,22 +115,29 @@ _fyi() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
-        fyi__debug)
-            opts=" -t -h -V -i  --stderr --add-timestamp --help --version --indent  <MSG> "
+        fyi__crunched)
+            opts=" -i -t -h -V  --indent --stderr --timestamp --help --version  <MSG> "
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 
-                --indent)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
+                *)
+                    COMPREPLY=()
                     ;;
-                    -i)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        fyi__debug)
+            opts=" -i -t -h -V  --indent --stderr --timestamp --help --version  <MSG> "
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                
                 *)
                     COMPREPLY=()
                     ;;
@@ -136,21 +146,13 @@ _fyi() {
             return 0
             ;;
         fyi__done)
-            opts=" -t -h -V -i  --stderr --add-timestamp --help --version --indent  <MSG> "
+            opts=" -i -t -h -V  --indent --stderr --timestamp --help --version  <MSG> "
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 
-                --indent)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                    -i)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -159,21 +161,13 @@ _fyi() {
             return 0
             ;;
         fyi__error)
-            opts=" -t -h -V -i -e  --stderr --add-timestamp --help --version --indent --exit  <MSG> "
+            opts=" -i -t -h -V -e  --indent --stderr --timestamp --help --version --exit  <MSG> "
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 
-                --indent)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                    -i)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
                 --exit)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -205,21 +199,13 @@ _fyi() {
             return 0
             ;;
         fyi__info)
-            opts=" -t -h -V -i  --stderr --add-timestamp --help --version --indent  <MSG> "
+            opts=" -i -t -h -V  --indent --stderr --timestamp --help --version  <MSG> "
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 
-                --indent)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                    -i)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -228,21 +214,13 @@ _fyi() {
             return 0
             ;;
         fyi__notice)
-            opts=" -t -h -V -i  --stderr --add-timestamp --help --version --indent  <MSG> "
+            opts=" -i -t -h -V  --indent --stderr --timestamp --help --version  <MSG> "
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 
-                --indent)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                    -i)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -251,21 +229,13 @@ _fyi() {
             return 0
             ;;
         fyi__print)
-            opts=" -t -h -V -i -p -c  --stderr --add-timestamp --help --version --indent --prefix --prefix-color  <MSG> "
+            opts=" -i -t -h -V -p -c  --indent --stderr --timestamp --help --version --prefix --prefix-color  <MSG> "
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 
-                --indent)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                    -i)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
                 --prefix)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -305,21 +275,13 @@ _fyi() {
             return 0
             ;;
         fyi__success)
-            opts=" -t -h -V -i  --stderr --add-timestamp --help --version --indent  <MSG> "
+            opts=" -i -t -h -V  --indent --stderr --timestamp --help --version  <MSG> "
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 
-                --indent)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                    -i)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -328,21 +290,13 @@ _fyi() {
             return 0
             ;;
         fyi__task)
-            opts=" -t -h -V -i  --stderr --add-timestamp --help --version --indent  <MSG> "
+            opts=" -i -t -h -V  --indent --stderr --timestamp --help --version  <MSG> "
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 
-                --indent)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                    -i)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -351,21 +305,13 @@ _fyi() {
             return 0
             ;;
         fyi__warning)
-            opts=" -t -h -V -i  --stderr --add-timestamp --help --version --indent  <MSG> "
+            opts=" -i -t -h -V  --indent --stderr --timestamp --help --version  <MSG> "
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 
-                --indent)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                    -i)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
                 *)
                     COMPREPLY=()
                     ;;
