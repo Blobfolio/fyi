@@ -13,7 +13,9 @@
 #![warn(clippy::filetype_is_file)]
 #![warn(clippy::integer_division)]
 #![warn(clippy::needless_borrow)]
+#![warn(clippy::nursery)]
 #![warn(clippy::pedantic)]
+#![warn(clippy::perf)]
 #![warn(clippy::suboptimal_flops)]
 #![warn(clippy::unneeded_field_pattern)]
 
@@ -24,13 +26,14 @@
 #![allow(clippy::missing_errors_doc)]
 
 use clap::ArgMatches;
-use fyi_msg::{
-	Flags,
-	Msg,
-	traits::Printable,
-	utility,
+use fyi_msg::Msg;
+use std::{
+	io::{
+		self,
+		Write
+	},
+	process
 };
-use std::process;
 
 mod menu;
 
@@ -44,11 +47,10 @@ fn main() {
 	// Make the message.
 	match opts.subcommand() {
 		("blank", Some(o)) => do_blank(o),
+		("confirm", Some(o)) => do_confirm(o),
 		(name, Some(o)) => do_msg(name, o),
 		_ => {},
 	}
-
-	process::exit(0);
 }
 
 /// Shoot blanks.
@@ -58,30 +60,39 @@ fn do_blank(opts: &ArgMatches) {
 		count = 1;
 	}
 
-	let flags = if opts.is_present("stderr") {
-		Flags::TO_STDERR | Flags::NO_LINE
+	if opts.is_present("stderr") {
+		io::stderr().write_all(&[10].repeat(count as usize)).unwrap();
 	}
 	else {
-		Flags::NO_LINE
-	};
+		io::stdout().write_all(&[10].repeat(count as usize)).unwrap();
+	}
+}
 
-	for _ in 0..count {
-		unsafe { utility::print(b"\n", 0, flags); }
+/// Confirmation prompt.
+fn do_confirm(opts: &ArgMatches) {
+	let mut msg: Msg = Msg::confirm(opts.value_of("msg").unwrap_or(""));
+
+	// Indent it?
+	if opts.is_present("indent") {
+		msg.set_indent(1);
+	}
+
+	if ! casual::confirm(msg) {
+		process::exit(1);
 	}
 }
 
 /// Print message.
 fn do_msg(name: &str, opts: &ArgMatches) {
-	// Build and print!
-	let indent: u8 = parse_cli_u8(opts.value_of("indent").unwrap_or("0"));
-
-	let msg: Msg = match name {
-		"confirm" => Msg::confirm(opts.value_of("msg").unwrap_or("")),
+	let mut msg: Msg = match name {
+		"crunched" => Msg::crunched(opts.value_of("msg").unwrap_or("")),
 		"debug" => Msg::debug(opts.value_of("msg").unwrap_or("")),
+		"done" => Msg::done(opts.value_of("msg").unwrap_or("")),
 		"error" => Msg::error(opts.value_of("msg").unwrap_or("")),
 		"info" => Msg::info(opts.value_of("msg").unwrap_or("")),
 		"notice" => Msg::notice(opts.value_of("msg").unwrap_or("")),
 		"success" => Msg::success(opts.value_of("msg").unwrap_or("")),
+		"task" => Msg::task(opts.value_of("msg").unwrap_or("")),
 		"warning" => Msg::warning(opts.value_of("msg").unwrap_or("")),
 		_ => match opts.value_of("prefix") {
 			Some(p) => Msg::new(
@@ -89,28 +100,38 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 				parse_cli_u8(opts.value_of("prefix_color").unwrap_or("199")),
 				opts.value_of("msg").unwrap_or("")
 			),
-			_ => Msg::plain(opts.value_of("msg").unwrap_or("")),
+			None => Msg::new("", 0, opts.value_of("msg").unwrap_or("")),
 		},
 	};
 
-	// Prompt.
-	if "confirm" == name {
-		if msg.prompt(indent) {
-			return;
-		}
-		else {
-			process::exit(1);
-		}
+	// Indent it?
+	if opts.is_present("indent") {
+		msg.set_indent(1);
 	}
 
-	let mut flags: Flags = Flags::NONE;
-	if opts.is_present("stderr") {
-		flags.insert(Flags::TO_STDERR);
-	}
+	// Add a timestamp?
 	if opts.is_present("time") {
-		flags.insert(Flags::TIMESTAMPED);
+		msg.set_timestamp();
 	}
-	msg.print(indent, flags);
+
+	// Print it to `Stderr`.
+	if opts.is_present("stderr") {
+		io::stderr().write_all(
+			&msg.iter()
+				.chain(&[10])
+				.copied()
+				.collect::<Vec<u8>>()
+		).unwrap();
+	}
+	// Print it to `Stdout`.
+	else {
+		io::stdout().write_all(
+			&msg.iter()
+				.chain(&[10])
+				.copied()
+				.collect::<Vec<u8>>()
+		).unwrap();
+	}
 
 	// We might have a custom exit code.
 	let exit: u8 = parse_cli_u8(opts.value_of("exit").unwrap_or("0"));
@@ -122,8 +143,6 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 /// Validate CLI numeric inputs.
 fn parse_cli_u8<S> (val: S) -> u8
 where S: Into<String> {
-	match val.into().parse::<u8>() {
-		Ok(x) => x,
-		_ => 0,
-	}
+	if let Ok(x) = val.into().parse::<u8>() { x }
+	else { 0 }
 }

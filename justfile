@@ -16,14 +16,13 @@ pkg_dir4    := justfile_directory() + "/fyi_witcher"
 
 cargo_dir   := "/tmp/" + pkg_id + "-cargo"
 cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
-pgo_dir     := "/tmp/pgo-data"
 release_dir := justfile_directory() + "/release"
 
 rustflags   := "-Clinker-plugin-lto -Clinker=clang-9 -Clink-args=-fuse-ld=lld-9 -C link-arg=-s"
 
 
 
-# Build Release!
+# Bench it!
 bench BENCH="" FILTER="":
 	#!/usr/bin/env bash
 
@@ -49,7 +48,7 @@ bench BENCH="" FILTER="":
 
 
 # Build Release!
-@build:
+@build: clean
 	# First let's build the Rust bit.
 	RUSTFLAGS="{{ rustflags }}" cargo build \
 		--bin "{{ pkg_id }}" \
@@ -75,7 +74,7 @@ bench BENCH="" FILTER="":
 
 
 # Build Man.
-@build-man: build-pgo
+@build-man: build
 	# Pre-clean.
 	find "{{ release_dir }}/man" -type f -delete
 
@@ -93,55 +92,6 @@ bench BENCH="" FILTER="":
 	just _fix-chown "{{ release_dir }}/man"
 
 
-# Build PGO.
-@build-pgo: clean
-	# First let's build the Rust bit.
-	RUSTFLAGS="{{ rustflags }} -Cprofile-generate={{ pgo_dir }}" \
-		cargo build \
-			--bin "{{ pkg_id }}" \
-			--release \
-			--target x86_64-unknown-linux-gnu \
-			--target-dir "{{ cargo_dir }}"
-
-	clear
-
-	# Instrumentation!
-	"{{ cargo_bin }}" debug "Beginning instrumentation!"
-	"{{ cargo_bin }}" confirm "Answer yes or no. Seriously!" || true
-	"{{ cargo_bin }}" confirm "Now answer the opposite way." || true
-	"{{ cargo_bin }}" blank -c 2
-	"{{ cargo_bin }}" blank -e -c 2
-	"{{ cargo_bin }}" debug -i 1 -t "Instrumenting!"
-	"{{ cargo_bin }}" task "Example task."
-	"{{ cargo_bin }}" error "We're doing what we're meant to."
-	"{{ cargo_bin }}" error -e 1 "We're doing what we're meant to." || true
-	"{{ cargo_bin }}" info -t "Still going…"
-	"{{ cargo_bin }}" notice "Notices are important."
-	"{{ cargo_bin }}" print "Nothing doing here."
-	"{{ cargo_bin }}" print -p "Custom" -c 199 "Nothing doing here."
-	"{{ cargo_bin }}" success "Very nearly there now!"
-	"{{ cargo_bin }}" warning --stderr -t "This is the last one."
-	"{{ cargo_bin }}" warning -i 4 -t "Euclid Apollonius of Perga courage of our questions brain is the seed of intelligence quasar tendrils of gossamer clouds. The carbon in our apple pies not a sunrise but a galaxyrise tesseract white dwarf the sky calls to us star stuff harvesting star light. Stirred by starlight hearts of the stars made in the interiors of collapsing stars Tunguska event the ash of stellar alchemy with pretty stories for which there's little good evidence and billions upon billions upon billions upon billions upon billions upon billions upon billions."
-	"{{ cargo_bin }}" done "We actually are (almost) done!"
-	"{{ cargo_bin }}" -h
-	"{{ cargo_bin }}" -V
-	"{{ cargo_bin }}" blank -c 1
-	"{{ cargo_bin }}" badanswer || true
-
-	clear
-
-	# Merge the data back in.
-	llvm-profdata-9 \
-		merge -o "{{ pgo_dir }}/merged.profdata" "{{ pgo_dir }}"
-
-	RUSTFLAGS="{{ rustflags }} -Cprofile-use={{ pgo_dir }}/merged.profdata" \
-		cargo build \
-			--bin "{{ pkg_id }}" \
-			--release \
-			--target x86_64-unknown-linux-gnu \
-			--target-dir "{{ cargo_dir }}"
-
-
 # Check Release!
 @check:
 	# First let's build the Rust bit.
@@ -156,7 +106,6 @@ bench BENCH="" FILTER="":
 @clean:
 	# Most things go here.
 	[ ! -d "{{ cargo_dir }}" ] || rm -rf "{{ cargo_dir }}"
-	[ ! -d "{{ pgo_dir }}" ] || rm -rf "{{ pgo_dir }}"
 
 	# But some Cargo apps place shit in subdirectories even if
 	# they place *other* shit in the designated target dir. Haha.
@@ -178,16 +127,12 @@ bench BENCH="" FILTER="":
 		--target-dir "{{ cargo_dir }}"
 
 
-# Build Release!
-demo-progress:
-	#!/usr/bin/env bash
-
+# Build and Run Example.
+@ex DEMO:
 	clear
-
 	cargo run \
 		-q \
-		-p fyi_progress \
-		--example progress \
+		--example "{{ DEMO }}" \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 

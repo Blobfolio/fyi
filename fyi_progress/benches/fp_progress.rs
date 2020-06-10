@@ -8,69 +8,58 @@ use criterion::{
 	criterion_group,
 	criterion_main,
 };
-use fyi_msg::Msg;
 use fyi_progress::Progress;
 
 
 
 fn new(c: &mut Criterion) {
-	let msg = Msg::new("Prefix", 199, "This is an example message!");
-	let hundred_k = black_box(100_000_u64);
+	let mut group = c.benchmark_group("fyi_progress::Progress");
+	let total = black_box(10000);
 
-	c.bench_function("fyi_progress::Progress/new(None, 100000)", move |b| {
-		b.iter(|| Progress::new(None, hundred_k))
+	group.bench_function("new(10000, None)", move |b| {
+		b.iter(|| Progress::new(total, black_box(None::<String>)))
 	});
 
-	c.bench_function("fyi_progress::Progress/new(Some(...), 100000)", move |b| {
-		b.iter(|| Progress::new(Some(msg.clone()), hundred_k))
+	group.bench_function("new(10000, \"Imma Title Wee\")", move |b| {
+		b.iter(|| Progress::new(total, black_box(Some("Imma Title Wee"))))
 	});
+
+	group.finish();
 }
 
 fn tick(c: &mut Criterion) {
-	let msg = Msg::new("Prefix", 199, "This is an example message!");
-	let hundred_k = black_box(100_000_u64);
+	let mut group = c.benchmark_group("fyi_progress::Progress");
+	let total = black_box(10000);
 
-	let progress = Progress::new(None, hundred_k);
-	c.bench_function("fyi_progress::Progress/tick()/{None, 0/100000, None}", move |b| {
-		b.iter(|| progress.tick())
+	group.bench_function("tick(10000, None)", move |b| {
+		let pbar = Progress::new(total, black_box(None::<String>));
+		b.iter_with_setup(|| pbar.increment(1), |_| pbar.tick())
 	});
 
-	let progress = Progress::new(None, hundred_k);
-	progress.increment(100);
-	c.bench_function("fyi_progress::Progress/tick()/{None, 100/100000, None}", move |b| {
-		b.iter(|| progress.tick())
+	group.bench_function("tick(10000, \"Imma Title Wee\")", move |b| {
+		let pbar = Progress::new(total, black_box(Some("Imma Title Wee")));
+		b.iter_with_setup(|| pbar.increment(1), |_| pbar.tick())
 	});
 
-	let progress = Progress::new(None, hundred_k);
-	progress.add_task("The first thing I want to say is, Hello!");
-	progress.add_task("The second thing I want to say is, Good Bye!");
-	c.bench_function("fyi_progress::Progress/tick()/{None, 0/100000, [2]}", move |b| {
-		b.iter(|| progress.tick())
+	group.bench_function("tick(10000, \"Imma Title Wee\") + tasks", move |b| {
+		let pbar = Progress::new(total, black_box(Some("Imma Title Wee")));
+		pbar.add_task("This is a task!");
+		pbar.add_task("This is an ostrich.");
+		pbar.add_task("Pick up groceries at the store.");
+		pbar.add_task("Add more benchmarks.");
+		pbar.add_task("Add more unit tests.");
+		b.iter_with_setup(|| pbar.increment(1), |_| pbar.tick())
 	});
 
-	let progress = Progress::new(None, hundred_k);
-	progress.increment(100);
-	progress.add_task("The first thing I want to say is, Hello!");
-	progress.add_task("The second thing I want to say is, Good Bye!");
-	c.bench_function("fyi_progress::Progress/tick()/{None, 100/100000, [2]}", move |b| {
-		b.iter(|| progress.tick())
+	group.bench_function("tick(10000, \"Imma Title Wee\") + long tasks", move |b| {
+		let pbar = Progress::new(total, black_box(Some("Imma Title Wee")));
+		pbar.add_task("This is a task!");
+		pbar.add_task("A still more glorious dawn awaits rogue globular star cluster decipherment Cambrian explosion tingling of the spine. The sky calls to us extraordinary claims require extraordinary evidence dream of the mind's eye Apollonius of Perga kindling the energy hidden in matter inconspicuous motes of rock and gas. Colonies kindling the energy hidden in matter a very small stage in a vast cosmic arena from which we spring vastness is bearable only through love the only home we've ever known and billions upon billions upon billions upon billions upon billions upon billions upon billions.");
+		pbar.add_task("Add more unit tests.");
+		b.iter_with_setup(|| pbar.increment(1), |_| pbar.tick())
 	});
 
-	let progress = Progress::new(None, hundred_k);
-	progress.increment(50000);
-	progress.add_task("The first thing I want to say is, Hello!");
-	progress.add_task("The second thing I want to say is, Good Bye!");
-	c.bench_function("fyi_progress::Progress/tick()/{None, 50000/100000, [2]}", move |b| {
-		b.iter(|| progress.tick())
-	});
-
-	let progress = Progress::new(Some(msg), hundred_k);
-	progress.increment(50000);
-	progress.add_task("The first thing I want to say is, Hello!");
-	progress.add_task("The second thing I want to say is, Good Bye!");
-	c.bench_function("fyi_progress::Progress/tick()/{Some(...), 50000/100000, [2]}", move |b| {
-		b.iter(|| progress.tick())
-	});
+	group.finish();
 }
 
 

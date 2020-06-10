@@ -4,25 +4,18 @@
 This mod contains miscellaneous utility functions for the crate.
 */
 
-use num_format::{
-	Locale,
-	WriteFormatted,
-};
 use std::{
-	borrow::{
-		Borrow,
-		Cow,
-	},
+	borrow::Borrow,
 	path::Path,
 };
 
 
 
-/// Ergonomical file extension.
+/// Ergonomical File Extension.
 ///
-/// This one-liner returns the file extension as a `String`, in lower case, if
-/// the path is the path of a file and it has an extension. Otherwise an empty
-/// `String` is returned.
+/// This one-liner returns the file extension as a lower-cased `String` for
+/// easier comparisons. If the path is not a file or has no extension, an empty
+/// string is returned instead.
 pub fn file_extension<P> (path: P) -> String
 where P: AsRef<Path> {
 	let path = path.as_ref();
@@ -39,9 +32,10 @@ where P: AsRef<Path> {
 	}
 }
 
-/// Ergonomical file size.
+/// Ergonomical File Size.
 ///
-/// If the path is a file path, return the size of that file, otherwise `0`.
+/// This method always returns a `u64`, either the file's size or `0` if the
+/// path is invalid.
 pub fn file_size<P> (path: P) -> u64
 where P: AsRef<Path> {
 	if let Ok(meta) = path.as_ref().metadata() {
@@ -53,39 +47,40 @@ where P: AsRef<Path> {
 
 /// String Inflection
 ///
-/// Given a number, come up with a string like "1 thing" or "2 things".
-pub fn inflect<T1, T2> (num: u64, one: T1, many: T2) -> Cow<'static, [u8]>
+/// Given a number, come up with a byte string like "1 thing" or "2 things".
+pub fn inflect<T1, T2> (num: u64, one: T1, many: T2) -> Vec<u8>
 where
 	T1: Borrow<str>,
 	T2: Borrow<str> {
 	if 1 == num {
-		Cow::Owned([
-			b"1 ",
-			one.borrow().as_bytes(),
-		].concat())
+		[49, 32].iter()
+			.chain(one.borrow().as_bytes())
+			.copied()
+			.collect::<Vec<u8>>()
 	}
 	else if num < 1000 {
-		let noun = many.borrow();
-		let mut buf: Vec<u8> = Vec::with_capacity(noun.len() + 4);
-		itoa::write(&mut buf, num).expect("Invalid number.");
-		buf.push(b' ');
-		buf.extend_from_slice(noun.as_bytes());
-		Cow::Owned(buf)
+		let mut buf = itoa::Buffer::new();
+		buf.format(num).as_bytes().iter()
+			.chain(&[32])
+			.chain(many.borrow().as_bytes())
+			.copied()
+			.collect::<Vec<u8>>()
 	}
 	else {
-		let noun = many.borrow();
-		let mut buf: Vec<u8> = Vec::with_capacity(noun.len() + 4);
-		buf.write_formatted(&num, &Locale::en).expect("Invalid number.");
-		buf.push(b' ');
-		buf.extend_from_slice(noun.as_bytes());
-		Cow::Owned(buf)
+		let mut buf = num_format::Buffer::default();
+		buf.write_formatted(&num, &num_format::Locale::en);
+		buf.as_bytes().iter()
+			.chain(&[32])
+			.chain(many.borrow().as_bytes())
+			.copied()
+			.collect::<Vec<u8>>()
 	}
 }
 
 /// Is File Executable?
 ///
 /// This method attempts to determine whether or not a file has executable
-/// permissions. If the path is not a file, `false` is returned.
+/// permissions (generally). If the path is not a file, `false` is returned.
 pub fn is_executable<P> (path: P) -> bool
 where P: AsRef<Path> {
 	use std::os::unix::fs::PermissionsExt;

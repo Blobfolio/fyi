@@ -13,7 +13,9 @@
 #![warn(clippy::filetype_is_file)]
 #![warn(clippy::integer_division)]
 #![warn(clippy::needless_borrow)]
+#![warn(clippy::nursery)]
 #![warn(clippy::pedantic)]
+#![warn(clippy::perf)]
 #![warn(clippy::suboptimal_flops)]
 #![warn(clippy::unneeded_field_pattern)]
 
@@ -23,8 +25,10 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::missing_errors_doc)]
 
+
+
+#[cfg(feature = "witch_io")] mod witchio;
 mod witcher;
-pub mod traits;
 pub mod utility;
 
 /// The Witcher!
@@ -32,3 +36,9 @@ pub use witcher::Witcher;
 
 /// Generic result type.
 pub type Result<T, E = String> = std::result::Result<T, E>;
+
+#[cfg(feature = "witch_io")]
+/// The `WitchIO` trait.
+pub mod traits {
+	pub use crate::witchio::WitchIO;
+}

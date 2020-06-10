@@ -13,7 +13,9 @@
 #![warn(clippy::filetype_is_file)]
 #![warn(clippy::integer_division)]
 #![warn(clippy::needless_borrow)]
+#![warn(clippy::nursery)]
 #![warn(clippy::pedantic)]
+#![warn(clippy::perf)]
 #![warn(clippy::suboptimal_flops)]
 #![warn(clippy::unneeded_field_pattern)]
 
@@ -24,9 +26,11 @@
 #![allow(clippy::missing_errors_doc)]
 
 mod progress;
+mod nice_elapsed;
+mod nice_int;
+pub mod traits;
+pub mod utility;
 
-/// Lapsed.
-pub mod lapsed;
-
-/// Progress.
+pub use nice_elapsed::NiceElapsed;
+pub use nice_int::NiceInt;
 pub use progress::Progress;

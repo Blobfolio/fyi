@@ -13,7 +13,9 @@
 #![warn(clippy::filetype_is_file)]
 #![warn(clippy::integer_division)]
 #![warn(clippy::needless_borrow)]
+#![warn(clippy::nursery)]
 #![warn(clippy::pedantic)]
+#![warn(clippy::perf)]
 #![warn(clippy::suboptimal_flops)]
 #![warn(clippy::unneeded_field_pattern)]
 
@@ -24,12 +26,10 @@
 #![allow(clippy::missing_errors_doc)]
 
 mod msg;
-mod timestamp;
-
-pub mod print;
-pub mod traits;
+mod msgbuf;
+mod partitions;
 pub mod utility;
 
 pub use msg::Msg;
-pub use print::Flags;
-pub use timestamp::Timestamp;
+pub use msgbuf::MsgBuf;
+pub use partitions::Partitions;

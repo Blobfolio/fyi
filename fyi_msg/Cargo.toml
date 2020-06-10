@@ -1,52 +1,33 @@
 [package]
 name = "fyi_msg"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2018"
 description = "FYI is a dead-simple status message printer for CLI use applications."
 publish = false
 
 [dependencies]
-bitflags = "1.2.*"
+bytes = "0.5.*"
 chrono = "0.4.*"
-itoa = "0.4.*"
-term_size = "0.3.*"
-unicode-width = "0.1.*"
-
-[dependencies.bytecount]
-version = "0.6.*"
-default-features = false
-features = [ "runtime-dispatch-simd" ]
-
-[dependencies.casual]
-version = "0.1.*"
-optional = true
-
-[dependencies.smallvec]
-version = "1.4.*"
-default-features = false
-features = [ "write" ]
-
-[features]
-default = []
-interactive = [ "casual" ]
-stdout_sinkhole = []
 
 [dev-dependencies]
 criterion = "*"
-
-[[bench]]
-name = "fm_girth_ext"
-harness = false
 
 [[bench]]
 name = "fm_msg"
 harness = false
 
 [[bench]]
-name = "fm_timestamp"
+name = "fm_msgbuf"
+harness = false
+
+[[bench]]
+name = "fm_partitions"
 harness = false
 
 [[bench]]
 name = "fm_utility"
 harness = false
+
+[[example]]
+name = "msg"
