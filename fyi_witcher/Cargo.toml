@@ -1,6 +1,6 @@
 [package]
 name = "fyi_witcher"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2018"
 description = "FYI is a dead-simple status message printer for CLI use applications."
