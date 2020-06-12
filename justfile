@@ -18,7 +18,8 @@ cargo_dir   := "/tmp/" + pkg_id + "-cargo"
 cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
 release_dir := justfile_directory() + "/release"
 
-rustflags   := "-Clinker-plugin-lto -Clinker=clang-9 -Clink-args=-fuse-ld=lld-9 -C link-arg=-s"
+# If we ever want to use Clang native: -Clinker-plugin-lto -Clinker=clang-9 -Clink-args=-fuse-ld=lld-9
+rustflags   := "-C link-arg=-s"
 
 
 
