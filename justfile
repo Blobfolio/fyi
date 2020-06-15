@@ -30,24 +30,32 @@ rustflags   := "-C link-arg=-s"
 
 	clear
 
+	fyi print -p "{{ BIN }}" -c 209 "$( "{{ BIN }}" -V )"
+	fyi print -p "{{ cargo_bin }}" -c 199 "$( "{{ cargo_bin }}" -V )"
+	fyi blank
+
 	just _ab "{{ BIN }}" 'debug "Twinkle, twinkle little star, how I wonder what you are."'
-	just _ab "{{ cargo_bin }}" 'debug "Twinkle, twinkle little star, how I wonder what you are."'
 
 	just _ab "{{ BIN }}" 'debug -t "Twinkle, twinkle little star, how I wonder what you are."'
-	just _ab "{{ cargo_bin }}" 'debug -t "Twinkle, twinkle little star, how I wonder what you are."'
 
 	just _ab "{{ BIN }}" 'print -p "Iron Maiden" -c 199 "Let he who hath understanding reckon the number of the beast."'
-	just _ab "{{ cargo_bin }}" 'print -p "Iron Maiden" -c 199 "Let he who hath understanding reckon the number of the beast."'
 
 
 # A/B Test Inner
 @_ab BIN ARGS:
 	"{{ BIN }}" {{ ARGS }}
-	fyi notice -t "$( "{{ BIN }}" -V ): Pausing 30 seconds before benching…"
+
 	sleep 30
 	hyperfine --warmup 10 \
 		--runs 100 \
 		'{{ BIN }} {{ ARGS }}'
+
+	sleep 30
+	hyperfine --warmup 10 \
+		--runs 100 \
+		'{{ cargo_bin }} {{ ARGS }}'
+
+	echo "\033[2m-----\033[0m\n"
 
 
 # Bench it!
