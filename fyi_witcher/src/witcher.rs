@@ -20,9 +20,10 @@ use fyi_progress::{
 use indexmap::set::IndexSet;
 use jwalk::WalkDir;
 use rayon::prelude::*;
-use regex::Regex;
+use regex::bytes::Regex;
 use std::{
 	borrow::Borrow,
+	ffi::OsStr,
 	fs::{
 		self,
 		File,
@@ -57,7 +58,7 @@ macro_rules! make_progress_loop {
 	($witcher:ident, $progress:ident, $cb:ident) => {
 		let handle = Progress::steady_tick(&$progress, None);
 		$witcher.0.par_iter().for_each(|x| {
-			let file: &str = x.to_str().unwrap_or("");
+			let file: &str = x.to_str().unwrap_or_default();
 			$progress.clone().add_task(file);
 			$cb(x);
 			$progress.clone().update(1, None::<String>, Some(file));
@@ -82,6 +83,7 @@ impl Deref for Witcher {
 }
 
 impl Witcher {
+	#[allow(trivial_casts)]
 	/// New.
 	///
 	/// Recursively search for files within the specified paths, filtered
@@ -96,22 +98,30 @@ impl Witcher {
 		let pattern: Regex = Regex::new(pattern.borrow()).expect("Invalid Regex.");
 
 		Self(paths.iter()
+			// Canonicalize the search paths.
 			.filter_map(|p| fs::canonicalize(p.as_ref()).ok())
 			.collect::<IndexSet<PathBuf>>()
 			.into_par_iter()
+			// Walk each search path.
 			.flat_map(|i| WalkDir::new(i)
 				.follow_links(true)
 				.skip_hidden(false)
 				.into_iter()
 				.filter_map(|p| {
+					// Skip errors, duh.
 					if let Ok(path) = p {
+						// We don't want directories.
 						if path.file_type().is_dir() { None }
+						// We need to canonicalize again because symlinks might
+						// not actually be living with the parent directory.
 						else if let Ok(path) = fs::canonicalize(&path.path()) {
-							if let Some(path_str) = path.to_str() {
-								if pattern.is_match(path_str) {
-									Some(path)
-								}
-								else { None }
+							// The most efficient way to match regex against a
+							// `Path` is to convert it to an `OsStr` and
+							// convert that into an `&[u8]`.
+							if pattern.is_match(unsafe {
+								&*(path.as_os_str() as *const OsStr as *const [u8])
+							}) {
+								Some(path)
 							}
 							else { None }
 						}
