@@ -58,7 +58,7 @@ macro_rules! make_progress_loop {
 	($witcher:ident, $progress:ident, $cb:ident) => {
 		let handle = Progress::steady_tick(&$progress, None);
 		$witcher.0.par_iter().for_each(|x| {
-			let file: &str = x.to_str().unwrap_or("");
+			let file: &str = x.to_str().unwrap_or_default();
 			$progress.clone().add_task(file);
 			$cb(x);
 			$progress.clone().update(1, None::<String>, Some(file));

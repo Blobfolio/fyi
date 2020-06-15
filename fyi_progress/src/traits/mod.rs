@@ -70,7 +70,7 @@ impl FittedRange for str {
 				}
 
 				// The width matters!
-				let ch_width: usize = UnicodeWidthChar::width(c).unwrap_or(0);
+				let ch_width: usize = UnicodeWidthChar::width(c).unwrap_or_default();
 				total_width += ch_width;
 
 				// Widths can creep up. If we went over, back up a step and

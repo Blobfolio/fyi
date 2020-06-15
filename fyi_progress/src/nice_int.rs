@@ -100,7 +100,7 @@ impl NiceInt {
 	/// From Small
 	fn from_small(num: u64) -> Self {
 		let mut out = Self::default();
-		out.len = itoa::write(&mut out.inner[..], num).unwrap_or(0);
+		out.len = itoa::write(&mut out.inner[..], num).unwrap_or_default();
 		out
 	}
 
@@ -108,7 +108,7 @@ impl NiceInt {
 	fn from_big(num: u64) -> Self {
 		use num_format::WriteFormatted;
 		let mut out = Self::default();
-		out.len = (&mut out.inner[..]).write_formatted(&num, &num_format::Locale::en).unwrap_or(0);
+		out.len = (&mut out.inner[..]).write_formatted(&num, &num_format::Locale::en).unwrap_or_default();
 		out
 	}
 }

@@ -70,7 +70,7 @@ fn do_blank(opts: &ArgMatches) {
 
 /// Confirmation prompt.
 fn do_confirm(opts: &ArgMatches) {
-	let mut msg: Msg = Msg::confirm(opts.value_of("msg").unwrap_or(""));
+	let mut msg: Msg = Msg::confirm(opts.value_of("msg").unwrap_or_default());
 
 	// Indent it?
 	if opts.is_present("indent") {
@@ -85,22 +85,22 @@ fn do_confirm(opts: &ArgMatches) {
 /// Print message.
 fn do_msg(name: &str, opts: &ArgMatches) {
 	let mut msg: Msg = match name {
-		"crunched" => Msg::crunched(opts.value_of("msg").unwrap_or("")),
-		"debug" => Msg::debug(opts.value_of("msg").unwrap_or("")),
-		"done" => Msg::done(opts.value_of("msg").unwrap_or("")),
-		"error" => Msg::error(opts.value_of("msg").unwrap_or("")),
-		"info" => Msg::info(opts.value_of("msg").unwrap_or("")),
-		"notice" => Msg::notice(opts.value_of("msg").unwrap_or("")),
-		"success" => Msg::success(opts.value_of("msg").unwrap_or("")),
-		"task" => Msg::task(opts.value_of("msg").unwrap_or("")),
-		"warning" => Msg::warning(opts.value_of("msg").unwrap_or("")),
+		"crunched" => Msg::crunched(opts.value_of("msg").unwrap_or_default()),
+		"debug" => Msg::debug(opts.value_of("msg").unwrap_or_default()),
+		"done" => Msg::done(opts.value_of("msg").unwrap_or_default()),
+		"error" => Msg::error(opts.value_of("msg").unwrap_or_default()),
+		"info" => Msg::info(opts.value_of("msg").unwrap_or_default()),
+		"notice" => Msg::notice(opts.value_of("msg").unwrap_or_default()),
+		"success" => Msg::success(opts.value_of("msg").unwrap_or_default()),
+		"task" => Msg::task(opts.value_of("msg").unwrap_or_default()),
+		"warning" => Msg::warning(opts.value_of("msg").unwrap_or_default()),
 		_ => match opts.value_of("prefix") {
 			Some(p) => Msg::new(
 				p,
 				parse_cli_u8(opts.value_of("prefix_color").unwrap_or("199")),
-				opts.value_of("msg").unwrap_or("")
+				opts.value_of("msg").unwrap_or_default()
 			),
-			None => Msg::new("", 0, opts.value_of("msg").unwrap_or("")),
+			None => Msg::new("", 0, opts.value_of("msg").unwrap_or_default()),
 		},
 	};
 
