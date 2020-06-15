@@ -23,6 +23,33 @@ rustflags   := "-C link-arg=-s"
 
 
 
+# A/B Test Two Binaries (second is implied)
+@ab BIN REBUILD="":
+	[ -z "{{ REBUILD }}" ] || just build
+	[ -f "{{ cargo_bin }}" ] || just build
+
+	clear
+
+	just _ab "{{ BIN }}" 'debug "Twinkle, twinkle little star, how I wonder what you are."'
+	just _ab "{{ cargo_bin }}" 'debug "Twinkle, twinkle little star, how I wonder what you are."'
+
+	just _ab "{{ BIN }}" 'debug -t "Twinkle, twinkle little star, how I wonder what you are."'
+	just _ab "{{ cargo_bin }}" 'debug -t "Twinkle, twinkle little star, how I wonder what you are."'
+
+	just _ab "{{ BIN }}" 'print -p "Iron Maiden" -c 199 "Let he who hath understanding reckon the number of the beast."'
+	just _ab "{{ cargo_bin }}" 'print -p "Iron Maiden" -c 199 "Let he who hath understanding reckon the number of the beast."'
+
+
+# A/B Test Inner
+@_ab BIN ARGS:
+	"{{ BIN }}" {{ ARGS }}
+	fyi notice -t "$( "{{ BIN }}" -V ): Pausing 30 seconds before benching…"
+	sleep 30
+	hyperfine --warmup 10 \
+		--runs 100 \
+		'{{ BIN }} {{ ARGS }}'
+
+
 # Bench it!
 bench BENCH="" FILTER="":
 	#!/usr/bin/env bash
