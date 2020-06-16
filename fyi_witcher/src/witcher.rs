@@ -135,6 +135,39 @@ impl Witcher {
 		)
 	}
 
+	/// New Custom
+	///
+	/// This method can be used to perform a file search with arbitrary
+	/// filtering via a callback method. This method should accept a
+	/// `Result<jwalk::DirEntry>` and return a `Some(PathBuf)` if the file is
+	/// worth keeping, or `None` to reject the entry.
+	///
+	/// # Safety
+	///
+	/// The responsibility for validating and canonicalizing file paths falls
+	/// falls to callback, so be sure you handle that, otherwise things like
+	/// `du()` might be a bit weird.
+	pub unsafe fn custom<P, F> (paths: &[P], cb: F) -> Self
+	where
+		P: AsRef<Path>,
+		F: FnMut(Result<jwalk::DirEntry<((), ())>, jwalk::Error>) -> Option<PathBuf> + Send + Sync + Copy {
+		Self(paths.iter()
+			// Canonicalize the search paths.
+			.filter_map(|p| fs::canonicalize(p.as_ref()).ok())
+			.collect::<IndexSet<PathBuf>>()
+			.into_par_iter()
+			// Walk each search path.
+			.flat_map(|i| WalkDir::new(i)
+				.follow_links(true)
+				.skip_hidden(false)
+				.into_iter()
+				.filter_map(cb)
+				.collect::<IndexSet<PathBuf>>()
+			)
+			.collect()
+		)
+	}
+
 	/// From File.
 	///
 	/// This works just like `new()`, except the list of paths to search are
