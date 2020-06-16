@@ -46,15 +46,16 @@ rustflags   := "-C link-arg=-s"
 # A/B Test Inner
 @_ab BIN ARGS:
 	"{{ BIN }}" {{ ARGS }}
+	"{{ cargo_bin }}" {{ ARGS }}
 
 	sleep 30
 	hyperfine --warmup 10 \
-		--runs 100 \
+		--runs 50 \
 		'{{ BIN }} {{ ARGS }}'
 
 	sleep 30
 	hyperfine --warmup 10 \
-		--runs 100 \
+		--runs 50 \
 		'{{ cargo_bin }} {{ ARGS }}'
 
 	echo "\033[2m-----\033[0m\n"
