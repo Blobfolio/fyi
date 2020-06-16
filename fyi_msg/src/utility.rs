@@ -33,6 +33,13 @@ pub fn ansi_code_bold(num: u8) -> &'static [u8] {
 }
 
 #[must_use]
+/// `String` to `u8`
+pub fn str_to_u8<S> (val: S) -> u8
+where S: AsRef<str> {
+	val.as_ref().parse::<u8>().unwrap_or_default()
+}
+
+#[must_use]
 /// Time Number to String.
 ///
 /// This is a simple conversion table for turning `u32` representations of
@@ -74,6 +81,17 @@ mod tests {
 				"Ansi for {} is incorrect: {:?}",
 				i,
 				ansi_code_bold(i),
+			);
+		}
+	}
+
+	#[test]
+	fn t_str_to_u8() {
+		for i in 1..=255 {
+			assert_eq!(
+				str_to_u8(format!("{}", i)),
+				i,
+				"Str-to-u8 is incorrect."
 			);
 		}
 	}

@@ -26,7 +26,10 @@
 #![allow(clippy::missing_errors_doc)]
 
 use clap::ArgMatches;
-use fyi_msg::Msg;
+use fyi_msg::{
+	Msg,
+	utility::str_to_u8,
+};
 use std::{
 	io::{
 		self,
@@ -97,8 +100,8 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 		_ => match opts.value_of("prefix") {
 			Some(p) => Msg::new(
 				p,
-				parse_cli_u8(opts.value_of("prefix_color").unwrap_or("199")),
-				opts.value_of("msg").unwrap_or_default()
+				str_to_u8(opts.value_of("prefix_color").unwrap_or("199")),
+				msg_str
 			),
 			None => Msg::new("", 0, opts.value_of("msg").unwrap_or_default()),
 		},
@@ -134,7 +137,7 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 	}
 
 	// We might have a custom exit code.
-	let exit: u8 = parse_cli_u8(opts.value_of("exit").unwrap_or("0"));
+	let exit: u8 = str_to_u8(opts.value_of("exit").unwrap_or("0"));
 	if 0 != exit {
 		process::exit(i32::from(exit));
 	}
