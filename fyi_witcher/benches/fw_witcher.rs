@@ -40,7 +40,8 @@ pub fn custom_cb (p: Result<jwalk::DirEntry<((), ())>, jwalk::Error>) -> Option<
 			// most robust approach, but a good demonstration of the sort of
 			// thing one might wish to do.
 			unsafe {
-				if (&*(path.as_os_str() as *const OsStr as *const [u8])).ends_with(&[46, 103, 122]) { Some(path) }
+				let p_str: *const OsStr = path.as_os_str();
+				if (&*(p_str as *const [u8])).ends_with(&[46, 103, 122]) { Some(path) }
 				else { None }
 			}
 		}
