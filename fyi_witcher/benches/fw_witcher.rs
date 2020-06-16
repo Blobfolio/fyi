@@ -64,11 +64,24 @@ fn custom(c: &mut Criterion) {
 	group.finish();
 }
 
+fn simple(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_witcher::Witcher");
+
+	let paths = black_box([ "/usr/share/man/man5" ]);
+
+	group.bench_function("simple(/usr/share/man/man5)", move |b| {
+		b.iter(|| Witcher::simple(&paths))
+	});
+
+	group.finish();
+}
+
 
 
 criterion_group!(
 	benches,
 	new,
 	custom,
+	simple,
 );
 criterion_main!(benches);

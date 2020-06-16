@@ -156,6 +156,33 @@ impl Witcher {
 		)
 	}
 
+	/// Simple.
+	///
+	/// Recursively search for files within the specified paths. That's it.
+	/// Unfiltered! All files in the result set will be canonicalized and
+	/// deduped for minimum confusion.
+	pub fn simple<P> (paths: &[P]) -> Self
+	where P: AsRef<Path> {
+		Self(paths.iter()
+			// Canonicalize the search paths.
+			.filter_map(|p| fs::canonicalize(p).ok())
+			.collect::<IndexSet<PathBuf>>()
+			.into_par_iter()
+			// Walk each search path.
+			.flat_map(|i| WalkDir::new(i)
+				.follow_links(true)
+				.skip_hidden(false)
+				.into_iter()
+				.filter_map(|p| p.ok()
+					.and_then(|p| if p.file_type().is_dir() { None } else { Some(p) })
+					.and_then(|p| fs::canonicalize(p.path()).ok())
+				)
+				.collect::<IndexSet<PathBuf>>()
+			)
+			.collect()
+		)
+	}
+
 	/// From File.
 	///
 	/// This works just like `new()`, except the list of paths to search are
