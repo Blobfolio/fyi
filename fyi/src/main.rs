@@ -83,23 +83,24 @@ fn do_confirm(opts: &ArgMatches) {
 
 /// Print message.
 fn do_msg(name: &str, opts: &ArgMatches) {
+	let msg_str: &str = &[opts.value_of("msg").unwrap_or_default(), "\n"].concat();
 	let mut msg: Msg = match name {
-		"crunched" => Msg::crunched(opts.value_of("msg").unwrap_or_default()),
-		"debug" => Msg::debug(opts.value_of("msg").unwrap_or_default()),
-		"done" => Msg::done(opts.value_of("msg").unwrap_or_default()),
-		"error" => Msg::error(opts.value_of("msg").unwrap_or_default()),
-		"info" => Msg::info(opts.value_of("msg").unwrap_or_default()),
-		"notice" => Msg::notice(opts.value_of("msg").unwrap_or_default()),
-		"success" => Msg::success(opts.value_of("msg").unwrap_or_default()),
-		"task" => Msg::task(opts.value_of("msg").unwrap_or_default()),
-		"warning" => Msg::warning(opts.value_of("msg").unwrap_or_default()),
+		"crunched" => Msg::crunched(msg_str),
+		"debug" => Msg::debug(msg_str),
+		"done" => Msg::done(msg_str),
+		"error" => Msg::error(msg_str),
+		"info" => Msg::info(msg_str),
+		"notice" => Msg::notice(msg_str),
+		"success" => Msg::success(msg_str),
+		"task" => Msg::task(msg_str),
+		"warning" => Msg::warning(msg_str),
 		_ => match opts.value_of("prefix") {
 			Some(p) => Msg::new(
 				p,
 				str_to_u8(opts.value_of("prefix_color").unwrap_or("199")),
 				msg_str
 			),
-			None => Msg::new("", 0, opts.value_of("msg").unwrap_or_default()),
+			None => Msg::new("", 0, msg_str),
 		},
 	};
 
@@ -115,21 +116,11 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 
 	// Print it to `Stderr`.
 	if opts.is_present("stderr") {
-		io::stderr().write_all(
-			&msg.iter()
-				.chain(&[10])
-				.copied()
-				.collect::<Vec<u8>>()
-		).unwrap();
+		io::stderr().write_all(&msg).unwrap();
 	}
 	// Print it to `Stdout`.
 	else {
-		io::stdout().write_all(
-			&msg.iter()
-				.chain(&[10])
-				.copied()
-				.collect::<Vec<u8>>()
-		).unwrap();
+		io::stdout().write_all(&msg).unwrap();
 	}
 
 	// We might have a custom exit code.
@@ -137,11 +128,4 @@ fn do_msg(name: &str, opts: &ArgMatches) {
 	if 0 != exit {
 		process::exit(i32::from(exit));
 	}
-}
-
-/// Validate CLI numeric inputs.
-fn parse_cli_u8<S> (val: S) -> u8
-where S: Into<String> {
-	if let Ok(x) = val.into().parse::<u8>() { x }
-	else { 0 }
 }
