@@ -43,12 +43,8 @@ mod menu;
 
 
 fn main() {
-	// Command line arguments.
-	let opts: ArgMatches = menu::menu()
-		.get_matches();
-
 	// Make the message.
-	match opts.subcommand() {
+	match menu::menu().get_matches().subcommand() {
 		("blank", Some(o)) => do_blank(o),
 		("confirm", Some(o)) => do_confirm(o),
 		(name, Some(o)) => do_msg(name, o),
