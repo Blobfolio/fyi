@@ -39,8 +39,8 @@ where P: AsRef<Path> {
 pub fn file_size<P> (path: P) -> u64
 where P: AsRef<Path> {
 	if let Ok(meta) = path.as_ref().metadata() {
-		if meta.is_file() { meta.len() }
-		else { 0 }
+		if meta.is_dir() { 0 }
+		else { meta.len() }
 	}
 	else { 0 }
 }
