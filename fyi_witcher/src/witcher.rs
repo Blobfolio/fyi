@@ -107,28 +107,16 @@ impl Witcher {
 				.follow_links(true)
 				.skip_hidden(false)
 				.into_iter()
-				.filter_map(|p| {
-					// Skip errors, duh.
-					if let Ok(path) = p {
-						// We don't want directories.
-						if path.file_type().is_dir() { None }
-						// We need to canonicalize again because symlinks might
-						// not actually be living with the parent directory.
-						else if let Ok(path) = fs::canonicalize(&path.path()) {
-							// The most efficient way to match regex against a
-							// `Path` is to convert it to an `OsStr` and
-							// convert that into an `&[u8]`.
-							if pattern.is_match(unsafe {
-								&*(path.as_os_str() as *const OsStr as *const [u8])
-							}) {
-								Some(path)
-							}
-							else { None }
-						}
-						else { None }
+				.filter_map(|p| p.ok()
+					.and_then(|p| if p.file_type().is_dir() { None } else { Some(p) })
+					.and_then(|p| fs::canonicalize(p.path()).ok())
+					.and_then(|p| if pattern.is_match(unsafe {
+						&*(p.as_os_str() as *const OsStr as *const [u8])
+					}) {
+						Some(p)
 					}
-					else { None }
-				})
+						else { None })
+				)
 				.collect::<IndexSet<PathBuf>>()
 			)
 			.collect()
@@ -179,14 +167,12 @@ impl Witcher {
 			if let Ok(file) = File::open(path.as_ref()) {
 				Self::new(
 					&io::BufReader::new(file).lines()
-						.filter_map(|x| match x {
-							Ok(x) => {
-								let x = x.trim();
-								if x.is_empty() { None }
-								else { Some(PathBuf::from(x)) }
-							},
-							Err(_) => None,
-						})
+						.filter_map(|x| x.ok()
+							.and_then(|x| match x.trim() {
+								"" => None,
+								y => Some(PathBuf::from(y)),
+							})
+						)
 						.collect::<Vec<PathBuf>>(),
 					pattern,
 				)
