@@ -99,7 +99,7 @@ impl Witcher {
 
 		Self(paths.iter()
 			// Canonicalize the search paths.
-			.filter_map(|p| fs::canonicalize(p.as_ref()).ok())
+			.filter_map(|p| fs::canonicalize(p).ok())
 			.collect::<IndexSet<PathBuf>>()
 			.into_par_iter()
 			// Walk each search path.
@@ -153,7 +153,7 @@ impl Witcher {
 		F: FnMut(Result<jwalk::DirEntry<((), ())>, jwalk::Error>) -> Option<PathBuf> + Send + Sync + Copy {
 		Self(paths.iter()
 			// Canonicalize the search paths.
-			.filter_map(|p| fs::canonicalize(p.as_ref()).ok())
+			.filter_map(|p| fs::canonicalize(p).ok())
 			.collect::<IndexSet<PathBuf>>()
 			.into_par_iter()
 			// Walk each search path.
