@@ -127,10 +127,6 @@ pub fn menu() -> App<'static, 'static> {
 #[allow(clippy::needless_pass_by_value)]
 /// Validate CLI numeric inputs.
 fn validate_cli_u8(val: String) -> Result<(), String> {
-	if val.parse::<u8>().is_ok() {
-		Ok(())
-	}
-	else {
-		Err("Value must be at least 0.".to_string())
-	}
+	if val.parse::<u8>().is_ok() { Ok(()) }
+	else { Err("Value must be at least 0.".to_string()) }
 }
