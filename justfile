@@ -38,6 +38,8 @@ rustflags   := "-C link-arg=-s"
 
 	just _ab "{{ BIN }}" 'debug -t "Twinkle, twinkle little star, how I wonder what you are."'
 
+	just _ab "{{ BIN }}" 'debug -i -t "Twinkle, twinkle little star, how I wonder what you are."'
+
 	just _ab "{{ BIN }}" 'print -p "Iron Maiden" -c 199 "Let he who hath understanding reckon the number of the beast."'
 
 
