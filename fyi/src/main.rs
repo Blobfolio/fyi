@@ -54,16 +54,16 @@ fn main() {
 
 /// Shoot blanks.
 fn do_blank(opts: &ArgMatches) {
-	let mut count: u8 = parse_cli_u8(opts.value_of("count").unwrap_or("1"));
-	if 0 == count {
-		count = 1;
-	}
+	let count: usize = usize::max(
+		1,
+		opts.value_of("count").unwrap_or("1").parse::<usize>().unwrap_or_default()
+	);
 
 	if opts.is_present("stderr") {
-		io::stderr().write_all(&[10].repeat(count as usize)).unwrap();
+		io::stderr().write_all(&[10].repeat(count)).unwrap();
 	}
 	else {
-		io::stdout().write_all(&[10].repeat(count as usize)).unwrap();
+		io::stdout().write_all(&[10].repeat(count)).unwrap();
 	}
 }
 
