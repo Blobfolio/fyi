@@ -188,7 +188,6 @@ impl Partitions {
 
 	/// Clear
 	pub fn clear(&mut self) {
-		self.inner[1..].copy_from_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 		self.used = 0;
 	}
 
@@ -205,9 +204,6 @@ impl Partitions {
 				let ptr = self.inner.as_mut_ptr();
 				ptr.add(1).copy_from_nonoverlapping(ptr.add(self.used), 1);
 			}
-
-			// Zero out everything else.
-			self.inner[2..].copy_from_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 			self.used = 1;
 		}
 	}
@@ -238,7 +234,8 @@ impl Partitions {
 	/// This combines `clear()` and `flatten()` so that you end up with a
 	/// single zero-length part.
 	pub fn zero(&mut self) {
-		self.inner[1..].copy_from_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+		// Zero out the first part and reduce the length.
+		unsafe { self.inner.as_mut_ptr().add(1).write(0); }
 		self.used = 1;
 	}
 
