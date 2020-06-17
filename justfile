@@ -24,7 +24,7 @@ rustflags   := "-C link-arg=-s"
 
 
 # A/B Test Two Binaries (second is implied)
-@ab BIN REBUILD="":
+@ab BIN="/usr/bin/fyi" REBUILD="":
 	[ -z "{{ REBUILD }}" ] || just build
 	[ -f "{{ cargo_bin }}" ] || just build
 
@@ -49,13 +49,15 @@ rustflags   := "-C link-arg=-s"
 	"{{ cargo_bin }}" {{ ARGS }}
 
 	sleep 30
-	hyperfine --warmup 10 \
-		--runs 50 \
+	hyperfine --warmup 20 \
+		--runs 100 \
+		--style color \
 		'{{ BIN }} {{ ARGS }}'
 
 	sleep 30
-	hyperfine --warmup 10 \
-		--runs 50 \
+	hyperfine --warmup 20 \
+		--runs 100 \
+		--style color \
 		'{{ cargo_bin }} {{ ARGS }}'
 
 	echo "\033[2m-----\033[0m\n"
