@@ -318,7 +318,7 @@ impl MsgBuf {
 		}
 
 		// Realign the partitions.
-		self.parts.insert_part(idx, buf.len());
+		self.parts.insert_part(idx, len);
 	}
 
 	/// Remove Part
