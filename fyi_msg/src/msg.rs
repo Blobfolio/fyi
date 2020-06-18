@@ -29,8 +29,14 @@ use crate::{
 };
 use std::{
 	borrow::Borrow,
+	cmp::Ordering,
 	fmt,
+	hash::{
+		Hash,
+		Hasher,
+	},
 	ops::Deref,
+	str::FromStr,
 };
 
 
@@ -76,35 +82,35 @@ const LBL_TIMESTAMP_PRE: &[u8] =  &[27, 91, 50, 109, 91, 27, 91, 48, 59, 51, 52,
 
 
 
-#[derive(Debug, Clone, Hash, PartialEq)]
+#[derive(Debug, Clone)]
 /// The Message!
 pub struct Msg(MsgBuf);
 
 impl AsRef<str> for Msg {
 	#[inline]
 	fn as_ref(&self) -> &str {
-		unsafe { std::str::from_utf8_unchecked(&*self.0) }
+		self.as_str()
 	}
 }
 
 impl AsRef<[u8]> for Msg {
 	#[inline]
 	fn as_ref(&self) -> &[u8] {
-		&*self.0
+		self.as_bytes()
 	}
 }
 
 impl Borrow<str> for Msg {
 	#[inline]
 	fn borrow(&self) -> &str {
-		unsafe { std::str::from_utf8_unchecked(&*self.0) }
+		self.as_str()
 	}
 }
 
 impl Borrow<[u8]> for Msg {
 	#[inline]
 	fn borrow(&self) -> &[u8] {
-		&*self.0
+		self.as_bytes()
 	}
 }
 
@@ -120,14 +126,16 @@ impl Deref for Msg {
 
 	#[inline]
 	fn deref(&self) -> &Self::Target {
-		&self.0
+		self.as_bytes()
 	}
 }
+
+impl Eq for Msg {}
 
 impl fmt::Display for Msg {
 	#[inline]
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str(self.as_ref())
+		f.write_str(self.as_str())
 	}
 }
 
@@ -158,6 +166,68 @@ impl<'a> From<&'a [u8]> for Msg {
 			msg,
 			LBL_RESET,
 		]))
+	}
+}
+
+impl FromStr for Msg {
+	type Err = std::num::ParseIntError;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		Ok(Self::from(s))
+	}
+}
+
+impl Hash for Msg {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.as_str().hash(state);
+	}
+}
+
+impl PartialEq for Msg {
+	fn eq(&self, other: &Self) -> bool {
+		self.as_str() == other.as_str()
+	}
+}
+
+impl PartialEq<&str> for Msg {
+	fn eq(&self, other: &&str) -> bool {
+		self.as_str() == *other
+	}
+}
+
+impl PartialEq<[u8]> for Msg {
+	fn eq(&self, other: &[u8]) -> bool {
+		self.as_str() == unsafe { std::str::from_utf8_unchecked(other) }
+	}
+}
+
+impl PartialEq<&[u8]> for Msg {
+	fn eq(&self, other: &&[u8]) -> bool {
+		self.as_str() == unsafe { std::str::from_utf8_unchecked(*other) }
+	}
+}
+
+impl PartialOrd for Msg {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.as_str().cmp(other.as_str()))
+	}
+}
+
+impl PartialOrd<&str> for Msg {
+	fn partial_cmp(&self, other: &&str) -> Option<Ordering> {
+		Some(self.as_str().cmp(*other))
+	}
+}
+
+impl PartialOrd<[u8]> for Msg {
+	fn partial_cmp(&self, other: &[u8]) -> Option<Ordering> {
+		Some(self.as_str().cmp(unsafe { std::str::from_utf8_unchecked(other) }))
+	}
+}
+
+impl PartialOrd<&[u8]> for Msg {
+	fn partial_cmp(&self, other: &&[u8]) -> Option<Ordering> {
+		Some(self.as_str().cmp(unsafe { std::str::from_utf8_unchecked(*other) }))
 	}
 }
 
@@ -347,6 +417,26 @@ impl Msg {
 
 
 	// ------------------------------------------------------------------------
+	// Conversion
+	// ------------------------------------------------------------------------
+
+	#[inline]
+	#[must_use]
+	/// As Bytes
+	pub fn as_bytes(&self) -> &[u8] {
+		&*self.0
+	}
+
+	#[inline]
+	#[must_use]
+	/// As Str
+	pub fn as_str(&self) -> &str {
+		unsafe { std::str::from_utf8_unchecked(&*self.0) }
+	}
+
+
+
+	// ------------------------------------------------------------------------
 	// Convenience Methods
 	// ------------------------------------------------------------------------
 
@@ -420,4 +510,52 @@ impl Msg {
 		// W   a    r    n    i    n    g
 		&[87, 97, 114, 110, 105, 110, 103]
 	);
+}
+
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn t_impl() {
+		use std::collections::hash_map::DefaultHasher;
+
+		let empty = Msg::default();
+		let one = Msg::error("Oh no!");
+		let one2 = Msg::error("Oh no!");
+		let two = Msg::warning("Oh no!");
+		let plain = Msg::from("Dogs are better than cats.");
+		let plain2 = Msg::from("Cats are better than dogs.");
+
+		// These should match.
+		assert_eq!(empty, Msg::default());
+		assert_eq!(one, one2);
+		assert_eq!(plain, "\x1b[1mDogs are better than cats.\x1b[0m");
+		assert_eq!(plain, &b"\x1b[1mDogs are better than cats.\x1b[0m"[..]);
+
+		// These shouldn't.
+		assert!(empty != one);
+		assert!(plain != "Dogs are better than cats.");
+		assert!(plain != plain2);
+
+		// Check matching hashes.
+		let mut h1 = DefaultHasher::new();
+		let mut h2 = DefaultHasher::new();
+		one.hash(&mut h1);
+		one2.hash(&mut h2);
+		assert_eq!(h1.finish(), h2.finish());
+
+		h1 = DefaultHasher::new();
+		let mut h3 = DefaultHasher::new();
+		two.hash(&mut h3);
+		one.hash(&mut h1);
+		assert!(h1.finish() != h3.finish());
+
+		// Let's also check ordering.
+		assert_eq!(one.cmp(&one2), Ordering::Equal);
+		assert_eq!(plain.cmp(&plain2), Ordering::Greater);
+		assert_eq!(plain2.cmp(&plain), Ordering::Less);
+	}
 }

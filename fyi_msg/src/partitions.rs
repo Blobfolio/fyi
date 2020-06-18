@@ -6,6 +6,11 @@ within the crate only; it does not implement safety checks on its own.
 */
 
 use std::{
+	fmt,
+	hash::{
+		Hash,
+		Hasher,
+	},
 	ops::{
 		AddAssign,
 		Index,
@@ -15,7 +20,7 @@ use std::{
 
 
 
-#[derive(Debug, Clone, Copy, Default, Hash, PartialEq)]
+#[derive(Clone, Copy, Default)]
 /// Partitions
 ///
 /// This is a very simple partitioning table, each index — up to 15 —
@@ -34,6 +39,17 @@ impl AddAssign<usize> for Partitions {
 		}
 	}
 }
+
+impl fmt::Debug for Partitions {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("Partitions")
+		 .field("inner", &self.as_slice())
+		 .field("used", &self.used)
+		 .finish()
+	}
+}
+
+impl Eq for Partitions {}
 
 /// Handle all the stupid slice sizes since this doesn't coerce. Haha.
 macro_rules! from_many {
@@ -100,6 +116,18 @@ impl<'a> From<&'a [usize]> for Partitions {
 		}
 
 		out
+	}
+}
+
+impl Hash for Partitions {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.as_slice().hash(state);
+	}
+}
+
+impl PartialEq for Partitions {
+	fn eq(&self, other: &Self) -> bool {
+		self.as_slice() == other.as_slice()
 	}
 }
 
@@ -339,9 +367,6 @@ impl Partitions {
 				ptr.add(idx).write(*ptr.add(idx + 1) - adj);
 				idx += 1;
 			}
-
-			// Zero out the last part.
-			ptr.add(self.used).copy_from_nonoverlapping(ptr, 1);
 		}
 
 		self.used -= 1;
@@ -377,6 +402,19 @@ impl Partitions {
 				idx += 1;
 			}
 		}
+	}
+
+
+
+	// ------------------------------------------------------------------------
+	// Conversion
+	// ------------------------------------------------------------------------
+
+	#[must_use]
+	/// As Slice
+	pub fn as_slice(&self) -> &[usize] {
+		if 0 == self.used { &[] }
+		else { &self.inner[..=self.used] }
 	}
 }
 
@@ -623,5 +661,51 @@ mod tests {
 			assert_eq!(parts.part_len(i), 0);
 			assert_eq!(parts.part_len(i + 1), many[i - 1]);
 		}
+	}
+
+	#[test]
+	fn t_as_slice() {
+		let mut many = Partitions::from(&[5, 4, 3, 2, 1]);
+		assert_eq!(many.as_slice(), &[0, 5, 9, 12, 14, 15]);
+
+		// Make sure it updates.
+		many.remove_part(5);
+		assert_eq!(many.as_slice(), &[0, 5, 9, 12, 14]);
+
+		// Check empty too.
+		many = Partitions::default();
+		assert_eq!(many.as_slice(), &[]);
+	}
+
+	#[test]
+	fn t_impl() {
+		use std::collections::hash_map::DefaultHasher;
+
+		let empty = Partitions::default();
+		let one = Partitions::splat(1);
+		let two = Partitions::splat(2);
+		let five = Partitions::from(&[5, 4, 3, 2, 1]);
+		let five2 = Partitions::from(&[5, 4, 3, 2, 1]);
+
+		// These should match.
+		assert_eq!(empty, Partitions::default());
+		assert_eq!(five, five2);
+
+		// Check the hashes of a match and non-match.
+		let mut h1 = DefaultHasher::new();
+		let mut h2 = DefaultHasher::new();
+		five.hash(&mut h1);
+		five2.hash(&mut h2);
+		assert_eq!(h1.finish(), h2.finish());
+
+		h1 = DefaultHasher::new();
+		let mut h3 = DefaultHasher::new();
+		two.hash(&mut h3);
+		five.hash(&mut h1);
+		assert!(h1.finish() != h3.finish());
+
+		// And these should not match.
+		assert!(five != empty);
+		assert!(one != two);
 	}
 }
