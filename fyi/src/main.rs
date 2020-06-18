@@ -85,15 +85,15 @@ fn do_confirm(opts: &ArgMatches) {
 fn do_msg(name: &str, opts: &ArgMatches) {
 	let msg_str: &str = &[opts.value_of("msg").unwrap_or_default(), "\n"].concat();
 	let mut msg: Msg = match name {
-		"crunched" => Msg::crunched(msg_str),
-		"debug" => Msg::debug(msg_str),
-		"done" => Msg::done(msg_str),
 		"error" => Msg::error(msg_str),
 		"info" => Msg::info(msg_str),
 		"notice" => Msg::notice(msg_str),
 		"success" => Msg::success(msg_str),
 		"task" => Msg::task(msg_str),
 		"warning" => Msg::warning(msg_str),
+		"crunched" => Msg::crunched(msg_str),
+		"debug" => Msg::debug(msg_str),
+		"done" => Msg::done(msg_str),
 		_ => match opts.value_of("prefix") {
 			Some(p) => Msg::new(
 				p,
