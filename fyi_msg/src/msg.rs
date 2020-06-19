@@ -69,16 +69,16 @@ const IDX_MSG: usize = 9;
 const IDX_MSG_POST: usize = 10;      // ANSI.
 
 /// Other repeated bits.
-//                                  \e   [   1    m
-const LBL_MSG_PRE: &[u8] =        &[27, 91, 49, 109];
-//                                   :  \e   [   0    m   •
-const LBL_PREFIX_POST: &[u8] =    &[58, 27, 91, 48, 109, 32];
-//                                  \e   [   0    m
-const LBL_RESET: &[u8] =          &[27, 91, 48, 109];
-//                                  \e   [   0   ;   2    m   ]  \e   [   0    m   •
-const LBL_TIMESTAMP_POST: &[u8] = &[27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32];
-//                                  \e   [   2    m   [  \e   [   0   ;   3   4    m
-const LBL_TIMESTAMP_PRE: &[u8] =  &[27, 91, 50, 109, 91, 27, 91, 48, 59, 51, 52, 109];
+//                                    \e   [   1    m
+const LBL_MSG_PRE: [u8; 4] =         [27, 91, 49, 109];
+//                                     :  \e   [   0    m   •
+const LBL_PREFIX_POST: [u8; 6] =     [58, 27, 91, 48, 109, 32];
+//                                    \e   [   0    m
+const LBL_RESET: [u8; 4] =           [27, 91, 48, 109];
+//                                    \e   [   0   ;   2    m   ]  \e   [   0    m   •
+const LBL_TIMESTAMP_POST: [u8; 12] = [27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32];
+//                                    \e   [   2    m   [  \e   [   0   ;   3   4    m
+const LBL_TIMESTAMP_PRE: [u8; 12]  = [27, 91, 50, 109, 91, 27, 91, 48, 59, 51, 52, 109];
 
 
 
@@ -147,9 +147,9 @@ impl<'a> From<&'a str> for Msg {
 			&[], &[], &[], &[],
 			// Prefix.
 			&[], &[], &[],
-			LBL_MSG_PRE,
+			&LBL_MSG_PRE[..],
 			msg.as_bytes(),
-			LBL_RESET,
+			&LBL_RESET[..],
 		]))
 	}
 }
@@ -162,9 +162,9 @@ impl<'a> From<&'a [u8]> for Msg {
 			&[], &[], &[], &[],
 			// Prefix.
 			&[], &[], &[],
-			LBL_MSG_PRE,
+			&LBL_MSG_PRE[..],
 			msg,
-			LBL_RESET,
+			&LBL_RESET[..],
 		]))
 	}
 }
@@ -280,10 +280,10 @@ impl Msg {
 			&[], &[], &[], &[],
 			prefix_pre,
 			prefix,
-			LBL_PREFIX_POST,
-			LBL_MSG_PRE,
+			&LBL_PREFIX_POST[..],
+			&LBL_MSG_PRE[..],
 			msg,
-			LBL_RESET,
+			&LBL_RESET[..],
 		]))
 	}
 
@@ -295,7 +295,7 @@ impl Msg {
 			&[], &[], &[], &[],
 			prefix_pre,
 			prefix,
-			LBL_RESET,
+			&LBL_RESET[..],
 			// Message.
 			&[], &[], &[],
 		]))
@@ -332,22 +332,22 @@ impl Msg {
 
 			// We might need to change the end of the prefix too.
 			if ! self.0.part_is_empty(IDX_PREFIX_POST) {
-				self.0.replace_part(IDX_PREFIX_POST, LBL_RESET);
+				self.0.replace_part(IDX_PREFIX_POST, &LBL_RESET[..]);
 			}
 		}
 		// Add or change it.
 		else {
 			// The opening and closing needs to be taken care of.
 			if self.0.part_is_empty(IDX_MSG_PRE) {
-				self.0.replace_part(IDX_MSG_PRE, LBL_MSG_PRE);
-				self.0.replace_part(IDX_MSG_POST, LBL_RESET);
+				self.0.replace_part(IDX_MSG_PRE, &LBL_MSG_PRE[..]);
+				self.0.replace_part(IDX_MSG_POST, &LBL_RESET[..]);
 			}
 
 			self.0.replace_part(IDX_MSG, msg.as_bytes());
 
 			// We might need to change the end of the prefix too.
 			if ! self.0.part_is_empty(IDX_PREFIX_POST) {
-				self.0.replace_part(IDX_PREFIX_POST, LBL_PREFIX_POST);
+				self.0.replace_part(IDX_PREFIX_POST, &LBL_PREFIX_POST[..]);
 			}
 		}
 	}
@@ -369,10 +369,10 @@ impl Msg {
 			self.0.replace_part(IDX_PREFIX_PRE, ansi_code_bold(prefix_color));
 			self.0.replace_part(IDX_PREFIX, prefix.as_bytes());
 			if self.0.part_is_empty(IDX_MSG_PRE) {
-				self.0.replace_part(IDX_PREFIX_POST, LBL_RESET);
+				self.0.replace_part(IDX_PREFIX_POST, &LBL_RESET[..]);
 			}
 			else {
-				self.0.replace_part(IDX_PREFIX_POST, LBL_PREFIX_POST);
+				self.0.replace_part(IDX_PREFIX_POST, &LBL_PREFIX_POST[..]);
 			}
 		}
 	}
@@ -394,8 +394,8 @@ impl Msg {
 
 		// If there wasn't already a timestamp, we need to set the defaults.
 		if self.0.part_is_empty(IDX_TIMESTAMP_PRE) {
-			self.0.replace_part(IDX_TIMESTAMP_PRE, LBL_TIMESTAMP_PRE);
-			self.0.replace_part(IDX_TIMESTAMP_POST, LBL_TIMESTAMP_POST);
+			self.0.replace_part(IDX_TIMESTAMP_PRE, &LBL_TIMESTAMP_PRE[..]);
+			self.0.replace_part(IDX_TIMESTAMP_POST, &LBL_TIMESTAMP_POST[..]);
 			//                                    2   0   0   0   -   0   0   -   0   0   •   0   0   :   0   0   :   0   0
 			self.0.replace_part(IDX_TIMESTAMP, &[50, 48, 48, 48, 45, 48, 48, 45, 48, 48, 32, 48, 48, 58, 48, 48, 58, 48, 48]);
 		}
