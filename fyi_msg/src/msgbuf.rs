@@ -91,11 +91,7 @@ macro_rules! from_many {
 		impl<'a> From<&'a [&'a [u8]; $size]> for MsgBuf {
 			fn from(bufs: &'a [&'a [u8]; $size]) -> Self {
 				let mut out = Self::default();
-
-				bufs.iter().for_each(|b| {
-					out += b;
-				});
-
+				bufs.iter().for_each(|b| { out += b; });
 				out
 			}
 		}
