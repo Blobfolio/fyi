@@ -34,11 +34,11 @@ rustflags   := "-C link-arg=-s"
 	fyi print -p "{{ cargo_bin }}" -c 199 "$( "{{ cargo_bin }}" -V )"
 	fyi blank
 
-	just _ab "{{ BIN }}" 'debug "Twinkle, twinkle little star, how I wonder what you are."'
+	just _ab "{{ BIN }}" 'error "Twinkle, twinkle little star, how I wonder what you are."'
 
-	just _ab "{{ BIN }}" 'debug -t "Twinkle, twinkle little star, how I wonder what you are."'
+	just _ab "{{ BIN }}" 'error -t "Twinkle, twinkle little star, how I wonder what you are."'
 
-	just _ab "{{ BIN }}" 'debug -i -t "Twinkle, twinkle little star, how I wonder what you are."'
+	just _ab "{{ BIN }}" 'error -i -t "Twinkle, twinkle little star, how I wonder what you are."'
 
 	just _ab "{{ BIN }}" 'print -p "Iron Maiden" -c 199 "Let he who hath understanding reckon the number of the beast."'
 
