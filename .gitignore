@@ -1,6 +1,7 @@
 /Cargo.lock
 /fyi/man/fyi.1.gz
 /fyi/target/
+/fyi_menu/target/
 /fyi_msg/target/
 /fyi_progress/target/
 /fyi_witcher/target/
