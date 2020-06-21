@@ -19,7 +19,8 @@ cargo_dir   := "/tmp/" + pkg_id + "-cargo"
 cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
 release_dir := justfile_directory() + "/release"
 
-# If we ever want to use Clang native: -Clinker-plugin-lto -Clinker=clang-9 -Clink-args=-fuse-ld=lld-9
+# If we ever want to use Clang native:
+# -Clinker-plugin-lto -Clinker=clang-9 -Clink-args=-fuse-ld=lld-9
 rustflags   := "-C link-arg=-s"
 
 
@@ -215,6 +216,16 @@ bench BENCH="" FILTER="":
 		--example "{{ DEMO }}" \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
+
+
+# Test Run.
+@run +ARGS:
+	RUSTFLAGS="{{ rustflags }}" cargo run \
+		--bin "{{ pkg_id }}" \
+		--release \
+		--target x86_64-unknown-linux-gnu \
+		--target-dir "{{ cargo_dir }}" \
+		-- {{ ARGS }}
 
 
 # Unit tests!
