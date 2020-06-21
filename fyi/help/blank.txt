@@ -1,0 +1,11 @@
+Print blank line(s).
+
+USAGE:
+    fyi blank [FLAGS] [OPTIONS]
+
+FLAGS:
+    -h, --help      Print this screen.
+        --stderr    Print to STDERR instead of STDOUT.
+
+OPTIONS:
+    -c, --count <num>    Number of empty lines to print. [default: 1]

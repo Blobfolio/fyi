@@ -1,0 +1,21 @@
+USAGE:
+    fyi <SUBCOMMAND>
+
+FLAGS:
+    -h, --help       Print this screen.
+    -V, --version    Print the version.
+
+SUBCOMMANDS:
+    help        Print this screen.
+    blank       Print blank line(s).
+    confirm     Ask a Yes/No question, exiting 0 or 1 respectively.
+    print       Print a message without a prefix (or with a custom one).
+    crunched    Crunched: Hello World
+    debug       Debug: Hello World
+    done        Done: Hello World
+    error       Error: Hello World
+    info        Info: Hello World
+    notice      Notice: Hello World
+    success     Success: Hello World
+    task        Task: Hello World
+    warning     Warning: Hello World

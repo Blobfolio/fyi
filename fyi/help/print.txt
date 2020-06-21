@@ -1,0 +1,18 @@
+Print a message without a prefix (or with a custom one).
+
+USAGE:
+    fyi print [FLAGS] [OPTIONS] <MSG>
+
+FLAGS:
+    -h, --help         Print this screen.
+    -i, --indent       Indent the line.
+        --stderr       Print to STDERR instead of STDOUT.
+    -t, --timestamp    Include a timestamp.
+
+OPTIONS:
+    -e, --exit <num>            Exit with this status code after printing. [default: 0]
+    -p, --prefix <txt>          Set a custom prefix. [default: ]
+    -c, --prefix-color <num>    Use this color for the prefix. [default: 199]
+
+ARGS:
+    <MSG>    The message!
