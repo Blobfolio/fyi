@@ -52,7 +52,7 @@ fn main() {
 		"-V" | "--version" => _version(),
 		"-h" | "--help" | "help" => _help(None),
 		// Otherwise just go off into the appropriate subcommand action.
-		_ => match args.expect_command().as_str() {
+		_ => match args.expect_command().into_owned().as_str() {
 			"blank" => _blank(&mut args),
 			"confirm" | "prompt" => _confirm(&mut args),
 			"print" => _custom(&mut args),
@@ -66,8 +66,8 @@ fn _blank(opts: &mut ArgList) {
 	get_help!("blank", opts);
 
 	let count: usize = match opts.extract_opt_usize(&["-c", "--count"]) {
-		Ok(c) => usize::min(10, usize::max(1, c)),
-		Err(_) => 1,
+		Some(c) => usize::min(10, usize::max(1, c)),
+		None => 1,
 	};
 
 	if opts.extract_switch(&["--stderr"]) {
@@ -148,7 +148,7 @@ fn _custom(opts: &mut ArgList) {
 	// Pull the options.
 	let exit: u8 = opts.extract_opt_usize(&["-e", "--exit"]).unwrap_or(0) as u8;
 	let color: u8 = usize::min(255, opts.extract_opt_usize(&["-c", "--prefix-color"]).unwrap_or(199)) as u8;
-	let prefix = opts.extract_opt(&["-p", "--prefix"]).unwrap_or_default();
+	let prefix = opts.extract_opt(&["-p", "--prefix"]).unwrap_or_default().into_owned();
 
 	// And finally the message bit!
 	_msg(

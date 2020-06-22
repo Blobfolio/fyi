@@ -19,9 +19,12 @@ but such is life.
 
 use fyi_msg::Msg;
 use std::{
-	borrow::Borrow,
+	borrow::{
+		Cow,
+		Borrow,
+	},
 	env,
-	ops::{Deref, DerefMut},
+	ops::Deref,
 	process,
 };
 
@@ -33,17 +36,18 @@ use std::{
 /// This is a very crude and simple draining CLI argument parser library. It is
 /// left to implementing programs to ask for the right things, in the right
 /// order, and take whatever actions necessary.
-pub struct ArgList(Vec<String>);
+pub struct ArgList<'a> (Vec<Cow<'a, str>>);
 
-impl Default for ArgList {
+impl Default for ArgList<'_> {
+	#[inline]
 	/// Default.
 	fn default() -> Self {
-		Self(env::args().skip(1).collect())
+		Self(env::args().skip(1).map(Cow::from).collect())
 	}
 }
 
-impl Deref for ArgList {
-	type Target = Vec<String>;
+impl<'a> Deref for ArgList<'a> {
+	type Target = Vec<Cow<'a, str>>;
 
 	#[inline]
 	fn deref(&self) -> &Self::Target {
@@ -51,33 +55,27 @@ impl Deref for ArgList {
 	}
 }
 
-impl DerefMut for ArgList {
+impl From<Vec<&'static str>> for ArgList<'_> {
 	#[inline]
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.0
+	fn from(env: Vec<&'static str>) -> Self {
+		Self(env.into_iter().map(Cow::from).collect())
 	}
 }
 
-impl From<Vec<&str>> for ArgList {
-	#[inline]
-	fn from(env: Vec<&str>) -> Self {
-		Self(env.into_iter().map(String::from).collect())
-	}
-}
-
-impl From<Vec<String>> for ArgList {
+impl From<Vec<String>> for ArgList<'_> {
 	#[inline]
 	fn from(env: Vec<String>) -> Self {
-		Self(env)
+		Self(env.into_iter().map(Cow::from).collect())
 	}
 }
 
-impl ArgList {
+impl ArgList<'_> {
+	#[must_use]
 	/// Peek First.
-	pub fn peek_first(&self) -> Result<&str, ()> {
-		if self.0.is_empty() { Err(()) }
+	pub fn peek_first(&self) -> Option<&str> {
+		if self.0.is_empty() { None }
 		else {
-			Ok(&self.0[0])
+			Some(&self.0[0])
 		}
 	}
 
@@ -95,18 +93,18 @@ impl ArgList {
 	///
 	/// If the first argument does not begin with a hypen, it is removed from
 	/// the store and returned.
-	pub fn extract_command(&mut self) -> Result<String, ()> {
-		if self.0.is_empty() || self.0[0].starts_with('-') { Err(()) }
+	pub fn extract_command(&mut self) -> Option<Cow<str>> {
+		if self.0.is_empty() || self.0[0].starts_with('-') { None }
 		else {
-			Ok(self.0.remove(0))
+			Some(self.0.remove(0))
 		}
 	}
 
 	/// Expect Command
 	///
 	/// Same as `extract_command`, except it will call `::die()` on failure.
-	pub fn expect_command(&mut self) -> String {
-		if let Ok(com) = self.extract_command() { com }
+	pub fn expect_command(&mut self) -> Cow<str> {
+		if let Some(com) = self.extract_command() { com }
 		else {
 			Self::die("Missing required subcommand.");
 			unreachable!()
@@ -125,7 +123,7 @@ impl ArgList {
 				l != self.0.len()
 			},
 			(l, _) => {
-				self.0.retain(|x| ! keys.contains(&x.as_str()));
+				self.0.retain(|x| ! keys.contains(&x.as_ref()));
 				l != self.0.len()
 			}
 		}
@@ -135,39 +133,39 @@ impl ArgList {
 	///
 	/// Remove all matching instances from the store and return the String
 	/// value if present.
-	pub fn extract_opt(&mut self, keys: &[&str]) -> Result<String, ()> {
+	pub fn extract_opt(&mut self, keys: &[&str]) -> Option<Cow<str>> {
 		let len: usize = self.0.len();
-		if len < 2 || keys.is_empty() { Err(()) }
-		else if let Some(idx) = self.0.iter().position(|x| keys.contains(&x.as_str())) {
+		if len < 2 || keys.is_empty() { None }
+		else if let Some(idx) = self.0.iter().position(|x| keys.contains(&x.as_ref())) {
 			// There must be a non-hyphen-starting value.
 			if idx + 1 < len && ! self.0[idx + 1].starts_with('-') {
 				// Remove the key.
 				self.0.remove(idx);
 
 				// Make sure there are no more occurrences of any keys.
-				if self.0.iter().any(|x| keys.contains(&x.as_str())) {
+				if self.0.iter().any(|x| keys.contains(&x.as_ref())) {
 					Self::die("Duplicate option.");
 					unreachable!();
 				}
 
 				// Remove the value.
 				let val = self.0.remove(idx);
-				if val.is_empty() { Err(()) }
-				else { Ok(val) }
+				if val.is_empty() { None }
+				else { Some(val) }
 			}
 			else {
 				Self::die("Missing option value.");
 				unreachable!();
 			}
 		}
-		else { Err(()) }
+		else { None }
 	}
 
 	/// Expect Option
 	///
 	/// Same as `extract_opt`, except it will call `::die()` on failure.
-	pub fn expect_opt(&mut self, keys: &[&str]) -> String {
-		if let Ok(opt) = self.extract_opt(keys) { opt }
+	pub fn expect_opt(&mut self, keys: &[&str]) -> Cow<str> {
+		if let Some(opt) = self.extract_opt(keys) { opt }
 		else {
 			Self::die("Missing required option.");
 			unreachable!()
@@ -178,16 +176,16 @@ impl ArgList {
 	///
 	/// Same as `extract_opt`, except the value is parsed as a `usize` and
 	/// will fail if that isn't possible.
-	pub fn extract_opt_usize(&mut self, keys: &[&str]) -> Result<usize, ()> {
+	pub fn extract_opt_usize(&mut self, keys: &[&str]) -> Option<usize> {
 		self.extract_opt(keys)
-			.and_then(|x| x.parse::<usize>().map_err(|_| ()))
+			.and_then(|x| x.parse::<usize>().ok())
 	}
 
 	/// Expect Usize Option
 	///
 	/// Same as `extract_opt_usize`, except it will call `::die()` on failure.
 	pub fn expect_opt_usize(&mut self, keys: &[&str]) -> usize {
-		if let Ok(opt) = self.extract_opt_usize(keys) { opt }
+		if let Some(opt) = self.extract_opt_usize(keys) { opt }
 		else {
 			Self::die("Missing required option.");
 			unreachable!()
@@ -198,11 +196,11 @@ impl ArgList {
 	///
 	/// There should be one and only one remaining argument (possibly after an
 	/// "--"). It will be removed from the store and returned if present.
-	pub fn extract_arg(&mut self) -> Result<String, ()> {
+	pub fn extract_arg(&mut self) -> Option<Cow<str>> {
 		self.extract_args()
 			.and_then(|mut x| match x.len() {
-				0 => Err(()),
-				1 => Ok(x.remove(0)),
+				0 => None,
+				1 => Some(x.remove(0)),
 				_ => {
 					Self::die("Unexpected arguments.");
 					unreachable!()
@@ -213,8 +211,8 @@ impl ArgList {
 	/// Expect Arg
 	///
 	/// Same as `extract_arg`, except it will call `::die()` on failure.
-	pub fn expect_arg(&mut self) -> String {
-		if let Ok(arg) = self.extract_arg() { arg }
+	pub fn expect_arg(&mut self) -> Cow<str> {
+		if let Some(arg) = self.extract_arg() { arg }
 		else {
 			Self::die("Missing required argument.");
 			unreachable!()
@@ -225,22 +223,22 @@ impl ArgList {
 	///
 	/// Drain all remaining arguments from the store, returning any with valid
 	/// length.
-	pub fn extract_args(&mut self) -> Result<Vec<String>, ()> {
-		if self.0.is_empty() { Err(()) }
+	pub fn extract_args(&mut self) -> Option<Vec<Cow<str>>> {
+		if self.0.is_empty() { None }
 		else {
-			let out: Vec<String> = self.0.drain(..)
-				.filter(|x| *x != "--" && ! x.is_empty())
+			let out: Vec<Cow<str>> = self.0.drain(..)
+				.filter(|x| x != "--" && ! x.is_empty())
 				.collect();
-			if out.is_empty() { Err(()) }
-			else { Ok(out) }
+			if out.is_empty() { None }
+			else { Some(out) }
 		}
 	}
 
 	/// Expect Arg
 	///
 	/// Same as `extract_args`, except it will call `::die()` on failure.
-	pub fn expect_args(&mut self) -> Vec<String> {
-		if let Ok(arg) = self.extract_args() { arg }
+	pub fn expect_args(&mut self) -> Vec<Cow<str>> {
+		if let Some(arg) = self.extract_args() { arg }
 		else {
 			Self::die("Missing required argument(s).");
 			unreachable!()
@@ -264,52 +262,58 @@ mod tests {
 
 	#[test]
 	fn t_extract() {
-		let mut args = ArgList(vec!["com".to_string(), "-v".to_string(), "-a".to_string(), "".to_string(), "-q".to_string(), "--".to_string(), "Apple Sauce".to_string()]);
+		let mut args = ArgList::from(vec!["com", "-v", "-a", "", "-q", "--", "Apple Sauce"]);
 
 		// Not an assertion, per se, but we should have arguments.
 		args.expect_any();
 
 		// Check the first.
-		assert_eq!(args.peek_first(), Ok("com"));
+		assert_eq!(args.peek_first(), Some("com"));
 		let com = args.extract_command();
-		assert_eq!(com, Ok("com".to_string()));
+		assert_eq!(com, Some(Cow::from("com")));
 
 		// Check for -v and -a.
 		assert!(args.extract_switch(&["-v", "-a"]));
 
 		// Let's make sure extractions have been draining.
-		assert_eq!(*args, vec!["".to_string(), "-q".to_string(), "--".to_string(), "Apple Sauce".to_string()]);
+		assert_eq!(
+			*args,
+			vec!["", "-q", "--", "Apple Sauce"]
+		);
 
 		// Check for something that doesn't exist.
 		assert!(! args.extract_switch(&["--perfection"]));
 
 		// Get -q out of the way so we can look at the trailing arg.
 		assert!(args.extract_switch(&["-q"]));
-		assert_eq!(args.extract_arg(), Ok("Apple Sauce".to_string()));
+		assert_eq!(args.extract_arg(), Some(Cow::from("Apple Sauce")));
 
 		// Empty?
 		assert!(args.is_empty());
 
 		// Let's start over and look at options and multi-args.
-		args = ArgList(vec!["-v".to_string(), "1.0".to_string(), "--num".to_string(), "100".to_string(), "-q".to_string(), "One Arg".to_string(), "Two Arg".to_string()]);
+		args = ArgList::from(vec!["-v", "1.0", "--num", "100", "-q", "One Arg", "Two Arg"]);
 		args.expect_any();
 
 		// No command this time.
-		assert_eq!(args.peek_first(), Ok("-v"));
-		assert_eq!(args.extract_command(), Err(()));
+		assert_eq!(args.peek_first(), Some("-v"));
+		assert_eq!(args.extract_command(), None);
 
 		// Grab the version.
-		assert_eq!(args.extract_opt(&["-v", "--version"]), Ok("1.0".to_string()));
-		assert_eq!(*args, vec!["--num".to_string(), "100".to_string(), "-q".to_string(), "One Arg".to_string(), "Two Arg".to_string()]);
+		assert_eq!(args.extract_opt(&["-v", "--version"]), Some(Cow::from("1.0")));
+		assert_eq!(
+			*args,
+			vec!["--num", "100", "-q", "One Arg", "Two Arg"]
+		);
 
 		// Grab the num as a number.
-		assert_eq!(args.extract_opt_usize(&["--num"]), Ok(100_usize));
+		assert_eq!(args.extract_opt_usize(&["--num"]), Some(100_usize));
 
 		// Get the -q out of the way.
 		assert!(args.extract_switch(&["-q"]));
 
 		// Now check that we get args!
-		assert_eq!(args.extract_args(), Ok(vec!["One Arg".to_string(), "Two Arg".to_string()]));
+		assert_eq!(args.extract_args(), Some(vec![Cow::from("One Arg"), Cow::from("Two Arg")]));
 		assert!(args.is_empty());
 	}
 }
