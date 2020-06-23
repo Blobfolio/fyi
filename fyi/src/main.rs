@@ -35,9 +35,7 @@ use std::process;
 /// everything and show the info.
 macro_rules! get_help {
 	($com:expr, $opts:ident) => {
-		if $opts.extract_switch(&["-h", "--help"]) {
-			return _help(Some($com));
-		}
+		if $opts.wants_help() { return _help(Some($com)); }
 	};
 }
 

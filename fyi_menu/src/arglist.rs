@@ -111,6 +111,30 @@ impl ArgList<'_> {
 		}
 	}
 
+	/// Wants Help?
+	///
+	/// This is a short-hand method to match -h, --help.
+	pub fn wants_help(&mut self) -> bool {
+		if self.0.is_empty() { false }
+		else {
+			let len: usize = self.0.len();
+			self.0.retain(|x| x != "-h" && x != "--help");
+			len != self.0.len()
+		}
+	}
+
+	/// Wants Version?
+	///
+	/// This is a short-hand method to match -V, --version.
+	pub fn wants_version(&mut self) -> bool {
+		if self.0.is_empty() { false }
+		else {
+			let len: usize = self.0.len();
+			self.0.retain(|x| x != "-V" && x != "--version");
+			len != self.0.len()
+		}
+	}
+
 	/// Extract Switch
 	///
 	/// Remove all matching instances from the store and return a boolean
