@@ -11,6 +11,27 @@ use fyi_menu::ArgList;
 
 
 
+fn practical(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_menu::ArgList");
+
+	group.bench_function("practical: fyi debug -t \"The current line count is 5.\"", move |b| {
+		b.iter_with_setup(||
+			ArgList::from(vec![String::from("debug"), String::from("-t"), String::from("The current line count is 5.")]),
+			|mut al| {
+				let _com = al.expect_command();
+				let _help = al.wants_help();
+				let _t = al.extract_switch_cb(|x| x != "-t" && x != "--timestamp");
+				let _i = al.extract_switch_cb(|x| x != "-i" && x != "--indent");
+				let _stderr = al.extract_switch_cb(|x| x != "--stderr");
+				let _e = al.extract_opt_usize_cb(|x| x == "-e" || x == "--exit").unwrap_or_default();
+				let _msg = al.expect_arg();
+			}
+		)
+	});
+
+	group.finish();
+}
+
 fn peek_first(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_menu::ArgList");
 
@@ -89,6 +110,7 @@ fn extract_opt(c: &mut Criterion) {
 
 criterion_group!(
 	benches,
+	practical,
 	peek_first,
 	extract_switch,
 	extract_opt,
