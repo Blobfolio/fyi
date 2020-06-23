@@ -115,24 +115,14 @@ impl ArgList<'_> {
 	///
 	/// This is a short-hand method to match -h, --help.
 	pub fn wants_help(&mut self) -> bool {
-		if self.0.is_empty() { false }
-		else {
-			let len: usize = self.0.len();
-			self.0.retain(|x| x != "-h" && x != "--help");
-			len != self.0.len()
-		}
+		self.extract_switch_cb(|x| x != "-h" && x != "--help")
 	}
 
 	/// Wants Version?
 	///
 	/// This is a short-hand method to match -V, --version.
 	pub fn wants_version(&mut self) -> bool {
-		if self.0.is_empty() { false }
-		else {
-			let len: usize = self.0.len();
-			self.0.retain(|x| x != "-V" && x != "--version");
-			len != self.0.len()
-		}
+		self.extract_switch_cb(|x| x != "-V" && x != "--version")
 	}
 
 	/// Extract Switch
@@ -140,16 +130,26 @@ impl ArgList<'_> {
 	/// Remove all matching instances from the store and return a boolean
 	/// indicating whether or not any were present.
 	pub fn extract_switch(&mut self, keys: &[&str]) -> bool {
-		match (self.0.len(), keys.len()) {
-			(0, _) | (_, 0) => false,
-			(l, 1) => {
-				self.0.retain(|x| *x != keys[0]);
-				l != self.0.len()
-			},
-			(l, _) => {
-				self.0.retain(|x| ! keys.contains(&x.as_ref()));
-				l != self.0.len()
-			}
+		if keys.is_empty() { false }
+		else {
+			self.extract_switch_cb(|x| ! keys.contains(&x.as_ref()))
+		}
+	}
+
+	/// Extract Switch (CB)
+	///
+	/// Same as `extract_switch()`, except a *retaining* callback is used
+	/// instead of a slice of key(s).
+	///
+	/// As this callback is used for retaining, it should return `false` on a
+	/// match rather than `true`!
+	pub fn extract_switch_cb<F> (&mut self, cb: F) -> bool
+	where F: Fn(&Cow<str>) -> bool + Send + Sync + Copy {
+		if self.0.is_empty() { false }
+		else {
+			let len: usize = self.0.len();
+			self.0.retain(cb);
+			len != self.0.len()
 		}
 	}
 
@@ -158,16 +158,31 @@ impl ArgList<'_> {
 	/// Remove all matching instances from the store and return the String
 	/// value if present.
 	pub fn extract_opt(&mut self, keys: &[&str]) -> Option<Cow<str>> {
+		if keys.is_empty() { None }
+		else {
+			self.extract_opt_cb(|x| keys.contains(&x.as_ref()))
+		}
+	}
+
+	/// Extract String Option (CB)
+	///
+	/// Same as `extract_opt()`, except a *matching* callback is used instead
+	/// of a slice of key(s).
+	///
+	/// As this callback is used for matching, it should return `true` on a
+	/// match.
+	pub fn extract_opt_cb<F> (&mut self, cb: F) -> Option<Cow<str>>
+	where F: Fn(&Cow<str>) -> bool + Send + Sync + Copy {
 		let len: usize = self.0.len();
-		if len < 2 || keys.is_empty() { None }
-		else if let Some(idx) = self.0.iter().position(|x| keys.contains(&x.as_ref())) {
+		if len < 2 { None }
+		else if let Some(idx) = self.0.iter().position(cb) {
 			// There must be a non-hyphen-starting value.
 			if idx + 1 < len && ! self.0[idx + 1].starts_with('-') {
 				// Remove the key.
 				self.0.remove(idx);
 
 				// Make sure there are no more occurrences of any keys.
-				if self.0.iter().any(|x| keys.contains(&x.as_ref())) {
+				if self.0.iter().any(cb) {
 					Self::die("Duplicate option.");
 					unreachable!();
 				}
@@ -202,6 +217,16 @@ impl ArgList<'_> {
 	/// will fail if that isn't possible.
 	pub fn extract_opt_usize(&mut self, keys: &[&str]) -> Option<usize> {
 		self.extract_opt(keys)
+			.and_then(|x| x.parse::<usize>().ok())
+	}
+
+	/// Extract Numeric Option (CB)
+	///
+	/// Same as `extract_opt_cb`, except the value is parsed as a `usize` and
+	/// will fail if that isn't possible.
+	pub fn extract_opt_usize_cb<F> (&mut self, cb: F) -> Option<usize>
+	where F: Fn(&Cow<str>) -> bool + Send + Sync + Copy {
+		self.extract_opt_cb(cb)
 			.and_then(|x| x.parse::<usize>().ok())
 	}
 

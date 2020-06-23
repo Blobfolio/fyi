@@ -27,7 +27,10 @@
 
 use fyi_menu::ArgList;
 use fyi_msg::Msg;
-use std::process;
+use std::{
+	borrow::Cow,
+	process,
+};
 
 
 
@@ -59,16 +62,40 @@ fn main() {
 	}
 }
 
+#[allow(clippy::ptr_arg)]
+/// Match: Exit Code
+fn match_exit(txt: &Cow<str>) -> bool {
+	txt == "-e" || txt == "--exit"
+}
+
+#[allow(clippy::ptr_arg)]
+/// Match: Indentation
+fn match_indent(txt: &Cow<str>) -> bool {
+	txt != "-i" && txt != "--indent"
+}
+
+#[allow(clippy::ptr_arg)]
+/// Match: Timestamp
+fn match_stderr(txt: &Cow<str>) -> bool {
+	txt != "--stderr"
+}
+
+#[allow(clippy::ptr_arg)]
+/// Match: Timestamp
+fn match_timestamp(txt: &Cow<str>) -> bool {
+	txt != "-t" && txt != "--timestamp"
+}
+
 /// Handle Blank
 fn _blank(opts: &mut ArgList) {
 	get_help!("blank", opts);
 
-	let count: usize = match opts.extract_opt_usize(&["-c", "--count"]) {
+	let count: usize = match opts.extract_opt_usize_cb(|x| x == "-c" || x == "--count") {
 		Some(c) => usize::min(10, usize::max(1, c)),
 		None => 1,
 	};
 
-	if opts.extract_switch(&["--stderr"]) {
+	if opts.extract_switch_cb(match_stderr) {
 		eprint!("{}", "\n".repeat(count));
 	}
 	else {
@@ -81,12 +108,12 @@ fn _builtin(com: &str, opts: &mut ArgList) {
 	get_help!(com, opts);
 
 	// Pull switches.
-	let indent = opts.extract_switch(&["-i", "--indent"]);
-	let timestamp = opts.extract_switch(&["-t", "--timestamp"]);
-	let stderr = opts.extract_switch(&["--stderr"]);
+	let indent = opts.extract_switch_cb(match_indent);
+	let timestamp = opts.extract_switch_cb(match_timestamp);
+	let stderr = opts.extract_switch_cb(match_stderr);
 
 	// Exit is an option.
-	let exit: u8 = opts.extract_opt_usize(&["-e", "--exit"]).unwrap_or(0) as u8;
+	let exit: u8 = opts.extract_opt_usize_cb(match_exit).unwrap_or(0) as u8;
 
 	// And finally the message bit!
 	_msg(
@@ -116,8 +143,8 @@ fn _builtin(com: &str, opts: &mut ArgList) {
 fn _confirm(opts: &mut ArgList) {
 	get_help!("confirm", opts);
 
-	let indent = opts.extract_switch(&["-i", "--indent"]);
-	let timestamp = opts.extract_switch(&["-t", "--timestamp"]);
+	let indent = opts.extract_switch_cb(match_indent);
+	let timestamp = opts.extract_switch_cb(match_timestamp);
 
 	let mut msg = Msg::confirm(opts.expect_arg());
 
@@ -139,14 +166,14 @@ fn _custom(opts: &mut ArgList) {
 	get_help!("print", opts);
 
 	// Pull switches.
-	let indent = opts.extract_switch(&["-i", "--indent"]);
-	let timestamp = opts.extract_switch(&["-t", "--timestamp"]);
-	let stderr = opts.extract_switch(&["--stderr"]);
+	let indent = opts.extract_switch_cb(match_indent);
+	let timestamp = opts.extract_switch_cb(match_timestamp);
+	let stderr = opts.extract_switch_cb(match_stderr);
 
 	// Pull the options.
-	let exit: u8 = opts.extract_opt_usize(&["-e", "--exit"]).unwrap_or(0) as u8;
-	let color: u8 = usize::min(255, opts.extract_opt_usize(&["-c", "--prefix-color"]).unwrap_or(199)) as u8;
-	let prefix = opts.extract_opt(&["-p", "--prefix"]).unwrap_or_default().into_owned();
+	let exit: u8 = opts.extract_opt_usize_cb(match_exit).unwrap_or(0) as u8;
+	let color: u8 = usize::min(255, opts.extract_opt_usize_cb(|x| x == "-c" || x == "--prefix-color").unwrap_or(199)) as u8;
+	let prefix = opts.extract_opt_cb(|x| x == "-p" || x == "--prefix").unwrap_or_default().into_owned();
 
 	// And finally the message bit!
 	_msg(
