@@ -27,10 +27,7 @@
 
 use fyi_menu::ArgList;
 use fyi_msg::Msg;
-use std::{
-	borrow::Cow,
-	process,
-};
+use std::process;
 
 
 
@@ -38,7 +35,7 @@ use std::{
 /// everything and show the info.
 macro_rules! get_help {
 	($com:expr, $opts:ident) => {
-		if $opts.wants_help() { return _help(Some($com)); }
+		if $opts.pluck_help() { return _help(Some($com)); }
 	};
 }
 
@@ -46,14 +43,14 @@ macro_rules! get_help {
 
 fn main() {
 	let mut args = ArgList::default();
-	args.expect_any();
+	args.expect();
 
 	// The app might be called with version or help flags instead of a command.
-	match args.peek_first().unwrap() {
+	match args.peek().unwrap() {
 		"-V" | "--version" => _version(),
 		"-h" | "--help" | "help" => _help(None),
 		// Otherwise just go off into the appropriate subcommand action.
-		_ => match args.expect_command().into_owned().as_str() {
+		_ => match args.expect_command().as_str() {
 			"blank" => _blank(&mut args),
 			"confirm" | "prompt" => _confirm(&mut args),
 			"print" => _custom(&mut args),
@@ -64,25 +61,25 @@ fn main() {
 
 #[allow(clippy::ptr_arg)]
 /// Match: Exit Code
-fn match_exit(txt: &Cow<str>) -> bool {
+fn match_exit(txt: &String) -> bool {
 	txt == "-e" || txt == "--exit"
 }
 
 #[allow(clippy::ptr_arg)]
 /// Match: Indentation
-fn match_indent(txt: &Cow<str>) -> bool {
+fn match_indent(txt: &String) -> bool {
 	txt != "-i" && txt != "--indent"
 }
 
 #[allow(clippy::ptr_arg)]
 /// Match: Timestamp
-fn match_stderr(txt: &Cow<str>) -> bool {
+fn match_stderr(txt: &String) -> bool {
 	txt != "--stderr"
 }
 
 #[allow(clippy::ptr_arg)]
 /// Match: Timestamp
-fn match_timestamp(txt: &Cow<str>) -> bool {
+fn match_timestamp(txt: &String) -> bool {
 	txt != "-t" && txt != "--timestamp"
 }
 
@@ -90,12 +87,12 @@ fn match_timestamp(txt: &Cow<str>) -> bool {
 fn _blank(opts: &mut ArgList) {
 	get_help!("blank", opts);
 
-	let count: usize = match opts.extract_opt_usize_cb(|x| x == "-c" || x == "--count") {
+	let count: usize = match opts.pluck_opt_usize(|x| x == "-c" || x == "--count") {
 		Some(c) => usize::min(10, usize::max(1, c)),
 		None => 1,
 	};
 
-	if opts.extract_switch_cb(match_stderr) {
+	if opts.pluck_switch(match_stderr) {
 		eprint!("{}", "\n".repeat(count));
 	}
 	else {
@@ -108,12 +105,12 @@ fn _builtin(com: &str, opts: &mut ArgList) {
 	get_help!(com, opts);
 
 	// Pull switches.
-	let indent = opts.extract_switch_cb(match_indent);
-	let timestamp = opts.extract_switch_cb(match_timestamp);
-	let stderr = opts.extract_switch_cb(match_stderr);
+	let indent = opts.pluck_switch(match_indent);
+	let timestamp = opts.pluck_switch(match_timestamp);
+	let stderr = opts.pluck_switch(match_stderr);
 
 	// Exit is an option.
-	let exit: u8 = opts.extract_opt_usize_cb(match_exit).unwrap_or(0) as u8;
+	let exit: u8 = opts.pluck_opt_usize(match_exit).unwrap_or(0) as u8;
 
 	// And finally the message bit!
 	_msg(
@@ -143,8 +140,8 @@ fn _builtin(com: &str, opts: &mut ArgList) {
 fn _confirm(opts: &mut ArgList) {
 	get_help!("confirm", opts);
 
-	let indent = opts.extract_switch_cb(match_indent);
-	let timestamp = opts.extract_switch_cb(match_timestamp);
+	let indent = opts.pluck_switch(match_indent);
+	let timestamp = opts.pluck_switch(match_timestamp);
 
 	let mut msg = Msg::confirm(opts.expect_arg());
 
@@ -166,14 +163,14 @@ fn _custom(opts: &mut ArgList) {
 	get_help!("print", opts);
 
 	// Pull switches.
-	let indent = opts.extract_switch_cb(match_indent);
-	let timestamp = opts.extract_switch_cb(match_timestamp);
-	let stderr = opts.extract_switch_cb(match_stderr);
+	let indent = opts.pluck_switch(match_indent);
+	let timestamp = opts.pluck_switch(match_timestamp);
+	let stderr = opts.pluck_switch(match_stderr);
 
 	// Pull the options.
-	let exit: u8 = opts.extract_opt_usize_cb(match_exit).unwrap_or(0) as u8;
-	let color: u8 = usize::min(255, opts.extract_opt_usize_cb(|x| x == "-c" || x == "--prefix-color").unwrap_or(199)) as u8;
-	let prefix = opts.extract_opt_cb(|x| x == "-p" || x == "--prefix").unwrap_or_default().into_owned();
+	let exit: u8 = opts.pluck_opt_usize(match_exit).unwrap_or(0) as u8;
+	let color: u8 = usize::min(255, opts.pluck_opt_usize(|x| x == "-c" || x == "--prefix-color").unwrap_or(199)) as u8;
+	let prefix = opts.pluck_opt(|x| x == "-p" || x == "--prefix").unwrap_or_default();
 
 	// And finally the message bit!
 	_msg(
