@@ -301,7 +301,6 @@ impl From<Vec<String>> for ArgList {
 							out[idx].truncate(kv);
 						}
 
-						// Otherwise it's fine.
 						idx += 1;
 					},
 					// Bunk Entry!
@@ -372,8 +371,6 @@ impl ArgList {
 		if len == 0 { false }
 		else {
 			self.0.retain(cb);
-
-			// A change in length implies existence of the switch!
 			len != self.0.len()
 		}
 	}
@@ -387,29 +384,28 @@ impl ArgList {
 	/// match.
 	pub fn pluck_opt<F> (&mut self, cb: F) -> Option<String>
 	where F: Fn(&String) -> bool + Send + Sync + Copy {
-		let len: usize = self.0.len();
-		if let Some(idx) = self.0.iter().position(cb) {
-			// There must be a trailing value, and said value must not be key-
-			// like.
-			if idx + 1 < len && ! self.0[idx + 1].starts_with('-') {
-				// Remove the key.
-				let key = self.0.remove(idx);
-
-				// Make sure there are no other matches.
-				if self.0[idx..].iter().any(cb) {
-					Self::die(format!("Duplicate option: {}", key));
+		let old_len: usize = self.0.len();
+		let mut len: usize = old_len;
+		let mut out = None;
+		let mut idx = 0;
+		while idx < len {
+			if cb(&self.0[idx]) {
+				if old_len != len {
+					Self::die(format!("Duplicate option: {}", self.0.remove(idx)));
+					unreachable!();
+				}
+				else if idx + 1 >= len || self.0[idx + 1].starts_with('-') {
+					Self::die(format!("Missing option value: {}", self.0[idx]));
 					unreachable!();
 				}
 
-				// Remove and return the value.
-				Some(self.0.remove(idx))
+				// Remove the key and value.
+				out = self.0.drain(idx..idx+2).skip(1).next();
+				len -= 2;
 			}
-			else {
-				Self::die(format!("Missing option value: {}", self.0[idx]));
-				unreachable!();
-			}
+			else { idx += 1; }
 		}
-		else { None }
+		out
 	}
 
 	/// Extract Option (usize)
