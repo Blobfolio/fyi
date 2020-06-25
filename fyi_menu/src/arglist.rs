@@ -400,7 +400,7 @@ impl ArgList {
 				}
 
 				// Remove the key and value.
-				out = self.0.drain(idx..idx+2).skip(1).next();
+				out = self.0.drain(idx..idx+2).nth(1);
 				len -= 2;
 			}
 			else { idx += 1; }
