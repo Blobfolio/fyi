@@ -11,7 +11,10 @@ bar output, or you can dereference the object to work directly with its inner
 */
 
 use crate::utility::inflect;
-use fyi_msg::Msg;
+use fyi_msg::{
+	Msg,
+	traits::EPrintyPlease,
+};
 use fyi_progress::{
 	NiceElapsed,
 	NiceInt,
@@ -31,7 +34,6 @@ use std::{
 	io::{
 		self,
 		BufRead,
-		Write,
 	},
 	ops::Deref,
 	path::{
@@ -299,17 +301,15 @@ impl Witcher {
 	///
 	/// Like the progress bar, this prints to `Stderr`.
 	fn finished_in(total: u64, time: u32) {
-		io::stderr().write_all(
-			&Msg::crunched(unsafe {
-				std::str::from_utf8_unchecked(
-					&inflect(total, "file in ", "files in ").iter()
-						.chain(&*NiceElapsed::from(time))
-						.chain(&[46, 10])
-						.copied()
-						.collect::<Vec<u8>>()
-				)
-			})
-		).unwrap();
+		Msg::crunched(unsafe {
+			std::str::from_utf8_unchecked(
+				&inflect(total, "file in ", "files in ").iter()
+					.chain(&*NiceElapsed::from(time))
+					.chain(&[46, 10])
+					.copied()
+					.collect::<Vec<u8>>()
+			)
+		}).fyi_eprint();
 	}
 
 	/// Crunched In Msg
@@ -321,37 +321,33 @@ impl Witcher {
 	/// Like the progress bar, this prints to `Stderr`.
 	fn crunched_in(total: u64, time: u32, before: u64, after: u64) {
 		if 0 == after || before <= after {
-			io::stderr().write_all(
-				&Msg::crunched(unsafe {
-					std::str::from_utf8_unchecked(
-						&inflect(total, "file in ", "files in ").iter()
-							.chain(&*NiceElapsed::from(time))
-							.chain(b", but nothing doing.\n")
-							.copied()
-							.collect::<Vec<u8>>()
+			Msg::crunched(unsafe {
+				std::str::from_utf8_unchecked(
+					&inflect(total, "file in ", "files in ").iter()
+						.chain(&*NiceElapsed::from(time))
+						.chain(b", but nothing doing.\n")
+						.copied()
+						.collect::<Vec<u8>>()
 
-					)
-				})
-			).unwrap();
+				)
+			}).fyi_eprint();
 		}
 		else {
-			io::stderr().write_all(
-				&Msg::crunched(unsafe {
-					std::str::from_utf8_unchecked(
-						&inflect(total, "file in ", "files in ").iter()
-							.chain(&*NiceElapsed::from(time))
-							.chain(b", saving ")
-							.chain(&*NiceInt::from(before - after))
-							.chain(format!(
-								" bytes ({:3.*}%).\n",
-								2,
-								(1.0 - (after as f64 / before as f64)) * 100.0
-							).as_bytes())
-							.copied()
-							.collect::<Vec<u8>>()
-					)
-				})
-			).unwrap();
+			Msg::crunched(unsafe {
+				std::str::from_utf8_unchecked(
+					&inflect(total, "file in ", "files in ").iter()
+						.chain(&*NiceElapsed::from(time))
+						.chain(b", saving ")
+						.chain(&*NiceInt::from(before - after))
+						.chain(format!(
+							" bytes ({:3.*}%).\n",
+							2,
+							(1.0 - (after as f64 / before as f64)) * 100.0
+						).as_bytes())
+						.copied()
+						.collect::<Vec<u8>>()
+				)
+			}).fyi_eprint();
 		}
 	}
 }

@@ -21,6 +21,10 @@ let msg = Msg::success("Example executed!");
 
 use crate::{
 	MsgBuf,
+	traits::{
+		PrintyPlease,
+		EPrintyPlease,
+	},
 	utility::{
 		ansi_code_bold,
 		time_format_dd,
@@ -228,6 +232,58 @@ impl PartialOrd<[u8]> for Msg {
 impl PartialOrd<&[u8]> for Msg {
 	fn partial_cmp(&self, other: &&[u8]) -> Option<Ordering> {
 		Some(self.as_str().cmp(unsafe { std::str::from_utf8_unchecked(*other) }))
+	}
+}
+
+impl PrintyPlease for Msg {
+	#[inline]
+	/// Print to STDOUT.
+	fn fyi_print(&self) {
+		self.0.fyi_print();
+	}
+
+	#[inline]
+	/// Print to STDOUT with trailing line.
+	fn fyi_println(&self) {
+		self.0.fyi_println();
+	}
+
+	#[inline]
+	/// Locked/flushed print to STDOUT.
+	fn fyi_print_flush(&self) {
+		self.0.fyi_print_flush();
+	}
+
+	#[inline]
+	/// Locked/Flushed print to STDOUT with trailing line.
+	fn fyi_println_flush(&self) {
+		self.0.fyi_println_flush();
+	}
+}
+
+impl EPrintyPlease for Msg {
+	#[inline]
+	/// Print to STDERR.
+	fn fyi_eprint(&self) {
+		self.0.fyi_eprint();
+	}
+
+	#[inline]
+	/// Print to STDERR with trailing line.
+	fn fyi_eprintln(&self) {
+		self.0.fyi_eprintln();
+	}
+
+	#[inline]
+	/// Locked/flushed print to STDERR.
+	fn fyi_eprint_flush(&self) {
+		self.0.fyi_eprint_flush();
+	}
+
+	#[inline]
+	/// Locked/Flushed print to STDERR with trailing line.
+	fn fyi_eprintln_flush(&self) {
+		self.0.fyi_eprintln_flush();
 	}
 }
 

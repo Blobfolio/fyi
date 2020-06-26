@@ -477,7 +477,8 @@ impl ArgList {
 
 	/// Print an Error and Exit
 	pub fn die<S: Borrow<str>>(msg: S) {
-		eprintln!("{}", &Msg::error(msg));
+		use fyi_msg::traits::EPrintyPlease;
+		Msg::error(msg).fyi_eprintln();
 		process::exit(1);
 	}
 }

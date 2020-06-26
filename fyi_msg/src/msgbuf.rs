@@ -9,7 +9,13 @@ checks on its own.
 */
 
 use bytes::BytesMut;
-use crate::Partitions;
+use crate::{
+	Partitions,
+	traits::{
+		PrintyPlease,
+		EPrintyPlease,
+	},
+};
 use std::{
 	borrow::Borrow,
 	fmt,
@@ -422,6 +428,72 @@ impl MsgBuf {
 			self.buf.truncate(pos - adj);
 			self.buf.unsplit(b);
 		}
+	}
+}
+
+
+
+impl PrintyPlease for MsgBuf {
+	/// Print to STDOUT.
+	fn fyi_print(&self) {
+		use std::io::Write;
+		std::io::stdout().write_all(&self.buf).unwrap();
+	}
+
+	/// Print to STDOUT with trailing line.
+	fn fyi_println(&self) {
+		use std::io::Write;
+		std::io::stdout().write_all(&self.buf.iter().chain(&[10]).copied().collect::<Vec<u8>>()).unwrap();
+	}
+
+	/// Locked/flushed print to STDOUT.
+	fn fyi_print_flush(&self) {
+		use std::io::Write;
+		let writer = std::io::stdout();
+		let mut handle = writer.lock();
+		handle.write_all(&self.buf).unwrap();
+		handle.flush().unwrap();
+	}
+
+	/// Locked/Flushed print to STDOUT with trailing line.
+	fn fyi_println_flush(&self) {
+		use std::io::Write;
+		let writer = std::io::stdout();
+		let mut handle = writer.lock();
+		handle.write_all(&self.buf.iter().chain(&[10]).copied().collect::<Vec<u8>>()).unwrap();
+		handle.flush().unwrap();
+	}
+}
+
+impl EPrintyPlease for MsgBuf {
+	/// Print to STDERR.
+	fn fyi_eprint(&self) {
+		use std::io::Write;
+		std::io::stderr().write_all(&self.buf).unwrap();
+	}
+
+	/// Print to STDERR with trailing line.
+	fn fyi_eprintln(&self) {
+		use std::io::Write;
+		std::io::stderr().write_all(&self.buf.iter().chain(&[10]).copied().collect::<Vec<u8>>()).unwrap();
+	}
+
+	/// Locked/flushed print to STDERR.
+	fn fyi_eprint_flush(&self) {
+		use std::io::Write;
+		let writer = std::io::stderr();
+		let mut handle = writer.lock();
+		handle.write_all(&self.buf).unwrap();
+		handle.flush().unwrap();
+	}
+
+	/// Locked/Flushed print to STDERR with trailing line.
+	fn fyi_eprintln_flush(&self) {
+		use std::io::Write;
+		let writer = std::io::stderr();
+		let mut handle = writer.lock();
+		handle.write_all(&self.buf.iter().chain(&[10]).copied().collect::<Vec<u8>>()).unwrap();
+		handle.flush().unwrap();
 	}
 }
 

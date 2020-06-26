@@ -28,8 +28,17 @@
 mod msg;
 mod msgbuf;
 mod partitions;
+mod printy_please;
 pub mod utility;
 
 pub use msg::Msg;
 pub use msgbuf::MsgBuf;
 pub use partitions::Partitions;
+
+/// Traits.
+pub mod traits {
+	pub use super::printy_please::{
+		PrintyPlease,
+		EPrintyPlease,
+	};
+}

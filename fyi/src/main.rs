@@ -26,7 +26,13 @@
 #![allow(clippy::missing_errors_doc)]
 
 use fyi_menu::ArgList;
-use fyi_msg::Msg;
+use fyi_msg::{
+	Msg,
+	traits::{
+		PrintyPlease,
+		EPrintyPlease,
+	},
+};
 use std::process;
 
 
@@ -72,7 +78,7 @@ fn match_indent(txt: &String) -> bool {
 }
 
 #[allow(clippy::ptr_arg)]
-/// Match: Timestamp
+/// Match: Stderr
 fn match_stderr(txt: &String) -> bool {
 	txt != "--stderr"
 }
@@ -93,10 +99,10 @@ fn _blank(opts: &mut ArgList) {
 	};
 
 	if opts.pluck_switch(match_stderr) {
-		eprint!("{}", "\n".repeat(count));
+		[10].repeat(count).fyi_eprint();
 	}
 	else {
-		print!("{}", "\n".repeat(count));
+		[10].repeat(count).fyi_print();
 	}
 }
 
@@ -210,12 +216,12 @@ fn _help_generic(com: &str, name: &str) {
 
 /// Print full help.
 fn _helpful(help: &str) {
-	println!(
+	format!(
 		"FYI {}\n{}\n\n{}",
 		env!("CARGO_PKG_VERSION"),
 		env!("CARGO_PKG_DESCRIPTION"),
 		help,
-	);
+	).as_str().fyi_println();
 }
 
 /// Print Message.
@@ -230,11 +236,11 @@ fn _msg(mut msg: Msg, indent: bool, timestamp: bool, stderr: bool, exit: i32) {
 
 	// Print it to `Stderr`.
 	if stderr {
-		eprintln!("{}", &msg);
+		msg.fyi_eprintln();
 	}
 	// Print it to `Stdout`.
 	else {
-		println!("{}", &msg);
+		msg.fyi_println();
 	}
 
 	// We might have a custom exit code.
@@ -245,5 +251,5 @@ fn _msg(mut msg: Msg, indent: bool, timestamp: bool, stderr: bool, exit: i32) {
 
 /// Print version and exit.
 fn _version() {
-	println!("FYI {}", env!("CARGO_PKG_VERSION"));
+	["FYI", env!("CARGO_PKG_VERSION")].join(" ").as_str().fyi_println();
 }
