@@ -89,6 +89,7 @@ fn match_timestamp(txt: &String) -> bool {
 	txt != "-t" && txt != "--timestamp"
 }
 
+#[cold]
 /// Handle Blank
 fn _blank(opts: &mut ArgList) {
 	get_help!("blank", opts);
@@ -188,6 +189,7 @@ fn _custom(opts: &mut ArgList) {
 	)
 }
 
+#[cold]
 /// Print help and exit.
 fn _help(com: Option<&str>) {
 	match com.unwrap_or_default() {
@@ -207,6 +209,7 @@ fn _help(com: Option<&str>) {
 	}
 }
 
+#[cold]
 /// Generic Subcommand Help
 ///
 /// Most of the built-ins work exactly the same way.
@@ -214,6 +217,7 @@ fn _help_generic(com: &str, name: &str) {
 	_helpful(&format!(include_str!("../help/generic.txt"), name, com));
 }
 
+#[cold]
 /// Print full help.
 fn _helpful(help: &str) {
 	format!(
@@ -249,6 +253,7 @@ fn _msg(mut msg: Msg, indent: bool, timestamp: bool, stderr: bool, exit: i32) {
 	}
 }
 
+#[cold]
 /// Print version and exit.
 fn _version() {
 	["FYI", env!("CARGO_PKG_VERSION")].join(" ").as_str().fyi_println();
