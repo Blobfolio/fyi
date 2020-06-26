@@ -74,7 +74,6 @@ macro_rules! from_many {
 
 /// Optimized From Empty.
 impl<'a> From<&'a [usize; 0]> for Partitions {
-	#[inline]
 	fn from(_parts: &'a [usize; 0]) -> Self {
 		Self::default()
 	}
@@ -82,7 +81,6 @@ impl<'a> From<&'a [usize; 0]> for Partitions {
 
 /// Optimized From One.
 impl<'a> From<&'a [usize; 1]> for Partitions {
-	#[inline]
 	fn from(parts: &'a [usize; 1]) -> Self {
 		Self::one(parts[0])
 	}
@@ -134,7 +132,6 @@ impl PartialEq for Partitions {
 impl Index<usize> for Partitions {
 	type Output = usize;
 
-	#[inline]
 	fn index(&self, idx: usize) -> &Self::Output {
 		&self.inner[idx]
 	}
@@ -185,7 +182,7 @@ impl Partitions {
 	}
 
 	#[must_use]
-	#[inline]
+
 	/// Single
 	///
 	/// Create a single partition with the specified length.
@@ -197,7 +194,7 @@ impl Partitions {
 	}
 
 	#[must_use]
-	#[inline]
+
 	/// Splat
 	///
 	/// Create `num` empty partitions, where `num` is between 1 and 16.
@@ -236,21 +233,19 @@ impl Partitions {
 		}
 	}
 
-	#[inline]
+
 	#[must_use]
 	/// Is Empty.
 	pub const fn is_empty(&self) -> bool {
 		0 == self.used
 	}
 
-	#[inline]
 	#[must_use]
 	/// Number of Partitions.
 	pub const fn len(&self) -> usize {
 		self.used
 	}
 
-	#[inline]
 	#[must_use]
 	/// Maximum Value.
 	pub const fn max(&self) -> usize {
@@ -273,7 +268,7 @@ impl Partitions {
 	// Fetching Parts
 	// ------------------------------------------------------------------------
 
-	#[inline]
+
 	#[must_use]
 	/// Get Part
 	///
@@ -282,7 +277,6 @@ impl Partitions {
 		Range { start: self.inner[idx - 1], end: self.inner[idx] }
 	}
 
-	#[inline]
 	#[must_use]
 	/// Get Spanning Range Across Parts
 	///
@@ -294,7 +288,6 @@ impl Partitions {
 		}
 	}
 
-	#[inline]
 	#[must_use]
 	/// Get Part Length
 	///
@@ -303,7 +296,6 @@ impl Partitions {
 		self.inner[idx] - self.inner[idx - 1]
 	}
 
-	#[inline]
 	#[must_use]
 	/// Part is Empty
 	///

@@ -49,14 +49,12 @@ impl AddAssign<&[u8]> for MsgBuf {
 }
 
 impl Borrow<[u8]> for MsgBuf {
-	#[inline]
 	fn borrow(&self) -> &[u8] {
 		&*self.buf
 	}
 }
 
 impl Default for MsgBuf {
-	#[inline]
 	fn default() -> Self {
 		Self {
 			buf: BytesMut::with_capacity(1024),
@@ -68,21 +66,18 @@ impl Default for MsgBuf {
 impl Deref for MsgBuf {
 	type Target = [u8];
 
-	#[inline]
 	fn deref(&self) -> &Self::Target {
 		&*self.buf
 	}
 }
 
 impl fmt::Display for MsgBuf {
-	#[inline]
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_str(unsafe { std::str::from_utf8_unchecked(&*self.buf) })
 	}
 }
 
 impl<'a> From<&'a [u8]> for MsgBuf {
-	#[inline]
 	fn from(buf: &'a [u8]) -> Self {
 		Self {
 			buf: BytesMut::from(buf),
@@ -106,7 +101,6 @@ macro_rules! from_many {
 
 /// Optimized From Empty.
 impl<'a> From<&'a [&'a [u8]; 0]> for MsgBuf {
-	#[inline]
 	fn from(_bufs: &'a [&'a [u8]; 0]) -> Self {
 		Self::default()
 	}
@@ -114,7 +108,6 @@ impl<'a> From<&'a [&'a [u8]; 0]> for MsgBuf {
 
 /// Optimized From One.
 impl<'a> From<&'a [&'a [u8]; 1]> for MsgBuf {
-	#[inline]
 	fn from(bufs: &'a [&'a [u8]; 1]) -> Self {
 		Self {
 			buf: BytesMut::from(bufs[0]),
@@ -141,14 +134,12 @@ from_many!(15);
 impl Index<usize> for MsgBuf {
 	type Output = [u8];
 
-	#[inline]
 	fn index(&self, idx: usize) -> &Self::Output {
 		&self.buf[self.parts.part(idx)]
 	}
 }
 
 impl IndexMut<usize> for MsgBuf {
-	#[inline]
 	fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
 		&mut self.buf[self.parts.part(idx)]
 	}
@@ -159,7 +150,7 @@ impl MsgBuf {
 	// Instantiation
 	// ------------------------------------------------------------------------
 
-	#[inline]
+
 	#[must_use]
 	/// New
 	///
@@ -176,7 +167,6 @@ impl MsgBuf {
 		}
 	}
 
-	#[inline]
 	#[must_use]
 	/// Splat
 	///
@@ -208,7 +198,6 @@ impl MsgBuf {
 		self.parts.clear();
 	}
 
-	#[inline]
 	/// Flatten
 	///
 	/// Keep the buffer, but drop to a single, spanning partition.
@@ -216,7 +205,6 @@ impl MsgBuf {
 		self.parts.flatten();
 	}
 
-	#[inline]
 	#[must_use]
 	/// Buffer Is Empty.
 	///
@@ -226,7 +214,6 @@ impl MsgBuf {
 		0 == self.parts.max()
 	}
 
-	#[inline]
 	#[must_use]
 	/// Buffer length.
 	///
@@ -250,14 +237,13 @@ impl MsgBuf {
 	// Fetching Parts
 	// ------------------------------------------------------------------------
 
-	#[inline]
+
 	#[must_use]
 	/// Number of Parts.
 	pub const fn parts_len(&self) -> usize {
 		self.parts.len()
 	}
 
-	#[inline]
 	#[must_use]
 	/// Spread.
 	///
@@ -268,7 +254,6 @@ impl MsgBuf {
 		&self.buf[self.parts.spread(idx1, idx2)]
 	}
 
-	#[inline]
 	#[must_use]
 	/// Spread Mut.
 	///
@@ -279,7 +264,6 @@ impl MsgBuf {
 		&mut self.buf[self.parts.spread(idx1, idx2)]
 	}
 
-	#[inline]
 	#[must_use]
 	/// Is Part Empty
 	///
@@ -288,7 +272,6 @@ impl MsgBuf {
 		self.parts.part_is_empty(idx)
 	}
 
-	#[inline]
 	#[must_use]
 	/// Get Part Length
 	///

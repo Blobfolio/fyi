@@ -24,14 +24,12 @@ pub struct NiceInt {
 impl Deref for NiceInt {
 	type Target = [u8];
 
-	#[inline]
 	fn deref(&self) -> &Self::Target {
 		&self.inner[..self.len]
 	}
 }
 
 impl Default for NiceInt {
-	#[inline]
 	fn default() -> Self {
 		Self {
 			inner: [48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -41,21 +39,18 @@ impl Default for NiceInt {
 }
 
 impl fmt::Display for NiceInt {
-	#[inline]
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_str(unsafe { std::str::from_utf8_unchecked(&*self) })
 	}
 }
 
 impl From<u8> for NiceInt {
-	#[inline]
 	fn from(num: u8) -> Self {
 		Self::from_small(u64::from(num))
 	}
 }
 
 impl From<u16> for NiceInt {
-	#[inline]
 	fn from(num: u16) -> Self {
 		if num < 1000 { Self::from_small(u64::from(num)) }
 		else { Self::from_big(u64::from(num)) }
@@ -63,7 +58,6 @@ impl From<u16> for NiceInt {
 }
 
 impl From<u32> for NiceInt {
-	#[inline]
 	fn from(num: u32) -> Self {
 		if num < 1000 { Self::from_small(u64::from(num)) }
 		else { Self::from_big(u64::from(num)) }
@@ -71,7 +65,6 @@ impl From<u32> for NiceInt {
 }
 
 impl From<u64> for NiceInt {
-	#[inline]
 	fn from(num: u64) -> Self {
 		if num < 1000 { Self::from_small(num) }
 		else { Self::from_big(u64::min(999_999_999_999, num)) }
@@ -79,7 +72,6 @@ impl From<u64> for NiceInt {
 }
 
 impl From<u128> for NiceInt {
-	#[inline]
 	fn from(num: u128) -> Self {
 		if num < 1000 { Self::from_small(num as u64) }
 		else { Self::from_big(u64::min(999_999_999_999, num as u64)) }
@@ -87,7 +79,6 @@ impl From<u128> for NiceInt {
 }
 
 impl From<usize> for NiceInt {
-	#[inline]
 	fn from(num: usize) -> Self {
 		if num < 1000 { Self::from_small(num as u64) }
 		else { Self::from_big(u64::min(999_999_999_999, num as u64)) }

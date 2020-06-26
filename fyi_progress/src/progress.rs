@@ -192,7 +192,7 @@ struct ProgressBar {
 }
 
 impl Default for ProgressBar {
-	#[inline]
+
 	fn default() -> Self {
 		Self {
 			inner: [0; 289],
@@ -204,7 +204,7 @@ impl Default for ProgressBar {
 impl Deref for ProgressBar {
 	type Target = [u8];
 
-	#[inline]
+
 	fn deref(&self) -> &Self::Target {
 		&self.inner[..self.len]
 	}

@@ -91,35 +91,30 @@ const LBL_TIMESTAMP_PRE: [u8; 12]  = [27, 91, 50, 109, 91, 27, 91, 48, 59, 51, 5
 pub struct Msg(MsgBuf);
 
 impl AsRef<str> for Msg {
-	#[inline]
 	fn as_ref(&self) -> &str {
 		self.as_str()
 	}
 }
 
 impl AsRef<[u8]> for Msg {
-	#[inline]
 	fn as_ref(&self) -> &[u8] {
 		self.as_bytes()
 	}
 }
 
 impl Borrow<str> for Msg {
-	#[inline]
 	fn borrow(&self) -> &str {
 		self.as_str()
 	}
 }
 
 impl Borrow<[u8]> for Msg {
-	#[inline]
 	fn borrow(&self) -> &[u8] {
 		self.as_bytes()
 	}
 }
 
 impl Default for Msg {
-	#[inline]
 	fn default() -> Self {
 		Self(MsgBuf::splat(10))
 	}
@@ -128,7 +123,6 @@ impl Default for Msg {
 impl Deref for Msg {
 	type Target = [u8];
 
-	#[inline]
 	fn deref(&self) -> &Self::Target {
 		self.as_bytes()
 	}
@@ -137,14 +131,12 @@ impl Deref for Msg {
 impl Eq for Msg {}
 
 impl fmt::Display for Msg {
-	#[inline]
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_str(self.as_str())
 	}
 }
 
 impl<'a> From<&'a str> for Msg {
-	#[inline]
 	fn from(msg: &'a str) -> Self {
 		Self(MsgBuf::from(&[
 			// Indentation and timestamp.
@@ -159,7 +151,6 @@ impl<'a> From<&'a str> for Msg {
 }
 
 impl<'a> From<&'a [u8]> for Msg {
-	#[inline]
 	fn from(msg: &'a [u8]) -> Self {
 		Self(MsgBuf::from(&[
 			// Indentation and timestamp.
@@ -236,25 +227,21 @@ impl PartialOrd<&[u8]> for Msg {
 }
 
 impl PrintyPlease for Msg {
-	#[inline]
 	/// Print to STDOUT.
 	fn fyi_print(&self) {
 		self.0.fyi_print();
 	}
 
-	#[inline]
 	/// Print to STDOUT with trailing line.
 	fn fyi_println(&self) {
 		self.0.fyi_println();
 	}
 
-	#[inline]
 	/// Locked/flushed print to STDOUT.
 	fn fyi_print_flush(&self) {
 		self.0.fyi_print_flush();
 	}
 
-	#[inline]
 	/// Locked/Flushed print to STDOUT with trailing line.
 	fn fyi_println_flush(&self) {
 		self.0.fyi_println_flush();
@@ -262,25 +249,21 @@ impl PrintyPlease for Msg {
 }
 
 impl EPrintyPlease for Msg {
-	#[inline]
 	/// Print to STDERR.
 	fn fyi_eprint(&self) {
 		self.0.fyi_eprint();
 	}
 
-	#[inline]
 	/// Print to STDERR with trailing line.
 	fn fyi_eprintln(&self) {
 		self.0.fyi_eprintln();
 	}
 
-	#[inline]
 	/// Locked/flushed print to STDERR.
 	fn fyi_eprint_flush(&self) {
 		self.0.fyi_eprint_flush();
 	}
 
-	#[inline]
 	/// Locked/Flushed print to STDERR with trailing line.
 	fn fyi_eprintln_flush(&self) {
 		self.0.fyi_eprintln_flush();
@@ -476,14 +459,13 @@ impl Msg {
 	// Conversion
 	// ------------------------------------------------------------------------
 
-	#[inline]
+
 	#[must_use]
 	/// As Bytes
 	pub fn as_bytes(&self) -> &[u8] {
 		&*self.0
 	}
 
-	#[inline]
 	#[must_use]
 	/// As Str
 	pub fn as_str(&self) -> &str {

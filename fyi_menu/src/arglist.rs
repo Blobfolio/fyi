@@ -60,7 +60,6 @@ use std::{
 
 
 
-#[inline]
 /// Escape Chars
 ///
 /// This returns `true` if a character requires escaping (for e.g. the shell).
@@ -124,7 +123,6 @@ fn escape(s: &String) -> String {
 	else { String::from(s) }
 }
 
-#[inline]
 /// Is Byte a Letter
 ///
 /// Keys need an [a-z] or [A-Z] letter following the dash.
@@ -135,7 +133,6 @@ fn is_letter(data: u8) -> bool {
 	}
 }
 
-#[inline]
 /// Count Leading Dashes
 fn leading_dashes(data: &[u8]) -> usize {
 	match data.len().cmp(&2) {
@@ -204,7 +201,6 @@ fn parse_kv(raw: &str) -> (bool, usize, bool, usize) {
 pub struct ArgList (Vec<String>);
 
 impl Default for ArgList {
-	#[inline]
 	/// Default from Env
 	fn default() -> Self {
 		Self::from(env::args().skip(1).collect::<Vec<String>>())
@@ -214,14 +210,12 @@ impl Default for ArgList {
 impl Deref for ArgList {
 	type Target = [String];
 
-	#[inline]
 	fn deref(&self) -> &Self::Target {
 		&self.0[..]
 	}
 }
 
 impl From<Vec<&str>> for ArgList {
-	#[inline]
 	fn from(out: Vec<&str>) -> Self {
 		Self::from(out.into_iter().map(String::from).collect::<Vec<String>>())
 	}
