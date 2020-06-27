@@ -360,7 +360,7 @@ impl ArgList {
 	///
 	/// In other words, `true` for non-match, `false` for match. Haha.
 	pub fn pluck_switch<F> (&mut self, cb: F) -> bool
-	where F: Fn(&String) -> bool + Send + Sync + Copy {
+	where F: FnMut(&String) -> bool {
 		let len: usize = self.0.len();
 		if len == 0 { false }
 		else {
@@ -376,8 +376,8 @@ impl ArgList {
 	/// Note: this method requires a *matching* callback, unlike
 	/// `pluck_switch()`, so it should return TRUE on a match, FALSE on a non-
 	/// match.
-	pub fn pluck_opt<F> (&mut self, cb: F) -> Option<String>
-	where F: Fn(&String) -> bool + Send + Sync + Copy {
+	pub fn pluck_opt<F> (&mut self, mut cb: F) -> Option<String>
+	where F: FnMut(&String) -> bool {
 		let old_len: usize = self.0.len();
 		let mut len: usize = old_len;
 		let mut out = None;
@@ -407,7 +407,7 @@ impl ArgList {
 	/// Same as `pluck_opt()`, except the value is returned as a usize. Parsing
 	/// failures are treated as None, i.e. an error.
 	pub fn pluck_opt_usize<F> (&mut self, cb: F) -> Option<usize>
-	where F: Fn(&String) -> bool + Send + Sync + Copy {
+	where F: FnMut(&String) -> bool {
 		self.pluck_opt(cb)
 			.and_then(|x| x.parse::<usize>().ok())
 	}
