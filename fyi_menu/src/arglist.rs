@@ -350,11 +350,8 @@ impl ArgList {
 	pub fn pluck_switch<F> (&mut self, cb: F) -> bool
 	where F: FnMut(&String) -> bool {
 		let len: usize = self.0.len();
-		if len == 0 { false }
-		else {
-			self.0.retain(cb);
-			len != self.0.len()
-		}
+		self.0.retain(cb);
+		len != self.0.len()
 	}
 
 	/// Extract Option
