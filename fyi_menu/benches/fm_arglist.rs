@@ -3,6 +3,7 @@
 */
 
 use criterion::{
+	black_box,
 	Criterion,
 	criterion_group,
 	criterion_main,
@@ -18,6 +19,7 @@ fn practical(c: &mut Criterion) {
 		b.iter_with_setup(||
 			vec![String::from("debug"), String::from("-t"), String::from("The current line count is 5.")],
 			|raw| {
+				black_box(1);
 				let mut al = ArgList::from(raw);
 				let _com = al.expect_command();
 				let _help = al.pluck_help();
@@ -26,6 +28,7 @@ fn practical(c: &mut Criterion) {
 				let _stderr = al.pluck_switch(|x| x != "--stderr");
 				let _e = al.pluck_opt_usize(|x| x == "-e" || x == "--exit").unwrap_or_default();
 				let _msg = al.expect_arg();
+				return al;
 			}
 		)
 	});
@@ -59,21 +62,21 @@ fn pluck_switch(c: &mut Criterion) {
 	group.bench_function("pluck_switch(-p) <Err>", move |b| {
 		b.iter_with_setup(||
 			ArgList::from(vec!["-h", "--help", "-v", "1.0", "-b", "master", "--single", "/path/to/thing"]),
-			|mut al| { let _ = al.pluck_switch(|x| x != "-p"); }
+			|mut al| al.pluck_switch(|x| x != "-p")
 		)
 	});
 
 	group.bench_function("pluck_switch(-v) <Ok>", move |b| {
 		b.iter_with_setup(||
 			ArgList::from(vec!["-h", "--help", "-v", "1.0", "-b", "master", "--single", "/path/to/thing"]),
-			|mut al| { let _ = al.pluck_switch(|x| x != "-v"); }
+			|mut al| al.pluck_switch(|x| x != "-v")
 		)
 	});
 
 	group.bench_function("pluck_switch(-v, --version) <Ok>", move |b| {
 		b.iter_with_setup(||
 			ArgList::from(vec!["-h", "--help", "-v", "1.0", "-b", "master", "--single", "/path/to/thing"]),
-			|mut al| { let _ = al.pluck_switch(|x| x != "-v" && x != "--version"); }
+			|mut al| al.pluck_switch(|x| x != "-v" && x != "--version")
 		)
 	});
 
@@ -86,21 +89,21 @@ fn pluck_opt(c: &mut Criterion) {
 	group.bench_function("pluck_opt(-p) <Err>", move |b| {
 		b.iter_with_setup(||
 			ArgList::from(vec!["-h", "--help", "-v", "1.0", "-b", "master", "--single", "/path/to/thing"]),
-			|mut al| { let _ = al.pluck_opt(|x| x == "-p"); }
+			|mut al| al.pluck_opt(|x| x == "-p")
 		)
 	});
 
 	group.bench_function("pluck_opt(-v) <Ok>", move |b| {
 		b.iter_with_setup(||
 			ArgList::from(vec!["-h", "--help", "-v", "1.0", "-b", "master", "--single", "/path/to/thing"]),
-			|mut al| { let _ = al.pluck_opt(|x| x == "-v"); }
+			|mut al| al.pluck_opt(|x| x == "-v")
 		)
 	});
 
 	group.bench_function("pluck_opt(-v, --version) <Ok>", move |b| {
 		b.iter_with_setup(||
 			ArgList::from(vec!["-h", "--help", "-v", "1.0", "-b", "master", "--single", "/path/to/thing"]),
-			|mut al| { let _ = al.pluck_opt(|x| x == "-v" || x == "--version"); }
+			|mut al| al.pluck_opt(|x| x == "-v" || x == "--version")
 		)
 	});
 
