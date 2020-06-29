@@ -70,23 +70,21 @@ fn escape_chars(ch: char) -> bool {
 	}
 }
 
-#[allow(clippy::ptr_arg)]
 #[allow(clippy::suspicious_else_formatting)]
 /// Escape String (for shell)
 ///
 /// For our purposes, we just want to ensure strings requiring quotes are
 /// single-quoted so as not to be lost entirely, but additional validation
 /// is definitely needed before attempting to use them!
-fn escape(s: &String) -> String {
+fn escape(mut s: String) -> String {
 	// Empty strings need to be quoted so as not to disappear.
-	if s.is_empty() { String::from("''") }
+	if s == "" { String::from("''") }
 	// We need to quote it, and escape any single quotes already within it.
 	else if s.contains(escape_chars) {
-		let mut s = String::from(s);
-		// There are quotes within!
-		if let Some(mut idx) = s.find('\'') {
-			unsafe {
-				let v = s.as_mut_vec();
+		unsafe {
+			let v = s.as_mut_vec();
+
+			if let Some(mut idx) = v.iter().position(|x| *x == b'\'') {
 				let mut len: usize = v.len();
 				while idx < len {
 					// Straighten backslashes. This is *not* a great solution,
@@ -104,23 +102,17 @@ fn escape(s: &String) -> String {
 					// Everything else can skate on through.
 					else { idx += 1; }
 				}
-				v.reserve(2);
-				v.insert(0, b'\'');
-				v.push(b'\'');
 			}
-		}
-		else {
-			unsafe {
-				let v = s.as_mut_vec();
-				v.reserve(2);
-				v.insert(0, b'\'');
-				v.push(b'\'');
-			}
+
+			v.reserve(2);
+			v.insert(0, b'\'');
+			v.push(b'\'');
 		}
 
 		s
 	}
-	else { String::from(s) }
+	// Send it through unchanged.
+	else { s }
 }
 
 /// Is Byte a Letter
