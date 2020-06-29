@@ -355,17 +355,17 @@ impl ArgList {
 	/// match.
 	pub fn pluck_opt<F> (&mut self, mut cb: F) -> Option<String>
 	where F: FnMut(&String) -> bool {
-		let old_len: usize = self.0.len();
-		let mut len: usize = old_len;
 		let mut out = None;
+		let mut len: usize = self.0.len();
 		let mut idx = 0;
+
 		while idx < len {
 			if cb(&self.0[idx]) {
-				if old_len != len {
-					Self::die(format!("Duplicate option: {}", self.0.remove(idx)));
+				if out.is_some() {
+					Self::die(format!("Duplicate option: {}", self.0[idx]));
 					unreachable!();
 				}
-				else if idx + 1 >= len || self.0[idx + 1].starts_with('-') {
+				else if idx + 1 == len || self.0[idx + 1].starts_with('-') {
 					Self::die(format!("Missing option value: {}", self.0[idx]));
 					unreachable!();
 				}
@@ -376,6 +376,7 @@ impl ArgList {
 			}
 			else { idx += 1; }
 		}
+
 		out
 	}
 
