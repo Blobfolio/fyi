@@ -140,14 +140,15 @@ fn leading_dashes(data: &[u8]) -> usize {
 		Ordering::Less => 0,
 		// This could be a short option.
 		Ordering::Equal =>
-			if data[0] == b'-' { 1 }
+			if data[0] == b'-' && is_letter(data[1]) { 1 }
 			else { 0 },
 		// This could be a short option (with value) or a long option (with or
 		// without value) or neither.
 		Ordering::Greater =>
 			if data[0] == b'-' {
-				if data[1] == b'-' { 2 }
-				else { 1 }
+				if data[1] == b'-' && is_letter(data[2]) { 2 }
+				else if is_letter(data[1]) { 1 }
+				else { 0 }
 			}
 			else { 0 },
 	}
@@ -162,31 +163,21 @@ fn parse_kv(raw: &str) -> (bool, usize, bool, usize) {
 		Ordering::Less => (false, 0, true, len),
 		// One dash.
 		Ordering::Equal =>
-			// A letter must follow the dash or this is not a key.
-			if is_letter(bytes[1]) {
-				// If the key is all there is, we're done.
-				if len == 2 { (true, len, false, 0) }
-				// We can't have something like "-v-v".
-				else if bytes[2] == b'-' { (false, 0, false, 0) }
-				// Split it down the middle.
-				else { (true, 2, true, len - 2) }
-			}
-			// Treat as value.
-			else { (false, 0, true, len) },
+			// If the key is all there is, we're done.
+			if len == 2 { (true, len, false, 0) }
+			// We can't have something like "-v-v".
+			else if bytes[2] == b'-' { (false, 0, false, 0) }
+			// Split it down the middle.
+			else { (true, 2, true, len - 2) }
 		// Two dashes.
 		Ordering::Greater =>
-			// As before, a letter must follow the dash or it isn't a key.
-			if is_letter(bytes[2]) {
-				// If there is an equal sign, split into a key and
-				// value chunks.
-				if let Some(idx_split) = bytes.iter().position(|x| *x == b'=') {
-					(true, idx_split, true, len.saturating_sub(idx_split + 1))
-				}
-				// Just the key.
-				else { (true, len, false, 0) }
+			// If there is an equal sign, split into a key and
+			// value chunks.
+			if let Some(idx_split) = bytes.iter().skip(3).position(|x| *x == b'=') {
+				(true, idx_split + 3, true, len.saturating_sub(idx_split + 4))
 			}
-			// Treat as value.
-			else { (false, 0, true, len) },
+			// Just the key.
+			else { (true, len, false, 0) }
 	}
 }
 
