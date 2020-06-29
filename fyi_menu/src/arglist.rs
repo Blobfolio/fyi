@@ -243,12 +243,10 @@ impl From<Vec<String>> for ArgList {
 					out.truncate(len);
 				}
 				else {
-					len = idx + 1;
-					out[idx] = out[len..].iter()
+					out[idx] = out.drain(idx+1..)
 						.map(escape)
 						.collect::<Vec<String>>()
 						.join(" ");
-					out.truncate(len);
 					break;
 				}
 			}
