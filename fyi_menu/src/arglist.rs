@@ -263,8 +263,7 @@ impl From<Vec<String>> for ArgList {
 						}
 						// Otherwise chop it off the end.
 						else {
-							let start: usize = el_len - v;
-							out.insert(idx + 1, String::from(&out[idx][start..]));
+							out.insert(idx + 1, String::from(&out[idx][el_len-v..]));
 						}
 
 						// Truncate the key to its appropriate length.
