@@ -416,7 +416,7 @@ impl ArgList {
 	/// Call this method last to grab whatever is left.
 	pub fn pluck_args(&mut self) -> Option<Vec<String>> {
 		let out: Vec<String> = self.0.drain(..)
-			.filter(|x| ! x.is_empty() && ! x.starts_with('-'))
+			.filter(|x| x != "" && ! x.starts_with('-'))
 			.collect();
 
 		if out.is_empty() { None }
@@ -438,7 +438,7 @@ impl ArgList {
 	///
 	/// Call this method last to grab the first of whatever is left.
 	pub fn pluck_arg(&mut self) -> Option<String> {
-		self.0.retain(|x| ! x.is_empty() && ! x.starts_with('-'));
+		self.0.retain(|x| x != "" && ! x.starts_with('-'));
 		if self.0.is_empty() { None }
 		else { Some(self.0.remove(0)) }
 	}
