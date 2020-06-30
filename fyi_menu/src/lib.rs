@@ -25,5 +25,5 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::missing_errors_doc)]
 
-mod arglist;
+pub mod arglist;
 pub use arglist::ArgList;
