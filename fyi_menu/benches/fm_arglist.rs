@@ -4,6 +4,7 @@
 
 use criterion::{
 	black_box,
+	BenchmarkId,
 	Criterion,
 	criterion_group,
 	criterion_main,
@@ -11,6 +12,53 @@ use criterion::{
 use fyi_menu::ArgList;
 
 
+
+fn parse_kv(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_menu::ArgList::parse_kv");
+
+	for kv in [
+		"Hello World",
+		"--key",
+		"--key=Value",
+		"-k",
+		"-kValue",
+	].iter() {
+		group.bench_with_input(
+			BenchmarkId::from_parameter(kv.to_string()),
+			kv,
+			|b, &kv| {
+				b.iter(||
+					fyi_menu::arglist::parse_kv(kv)
+				);
+			}
+		);
+	}
+
+	group.finish();
+}
+
+fn escape(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_menu::ArgList::escape");
+
+	for kv in [
+		"",
+		"Hello",
+		"Hello World",
+		"Hello Joe\'s World",
+	].iter() {
+		group.bench_with_input(
+			BenchmarkId::from_parameter(kv.to_string()),
+			&kv.to_string(),
+			|b, kv| {
+				b.iter(||
+					fyi_menu::arglist::escape(kv.to_string())
+				);
+			}
+		);
+	}
+
+	group.finish();
+}
 
 fn practical(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_menu::ArgList");
@@ -114,6 +162,8 @@ fn pluck_opt(c: &mut Criterion) {
 
 criterion_group!(
 	benches,
+	escape,
+	parse_kv,
 	practical,
 	peek,
 	pluck_switch,
