@@ -76,7 +76,7 @@ fn escape_chars(ch: char) -> bool {
 /// For our purposes, we just want to ensure strings requiring quotes are
 /// single-quoted so as not to be lost entirely, but additional validation
 /// is definitely needed before attempting to use them!
-fn escape(mut s: String) -> String {
+pub fn escape(mut s: String) -> String {
 	// Empty strings need to be quoted so as not to disappear.
 	if s == "" { String::from("''") }
 	// We need to quote it, and escape any single quotes already within it.
@@ -146,30 +146,40 @@ fn leading_dashes(data: &[u8]) -> usize {
 	}
 }
 
+#[must_use]
 /// Parse Key and/or Value From Raw
-fn parse_kv(raw: &str) -> (bool, usize, bool, usize) {
+pub fn parse_kv(raw: &str) -> (Option<usize>, Option<usize>) {
 	let bytes: &[u8] = raw.as_bytes();
 	let len: usize = raw.len();
 	match leading_dashes(bytes).cmp(&1) {
 		// No dashes, treat as a value.
-		Ordering::Less => (false, 0, true, len),
+		Ordering::Less => (None, Some(len)),
 		// One dash.
 		Ordering::Equal =>
 			// If the key is all there is, we're done.
-			if len == 2 { (true, len, false, 0) }
+			if len == 2 { (Some(len), None) }
 			// We can't have something like "-v-v".
-			else if bytes[2] == b'-' { (false, 0, false, 0) }
+			else if bytes[2] == b'-' { (None, None) }
 			// Split it down the middle.
-			else { (true, 2, true, len - 2) }
+			else { (Some(2), Some(len - 2)) }
 		// Two dashes.
-		Ordering::Greater =>
-			// If there is an equal sign, split into a key and
-			// value chunks.
-			if let Some(idx_split) = bytes.iter().skip(3).position(|x| *x == b'=') {
-				(true, idx_split + 3, true, len.saturating_sub(idx_split + 4))
+		Ordering::Greater => {
+			let mut idx = 3;
+			while idx < len {
+				if bytes[idx] == b'=' {
+					if idx + 1 < len {
+						return (Some(idx), Some(len - idx - 1));
+					}
+					else {
+						return (Some(idx), Some(0));
+					}
+				}
+
+				idx += 1;
 			}
-			// Just the key.
-			else { (true, len, false, 0) }
+
+			(Some(len), None)
+		}
 	}
 }
 
@@ -245,8 +255,19 @@ impl From<Vec<String>> for ArgList {
 			// We have a value, a key, or both. Need to dig deeper!
 			else {
 				match parse_kv(&out[idx]) {
+					// Key or Value.
+					(Some(kv), None) | (None, Some(kv)) => {
+						any = true;
+
+						// We might need to shrink it.
+						if kv != out[idx].len() {
+							out[idx].truncate(kv);
+						}
+
+						idx += 1;
+					},
 					// Key *and* value.
-					(true, k, true, v) => {
+					(Some(k), Some(v)) => {
 						let el_len: usize = out[idx].len();
 
 						// Value might be empty.
@@ -265,17 +286,6 @@ impl From<Vec<String>> for ArgList {
 
 						len += 1;
 						idx += 2;
-					},
-					// Key or Value.
-					(true, kv, false, 0) | (false, 0, true, kv) => {
-						any = true;
-
-						// We might need to shrink it.
-						if kv != out[idx].len() {
-							out[idx].truncate(kv);
-						}
-
-						idx += 1;
 					},
 					// Bunk Entry!
 					_ => {
