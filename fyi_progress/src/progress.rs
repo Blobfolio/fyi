@@ -661,19 +661,19 @@ impl ProgressInner {
 
 		// Update our done amount.
 		if self.flags.contains(ProgressFlags::TICK_DONE) {
-			self.buf.replace_part(IDX_DONE, &*NiceInt::from(self.done));
+			self.buf.replace(IDX_DONE, &*NiceInt::from(self.done));
 			self.flags &= !ProgressFlags::TICK_DONE;
 		}
 
 		// Did the total change? Probably not, but just in case...
 		if self.flags.contains(ProgressFlags::TICK_TOTAL) {
-			self.buf.replace_part(IDX_TOTAL, &*NiceInt::from(self.total));
+			self.buf.replace(IDX_TOTAL, &*NiceInt::from(self.total));
 			self.flags &= !ProgressFlags::TICK_TOTAL;
 		}
 
 		// The percent?
 		if self.flags.contains(ProgressFlags::TICK_PERCENT) {
-			self.buf.replace_part(
+			self.buf.replace(
 				IDX_PERCENT,
 				format!("{:>3.*}%", 2, self.percent() * 100.0).as_bytes(),
 			);
@@ -743,11 +743,13 @@ impl ProgressInner {
 		// 2: the braces around the bar itself (should there be one);
 		// 2: the spaces after the bar itself (should there be one);
 		let total: usize = usize::min(255, width.saturating_sub(
-			11 +
-			self.buf.part_len(IDX_ELAPSED) +
-			self.buf.part_len(IDX_DONE) +
-			self.buf.part_len(IDX_TOTAL) +
-			self.buf.part_len(IDX_PERCENT)
+			unsafe {
+				11 +
+				self.buf.p_len(IDX_ELAPSED) +
+				self.buf.p_len(IDX_DONE) +
+				self.buf.p_len(IDX_TOTAL) +
+				self.buf.p_len(IDX_PERCENT)
+			}
 		));
 
 		if total >= 10 { total }
@@ -775,10 +777,10 @@ impl ProgressInner {
 		// We don't have room for it.
 		let bar_len: usize = self.bar_space(self.last_width);
 		if bar_len < 10 {
-			self.buf.clear_part(IDX_BAR);
+			self.buf.clear(IDX_BAR);
 		}
 		else {
-			self.buf.replace_part(
+			self.buf.replace(
 				IDX_BAR,
 				&*ProgressBar::new(self.done, self.total, bar_len)
 			);
@@ -807,13 +809,13 @@ impl ProgressInner {
 	/// This method updates the "tasks" slice.
 	fn redraw_tasks(&mut self) {
 		if self.tasks.is_empty() {
-			self.buf.clear_part(IDX_TASKS);
+			self.buf.clear(IDX_TASKS);
 		}
 		else {
 			// Our formatting eats up 7 printable spaces; the task can use up
 			// whatever else.
 			let width: usize = self.last_width - 7;
-			self.buf.replace_part(
+			self.buf.replace(
 				IDX_TASKS,
 				&self.tasks.iter()
 					.flat_map(|s|
@@ -834,14 +836,14 @@ impl ProgressInner {
 	/// This method updates the "title" slice.
 	fn redraw_title(&mut self) {
 		if self.title.is_empty() {
-			self.buf.clear_part(IDX_TITLE);
+			self.buf.clear(IDX_TITLE);
 		}
 		else {
 			let fit = self.title.fitted_range(self.last_width);
 
 			// The whole thing fits; just add a line break.
 			if fit.end == self.title.len() {
-				self.buf.replace_part(
+				self.buf.replace(
 					IDX_TITLE,
 					&self.title.as_bytes().iter()
 						//       \n
@@ -853,7 +855,7 @@ impl ProgressInner {
 			// It has to be chopped; add an ANSI clear in addition to the line
 			// break to be safe.
 			else {
-				self.buf.replace_part(
+				self.buf.replace(
 					IDX_TITLE,
 					&self.title.as_bytes()[fit].iter()
 						//       \e   [   0    m  \n

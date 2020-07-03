@@ -21,10 +21,6 @@ let msg = Msg::success("Example executed!");
 
 use crate::{
 	MsgBuf,
-	traits::{
-		PrintyPlease,
-		EPrintyPlease,
-	},
 	utility::{
 		ansi_code_bold,
 		time_format_dd,
@@ -226,50 +222,6 @@ impl PartialOrd<&[u8]> for Msg {
 	}
 }
 
-impl PrintyPlease for Msg {
-	/// Print to STDOUT.
-	fn fyi_print(&self) {
-		self.0.fyi_print();
-	}
-
-	/// Print to STDOUT with trailing line.
-	fn fyi_println(&self) {
-		self.0.fyi_println();
-	}
-
-	/// Locked/flushed print to STDOUT.
-	fn fyi_print_flush(&self) {
-		self.0.fyi_print_flush();
-	}
-
-	/// Locked/Flushed print to STDOUT with trailing line.
-	fn fyi_println_flush(&self) {
-		self.0.fyi_println_flush();
-	}
-}
-
-impl EPrintyPlease for Msg {
-	/// Print to STDERR.
-	fn fyi_eprint(&self) {
-		self.0.fyi_eprint();
-	}
-
-	/// Print to STDERR with trailing line.
-	fn fyi_eprintln(&self) {
-		self.0.fyi_eprintln();
-	}
-
-	/// Locked/flushed print to STDERR.
-	fn fyi_eprint_flush(&self) {
-		self.0.fyi_eprint_flush();
-	}
-
-	/// Locked/Flushed print to STDERR with trailing line.
-	fn fyi_eprintln_flush(&self) {
-		self.0.fyi_eprintln_flush();
-	}
-}
-
 
 
 impl Msg {
@@ -350,10 +302,10 @@ impl Msg {
 	pub fn set_indent(&mut self, indent: usize) {
 		let len: usize = usize::min(10, indent) * 4;
 		if 0 == len {
-			self.0.clear_part(IDX_INDENT);
+			self.0.clear(IDX_INDENT);
 		}
 		else {
-			self.0.replace_part(IDX_INDENT, whitespace(len));
+			self.0.replace(IDX_INDENT, whitespace(len));
 		}
 	}
 
@@ -363,30 +315,30 @@ impl Msg {
 
 		// Remove the message.
 		if msg.is_empty() {
-			if ! self.0.part_is_empty(IDX_MSG_PRE) {
-				self.0.clear_part(IDX_MSG_PRE);
-				self.0.clear_part(IDX_MSG);
-				self.0.clear_part(IDX_MSG_POST);
+			if unsafe { ! self.0.p_is_empty(IDX_MSG_PRE) } {
+				self.0.clear(IDX_MSG_PRE);
+				self.0.clear(IDX_MSG);
+				self.0.clear(IDX_MSG_POST);
 			}
 
 			// We might need to change the end of the prefix too.
-			if ! self.0.part_is_empty(IDX_PREFIX_POST) {
-				self.0.replace_part(IDX_PREFIX_POST, &LBL_RESET[..]);
+			if unsafe { ! self.0.p_is_empty(IDX_PREFIX_POST) } {
+				self.0.replace(IDX_PREFIX_POST, &LBL_RESET[..]);
 			}
 		}
 		// Add or change it.
 		else {
 			// The opening and closing needs to be taken care of.
-			if self.0.part_is_empty(IDX_MSG_PRE) {
-				self.0.replace_part(IDX_MSG_PRE, &LBL_MSG_PRE[..]);
-				self.0.replace_part(IDX_MSG_POST, &LBL_RESET[..]);
+			if unsafe { self.0.p_is_empty(IDX_MSG_PRE) } {
+				self.0.replace(IDX_MSG_PRE, &LBL_MSG_PRE[..]);
+				self.0.replace(IDX_MSG_POST, &LBL_RESET[..]);
 			}
 
-			self.0.replace_part(IDX_MSG, msg.as_bytes());
+			self.0.replace(IDX_MSG, msg.as_bytes());
 
 			// We might need to change the end of the prefix too.
-			if ! self.0.part_is_empty(IDX_PREFIX_POST) {
-				self.0.replace_part(IDX_PREFIX_POST, &LBL_PREFIX_POST[..]);
+			if unsafe { ! self.0.p_is_empty(IDX_PREFIX_POST) } {
+				self.0.replace(IDX_PREFIX_POST, &LBL_PREFIX_POST[..]);
 			}
 		}
 	}
@@ -397,30 +349,30 @@ impl Msg {
 
 		// Remove the prefix.
 		if prefix.is_empty() {
-			if ! self.0.part_is_empty(IDX_PREFIX_PRE) {
-				self.0.clear_part(IDX_PREFIX_PRE);
-				self.0.clear_part(IDX_PREFIX);
-				self.0.clear_part(IDX_PREFIX_POST);
+			if unsafe { ! self.0.p_is_empty(IDX_PREFIX_PRE) } {
+				self.0.clear(IDX_PREFIX_PRE);
+				self.0.clear(IDX_PREFIX);
+				self.0.clear(IDX_PREFIX_POST);
 			}
 		}
 		// Add or change it.
 		else {
-			self.0.replace_part(IDX_PREFIX_PRE, ansi_code_bold(prefix_color));
-			self.0.replace_part(IDX_PREFIX, prefix.as_bytes());
-			if self.0.part_is_empty(IDX_MSG_PRE) {
-				self.0.replace_part(IDX_PREFIX_POST, &LBL_RESET[..]);
+			self.0.replace(IDX_PREFIX_PRE, ansi_code_bold(prefix_color));
+			self.0.replace(IDX_PREFIX, prefix.as_bytes());
+			if unsafe { self.0.p_is_empty(IDX_MSG_PRE) } {
+				self.0.replace(IDX_PREFIX_POST, &LBL_RESET[..]);
 			}
 			else {
-				self.0.replace_part(IDX_PREFIX_POST, &LBL_PREFIX_POST[..]);
+				self.0.replace(IDX_PREFIX_POST, &LBL_PREFIX_POST[..]);
 			}
 		}
 	}
 
 	/// Clear Timestamp.
 	pub fn clear_timestamp(&mut self) {
-		self.0.clear_part(IDX_TIMESTAMP_PRE);
-		self.0.clear_part(IDX_TIMESTAMP);
-		self.0.clear_part(IDX_TIMESTAMP_POST);
+		self.0.clear(IDX_TIMESTAMP_PRE);
+		self.0.clear(IDX_TIMESTAMP);
+		self.0.clear(IDX_TIMESTAMP_POST);
 	}
 
 	/// Timestamp.
@@ -432,11 +384,11 @@ impl Msg {
 		};
 
 		// If there wasn't already a timestamp, we need to set the defaults.
-		if self.0.part_is_empty(IDX_TIMESTAMP_PRE) {
-			self.0.replace_part(IDX_TIMESTAMP_PRE, &LBL_TIMESTAMP_PRE[..]);
-			self.0.replace_part(IDX_TIMESTAMP_POST, &LBL_TIMESTAMP_POST[..]);
+		if unsafe { self.0.p_is_empty(IDX_TIMESTAMP_PRE) } {
+			self.0.replace(IDX_TIMESTAMP_PRE, &LBL_TIMESTAMP_PRE[..]);
+			self.0.replace(IDX_TIMESTAMP_POST, &LBL_TIMESTAMP_POST[..]);
 			//                                    2   0   0   0   -   0   0   -   0   0   •   0   0   :   0   0   :   0   0
-			self.0.replace_part(IDX_TIMESTAMP, &[50, 48, 48, 48, 45, 48, 48, 45, 48, 48, 32, 48, 48, 58, 48, 48, 58, 48, 48]);
+			self.0.replace(IDX_TIMESTAMP, &[50, 48, 48, 48, 45, 48, 48, 45, 48, 48, 32, 48, 48, 58, 48, 48, 58, 48, 48]);
 		}
 
 		// And of course, the timestamp.
@@ -459,7 +411,6 @@ impl Msg {
 	// Conversion
 	// ------------------------------------------------------------------------
 
-
 	#[must_use]
 	/// As Bytes
 	pub fn as_bytes(&self) -> &[u8] {
@@ -470,6 +421,42 @@ impl Msg {
 	/// As Str
 	pub fn as_str(&self) -> &str {
 		unsafe { std::str::from_utf8_unchecked(&*self.0) }
+	}
+
+
+
+	// ------------------------------------------------------------------------
+	// Printing
+	// ------------------------------------------------------------------------
+
+	/// Stdout Print.
+	pub fn print(&self) {
+		self.0.print();
+	}
+
+	/// Stdout Print w/ Line.
+	pub fn println(&self) {
+		self.0.println();
+	}
+
+	/// Stderr Print.
+	pub fn eprint(&self) {
+		self.0.eprint();
+	}
+
+	/// Stderr Print w/ Line.
+	pub fn eprintln(&self) {
+		self.0.eprintln();
+	}
+
+	/// Sink Print.
+	pub fn sink(&self) {
+		self.0.sink();
+	}
+
+	/// Stderr Print w/ Line.
+	pub fn sinkln(&self) {
+		self.0.sinkln();
 	}
 
 

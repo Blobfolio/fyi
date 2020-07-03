@@ -70,6 +70,7 @@ fn escape_chars(ch: char) -> bool {
 	}
 }
 
+#[must_use]
 #[allow(clippy::suspicious_else_formatting)]
 /// Escape String (for shell)
 ///
@@ -459,8 +460,7 @@ impl ArgList {
 
 	/// Print an Error and Exit
 	pub fn die<S: Borrow<str>>(msg: S) {
-		use fyi_msg::traits::EPrintyPlease;
-		Msg::error(msg).fyi_eprintln();
+		Msg::error(msg).eprintln();
 		process::exit(1);
 	}
 }

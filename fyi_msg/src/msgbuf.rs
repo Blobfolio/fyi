@@ -1,64 +1,213 @@
 /*!
-# FYI Message: Message Buffer
-
-`MsgBuf` is a light wrapper containing a 1024-capacity `bytes::BytesMut` and a
-partition table to logically slices within the buffer.
-
-This is intended for use within the crate only; it does not implement safety
-checks on its own.
+# FYI Msg: Buffered Message
 */
 
-use bytes::BytesMut;
-use crate::{
-	Partitions,
-	traits::{
-		PrintyPlease,
-		EPrintyPlease,
-	},
-};
+#![allow(missing_debug_implementations)]
+
 use std::{
-	borrow::Borrow,
 	fmt,
+	hash::{
+		Hash,
+		Hasher,
+	},
+	io::{
+		self,
+		Write,
+	},
+	iter::ExactSizeIterator,
 	ops::{
+		self,
 		AddAssign,
 		Deref,
+		DerefMut,
 		Index,
 		IndexMut,
+		Range,
 	},
+	ptr,
 };
 
 
 
-#[derive(Debug, Clone, Hash, PartialEq)]
-/// Message Buffer.
+/// Idx holding size information.
+const P_IDX_COUNT: usize = 15;
+
+/// Min idx for user partition.
+const P_IDX_UMIN: usize = 1;
+
+/// Max idx for user partition.
+const P_IDX_UMAX: usize = 14;
+
+
+/// Traits for Vec<u8>.
 ///
-/// This handles the actual data.
-pub struct MsgBuf {
-	buf: BytesMut,
-	parts: Partitions,
+/// It is simply easier to handle some bits directly!
+pub trait MsgBufVec {
+	/// Grow the Buffer at `idx` by `adj`.
+	fn buf_grow(&mut self, idx: usize, adj: usize);
+	/// Insert Bytes at Position `idx`.
+	fn buf_insert(&mut self, idx: usize, buf: &[u8]);
+	/// Replace a Range of Bytes.
+	fn buf_replace(&mut self, range: Range<usize>, buf: &[u8]);
+	/// Remove a Range from the Buffer.
+	fn buf_snip(&mut self, range: Range<usize>);
 }
 
-impl AddAssign<&[u8]> for MsgBuf {
-	fn add_assign(&mut self, other: &[u8]) {
-		let len: usize = other.len();
-		self.parts += len;
-		if 0 != len {
-			self.buf.extend_from_slice(other);
+impl MsgBufVec for Vec<u8> {
+	/// Grow the Buffer at `idx` by `adj`.
+	///
+	/// This functions like `resize()`, but from the middle. New entries are
+	/// initialized with `0`.
+	///
+	/// Panics if `idx` is greater than the length (but it can *be* the length,
+	/// in which case the bytes are just tacked onto the end).
+	fn buf_grow(&mut self, idx: usize, adj: usize) {
+		assert!(idx <= self.len());
+
+		// Are we just adding to the end?
+		let old_len: usize = self.len();
+		if idx == old_len {
+			self.resize(old_len + adj, 0);
+		}
+		// Shift bits over to make room.
+		else {
+			// Make sure we have the room.
+			self.reserve(adj);
+
+			unsafe {
+				ptr::copy(
+					self.as_ptr().add(idx),
+					self.as_mut_ptr().add(idx + adj),
+					old_len - idx
+				);
+
+				self.set_len(old_len + adj);
+			}
+		}
+	}
+
+	#[allow(clippy::comparison_chain)] // We're only matching 2 of 3 cases.
+	/// Insert Bytes at Position `idx`.
+	///
+	/// This functions like `extend_from_slice()`, but from the middle.
+	///
+	/// Panics if `idx` is out of range.
+	fn buf_insert(&mut self, idx: usize, other: &[u8]) {
+		assert!(idx < self.len());
+
+		// Is there anything to even add?
+		let other_len: usize = other.len();
+		if 1 == other_len {
+			self.insert(idx, other[0]);
+		}
+		else if 1 < other_len {
+			self.buf_grow(idx, other_len);
+
+			unsafe {
+				// Copy the new bits in.
+				ptr::copy_nonoverlapping(
+					other.as_ptr(),
+					self.as_mut_ptr().add(idx),
+					other_len
+				);
+			}
+		}
+	}
+
+	#[allow(clippy::comparison_chain)] // We're only matching 2 of 3 cases.
+	#[allow(clippy::len_zero)] // is_empty() is unstable.
+	/// Replace a Range of Bytes.
+	///
+	/// Perform a ranged replace, copying `other` into that position. The range
+	/// can be bigger or smaller than `other`; elements will be moved left or
+	/// right as needed.
+	///
+	/// Panics if the range falls outside `0..self.len()`.
+	fn buf_replace(&mut self, range: Range<usize>, other: &[u8]) {
+		assert!(range.end <= self.len());
+
+		// Note: unsure if this needs a temporary variable, but hopefully the
+		// compiler will remove it if not.
+		let range_len: usize = range.len();
+
+		// Requires expansion?
+		if range_len < other.len() {
+			self.buf_grow(range.end, other.len() - range_len);
+		}
+		// Requires a snip?
+		else if other.len() < range_len {
+			self.buf_snip(range.start + other.len()..range.end);
+			if other.is_empty() {
+				return;
+			}
+		}
+
+		unsafe {
+			// Copy the new bits in.
+			ptr::copy_nonoverlapping(
+				other.as_ptr(),
+				self.as_mut_ptr().add(range.start),
+				other.len()
+			);
+		}
+	}
+
+	/// Remove a Range from the Buffer.
+	///
+	/// This removes bytes within the range, shifting anything after left to
+	/// fill the gaps.
+	///
+	/// Panics if the range falls outside `0..self.len()`.
+	fn buf_snip(&mut self, range: Range<usize>) {
+		assert!(range.end <= self.len());
+
+		// Coming from the end?
+		if range.end == self.len() {
+			self.truncate(range.start);
+		}
+		// Shift bytes over, then shrink.
+		else {
+			let old_len: usize = self.len();
+			unsafe {
+				ptr::copy(
+					self.as_ptr().add(range.end),
+					self.as_mut_ptr().add(range.start),
+					old_len - range.end
+				);
+
+				self.set_len(old_len - range.len());
+			}
 		}
 	}
 }
 
-impl Borrow<[u8]> for MsgBuf {
-	fn borrow(&self) -> &[u8] {
-		&*self.buf
+
+
+#[derive(Debug, Clone)]
+/// Message Buffer!
+pub struct MsgBuf {
+	/// The full string buffer.
+	buf: Vec<u8>,
+
+	/// The partition table.
+	///
+	/// The first `[0]` is always zero, marking the range start. Slices `[1]`
+	/// through `[14]` mark the range ends for each used part. The last slice
+	/// `[15]` keeps track of the number of parts actually in use.
+	p: [usize; 16],
+}
+
+impl AddAssign<&[u8]> for MsgBuf {
+	fn add_assign(&mut self, other: &[u8]) {
+		self.add(other);
 	}
 }
 
 impl Default for MsgBuf {
 	fn default() -> Self {
 		Self {
-			buf: BytesMut::with_capacity(1024),
-			parts: Partitions::default(),
+			buf: Vec::with_capacity(1024),
+			p: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 		}
 	}
 }
@@ -67,308 +216,667 @@ impl Deref for MsgBuf {
 	type Target = [u8];
 
 	fn deref(&self) -> &Self::Target {
-		&*self.buf
+		&self.buf[..]
+	}
+}
+
+impl DerefMut for MsgBuf {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.buf[..]
 	}
 }
 
 impl fmt::Display for MsgBuf {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str(unsafe { std::str::from_utf8_unchecked(&*self.buf) })
+		f.write_str(self.as_str())
 	}
 }
 
-impl<'a> From<&'a [u8]> for MsgBuf {
-	fn from(buf: &'a [u8]) -> Self {
+impl Eq for MsgBuf {}
+
+impl From<&str> for MsgBuf {
+	fn from(raw: &str) -> Self {
 		Self {
-			buf: BytesMut::from(buf),
-			parts: Partitions::one(buf.len()),
+			p: [0, raw.len(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+			buf: raw.as_bytes().to_vec(),
 		}
 	}
 }
 
-/// Handle all the stupid slice sizes since this doesn't coerce. Haha.
-macro_rules! from_many {
+impl From<String> for MsgBuf {
+	fn from(raw: String) -> Self {
+		<Self as From<&str>>::from(&raw)
+	}
+}
+
+impl From<&[u8]> for MsgBuf {
+	fn from(raw: &[u8]) -> Self {
+		Self {
+			p: [0, raw.len(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+			buf: raw.to_vec(),
+		}
+	}
+}
+
+impl From<Vec<u8>> for MsgBuf {
+	fn from(raw: Vec<u8>) -> Self {
+		Self {
+			p: [0, raw.len(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+			buf: raw,
+		}
+	}
+}
+
+impl From<&[&[u8]]> for MsgBuf {
+	fn from(raw: &[&[u8]]) -> Self {
+		let mut out = Self::default();
+		let len: usize = raw.len().min(P_IDX_UMAX);
+		let ptr = out.p.as_mut_ptr();
+
+		unsafe {
+			// Set the count.
+			ptr.add(P_IDX_COUNT).write(len);
+
+			let mut idx: usize = 0;
+			while idx < len {
+				let len2: usize = raw[idx].len();
+				if 0 == len2 {
+					ptr.add(idx + 1).copy_from_nonoverlapping(ptr.add(idx), 1);
+				}
+				else {
+					out.buf.extend_from_slice(raw[idx]);
+					ptr.add(idx + 1).write(*ptr.add(idx) + len2);
+				}
+
+				idx += 1;
+			}
+		}
+
+		out
+	}
+}
+
+impl From<&[&[u8]; 0]> for MsgBuf {
+	fn from(_: &[&[u8]; 0]) -> Self {
+		Self {
+			buf: Vec::with_capacity(1024),
+			p: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+		}
+	}
+}
+
+impl From<&[&[u8]; 1]> for MsgBuf {
+	fn from(raw: &[&[u8]; 1]) -> Self {
+		Self {
+			p: [0, raw[0].len(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+			buf: raw[0].to_vec(),
+		}
+	}
+}
+
+macro_rules! from_u8s {
 	($size:literal) => {
-		impl<'a> From<&'a [&'a [u8]; $size]> for MsgBuf {
-			fn from(bufs: &'a [&'a [u8]; $size]) -> Self {
+		impl From<&[&[u8]; $size]> for MsgBuf {
+			fn from(raw: &[&[u8]; $size]) -> Self {
 				let mut out = Self::default();
-				bufs.iter().for_each(|b| { out += b; });
+				let ptr = out.p.as_mut_ptr();
+
+				unsafe {
+					// Set the count.
+					ptr.add(P_IDX_COUNT).write($size);
+
+					let mut idx: usize = 0;
+					while idx < $size {
+						let len2: usize = raw[idx].len();
+						if 0 == len2 {
+							ptr.add(idx + 1).copy_from_nonoverlapping(ptr.add(idx), 1);
+						}
+						else {
+							out.buf.extend_from_slice(raw[idx]);
+							ptr.add(idx + 1).write(*ptr.add(idx) + len2);
+						}
+
+						idx += 1;
+					}
+				}
+
 				out
 			}
 		}
 	};
 }
 
-/// Optimized From Empty.
-impl<'a> From<&'a [&'a [u8]; 0]> for MsgBuf {
-	fn from(_bufs: &'a [&'a [u8]; 0]) -> Self {
-		Self::default()
-	}
-}
+from_u8s!(2);
+from_u8s!(3);
+from_u8s!(4);
+from_u8s!(5);
+from_u8s!(6);
+from_u8s!(7);
+from_u8s!(8);
+from_u8s!(9);
+from_u8s!(10);
+from_u8s!(11);
+from_u8s!(12);
+from_u8s!(13);
+from_u8s!(14);
 
-/// Optimized From One.
-impl<'a> From<&'a [&'a [u8]; 1]> for MsgBuf {
-	fn from(bufs: &'a [&'a [u8]; 1]) -> Self {
-		Self {
-			buf: BytesMut::from(bufs[0]),
-			parts: Partitions::one(bufs[0].len()),
+impl From<Vec<Vec<u8>>> for MsgBuf {
+	fn from(raw: Vec<Vec<u8>>) -> Self {
+		let mut out = Self::default();
+		let len: usize = raw.len().min(P_IDX_UMAX);
+		let ptr = out.p.as_mut_ptr();
+
+		unsafe {
+			// Set the count.
+			ptr.add(P_IDX_COUNT).write(len);
+
+			let mut idx: usize = 0;
+			while idx < len {
+				let len2: usize = raw[idx].len();
+				if 0 == len2 {
+					ptr.add(idx + 1).copy_from_nonoverlapping(ptr.add(idx), 1);
+				}
+				else {
+					out.buf.extend_from_slice(&raw[idx]);
+					ptr.add(idx + 1).write(*ptr.add(idx) + len2);
+				}
+
+				idx += 1;
+			}
 		}
+
+		out
 	}
 }
 
-from_many!(2);
-from_many!(3);
-from_many!(4);
-from_many!(5);
-from_many!(6);
-from_many!(7);
-from_many!(8);
-from_many!(9);
-from_many!(10);
-from_many!(11);
-from_many!(12);
-from_many!(13);
-from_many!(14);
-from_many!(15);
+impl Hash for MsgBuf {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.buf.hash(state);
+		self.p_used().hash(state);
+	}
+}
 
 impl Index<usize> for MsgBuf {
 	type Output = [u8];
 
 	fn index(&self, idx: usize) -> &Self::Output {
-		&self.buf[self.parts.part(idx)]
+		self.get(idx)
 	}
 }
 
 impl IndexMut<usize> for MsgBuf {
 	fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
-		&mut self.buf[self.parts.part(idx)]
+		self.get_mut(idx)
+	}
+}
+
+impl PartialEq for MsgBuf {
+	fn eq(&self, other: &Self) -> bool {
+		self.buf == other.buf && self.p_used() == other.p_used()
+	}
+}
+
+impl PartialEq<[u8]> for MsgBuf {
+	fn eq(&self, other: &[u8]) -> bool {
+		self.buf == other
+	}
+}
+
+impl PartialEq<&[u8]> for MsgBuf {
+	fn eq(&self, other: &&[u8]) -> bool {
+		self.buf == *other
+	}
+}
+
+impl PartialEq<Vec<u8>> for MsgBuf {
+	fn eq(&self, other: &Vec<u8>) -> bool {
+		&self.buf == other
 	}
 }
 
 impl MsgBuf {
 	// ------------------------------------------------------------------------
-	// Instantiation
+	// Shiva
 	// ------------------------------------------------------------------------
-
 
 	#[must_use]
 	/// New
 	///
-	/// Create a new `MsgBuf` from a single buffer with pre-calculated
-	/// partition sizes. If the chunk total is lower than the buffer's length,
-	/// an additional chunk will be created to fill the gap.
+	/// Create a new `MsgBuf` from a single buffer with pre-determined
+	/// partition sizes. The last partition will automatically be adjusted to
+	/// cover the buffer in cases where it falls short.
 	///
-	/// Panics if more than 15 parts are constructed or the chunks add up to
-	/// more than the buffer's length.
+	/// Panics if there are more parts than allowed.
 	pub fn new(buf: &[u8], parts: &[usize]) -> Self {
-		Self {
-			buf: BytesMut::from(buf),
-			parts: Partitions::new_bounded(parts, buf.len()),
+		assert!(parts.len() <= P_IDX_UMAX);
+
+		// Don't waste time on small shit.
+		if parts.len() <= 1 {
+			return Self::from(buf);
 		}
+
+		Self {
+			buf: Vec::from(buf),
+			p: {
+				let mut p: [usize; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, parts.len()];
+				let max: usize = buf.len();
+				let last: usize = 0;
+				let mut idx: usize = 0;
+
+				while idx < parts.len() {
+					if last == max {
+						p[idx + 1] = max;
+					}
+					else {
+						p[idx + 1] = usize::min(max, last + parts[idx]);
+					}
+
+					idx += 1;
+				}
+
+				if last != max {
+					p[parts.len()] = max;
+				}
+
+				p
+			}
+		}
+	}
+
+	/// Reset the Whole Thing.
+	///
+	/// This will clear the buffer and remove all parts, without reallocating.
+	pub fn reset(&mut self) {
+		self.buf.clear();
+		unsafe { self.p.as_mut_ptr().add(P_IDX_COUNT).write(0); }
 	}
 
 	#[must_use]
 	/// Splat
 	///
 	/// Create a new `MsgBuf` with `num` empty parts.
-	///
-	/// Panics if there are more than `15` parts.
 	pub fn splat(num: usize) -> Self {
 		Self {
-			buf: BytesMut::with_capacity(1024),
-			parts: Partitions::splat(num),
+			buf: Vec::with_capacity(1024),
+			p: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, num.min(P_IDX_UMAX)],
 		}
 	}
 
-
-
 	// ------------------------------------------------------------------------
-	// Working on the Whole
+	// State
 	// ------------------------------------------------------------------------
 
-	/// Clear
-	///
-	/// Clear the buffer and partitioning table, restoring the instance to the
-	/// equivalent of `default()` (save for any allocations that already
-	/// happened).
-	///
-	/// See also `zero()`, which leaves behind one zero-length partition.
-	pub fn clear(&mut self) {
-		self.buf.clear();
-		self.parts.clear();
-	}
-
-	/// Flatten
-	///
-	/// Keep the buffer, but drop to a single, spanning partition.
-	pub fn flatten(&mut self) {
-		self.parts.flatten();
-	}
-
 	#[must_use]
-	/// Buffer Is Empty.
-	///
-	/// Technically, we're testing the parts rather than the buffer since that
-	/// lets us make this a `const fn`.
-	pub const fn is_empty(&self) -> bool {
-		0 == self.parts.max()
-	}
-
-	#[must_use]
-	/// Buffer length.
-	///
-	/// Same as with `is_empty()`, we're technically checking the parts rather
-	/// than the buffer since that lets us make this a `const fn`.
+	/// Len.
 	pub const fn len(&self) -> usize {
-		self.parts.max()
+		self.p[self.p[P_IDX_COUNT]]
 	}
 
-	/// Zero
+	#[must_use]
+	/// Is Empty.
+	pub const fn is_empty(&self) -> bool {
+		self.p[self.p[P_IDX_COUNT]] == 0
+	}
+
+	#[must_use]
+	/// Number of Partitions.
+	pub const fn count(&self) -> usize {
+		self.p[P_IDX_COUNT]
+	}
+
+	#[must_use]
+	/// Part.
 	///
-	/// Clear the buffer, but keep one empty partition.
-	pub fn zero(&mut self) {
-		self.buf.clear();
-		self.parts.zero();
+	/// # Safety
+	/// `idx` must be previously validated to be in range.
+	pub const unsafe fn p(&self, idx: usize) -> ops::Range<usize> {
+		ops::Range{
+			start: self.p[idx - 1],
+			end: self.p[idx],
+		}
+	}
+
+	#[must_use]
+	/// Partition Length.
+	///
+	/// # Safety
+	/// `idx` must be previously validated to be in range.
+	pub const unsafe fn p_len(&self, idx: usize) -> usize {
+		self.p[idx] - self.p[idx - 1]
+	}
+
+	#[must_use]
+	/// Partition Is Empty.
+	///
+	/// # Safety
+	/// `idx` must be previously validated to be in range.
+	pub const unsafe fn p_is_empty(&self, idx: usize) -> bool {
+		self.p[idx] - self.p[idx - 1] == 0
+	}
+
+	#[must_use]
+	/// Return Used Parts
+	///
+	/// This is mostly used for hashing purposes.
+	pub fn p_used(&self) -> &[usize] {
+		&self.p[0..=self.p[P_IDX_COUNT]]
+	}
+
+	#[must_use]
+	/// Partition Is Used?
+	pub fn p_is_used(&self, idx: usize) -> bool {
+		P_IDX_UMIN <= idx && idx <= self.p[P_IDX_COUNT]
 	}
 
 
 
 	// ------------------------------------------------------------------------
-	// Fetching Parts
+	// Access
 	// ------------------------------------------------------------------------
 
-
 	#[must_use]
-	/// Number of Parts.
-	pub const fn parts_len(&self) -> usize {
-		self.parts.len()
+	/// As Slice.
+	pub fn as_bytes(&self) -> &[u8] {
+		&self.buf[..]
 	}
 
 	#[must_use]
-	/// Spread.
-	///
-	/// Return the contiguous spread of two parts.
-	///
-	/// Panics if `idx1` or `idx2` are out of range.
+	/// As Slice.
+	pub fn as_bytes_mut(&mut self) -> &mut [u8] {
+		&mut self.buf[..]
+	}
+
+	#[must_use]
+	/// As String.
+	pub fn as_str(&self) -> &str {
+		unsafe { std::str::from_utf8_unchecked(&self.buf[..]) }
+	}
+
+	#[must_use]
+	/// To Vec.
+	pub fn to_vec(&self) -> Vec<u8> {
+		self.buf.clone()
+	}
+
+	#[must_use]
+	/// Partition.
+	pub fn get(&self, idx: usize) -> &[u8] {
+		assert!(self.p_is_used(idx));
+
+		&self.buf[unsafe { self.p(idx) }]
+	}
+
+	#[must_use]
+	/// Partition Mut.
+	pub fn get_mut(&mut self, idx: usize) -> &mut [u8] {
+		assert!(self.p_is_used(idx));
+
+		let prg = unsafe { self.p(idx) };
+		&mut self.buf[prg]
+	}
+
+	#[must_use]
+	/// Partition Spread.
 	pub fn spread(&self, idx1: usize, idx2: usize) -> &[u8] {
-		&self.buf[self.parts.spread(idx1, idx2)]
-	}
+		assert!(P_IDX_UMIN <= idx1 && idx1 < idx2 && idx2 <= self.count());
 
-	#[must_use]
-	/// Spread Mut.
-	///
-	/// Return the contiguous spread of two parts.
-	///
-	/// Panics if `idx1` or `idx2` are out of range.
-	pub fn spread_mut(&mut self, idx1: usize, idx2: usize) -> &mut [u8] {
-		&mut self.buf[self.parts.spread(idx1, idx2)]
-	}
-
-	#[must_use]
-	/// Is Part Empty
-	///
-	/// Panics if `idx` is out of range.
-	pub const fn part_is_empty(&self, idx: usize) -> bool {
-		self.parts.part_is_empty(idx)
-	}
-
-	#[must_use]
-	/// Get Part Length
-	///
-	/// Panics if `idx` is out of range.
-	pub const fn part_len(&self, idx: usize) -> usize {
-		self.parts.part_len(idx)
+		&self.buf[self.p[idx1 - 1]..self.p[idx2]]
 	}
 
 
 
 	// ------------------------------------------------------------------------
-	// Adding/Removing Parts
+	// Adding
 	// ------------------------------------------------------------------------
 
-	/// Insert Part
+	/// Add Part (to End).
 	///
-	/// Panics if `idx` is out of bounds or the table is full.
-	pub fn insert_part(&mut self, idx: usize, buf: &[u8]) {
+	/// Panics if the maximum number of parts has already been reached.
+	pub fn add(&mut self, buf: &[u8]) {
+		assert!(self.count() < P_IDX_UMAX);
+
+		// Just increase the part count.
+		if buf.is_empty() {
+			let ptr = self.p.as_mut_ptr();
+			unsafe {
+				let count: usize = *ptr.add(P_IDX_COUNT);
+				// Copy the previous point since this has no length.
+				ptr.add(count + 1).copy_from_nonoverlapping(ptr.add(count), 1);
+				// Update the count count.
+				*ptr.add(P_IDX_COUNT) += 1;
+			}
+		}
+		else {
+			self.buf.extend_from_slice(buf);
+
+			let ptr = self.p.as_mut_ptr();
+			unsafe {
+				let count: usize = *ptr.add(P_IDX_COUNT);
+				// Copy the previous point since this has no length.
+				ptr.add(count + 1).write(*ptr.add(count) + buf.len());
+				// Update the count count.
+				*ptr.add(P_IDX_COUNT) += 1;
+			}
+		}
+	}
+
+	/// Insert Part At `idx`
+	///
+	/// Insert a part and shove everything previously at or after `idx` to the
+	/// right.
+	///
+	/// Panics if the maximum number of parts has already been reached or `idx`
+	/// is out of range.
+	pub fn insert(&mut self, idx: usize, buf: &[u8]) {
+		assert!(self.count() < P_IDX_UMAX && self.p_is_used(idx));
+
+		self.buf.buf_insert(self.p[idx - 1], buf);
+
+		// Adjusting the part table takes a bit more.
 		let len: usize = buf.len();
-		if 0 != len {
-			// Grow before the start of the position.
-			let start: usize = self.parts[idx - 1];
-			let adj: usize = buf.len();
-			self.grow_buffer_at(start, adj);
-
-			// Copy the new data to that spot.
-			let end: usize = start + adj;
-			self.buf[start..end].copy_from_slice(buf);
+		let mut tail_idx: usize = self.count() + 1;
+		let ptr = self.p.as_mut_ptr();
+		unsafe {
+			*ptr.add(P_IDX_COUNT) += 1;
+			// Empty parts can be straight copies.
+			if len == 0 {
+				while tail_idx >= idx {
+					ptr.add(tail_idx).copy_from_nonoverlapping(ptr.add(tail_idx - 1), 1);
+					tail_idx -= 1;
+				}
+			}
+			// Otherwise we need to write some math.
+			else {
+				while tail_idx >= idx {
+					ptr.add(tail_idx).write(*ptr.add(tail_idx - 1) + len);
+					tail_idx -= 1;
+				}
+			}
 		}
-
-		// Realign the partitions.
-		self.parts.insert_part(idx, len);
-	}
-
-	/// Remove Part
-	///
-	/// Panics if `idx` is out of bounds.
-	pub fn remove_part(&mut self, idx: usize) {
-		let len: usize = self.parts.part_len(idx);
-		// Shrink the buffer.
-		if 0 != len {
-			self.shrink_buffer_at(self.parts[idx], len);
-		}
-
-		// Realign the partitions.
-		self.parts.remove_part(idx);
 	}
 
 
 
 	// ------------------------------------------------------------------------
-	// Changing Parts
+	// Editing
 	// ------------------------------------------------------------------------
 
-	/// Clear Part
+	/// Clear Part.
 	///
-	/// Panics if `idx` is out of bounds.
-	pub fn clear_part(&mut self, idx: usize) {
-		let len: usize = self.parts.part_len(idx);
-		if 0 != len {
-			// Shrink the buffer.
-			self.shrink_buffer_at(self.parts[idx], len);
+	/// Like `remove()`, except the part is kept at zero-length.
+	///
+	/// Panics if `idx` is out of range.
+	pub fn clear(&mut self, idx: usize) {
+		assert!(self.p_is_used(idx));
 
-			// Realign the partitions.
-			self.parts.shrink_part(idx, len);
+		let len: usize = unsafe { self.p_len(idx) };
+		if 0 != len {
+			self.buf.buf_snip(unsafe { self.p(idx) });
+			unsafe { self.p_shrink(idx, len); }
 		}
 	}
 
-	#[allow(clippy::comparison_chain)] // False positive: match len.cmp()
-	/// Replace Part
+	/// Extend Part.
 	///
-	/// Panics if `idx` is out of bounds.
-	pub fn replace_part(&mut self, idx: usize, buf: &[u8]) {
-		// Check the new size first; we might just need to clear the buffer.
+	/// This adds data onto part `idx`.
+	///
+	/// Panics if `idx` is out of range.
+	pub fn extend(&mut self, idx: usize, buf: &[u8]) {
+		assert!(self.p_is_used(idx));
+
+		if ! buf.is_empty() {
+			self.buf.buf_insert(self.p[idx], buf);
+			unsafe { self.p_grow(idx, buf.len()); }
+		}
+	}
+
+	/// Flatten Parts.
+	pub fn flatten(&mut self) {
+		let ptr = self.p.as_mut_ptr();
+		unsafe {
+			if 1 < *ptr.add(P_IDX_COUNT) {
+				ptr.add(1).copy_from_nonoverlapping(ptr.add(P_IDX_COUNT), 1);
+				ptr.add(P_IDX_COUNT).write(1);
+			}
+		}
+	}
+
+	/// Remove Part.
+	///
+	/// Panics if `idx` is out of range.
+	pub fn remove(&mut self, mut idx: usize) {
+		assert!(self.p_is_used(idx));
+
+		let len: usize = unsafe { self.p_len(idx) };
+
+		// If the partition is empty, we can just shift everything down.
+		if 0 == len {
+			let ptr = self.p.as_mut_ptr();
+			unsafe {
+				let count: usize = *ptr.add(P_IDX_COUNT);
+				while idx < count {
+					ptr.add(idx).copy_from_nonoverlapping(ptr.add(idx + 1), 1);
+					idx += 1;
+				}
+
+				*ptr.add(P_IDX_COUNT) -= 1;
+			}
+		}
+		// Otherwise we need to cut it from the buffer and rewrite all other
+		// entries.
+		else {
+			self.buf.buf_snip(unsafe { self.p(idx) });
+
+			let ptr = self.p.as_mut_ptr();
+			unsafe {
+				let count: usize = *ptr.add(P_IDX_COUNT);
+				while idx < count {
+					ptr.add(idx).write(*ptr.add(idx + 1) - len);
+					idx += 1;
+				}
+
+				*ptr.add(P_IDX_COUNT) -= 1;
+			}
+		}
+	}
+
+	#[allow(clippy::comparison_chain)] // We're only matching 2 of 3 cases.
+	/// Replace Part.
+	///
+	/// Replace a part with new data, which can be any size.
+	///
+	/// Panics if `idx` is out of range.
+	pub fn replace(&mut self, idx: usize, buf: &[u8]) {
+		assert!(self.p_is_used(idx));
+
+		// If the buffer is empty, just run `clear()` instead.
 		let new_len: usize = buf.len();
 		if 0 == new_len {
-			self.clear_part(idx);
-			return;
+			return self.clear(idx);
 		}
 
-		let old_len: usize = self.parts.part_len(idx);
+		// Update the buffer.
+		self.buf.buf_replace(unsafe { self.p(idx) }, buf);
 
-		// Grow the part to size.
-		if new_len > old_len {
-			let adj: usize = new_len - old_len;
-			self.grow_buffer_at(self.parts[idx], adj);
-			self.parts.grow_part(idx, adj);
+		// We have to adjust the partition table if the length changed.
+		let old_len: usize = unsafe { self.p_len(idx) };
+		if old_len < new_len {
+			unsafe { self.p_grow(idx, new_len - old_len); }
 		}
-		// Shrink the part to size.
-		else if old_len > new_len {
-			let adj: usize = old_len - new_len;
-			self.shrink_buffer_at(self.parts[idx], adj);
-			self.parts.shrink_part(idx, adj);
+		else if new_len < old_len {
+			unsafe { self.p_shrink(idx, old_len - new_len); }
 		}
+	}
 
-		// Sizes match, now we can copy!
-		self.buf[self.parts.part(idx)].copy_from_slice(buf);
+	/// Truncate.
+	///
+	/// Reduce the length of part `idx` to `len`. This does nothing if the
+	/// length is already at or lower than `len`.
+	///
+	/// Panics if `idx` is out of range.
+	pub fn truncate(&mut self, idx: usize, len: usize) {
+		assert!(self.p_is_used(idx));
+
+		let end: usize = self.p[idx - 1] + len;
+		if end < self.p[idx] {
+			self.buf.buf_snip(self.p[idx - 1]..end);
+			unsafe { self.p_shrink(idx, self.p[idx] - end); }
+		}
+	}
+
+
+
+	// ------------------------------------------------------------------------
+	// Printing
+	// ------------------------------------------------------------------------
+
+	/// Stdout Print.
+	pub fn print(&self) {
+		let writer = std::io::stdout();
+		let mut handle = writer.lock();
+		handle.write_all(&self.buf).unwrap();
+		handle.flush().unwrap();
+	}
+
+	/// Stdout Print w/ Line.
+	pub fn println(&self) {
+		let writer = std::io::stdout();
+		let mut handle = writer.lock();
+		handle.write_all(&self.buf).unwrap();
+		handle.write_all(&[10]).unwrap();
+		handle.flush().unwrap();
+	}
+
+	/// Stderr Print.
+	pub fn eprint(&self) {
+		let writer = std::io::stderr();
+		let mut handle = writer.lock();
+		handle.write_all(&self.buf).unwrap();
+		handle.flush().unwrap();
+	}
+
+	/// Stderr Print w/ Line.
+	pub fn eprintln(&self) {
+		let writer = std::io::stderr();
+		let mut handle = writer.lock();
+		handle.write_all(&self.buf).unwrap();
+		handle.write_all(&[10]).unwrap();
+		handle.flush().unwrap();
+	}
+
+	/// Sink Print.
+	pub fn sink(&self) {
+		let mut handle = io::sink();
+		handle.write_all(&self.buf).unwrap();
+		handle.flush().unwrap();
+	}
+
+	/// Stderr Print w/ Line.
+	pub fn sinkln(&self) {
+		let mut handle = io::sink();
+		handle.write_all(&self.buf).unwrap();
+		handle.write_all(&[10]).unwrap();
+		handle.flush().unwrap();
 	}
 
 
@@ -377,106 +885,42 @@ impl MsgBuf {
 	// Internal Helpers
 	// ------------------------------------------------------------------------
 
-	/// Grow Buffer At/By
+	/// Grow & Shift Partitions
 	///
-	/// Insert `adj` zeroes into the buffer at `pos - 1`.
-	fn grow_buffer_at(&mut self, pos: usize, adj: usize) {
-		let len: usize = self.buf.len();
-
-		// If it is at the end, we can just work straight on the buffer.
-		if pos == len {
-			self.buf.resize(pos + adj, 0);
-		}
-		// Otherwise we need split, fiddle, and glue it up.
-		else {
-			let b = self.buf.split_off(pos);
-			self.buf.resize(pos + adj, 0);
-			self.buf.unsplit(b);
-		}
-	}
-
-	/// Shrink Buffer At/By
+	/// The "length" of `idx` is increased by `len`, then all subsequent
+	/// entries are shifted up accordingly (while maintaining their original
+	/// "lengths".)
 	///
-	/// Remove the previous `adj` bytes preceding position `pos`.
-	fn shrink_buffer_at(&mut self, pos: usize, adj: usize) {
-		let len: usize = self.buf.len();
-
-		// If it is at the end, we can just work straight on the buffer.
-		if pos == len {
-			self.buf.truncate(pos - adj);
-		}
-		// Otherwise we need split, fiddle, and glue it up.
-		else {
-			let b = self.buf.split_off(pos);
-			self.buf.truncate(pos - adj);
-			self.buf.unsplit(b);
+	/// # Safety
+	/// The index must have already been verified to exist.
+	unsafe fn p_grow(&mut self, mut idx: usize, len: usize) {
+		let ptr = self.p.as_mut_ptr();
+		let count: usize = *ptr.add(P_IDX_COUNT);
+		while idx <= count {
+			*ptr.add(idx) += len;
+			idx += 1;
 		}
 	}
-}
 
+	/// Shrink & Shift Partitions
+	///
+	/// The "length" of `idx` is decreased by `len`, then all subsequent
+	/// entries are shifted down accordingly (while maintaining their original
+	/// "lengths".)
+	///
+	/// Panics if `len` is greater than `self.p[idx]`.
+	///
+	/// # Safety
+	/// The index must have already been verified to exist.
+	unsafe fn p_shrink(&mut self, mut idx: usize, len: usize) {
+		assert!(self.p[idx] >= len);
 
-
-impl PrintyPlease for MsgBuf {
-	/// Print to STDOUT.
-	fn fyi_print(&self) {
-		use std::io::Write;
-		std::io::stdout().write_all(&self.buf).unwrap();
-	}
-
-	/// Print to STDOUT with trailing line.
-	fn fyi_println(&self) {
-		use std::io::Write;
-		std::io::stdout().write_all(&self.buf.iter().chain(&[10]).copied().collect::<Vec<u8>>()).unwrap();
-	}
-
-	/// Locked/flushed print to STDOUT.
-	fn fyi_print_flush(&self) {
-		use std::io::Write;
-		let writer = std::io::stdout();
-		let mut handle = writer.lock();
-		handle.write_all(&self.buf).unwrap();
-		handle.flush().unwrap();
-	}
-
-	/// Locked/Flushed print to STDOUT with trailing line.
-	fn fyi_println_flush(&self) {
-		use std::io::Write;
-		let writer = std::io::stdout();
-		let mut handle = writer.lock();
-		handle.write_all(&self.buf.iter().chain(&[10]).copied().collect::<Vec<u8>>()).unwrap();
-		handle.flush().unwrap();
-	}
-}
-
-impl EPrintyPlease for MsgBuf {
-	/// Print to STDERR.
-	fn fyi_eprint(&self) {
-		use std::io::Write;
-		std::io::stderr().write_all(&self.buf).unwrap();
-	}
-
-	/// Print to STDERR with trailing line.
-	fn fyi_eprintln(&self) {
-		use std::io::Write;
-		std::io::stderr().write_all(&self.buf.iter().chain(&[10]).copied().collect::<Vec<u8>>()).unwrap();
-	}
-
-	/// Locked/flushed print to STDERR.
-	fn fyi_eprint_flush(&self) {
-		use std::io::Write;
-		let writer = std::io::stderr();
-		let mut handle = writer.lock();
-		handle.write_all(&self.buf).unwrap();
-		handle.flush().unwrap();
-	}
-
-	/// Locked/Flushed print to STDERR with trailing line.
-	fn fyi_eprintln_flush(&self) {
-		use std::io::Write;
-		let writer = std::io::stderr();
-		let mut handle = writer.lock();
-		handle.write_all(&self.buf.iter().chain(&[10]).copied().collect::<Vec<u8>>()).unwrap();
-		handle.flush().unwrap();
+		let ptr = self.p.as_mut_ptr();
+		let count: usize = *ptr.add(P_IDX_COUNT);
+		while idx <= count {
+			*ptr.add(idx) -= len;
+			idx += 1;
+		}
 	}
 }
 
@@ -499,36 +943,40 @@ mod tests {
 		// New empty.
 		let mut buf = MsgBuf::new(&[], &[]);
 		assert_eq!(buf.len(), 0);
-		assert_eq!(buf.parts_len(), 1);
-		assert_eq!(buf.part_len(1), 0);
+		assert_eq!(buf.count(), 1);
+		unsafe { assert_eq!(buf.p_len(1), 0); }
 
 		// New filled, no parts.
 		buf = MsgBuf::new(SM1, &[]);
 		assert_eq!(buf.len(), SM1.len());
-		assert_eq!(buf.parts_len(), 1);
-		assert_eq!(buf.part_len(1), SM1.len());
+		assert_eq!(buf.count(), 1);
+		unsafe { assert_eq!(buf.p_len(1), SM1.len()); }
+		assert_eq!(buf.get(1), SM1);
 		assert_eq!(&buf[1], SM1);
 
 		// New filled, spanning part.
 		buf = MsgBuf::new(SM1, &[SM1.len()]);
 		assert_eq!(buf.len(), SM1.len());
-		assert_eq!(buf.parts_len(), 1);
-		assert_eq!(buf.part_len(1), SM1.len());
+		assert_eq!(buf.count(), 1);
+		unsafe { assert_eq!(buf.p_len(1), SM1.len()); }
+		assert_eq!(buf.get(1), SM1);
 		assert_eq!(&buf[1], SM1);
 
 		// New filled, 2 parts.
 		buf = MsgBuf::new(LG1, &[4, 5]);
 		assert_eq!(buf.len(), LG1.len());
-		assert_eq!(buf.parts_len(), 2);
+		assert_eq!(buf.count(), 2);
+		assert_eq!(buf.get(1), &b"dino"[..]);
+		assert_eq!(buf.get(2), &b"saurs"[..]);
 		assert_eq!(&buf[1], &b"dino"[..]);
 		assert_eq!(&buf[2], &b"saurs"[..]);
 
 		// New filled, 2 parts (implied).
 		buf = MsgBuf::new(LG1, &[4]);
 		assert_eq!(buf.len(), LG1.len());
-		assert_eq!(buf.parts_len(), 2);
-		assert_eq!(&buf[1], &b"dino"[..]);
-		assert_eq!(&buf[2], &b"saurs"[..]);
+		assert_eq!(buf.count(), 1);
+		assert_eq!(buf.get(1), &b"dinosaurs"[..]);
+		assert_eq!(&buf[1], &b"dinosaurs"[..]);
 	}
 
 	#[test]
@@ -536,146 +984,135 @@ mod tests {
 		// From empty.
 		let mut buf = <MsgBuf as From<&[u8]>>::from(&[]);
 		assert_eq!(buf.len(), 0);
-		assert_eq!(buf.parts_len(), 1);
-		assert_eq!(buf.part_len(1), 0);
+		assert_eq!(buf.count(), 1);
+		unsafe { assert_eq!(buf.p_len(1), 0); }
 
 		// From filled.
 		buf = MsgBuf::from(SM1);
 		assert_eq!(buf.len(), SM1.len());
-		assert_eq!(buf.parts_len(), 1);
-		assert_eq!(buf.part_len(1), SM1.len());
+		assert_eq!(buf.count(), 1);
+		unsafe { assert_eq!(buf.p_len(1), SM1.len()); }
 		assert_eq!(&buf[1], SM1);
 
 		// From Many empty.
 		buf = MsgBuf::from(&[]);
 		assert_eq!(buf.len(), 0);
-		assert_eq!(buf.parts_len(), 0);
+		assert_eq!(buf.count(), 1);
 
 		// From many one.
 		buf = MsgBuf::from(&[SM1]);
 		assert_eq!(buf.len(), SM1.len());
-		assert_eq!(buf.parts_len(), 1);
+		assert_eq!(buf.count(), 1);
 		assert_eq!(&buf[1], SM1);
 
 		buf = MsgBuf::from(&[SM1, MD1, LG1]);
 		assert_eq!(buf.len(), 18);
-		assert_eq!(buf.parts_len(), 3);
+		assert_eq!(buf.count(), 3);
 		assert_eq!(&buf[1], SM1);
 		assert_eq!(&buf[2], MD1);
 		assert_eq!(&buf[3], LG1);
 	}
 
 	#[test]
-	fn t_clear_splat_zero() {
+	fn t_reset_splat() {
 		// Clearing empty.
 		let mut buf = MsgBuf::default();
 		assert_eq!(buf.len(), 0);
-		assert_eq!(buf.parts_len(), 0);
-		buf.clear();
+		assert_eq!(buf.count(), 0);
+
+		buf.reset();
 		assert_eq!(buf.len(), 0);
-		assert_eq!(buf.parts_len(), 0);
+		assert_eq!(buf.count(), 0);
 
 		// Clear filled.
 		buf = MsgBuf::from(SM1);
-		buf.clear();
+		buf.reset();
 		assert_eq!(buf.len(), 0);
-		assert_eq!(buf.parts_len(), 0);
-
-		// Zero empty.
-		buf = MsgBuf::default();
-		buf.zero();
-		assert_eq!(buf.len(), 0);
-		assert_eq!(buf.parts_len(), 1);
-		assert_eq!(buf.part_len(1), 0);
-
-		// Zero full.
-		buf = MsgBuf::from(SM1);
-		buf.zero();
-		assert_eq!(buf.len(), 0);
-		assert_eq!(buf.parts_len(), 1);
-		assert_eq!(buf.part_len(1), 0);
+		assert_eq!(buf.count(), 0);
 
 		// Check a splat.
 		buf = MsgBuf::splat(3);
 		assert_eq!(buf.len(), 0);
-		assert_eq!(buf.parts_len(), 3);
-		assert_eq!(buf.part_len(1), 0);
-		assert_eq!(buf.part_len(2), 0);
-		assert_eq!(buf.part_len(3), 0);
+		assert_eq!(buf.count(), 3);
+		unsafe {
+			assert_eq!(buf.p_len(1), 0);
+			assert_eq!(buf.p_len(2), 0);
+			assert_eq!(buf.p_len(3), 0);
+		}
 	}
 
 	#[test]
-	fn t_add_remove_part() {
+	fn t_add_remove() {
 		let mut buf = MsgBuf::default();
 
 		// Add empty.
 		buf += &[];
 		assert_eq!(buf.len(), 0);
-		assert_eq!(buf.parts_len(), 1);
-		assert_eq!(buf.part_len(1), 0);
+		assert_eq!(buf.count(), 1);
+		unsafe { assert_eq!(buf.p_len(1), 0); }
 
 		// Remove it.
-		buf.remove_part(1);
+		buf.remove(1);
 		assert_eq!(buf.len(), 0);
-		assert_eq!(buf.parts_len(), 0);
+		assert_eq!(buf.count(), 0);
 
 		// Add something.
 		buf += SM1;
 		buf += MD1;
 		buf += LG1;
 		assert_eq!(buf.len(), 18);
-		assert_eq!(buf.parts_len(), 3);
+		assert_eq!(buf.count(), 3);
 		assert_eq!(&buf[1], SM1);
 		assert_eq!(&buf[2], MD1);
 		assert_eq!(&buf[3], LG1);
 
 		// Try removing from each index.
 		buf = MsgBuf::from(&[SM1, MD1, LG1]);
-		buf.remove_part(1);
+		buf.remove(1);
 		assert_eq!(buf.len(), 15);
-		assert_eq!(buf.parts_len(), 2);
+		assert_eq!(buf.count(), 2);
 		assert_eq!(&buf[1], MD1);
 		assert_eq!(&buf[2], LG1);
 
 		buf = MsgBuf::from(&[SM1, MD1, LG1]);
-		buf.remove_part(2);
+		buf.remove(2);
 		assert_eq!(buf.len(), 12);
-		assert_eq!(buf.parts_len(), 2);
+		assert_eq!(buf.count(), 2);
 		assert_eq!(&buf[1], SM1);
 		assert_eq!(&buf[2], LG1);
 
 		buf = MsgBuf::from(&[SM1, MD1, LG1]);
-		buf.remove_part(3);
+		buf.remove(3);
 		assert_eq!(buf.len(), 9);
-		assert_eq!(buf.parts_len(), 2);
+		assert_eq!(buf.count(), 2);
 		assert_eq!(&buf[1], SM1);
 		assert_eq!(&buf[2], MD1);
 
 		// Now try to remove all parts, from the left.
 		buf = MsgBuf::from(&[SM1, MD1, LG1]);
-		buf.remove_part(1);
-		buf.remove_part(1);
-		buf.remove_part(1);
+		buf.remove(1);
+		buf.remove(1);
+		buf.remove(1);
 		assert_eq!(buf.len(), 0);
-		assert_eq!(buf.parts_len(), 0);
+		assert_eq!(buf.count(), 0);
 
 		// And again from the right.
 		buf = MsgBuf::from(&[SM1, MD1, LG1]);
-		buf.remove_part(3);
-		buf.remove_part(2);
-		buf.remove_part(1);
+		buf.remove(3);
+		buf.remove(2);
+		buf.remove(1);
 		assert_eq!(buf.len(), 0);
-		assert_eq!(buf.parts_len(), 0);
+		assert_eq!(buf.count(), 0);
 	}
 
 	#[test]
-	fn t_insert_part() {
+	fn t_insert() {
 		// Test insertion into a spread buffer.
 		for b in [&[], SM1].iter() {
 			let mut buf = MsgBuf::from(SM1);
-			buf.insert_part(1, b);
+			buf.insert(1, b);
 			assert_eq!(buf.len(), SM1.len() + b.len());
-			assert_eq!(buf.parts_len(), 2);
+			assert_eq!(buf.count(), 2);
 			assert_eq!(&buf[1], *b);
 			assert_eq!(&buf[2], SM1);
 		}
@@ -684,9 +1121,9 @@ mod tests {
 		for i in 1..4 {
 			for b in [&[], SM1].iter() {
 				let mut buf = MsgBuf::from(&[SM2, MD2, LG2]);
-				buf.insert_part(i, b);
+				buf.insert(i, b);
 				assert_eq!(buf.len(), 18 + b.len());
-				assert_eq!(buf.parts_len(), 4);
+				assert_eq!(buf.count(), 4);
 				assert_eq!(&buf[i], *b);
 			}
 		}
@@ -698,9 +1135,9 @@ mod tests {
 		// Test replacement when there's just one part.
 		for b in [SM1, MD1, LG1].iter() {
 			let mut buf = MsgBuf::from(MD2);
-			buf.replace_part(1, b);
+			buf.replace(1, b);
 			assert_eq!(buf.len(), b.len());
-			assert_eq!(buf.parts_len(), 1);
+			assert_eq!(buf.count(), 1);
 			assert_eq!(&buf[1], *b);
 		}
 
@@ -708,16 +1145,16 @@ mod tests {
 		for i in 1..4 {
 			for b in [SM1, MD1, LG1].iter() {
 				let mut buf = MsgBuf::from(&[SM2, MD2, LG2]);
-				buf.replace_part(i, b);
-				assert_eq!(buf.parts_len(), 3);
+				buf.replace(i, b);
+				assert_eq!(buf.count(), 3);
 				assert_eq!(&buf[i], *b);
 			}
 		}
 
 		// And real quick test an empty replacement.
 		let mut buf = MsgBuf::from(&[SM2, MD2, LG2]);
-		buf.replace_part(1, &[]);
-		assert_eq!(buf.parts_len(), 3);
+		buf.replace(1, &[]);
+		assert_eq!(buf.count(), 3);
 		assert_eq!(buf.len(), 15);
 	}
 
@@ -739,4 +1176,71 @@ mod tests {
 
 		assert_eq!(buf.deref(), b"dogyellowarcosaurs");
 	}
+
+	#[test]
+	/// MsgBufVec: Test Insertion
+	///
+	/// This covers `buf_grow()` too.
+	fn t_eq() {
+		const SM2: &[u8] = b"dog";
+		const MD2: &[u8] = b"yellow";
+		const LG2: &[u8] = b"arcosaurs";
+
+		let buf = MsgBuf::from(&[SM2, MD2, LG2]);
+		let buf2 = MsgBuf::from(&[SM2, MD2, LG2]);
+		assert_eq!(buf, buf2);
+		assert_eq!(buf, buf2.deref());
+
+		let buf2 = MsgBuf::from(&[SM2, MD2]);
+		assert!(buf != buf2);
+		assert!(buf != buf2.deref());
+	}
+
+	#[test]
+	/// MsgBufVec: Test Insertion
+	///
+	/// This covers `buf_grow()` too.
+	fn mbv_buf_insert() {
+		// Add a middle name.
+		let mut owned: Vec<u8> = Vec::from(&b"John Jingleheimer Schmidt"[..]);
+		owned.buf_insert(4, &b" Jacob"[..]);
+		assert_eq!(owned, &b"John Jacob Jingleheimer Schmidt"[..]);
+	}
+
+	#[test]
+	/// MsgBufVec: Test Insertion
+	///
+	/// This covers `buf_grow()` and `buf_snip()` too.
+	fn mbv_buf_replace() {
+		// Replace Shorter (end).
+		let mut owned: Vec<u8> = Vec::from(&b"John Jacob Jingleheimer Schmidt"[..]);
+		owned.buf_replace(11..31, &b"Astor"[..]);
+		assert_eq!(owned, &b"John Jacob Astor"[..]);
+
+		// Replace Bigger (end).
+		owned.buf_replace(11..16, &b"Jingleheimer Schmidt"[..]);
+		assert_eq!(owned, &b"John Jacob Jingleheimer Schmidt"[..]);
+
+		// Replace Shorter (middle).
+		owned.buf_replace(5..10, &b"Dan"[..]);
+		assert_eq!(owned, &b"John Dan Jingleheimer Schmidt"[..]);
+
+		// Replace Bigger (middle).
+		owned.buf_replace(5..8, &b"Jacob"[..]);
+		assert_eq!(owned, &b"John Jacob Jingleheimer Schmidt"[..]);
+
+		// Replace the whole thing.
+		owned.buf_replace(0..31, &b"Something New!"[..]);
+		assert_eq!(owned, &b"Something New!"[..]);
+
+		// And replace with nothing.
+		owned.buf_replace(9..14, &[]);
+		assert_eq!(owned, &b"Something"[..]);
+
+		// Totally nothing!
+		owned.buf_replace(0..9, &[]);
+		assert!(owned.is_empty());
+	}
 }
+
+

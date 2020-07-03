@@ -7,7 +7,6 @@ description = "FYI is a dead-simple status message printer for CLI use applicati
 publish = false
 
 [dependencies]
-bytes = "0.5.*"
 chrono = "0.4.*"
 
 [dev-dependencies]
@@ -19,10 +18,6 @@ harness = false
 
 [[bench]]
 name = "fm_msgbuf"
-harness = false
-
-[[bench]]
-name = "fm_partitions"
 harness = false
 
 [[bench]]

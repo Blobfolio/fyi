@@ -11,10 +11,7 @@ bar output, or you can dereference the object to work directly with its inner
 */
 
 use crate::utility::inflect;
-use fyi_msg::{
-	Msg,
-	traits::EPrintyPlease,
-};
+use fyi_msg::Msg;
 use fyi_progress::{
 	NiceElapsed,
 	NiceInt,
@@ -309,7 +306,7 @@ impl Witcher {
 					.copied()
 					.collect::<Vec<u8>>()
 			)
-		}).fyi_eprint();
+		}).eprint();
 	}
 
 	/// Crunched In Msg
@@ -330,7 +327,7 @@ impl Witcher {
 						.collect::<Vec<u8>>()
 
 				)
-			}).fyi_eprint();
+			}).eprint();
 		}
 		else {
 			Msg::crunched(unsafe {
@@ -347,7 +344,7 @@ impl Witcher {
 						.copied()
 						.collect::<Vec<u8>>()
 				)
-			}).fyi_eprint();
+			}).eprint();
 		}
 	}
 }
