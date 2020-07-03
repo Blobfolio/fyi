@@ -47,7 +47,7 @@ rustflags   := "-C link-arg=-s"
 	"{{ BIN }}" {{ ARGS }}
 	"{{ cargo_bin }}" {{ ARGS }}
 
-	sleep 30
+	#sleep 30
 	hyperfine --warmup 50 \
 		--runs 1000 \
 		--style color \
