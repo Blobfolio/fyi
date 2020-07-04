@@ -1,5 +1,5 @@
 /*!
-# Benchmark: `fyi_msg::traits::Inflection`
+# Benchmark: `fyi_msg::utility`
 */
 
 use criterion::{
