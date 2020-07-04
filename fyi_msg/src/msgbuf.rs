@@ -1063,12 +1063,19 @@ impl MsgBuf {
 		assert!(self.p_is_used(idx));
 
 		let len: usize = unsafe { self.p_len(idx) };
+		let count: usize = self.count();
 
+		// If this is the last index, we can cheat a bit.
+		if idx == count {
+			if len > 0 {
+				self.buf.truncate(self.len() - len);
+			}
+			unsafe { *self.p.as_mut_ptr().add(P_IDX_COUNT) -= 1; }
+		}
 		// If the partition is empty, we can just shift everything down.
-		if 0 == len {
+		else if 0 == len {
 			let ptr = self.p.as_mut_ptr();
 			unsafe {
-				let count: usize = *ptr.add(P_IDX_COUNT);
 				while idx < count {
 					ptr.add(idx).copy_from_nonoverlapping(ptr.add(idx + 1), 1);
 					idx += 1;
@@ -1084,7 +1091,6 @@ impl MsgBuf {
 
 			let ptr = self.p.as_mut_ptr();
 			unsafe {
-				let count: usize = *ptr.add(P_IDX_COUNT);
 				while idx < count {
 					ptr.add(idx).write(*ptr.add(idx + 1) - len);
 					idx += 1;
