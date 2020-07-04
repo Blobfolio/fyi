@@ -85,26 +85,30 @@ pub fn escape(mut s: String) -> String {
 		unsafe {
 			let v = s.as_mut_vec();
 
-			if let Some(mut idx) = v.iter().position(|x| *x == b'\'') {
+			{
+				let mut idx: usize = 0;
 				let mut len: usize = v.len();
 				while idx < len {
-					// Straighten backslashes. This is *not* a great solution,
-					// but will at least keep path values working.
-					if v[idx] == b'\\' {
-						v[idx] = b'/';
-						idx += 1;
+					match v[idx] {
+						// Replace existing backslashes with forward slashes.
+						// This ain't a Windows library. Haha.
+						b'\\' => {
+							v[idx] = b'/';
+							idx += 1;
+						},
+						// Backslash any existing quotes.
+						b'\'' => {
+							v.insert(idx, b'\\');
+							idx += 2;
+							len += 1;
+						},
+						// Everything else can just pass right on through.
+						_ => { idx += 1; }
 					}
-					// Inject backslashes behind existing single quotes.
-					else if v[idx] == b'\'' {
-						v.insert(idx, b'\\');
-						idx += 2;
-						len += 1;
-					}
-					// Everything else can skate on through.
-					else { idx += 1; }
 				}
 			}
 
+			// Add quotes to the front and back when we're done!
 			v.reserve(2);
 			v.insert(0, b'\'');
 			v.push(b'\'');
