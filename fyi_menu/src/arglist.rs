@@ -190,6 +190,54 @@ pub fn parse_kv(raw: &str) -> (Option<usize>, Option<usize>) {
 
 
 
+/// Traits for Vec<String>
+///
+/// We use `retain()` in a lot of places, but usually just want to know if
+/// anything changed. We'll give Vec that power via a trait to make our lives
+/// easier.
+pub trait ArgListVec {
+	/// Retain With Answer
+	///
+	/// Identical to `retain()` except a boolean is returned.
+	fn retain_explain<F> (&mut self, f: F) -> bool
+	where F: FnMut(&String) -> bool;
+}
+
+impl ArgListVec for Vec<String> {
+	/// Retain With Answer
+	///
+	/// Identical to `retain()` except it returns `true` if changes were made,
+	/// `false` otherwise.
+	fn retain_explain<F> (&mut self, mut f: F) -> bool
+	where F: FnMut(&String) -> bool {
+		let len = self.len();
+		let mut del = 0;
+
+		let ptr = self.as_mut_ptr();
+		unsafe {
+			let mut idx: usize = 0;
+			while idx < len {
+				if !f(&*ptr.add(idx)) {
+					del += 1;
+				}
+				else if del > 0 {
+					ptr.add(idx).swap(ptr.add(idx - del));
+				}
+
+				idx += 1;
+			}
+		}
+
+		if del > 0 {
+			self.truncate(len - del);
+			true
+		}
+		else { false }
+	}
+}
+
+
+
 #[derive(Debug, Clone, Hash, PartialEq)]
 /// Argument List.
 ///
@@ -356,9 +404,7 @@ impl ArgList {
 	/// In other words, `true` for non-match, `false` for match. Haha.
 	pub fn pluck_switch<F> (&mut self, cb: F) -> bool
 	where F: FnMut(&String) -> bool {
-		let len: usize = self.0.len();
-		self.0.retain(cb);
-		len != self.0.len()
+		self.0.retain_explain(cb)
 	}
 
 	/// Extract Option
@@ -407,16 +453,12 @@ impl ArgList {
 
 	/// Convenience: Help
 	pub fn pluck_help(&mut self) -> bool {
-		let len: usize = self.0.len();
-		self.0.retain(|x| x != "-h" && x != "--help");
-		len != self.0.len()
+		self.0.retain_explain(|x| x != "-h" && x != "--help")
 	}
 
 	/// Convenience: Version
 	pub fn pluck_version(&mut self) -> bool {
-		let len: usize = self.0.len();
-		self.0.retain(|x| x != "-V" && x != "--version");
-		len != self.0.len()
+		self.0.retain_explain(|x| x != "-V" && x != "--version")
 	}
 
 	/// Pluck Arg(s)
@@ -446,9 +488,16 @@ impl ArgList {
 	///
 	/// Call this method last to grab the first of whatever is left.
 	pub fn pluck_arg(&mut self) -> Option<String> {
-		self.0.retain(|x| x != "" && ! x.starts_with('-'));
-		if self.0.is_empty() { None }
-		else { Some(self.0.remove(0)) }
+		if
+			! self.0.is_empty() &&
+			(
+				! self.0.retain_explain(|x| x != "" && ! x.starts_with('-')) ||
+				! self.0.is_empty()
+			)
+		{
+			Some(self.0.remove(0))
+		}
+		else { None }
 	}
 
 	/// Expect Arg
