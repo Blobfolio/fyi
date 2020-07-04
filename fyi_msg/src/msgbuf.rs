@@ -1,5 +1,42 @@
 /*!
-# FYI Msg: Buffered Message
+# FYI Msg: Message Buffer
+
+The `MsgBuf` struct combines a `Vec<u8>` with a small, fixed, 14-part
+"partitioning" table. This allows the complete String to be stored in a single
+memory space, while allowing fairly straightforward logical manipulation of
+its inner slices.
+
+This storage model is a sort of compromise between being able to quickly and
+repeatedly access the whole of the thing, while also having reasonable logical
+access to view or change individual pieces of it. (For use cases where the
+parts matter more than the whole, just use `HashMap` or similar!)
+
+## Examples
+
+The `Msg` struct is really just a wrapper around `MsgBuf` with slots designated
+for the various ANSI sequences and message components like prefix and text. A
+simpler version could bypass the need for a custom struct altogether.
+
+```no_run
+// We want three separate parts: a prefix, a colon/space, and some text.
+// Let's start with something that creates: "Error: This Broke!"
+let mut msg = MsgBuf::from(&[
+    &b"Error"[..],   // msg[1]
+    &b": "[..],      // msg[2]
+    &b"This Broke!", // msg[3]
+]);
+
+// You can get the whole thing as a string if you wanted:
+let txt = msg.as_str();
+
+// You could change a part:
+msg.replace(3, "This caught fire!");
+
+// You can print it without macros:
+msg.println();
+
+// You can get a range of parts:
+assert_eq!(msg.spread(1..=2), b"Error: ");
 */
 
 #![allow(missing_debug_implementations)]
@@ -25,6 +62,7 @@ use std::{
 		Range,
 	},
 	ptr,
+	str::FromStr,
 };
 
 
@@ -39,9 +77,13 @@ const P_IDX_UMIN: usize = 1;
 const P_IDX_UMAX: usize = 14;
 
 
-/// Traits for Vec<u8>.
+/// Methods for Vec<u8>.
 ///
-/// It is simply easier to handle some bits directly!
+/// The `Vec` struct actually has most of what we need, but life is easier with
+/// ways to grow or shrink from the middle, as well as insert and/or replace
+/// entries (plural).
+///
+/// Adding this as a trait helps keep it out of the way.
 pub trait MsgBufVec {
 	/// Grow the Buffer at `idx` by `adj`.
 	fn buf_grow(&mut self, idx: usize, adj: usize);
@@ -61,6 +103,14 @@ impl MsgBufVec for Vec<u8> {
 	///
 	/// Panics if `idx` is greater than the length (but it can *be* the length,
 	/// in which case the bytes are just tacked onto the end).
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	/// let mut v = vec![0, 1, 2, 3, 4, 5];
+	/// v.buf_grow(1, 3);
+	/// assert_eq!(v, vec![0, 0, 0, 0, 1, 2, 3, 4, 5]);
+	/// ```
 	fn buf_grow(&mut self, idx: usize, adj: usize) {
 		assert!(idx <= self.len());
 
@@ -92,6 +142,14 @@ impl MsgBufVec for Vec<u8> {
 	/// This functions like `extend_from_slice()`, but from the middle.
 	///
 	/// Panics if `idx` is out of range.
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	/// let mut v = vec![0, 1, 2, 3, 4, 5];
+	/// v.buf_insert(1, &[6, 7, 8]);
+	/// assert_eq!(v, vec![0, 6, 7, 8, 1, 2, 3, 4, 5]);
+	/// ```
 	fn buf_insert(&mut self, idx: usize, other: &[u8]) {
 		assert!(idx < self.len());
 
@@ -123,6 +181,14 @@ impl MsgBufVec for Vec<u8> {
 	/// right as needed.
 	///
 	/// Panics if the range falls outside `0..self.len()`.
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	/// let mut v = vec![0, 1, 2, 3, 4, 5];
+	/// v.buf_replace(1..3, &[6, 7, 8]);
+	/// assert_eq!(v, vec![0, 6, 7, 8, 3, 4, 5]);
+	/// ```
 	fn buf_replace(&mut self, range: Range<usize>, other: &[u8]) {
 		assert!(range.end <= self.len());
 
@@ -158,6 +224,14 @@ impl MsgBufVec for Vec<u8> {
 	/// fill the gaps.
 	///
 	/// Panics if the range falls outside `0..self.len()`.
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	/// let mut v = vec![0, 1, 2, 3, 4, 5];
+	/// v.buf_snip(1..3);
+	/// assert_eq!(v, vec![0, 3, 4, 5]);
+	/// ```
 	fn buf_snip(&mut self, range: Range<usize>) {
 		assert!(range.end <= self.len());
 
@@ -191,9 +265,15 @@ pub struct MsgBuf {
 
 	/// The partition table.
 	///
-	/// The first `[0]` is always zero, marking the range start. Slices `[1]`
-	/// through `[14]` mark the range ends for each used part. The last slice
-	/// `[15]` keeps track of the number of parts actually in use.
+	/// The exclusive "end" points of each part are stored in sequence, such
+	/// that a range could be constructed via `idx-1..idx`.
+	///
+	/// The first entry `[0]` is always `0`, removing the need for a bounds
+	/// check on `idx-1`.
+	///
+	/// The last entry `[15]` holds the number of active partitions rather
+	/// than an end point. This moots the need for an additional variable at
+	/// the expense of the total number of slots available for users (14).
 	p: [usize; 16],
 }
 
@@ -204,6 +284,10 @@ impl AddAssign<&[u8]> for MsgBuf {
 }
 
 impl Default for MsgBuf {
+	/// Default.
+	///
+	/// The default buffer is empty, but initialized with a capacity of `1024`
+	/// for the eventual message.
 	fn default() -> Self {
 		Self {
 			buf: Vec::with_capacity(1024),
@@ -235,6 +319,10 @@ impl fmt::Display for MsgBuf {
 impl Eq for MsgBuf {}
 
 impl From<&str> for MsgBuf {
+	/// From Str.
+	///
+	/// Create a buffer from the string with a single partition covering all of
+	/// it.
 	fn from(raw: &str) -> Self {
 		Self {
 			p: [0, raw.len(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
@@ -244,12 +332,20 @@ impl From<&str> for MsgBuf {
 }
 
 impl From<String> for MsgBuf {
+	/// From Str.
+	///
+	/// Create a buffer from the string with a single partition covering all of
+	/// it.
 	fn from(raw: String) -> Self {
 		<Self as From<&str>>::from(&raw)
 	}
 }
 
 impl From<&[u8]> for MsgBuf {
+	/// From Bytes.
+	///
+	/// Create a buffer from a byte string with a single partition covering all
+	/// of it.
 	fn from(raw: &[u8]) -> Self {
 		Self {
 			p: [0, raw.len(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
@@ -259,6 +355,10 @@ impl From<&[u8]> for MsgBuf {
 }
 
 impl From<Vec<u8>> for MsgBuf {
+	/// From Vec.
+	///
+	/// Create a buffer from a `Vec<u8>` with a single partition covering all
+	/// of it.
 	fn from(raw: Vec<u8>) -> Self {
 		Self {
 			p: [0, raw.len(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
@@ -268,6 +368,10 @@ impl From<Vec<u8>> for MsgBuf {
 }
 
 impl From<&[&[u8]]> for MsgBuf {
+	/// From Slice of Slices.
+	///
+	/// Create a buffer from multiple byte strings, creating a separate part
+	/// for each.
 	fn from(raw: &[&[u8]]) -> Self {
 		let mut out = Self::default();
 		let len: usize = raw.len().min(P_IDX_UMAX);
@@ -361,6 +465,10 @@ from_u8s!(13);
 from_u8s!(14);
 
 impl From<Vec<Vec<u8>>> for MsgBuf {
+	/// From Vec of Vecs.
+	///
+	/// Create a buffer from multiple `Vec<u8>`s, creating a separate part for
+	/// each.
 	fn from(raw: Vec<Vec<u8>>) -> Self {
 		let mut out = Self::default();
 		let len: usize = raw.len().min(P_IDX_UMAX);
@@ -389,7 +497,20 @@ impl From<Vec<Vec<u8>>> for MsgBuf {
 	}
 }
 
+impl FromStr for MsgBuf {
+	type Err = std::num::ParseIntError;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		Ok(Self::from(s))
+	}
+}
+
 impl Hash for MsgBuf {
+	/// Hash.
+	///
+	/// The `Hash` trait is manually implemented to ensure that only the used
+	/// portions of the partition table — which don't get rezeroed on clear,
+	/// etc. — factor into the comparison.
 	fn hash<H: Hasher>(&self, state: &mut H) {
 		self.buf.hash(state);
 		self.p_used().hash(state);
@@ -411,6 +532,10 @@ impl IndexMut<usize> for MsgBuf {
 }
 
 impl PartialEq for MsgBuf {
+	/// Self Compare.
+	///
+	/// For self comparisons, make sure the buffer and partitions match up. For
+	/// all other implementations, only the buffer contents matter.
 	fn eq(&self, other: &Self) -> bool {
 		self.buf == other.buf && self.p_used() == other.p_used()
 	}
@@ -434,6 +559,18 @@ impl PartialEq<Vec<u8>> for MsgBuf {
 	}
 }
 
+impl PartialEq<str> for MsgBuf {
+	fn eq(&self, other: &str) -> bool {
+		self.as_str() == other
+	}
+}
+
+impl PartialEq<&str> for MsgBuf {
+	fn eq(&self, other: &&str) -> bool {
+		self.as_str() == *other
+	}
+}
+
 impl MsgBuf {
 	// ------------------------------------------------------------------------
 	// Shiva
@@ -444,9 +581,21 @@ impl MsgBuf {
 	///
 	/// Create a new `MsgBuf` from a single buffer with pre-determined
 	/// partition sizes. The last partition will automatically be adjusted to
-	/// cover the buffer in cases where it falls short.
+	/// cover the buffer (i.e. end with `buf.len()`) in cases where it falls
+	/// short.
 	///
 	/// Panics if there are more parts than allowed.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use fyi_msg::MsgBuf;
+	///
+	/// let msg = MsgBuf::new(b"Hello World", &[5, 1, 5]);
+	/// assert_eq!(msg.get(1), b"Hello");
+	/// assert_eq!(msg.get(2), b" ");
+	/// assert_eq!(msg.get(3), b"World");
+	/// ```
 	pub fn new(buf: &[u8], parts: &[usize]) -> Self {
 		assert!(parts.len() <= P_IDX_UMAX);
 
@@ -486,6 +635,19 @@ impl MsgBuf {
 	/// Reset the Whole Thing.
 	///
 	/// This will clear the buffer and remove all parts, without reallocating.
+	/// Not to be confused with `clear()`, which clears a single part.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use fyi_msg::MsgBuf;
+	///
+	/// let mut msg = MsgBuf::new(b"Hello World", &[5, 1, 5]);
+	/// assert_eq!(*msg, b"Hello World");
+	///
+	/// msg.reset();
+	/// assert_eq!(*msg, b"");
+	/// ```
 	pub fn reset(&mut self) {
 		self.buf.clear();
 		unsafe { self.p.as_mut_ptr().add(P_IDX_COUNT).write(0); }
@@ -495,6 +657,9 @@ impl MsgBuf {
 	/// Splat
 	///
 	/// Create a new `MsgBuf` with `num` empty parts.
+	///
+	/// As with all `MsgBuf` incarnations, there may only be up to 14
+	/// individual parts; any excess will be ignored.
 	pub fn splat(num: usize) -> Self {
 		Self {
 			buf: Vec::with_capacity(1024),
@@ -507,13 +672,13 @@ impl MsgBuf {
 	// ------------------------------------------------------------------------
 
 	#[must_use]
-	/// Len.
+	/// Buffer Length.
 	pub const fn len(&self) -> usize {
 		self.p[self.p[P_IDX_COUNT]]
 	}
 
 	#[must_use]
-	/// Is Empty.
+	/// Buffer Is Empty.
 	pub const fn is_empty(&self) -> bool {
 		self.p[self.p[P_IDX_COUNT]] == 0
 	}
@@ -528,7 +693,11 @@ impl MsgBuf {
 	/// Part.
 	///
 	/// # Safety
-	/// `idx` must be previously validated to be in range.
+	///
+	/// This method assumes `idx` is in range; meaningless and possibly panic-
+	/// worthy results can be returned if you screw this up.
+	///
+	/// When in doubt, use `get()` instead and determine a range from that.
 	pub const unsafe fn p(&self, idx: usize) -> ops::Range<usize> {
 		ops::Range{
 			start: self.p[idx - 1],
@@ -540,7 +709,11 @@ impl MsgBuf {
 	/// Partition Length.
 	///
 	/// # Safety
-	/// `idx` must be previously validated to be in range.
+	///
+	/// This method assumes `idx` is in range; meaningless and possibly panic-
+	/// worthy results can be returned if you screw this up.
+	///
+	/// When in doubt, use `get()` instead and determine a length from that.
 	pub const unsafe fn p_len(&self, idx: usize) -> usize {
 		self.p[idx] - self.p[idx - 1]
 	}
@@ -549,7 +722,11 @@ impl MsgBuf {
 	/// Partition Is Empty.
 	///
 	/// # Safety
-	/// `idx` must be previously validated to be in range.
+	///
+	/// This method assumes `idx` is in range; meaningless and possibly panic-
+	/// worthy results can be returned if you screw this up.
+	///
+	/// When in doubt, use `get()` instead and determine emptiness from that.
 	pub const unsafe fn p_is_empty(&self, idx: usize) -> bool {
 		self.p[idx] - self.p[idx - 1] == 0
 	}
@@ -557,13 +734,22 @@ impl MsgBuf {
 	#[must_use]
 	/// Return Used Parts
 	///
-	/// This is mostly used for hashing purposes.
+	/// This returns only the used slice of the partitioning table.
+	///
+	/// Note: This is used internally for determining hash equivalence.
 	pub fn p_used(&self) -> &[usize] {
 		&self.p[0..=self.p[P_IDX_COUNT]]
 	}
 
 	#[must_use]
 	/// Partition Is Used?
+	///
+	/// Answer whether or not a partition has been initialized. This serves as
+	/// an assertion test for a lot of this struct's methods.
+	///
+	/// A partition is in "use" if it is at least "1" and less than or equal to
+	/// the total count (since user indexes begin at "1", there's no +1 offset
+	/// for the count length; it is itself an index).
 	pub fn p_is_used(&self, idx: usize) -> bool {
 		P_IDX_UMIN <= idx && idx <= self.p[P_IDX_COUNT]
 	}
@@ -576,30 +762,57 @@ impl MsgBuf {
 
 	#[must_use]
 	/// As Slice.
+	///
+	/// Return an `&[u8]` slice of the entire buffer.
 	pub fn as_bytes(&self) -> &[u8] {
 		&self.buf[..]
 	}
 
 	#[must_use]
 	/// As Slice.
+	///
+	/// Return a mutable `&[u8]` slice of the entire buffer. If making changes
+	/// to the data, be sure you do so within the confines of the partitions
+	/// you've established or methods like `replace()` and `insert()` and `get()`
+	/// will be confused.
 	pub fn as_bytes_mut(&mut self) -> &mut [u8] {
 		&mut self.buf[..]
 	}
 
 	#[must_use]
 	/// As String.
+	///
+	/// Return the buffer as a string slice.
 	pub fn as_str(&self) -> &str {
 		unsafe { std::str::from_utf8_unchecked(&self.buf[..]) }
 	}
 
 	#[must_use]
 	/// To Vec.
+	///
+	/// Return an owned clone of the inner buffer as a Vec.
 	pub fn to_vec(&self) -> Vec<u8> {
 		self.buf.clone()
 	}
 
 	#[must_use]
-	/// Partition.
+	/// Get Partition.
+	///
+	/// Return a slice of the buffer corresponding to the given part.
+	///
+	/// Remember, partitions start at `1`, not `0`.
+	///
+	/// Panics if `idx` is out of range.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use fyi_msg::MsgBuf;
+	///
+	/// let msg = MsgBuf::new(b"Hello World", &[5, 1, 5]);
+	/// assert_eq!(msg[1], msg.get(1));
+	/// assert_eq!(msg[1], b"Hello");
+	/// ```
 	pub fn get(&self, idx: usize) -> &[u8] {
 		assert!(self.p_is_used(idx));
 
@@ -607,7 +820,25 @@ impl MsgBuf {
 	}
 
 	#[must_use]
-	/// Partition Mut.
+	/// Get Mutable Partition.
+	///
+	/// Return a mutable slice of the buffer corresponding to the given part.
+	///
+	/// Remember, partitions start at `1`, not `0`.
+	///
+	/// Panics if `idx` is out of range.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use fyi_msg::MsgBuf;
+	///
+	/// let mut msg = MsgBuf::new(b"Hello World", &[5, 1, 5]);
+	/// let mut p1 = msg.get_mut(1);
+	/// p1[0] = b'J';
+	///
+	/// assert_eq!(*msg, b"Jello World");
+	/// ```
 	pub fn get_mut(&mut self, idx: usize) -> &mut [u8] {
 		assert!(self.p_is_used(idx));
 
@@ -617,6 +848,22 @@ impl MsgBuf {
 
 	#[must_use]
 	/// Partition Spread.
+	///
+	/// Return a slice of the buffer spanning multiple parts, from the
+	/// beginning of `idx1` to the ending of `idx2`.
+	///
+	/// Remember, partitions start at `1`, not `0`.
+	///
+	/// Panics if the indexes are out of range or out of order.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use fyi_msg::MsgBuf;
+	///
+	/// let msg = MsgBuf::new(b"Hello World", &[5, 1, 5]);
+	/// assert_eq!(msg.spread(1, 2), b"Hello ");
+	/// ```
 	pub fn spread(&self, idx1: usize, idx2: usize) -> &[u8] {
 		assert!(P_IDX_UMIN <= idx1 && idx1 < idx2 && idx2 <= self.count());
 
@@ -631,7 +878,23 @@ impl MsgBuf {
 
 	/// Add Part (to End).
 	///
+	/// This is a `push()` method, basically, extending the buffer and adding a
+	/// new partition to cover it.
+	///
 	/// Panics if the maximum number of parts has already been reached.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use fyi_msg::MsgBuf;
+	///
+	/// let mut msg = MsgBuf::new(b"Hello World", &[5, 1, 5]);
+	/// msg += &b" "[..];  // Add with an operator.
+	/// msg.add(b"Hello"); // Add procedurally.
+	///
+	/// assert_eq!(msg.count(), 5);
+	/// assert_eq!(*msg, b"Hello World Hello");
+	/// ```
 	pub fn add(&mut self, buf: &[u8]) {
 		assert!(self.count() < P_IDX_UMAX);
 
@@ -662,11 +925,24 @@ impl MsgBuf {
 
 	/// Insert Part At `idx`
 	///
-	/// Insert a part and shove everything previously at or after `idx` to the
-	/// right.
+	/// Insert a part at `idx`, shifting the old `idx` and everything after it
+	/// to the right to make room.
 	///
 	/// Panics if the maximum number of parts has already been reached or `idx`
 	/// is out of range.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use fyi_msg::MsgBuf;
+	///
+	/// let mut msg = MsgBuf::new(b"Hello World", &[5, 1, 5]);
+	/// msg.insert(2, b" ");
+	/// msg.insert(3, b"Sweet");
+	///
+	/// assert_eq!(msg.count(), 5);
+	/// assert_eq!(*msg, b"Hello Sweet World");
+	/// ```
 	pub fn insert(&mut self, idx: usize, buf: &[u8]) {
 		assert!(self.count() < P_IDX_UMAX && self.p_is_used(idx));
 
@@ -703,9 +979,19 @@ impl MsgBuf {
 
 	/// Clear Part.
 	///
-	/// Like `remove()`, except the part is kept at zero-length.
+	/// Like `remove()`, except the part is preserved, albeit without length.
 	///
 	/// Panics if `idx` is out of range.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use fyi_msg::MsgBuf;
+	///
+	/// let mut msg = MsgBuf::new(b"Hello World", &[5, 1, 5]);
+	/// msg.clear(2);
+	/// assert_eq!(*msg, b"HelloWorld");
+	/// ```
 	pub fn clear(&mut self, idx: usize) {
 		assert!(self.p_is_used(idx));
 
@@ -718,9 +1004,20 @@ impl MsgBuf {
 
 	/// Extend Part.
 	///
-	/// This adds data onto part `idx`.
+	/// This adds data onto the existing part at `idx`, growing the partition
+	/// length accordingly.
 	///
 	/// Panics if `idx` is out of range.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use fyi_msg::MsgBuf;
+	///
+	/// let mut msg = MsgBuf::new(b"Hello World", &[5, 1, 5]);
+	/// msg.extend(3, b"lets");
+	/// assert_eq!(*msg, b"Hello Worldlets");
+	/// ```
 	pub fn extend(&mut self, idx: usize, buf: &[u8]) {
 		assert!(self.p_is_used(idx));
 
@@ -731,6 +1028,9 @@ impl MsgBuf {
 	}
 
 	/// Flatten Parts.
+	///
+	/// This method reduces the partition table to a single, all-spanning
+	/// entry. (The buffer remains unchanged.)
 	pub fn flatten(&mut self) {
 		let ptr = self.p.as_mut_ptr();
 		unsafe {
@@ -743,7 +1043,22 @@ impl MsgBuf {
 
 	/// Remove Part.
 	///
+	/// Remove a part from the buffer and the partitioning table.
+	///
 	/// Panics if `idx` is out of range.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use fyi_msg::MsgBuf;
+	///
+	/// let mut msg = MsgBuf::new(b"Hello World", &[5, 1, 5]);
+	/// msg.remove(2);
+	/// msg.remove(2);
+	///
+	/// assert_eq!(msg.count(), 1);
+	/// assert_eq!(*msg, b"Hello");
+	/// ```
 	pub fn remove(&mut self, mut idx: usize) {
 		assert!(self.p_is_used(idx));
 
@@ -783,9 +1098,21 @@ impl MsgBuf {
 	#[allow(clippy::comparison_chain)] // We're only matching 2 of 3 cases.
 	/// Replace Part.
 	///
-	/// Replace a part with new data, which can be any size.
+	/// Replace a part with new data. The new data can be any size; it needn't
+	/// match the length of the original.
 	///
 	/// Panics if `idx` is out of range.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use fyi_msg::MsgBuf;
+	///
+	/// let mut msg = MsgBuf::new(b"Hello World", &[5, 1, 5]);
+	/// msg.replace(1, b"Good-bye");
+	/// msg.replace(3, b"Dolly");
+	/// assert_eq!(*msg, b"Good-bye Dolly");
+	/// ```
 	pub fn replace(&mut self, idx: usize, buf: &[u8]) {
 		assert!(self.p_is_used(idx));
 
@@ -810,10 +1137,21 @@ impl MsgBuf {
 
 	/// Truncate.
 	///
-	/// Reduce the length of part `idx` to `len`. This does nothing if the
+	/// Reduce the length of part `idx` to `len`, similar to the same method
+	/// on `Vec`, except it can work from the middle. This does nothing if the
 	/// length is already at or lower than `len`.
 	///
 	/// Panics if `idx` is out of range.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use fyi_msg::MsgBuf;
+	///
+	/// let mut msg = MsgBuf::new(b"Hello World", &[5, 1, 5]);
+	/// msg.truncate(1, 4);
+	/// assert_eq!(*msg, b"Hell World"); // Sounds nice!
+	/// ```
 	pub fn truncate(&mut self, idx: usize, len: usize) {
 		assert!(self.p_is_used(idx));
 
@@ -830,7 +1168,10 @@ impl MsgBuf {
 	// Printing
 	// ------------------------------------------------------------------------
 
-	/// Stdout Print.
+	/// Print to `STDOUT`.
+	///
+	/// This is equivalent to manually writing the bytes to a locked
+	/// `io::stdout()` and flushing the handle.
 	pub fn print(&self) {
 		let writer = std::io::stdout();
 		let mut handle = writer.lock();
@@ -838,7 +1179,10 @@ impl MsgBuf {
 		handle.flush().unwrap();
 	}
 
-	/// Stdout Print w/ Line.
+	/// Print to `STDOUT` (w/ line break)
+	///
+	/// Same as `print()`, except a trailing line break `10_u8` is appended,
+	/// like using the `println!()` macro, but faster.
 	pub fn println(&self) {
 		let writer = std::io::stdout();
 		let mut handle = writer.lock();
@@ -847,7 +1191,10 @@ impl MsgBuf {
 		handle.flush().unwrap();
 	}
 
-	/// Stderr Print.
+	/// Print to `STDERR`.
+	///
+	/// This is equivalent to manually writing the bytes to a locked
+	/// `io::stderr()` and flushing the handle.
 	pub fn eprint(&self) {
 		let writer = std::io::stderr();
 		let mut handle = writer.lock();
@@ -855,7 +1202,10 @@ impl MsgBuf {
 		handle.flush().unwrap();
 	}
 
-	/// Stderr Print w/ Line.
+	/// Print to `STDERR` (w/ line break)
+	///
+	/// Same as `eprint()`, except a trailing line break `10_u8` is appended,
+	/// like using the `eprintln!()` macro, but faster.
 	pub fn eprintln(&self) {
 		let writer = std::io::stderr();
 		let mut handle = writer.lock();
@@ -864,14 +1214,19 @@ impl MsgBuf {
 		handle.flush().unwrap();
 	}
 
-	/// Sink Print.
+	/// Print to `io::sink()`.
+	///
+	/// This is equivalent to manually writing the bytes to `io::sink()`,
+	/// namely useful for benchmarking purposes.
 	pub fn sink(&self) {
 		let mut handle = io::sink();
 		handle.write_all(&self.buf).unwrap();
 		handle.flush().unwrap();
 	}
 
-	/// Stderr Print w/ Line.
+	/// Print to `io::sink()` (w/ line break)
+	///
+	/// Same as `sink()`, except a trailing line break `10_u8` is appended.
 	pub fn sinkln(&self) {
 		let mut handle = io::sink();
 		handle.write_all(&self.buf).unwrap();
@@ -887,38 +1242,41 @@ impl MsgBuf {
 
 	/// Grow & Shift Partitions
 	///
-	/// The "length" of `idx` is increased by `len`, then all subsequent
-	/// entries are shifted up accordingly (while maintaining their original
-	/// "lengths".)
+	/// The length of `idx` is increased by `adj`, then all subsequent entries
+	/// are shifted up accordingly (while maintaining their original lengths).
 	///
 	/// # Safety
-	/// The index must have already been verified to exist.
-	unsafe fn p_grow(&mut self, mut idx: usize, len: usize) {
+	///
+	/// This is only used internally; `idx` will have already been verified
+	/// before reaching this point.
+	unsafe fn p_grow(&mut self, mut idx: usize, adj: usize) {
 		let ptr = self.p.as_mut_ptr();
 		let count: usize = *ptr.add(P_IDX_COUNT);
 		while idx <= count {
-			*ptr.add(idx) += len;
+			*ptr.add(idx) += adj;
 			idx += 1;
 		}
 	}
 
 	/// Shrink & Shift Partitions
 	///
-	/// The "length" of `idx` is decreased by `len`, then all subsequent
-	/// entries are shifted down accordingly (while maintaining their original
-	/// "lengths".)
+	/// The length of `idx` is decreased by `adj`, then all subsequent entries
+	/// are shifted down accordingly (while maintaining their original
+	/// lengths).
 	///
-	/// Panics if `len` is greater than `self.p[idx]`.
+	/// Panics if `adj` is greater than `self.p[idx]`.
 	///
 	/// # Safety
-	/// The index must have already been verified to exist.
-	unsafe fn p_shrink(&mut self, mut idx: usize, len: usize) {
-		assert!(self.p[idx] >= len);
+	///
+	/// This is only used internally; `idx` will have already been verified
+	/// before reaching this point.
+	unsafe fn p_shrink(&mut self, mut idx: usize, adj: usize) {
+		assert!(self.p[idx] >= adj);
 
 		let ptr = self.p.as_mut_ptr();
 		let count: usize = *ptr.add(P_IDX_COUNT);
 		while idx <= count {
-			*ptr.add(idx) -= len;
+			*ptr.add(idx) -= adj;
 			idx += 1;
 		}
 	}

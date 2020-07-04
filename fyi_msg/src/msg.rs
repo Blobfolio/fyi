@@ -1,8 +1,15 @@
 /*!
 # FYI Message
 
-The `Msg` struct is an efficient way to construct a simple, printable, colored
-`Prefix: Hello World`-type status message.
+The `Msg` struct is an efficient way to construct and store a simple, printable
+UTF-8 status message with a bit of ANSI formatting, something like: `*Success:* The file was opened!`
+
+What's the point? Well, writing ANSI escape sequences by hand — a task usually
+repeated all throughout a codebase — is quite tedious and makes everything hard
+to read.
+
+Sure, there are plenty of crates to help make ANSI more approachable, but they
+serve much more than the simple use case of printing prefixed messages.
 
 ## Example:
 
@@ -14,8 +21,8 @@ let msg = Msg::new("Yo", 199, "How are you doing today?");
 
 // Use a short-hand method to create a message with a pre-defined prefix:
 let msg = Msg::error("Well darn.");
-let msg = Msg::debug("I like cookies.");
-let msg = Msg::success("Example executed!");
+let msg = Msg::debug("Token refreshed.");
+let msg = Msg::success("We did it!");
 ```
 */
 
@@ -231,6 +238,23 @@ impl Msg {
 
 	#[must_use]
 	/// New Prefix + Msg
+	///
+	/// Create a new `Msg` with a custom prefix (or no prefix).
+	///
+	/// The `prefix_color` argument accepts a `u8` corresponding to a
+	/// [BASH foreground color code](https://misc.flogisoft.com/bash/tip_colors_and_formatting#foreground_text1).
+	/// Because BASH runs on 1-256 while `u8`s run 0-255, this method does not
+	/// support a value of `256` (and `0` does nothing).
+	///
+	/// A bit weird, but that's life.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// let msg = Msg::new("Temperature", 199, "Hot, hot, hot!");
+	/// ```
 	pub fn new<T1, T2> (prefix: T1, prefix_color: u8, msg: T2) -> Self
 	where
 	T1: Borrow<str>,
@@ -265,6 +289,13 @@ impl Msg {
 
 	#[must_use]
 	/// New Prefix + Msg (Unchecked)
+	///
+	/// This function builds the `Msg`, assuming both prefix and message
+	/// components are defined and present.
+	///
+	/// Nothing too terrible happens if they aren't, but the resulting data
+	/// would contain a bunch of unnecessary markup and some floating colons
+	/// and spaces.
 	fn new_prefix_msg_unchecked(prefix_pre: &[u8], prefix: &[u8], msg: &[u8]) -> Self {
 		Self(MsgBuf::from(&[
 			// Indentation and timestamp.
@@ -280,6 +311,9 @@ impl Msg {
 
 	#[must_use]
 	/// New Prefix (Unchecked)
+	///
+	/// This function builds the `Msg`, assuming the prefix component is
+	/// defined and present, but no message is included.
 	fn new_prefix_unchecked(prefix_pre: &[u8], prefix: &[u8]) -> Self {
 		Self(MsgBuf::from(&[
 			// Indentation and timestamp.
@@ -299,6 +333,23 @@ impl Msg {
 	// ------------------------------------------------------------------------
 
 	/// Indent.
+	///
+	/// Set the level of indentation (`0..=10`), each indentation being
+	/// equivalent to four horizontal spaces.
+	///
+	/// This method is not cumulative; each call resets the whitespace
+	/// accordingly.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// let mut msg = Msg::new("Temperature", 199, "Hot, hot, hot!");
+	/// msg.set_indent(1); // "----Temperature: Hot, hot, hot!"
+	/// msg.set_indent(2); // "--------Temperature: Hot, hot, hot!"
+	/// msg.set_indent(0); // "Temperature: Hot, hot, hot!"
+	/// ```
 	pub fn set_indent(&mut self, indent: usize) {
 		let len: usize = usize::min(10, indent) * 4;
 		if 0 == len {
@@ -310,6 +361,17 @@ impl Msg {
 	}
 
 	/// Set Message.
+	///
+	/// (Re)set the message part of the `Msg`.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// let mut msg = Msg::new("Temperature", 199, "Hot, hot, hot!");
+	/// msg.set_msg("Cold, cold, cold!");
+	/// ```
 	pub fn set_msg<T: Borrow<str>>(&mut self, msg: T) {
 		let msg = msg.borrow();
 
@@ -344,6 +406,22 @@ impl Msg {
 	}
 
 	/// Set Prefix.
+	///
+	/// (Re)set the prefix part of the `Msg`, both label and color.
+	///
+	/// The `prefix_color` argument accepts a `u8` corresponding to a
+	/// [BASH foreground color code](https://misc.flogisoft.com/bash/tip_colors_and_formatting#foreground_text1).
+	/// Because BASH runs on 1-256 while `u8`s run 0-255, this method does not
+	/// support a value of `256` (and `0` does nothing).
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// let mut msg = Msg::new("Temperature", 199, "Hot, hot, hot!");
+	/// msg.set_msg("Cold, cold, cold!");
+	/// ```
 	pub fn set_prefix<T: Borrow<str>>(&mut self, prefix: T, prefix_color: u8) {
 		let prefix = prefix.borrow();
 
@@ -369,6 +447,18 @@ impl Msg {
 	}
 
 	/// Clear Timestamp.
+	///
+	/// This removes the timestamp portion of the `Msg`, if any.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// let mut msg = Msg::new("Temperature", 199, "Hot, hot, hot!");
+	/// msg.set_timestamp();   // [2020-06-01 12:01:50] Temperature: Hot, hot, hot!
+	/// msg.clear_timestamp(); // Temperature: Hot, hot, hot!
+	/// ```
 	pub fn clear_timestamp(&mut self) {
 		self.0.clear(IDX_TIMESTAMP_PRE);
 		self.0.clear(IDX_TIMESTAMP);
@@ -376,6 +466,21 @@ impl Msg {
 	}
 
 	/// Timestamp.
+	///
+	/// Prepend a timestamp to the message, updating it to the current local
+	/// time if it already existed.
+	///
+	/// Time units run biggest to smallest as Saturn intended!
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// let mut msg = Msg::new("Temperature", 199, "Hot, hot, hot!");
+	/// msg.set_timestamp();   // [2020-06-01 12:01:50] Temperature: Hot, hot, hot!
+	/// msg.clear_timestamp(); // Temperature: Hot, hot, hot!
+	/// ```
 	pub fn set_timestamp(&mut self) {
 		use chrono::{
 			Datelike,
@@ -413,12 +518,24 @@ impl Msg {
 
 	#[must_use]
 	/// As Bytes
+	///
+	/// Return the message as a slice of `u8` bytes, ANSI escape sequences and
+	/// all. The same can be achieved via dereference.
+	///
+	/// Note: This will include ANSI escape sequences, etc.
 	pub fn as_bytes(&self) -> &[u8] {
 		&*self.0
 	}
 
 	#[must_use]
 	/// As Str
+	///
+	/// Return the message as an `&str`, ANSI escape sequences and all. The
+	/// same can be achieved via the `AsRef<str>` trait.
+	///
+	/// Note: This should be valid UTF-8 so long as valid UTF-8 went into
+	/// making it in the first place; the bounds are not rechecked here,
+	/// ensuring as little overhead as possible.
 	pub fn as_str(&self) -> &str {
 		unsafe { std::str::from_utf8_unchecked(&*self.0) }
 	}
@@ -429,32 +546,49 @@ impl Msg {
 	// Printing
 	// ------------------------------------------------------------------------
 
-	/// Stdout Print.
+	/// Print to `STDOUT`.
+	///
+	/// This is equivalent to manually writing the bytes to a locked
+	/// `io::stdout()` and flushing the handle.
 	pub fn print(&self) {
 		self.0.print();
 	}
 
-	/// Stdout Print w/ Line.
+	/// Print to `STDOUT` (w/ line break)
+	///
+	/// Same as `print()`, except a trailing line break `10_u8` is appended,
+	/// like using the `println!()` macro, but faster.
 	pub fn println(&self) {
 		self.0.println();
 	}
 
-	/// Stderr Print.
+	/// Print to `STDERR`.
+	///
+	/// This is equivalent to manually writing the bytes to a locked
+	/// `io::stderr()` and flushing the handle.
 	pub fn eprint(&self) {
 		self.0.eprint();
 	}
 
-	/// Stderr Print w/ Line.
+	/// Print to `STDERR` (w/ line break)
+	///
+	/// Same as `eprint()`, except a trailing line break `10_u8` is appended,
+	/// like using the `eprintln!()` macro, but faster.
 	pub fn eprintln(&self) {
 		self.0.eprintln();
 	}
 
-	/// Sink Print.
+	/// Print to `io::sink()`.
+	///
+	/// This is equivalent to manually writing the bytes to `io::sink()`,
+	/// namely useful for benchmarking purposes.
 	pub fn sink(&self) {
 		self.0.sink();
 	}
 
-	/// Stderr Print w/ Line.
+	/// Print to `io::sink()` (w/ line break)
+	///
+	/// Same as `sink()`, except a trailing line break `10_u8` is appended.
 	pub fn sinkln(&self) {
 		self.0.sinkln();
 	}
