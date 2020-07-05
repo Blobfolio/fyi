@@ -493,7 +493,7 @@ impl Msg {
 		if unsafe { self.0.p_is_empty(IDX_TIMESTAMP_PRE) } {
 			self.0.replace(IDX_TIMESTAMP_PRE, &LBL_TIMESTAMP_PRE[..]);
 			self.0.replace(IDX_TIMESTAMP_POST, &LBL_TIMESTAMP_POST[..]);
-			//                                    2   0   0   0   -   0   0   -   0   0   •   0   0   :   0   0   :   0   0
+			//                               2   0   0   0   -   0   0   -   0   0   •   0   0   :   0   0   :   0   0
 			self.0.replace(IDX_TIMESTAMP, &[50, 48, 48, 48, 45, 48, 48, 45, 48, 48, 32, 48, 48, 58, 48, 48, 58, 48, 48]);
 		}
 
