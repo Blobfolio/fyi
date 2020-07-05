@@ -38,6 +38,7 @@ use std::{
 	borrow::Borrow,
 	cmp::Ordering,
 	fmt,
+	io,
 	hash::{
 		Hash,
 		Hasher,
@@ -546,6 +547,33 @@ impl Msg {
 	// Printing
 	// ------------------------------------------------------------------------
 
+	#[must_use]
+	/// Y/N Prompt (to `STDOUT`).
+	pub fn prompt(&self) -> bool {
+		// Clone the buffer so we can append a [y/N] instruction to it without
+		// defacing the original object.
+		let mut q = self.0.clone();
+
+		//       •  \e   [   2    m   [    y   /  \e   [   4    m   N  \e   [   0   ;   2    m   ]   •  \e   [   0    m
+		q.add(&[32, 27, 91, 50, 109, 91, 121, 47, 27, 91, 52, 109, 78, 27, 91, 48, 59, 50, 109, 93, 32, 27, 91, 48, 109]);
+
+		// Ask and collect input, looping until a valid response is typed.
+		loop {
+			// Ask the question.
+			q.print();
+
+			if let Ok(s) = read_line() {
+				match s.as_str() {
+					"" | "n" | "no" => break false,
+					"y" | "yes" => break true,
+					_ => {},
+				}
+			}
+
+			Self::error("Invalid input; your choices are 'N' or 'Y'.").println();
+		}
+	}
+
 	/// Print to `STDOUT`.
 	///
 	/// This is equivalent to manually writing the bytes to a locked
@@ -669,6 +697,19 @@ impl Msg {
 		// W   a    r    n    i    n    g
 		&[87, 97, 114, 110, 105, 110, 103]
 	);
+}
+
+
+
+/// Input Prompt
+///
+/// This prints a question and collects the raw answer. It is up to
+/// `Msg::prompt()` to figure out if it makes sense or not. (If not, that
+/// method's loop will just recall this method.)
+fn read_line() -> io::Result<String> {
+	let mut result = String::new();
+	io::stdin().read_line(&mut result)?;
+	Ok(result.trim().to_lowercase())
 }
 
 

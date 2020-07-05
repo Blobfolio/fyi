@@ -21,9 +21,6 @@ assets = [
     ["./man/fyi.1.gz", "usr/share/man/man1/", "644"],
 ]
 
-[dependencies]
-casual = "0.1.*"
-
 [dependencies.fyi_menu]
 path = "../fyi_menu"
 

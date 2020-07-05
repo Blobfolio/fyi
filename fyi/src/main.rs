@@ -160,7 +160,7 @@ fn _confirm(opts: &mut ArgList) {
 		msg.set_timestamp();
 	}
 
-	if ! casual::confirm(msg) {
+	if ! msg.prompt() {
 		process::exit(1);
 	}
 }
