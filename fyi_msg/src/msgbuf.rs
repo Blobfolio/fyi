@@ -383,13 +383,12 @@ impl From<&[&[u8]]> for MsgBuf {
 
 			let mut idx: usize = 0;
 			while idx < len {
-				let len2: usize = raw[idx].len();
-				if 0 == len2 {
-					ptr.add(idx + 1).copy_from_nonoverlapping(ptr.add(idx), 1);
-				}
-				else {
-					out.buf.extend_from_slice(raw[idx]);
-					ptr.add(idx + 1).write(*ptr.add(idx) + len2);
+				match raw[idx].len() {
+					0 => ptr.add(idx + 1).copy_from_nonoverlapping(ptr.add(idx), 1),
+					l => {
+						out.buf.extend_from_slice(raw[idx]);
+						ptr.add(idx + 1).write(*ptr.add(idx) + l);
+					},
 				}
 
 				idx += 1;
@@ -431,13 +430,12 @@ macro_rules! from_u8s {
 
 					let mut idx: usize = 0;
 					while idx < $size {
-						let len2: usize = raw[idx].len();
-						if 0 == len2 {
-							ptr.add(idx + 1).copy_from_nonoverlapping(ptr.add(idx), 1);
-						}
-						else {
-							out.buf.extend_from_slice(raw[idx]);
-							ptr.add(idx + 1).write(*ptr.add(idx) + len2);
+						match raw[idx].len() {
+							0 => ptr.add(idx + 1).copy_from_nonoverlapping(ptr.add(idx), 1),
+							l => {
+								out.buf.extend_from_slice(raw[idx]);
+								ptr.add(idx + 1).write(*ptr.add(idx) + l);
+							},
 						}
 
 						idx += 1;
@@ -480,13 +478,12 @@ impl From<Vec<Vec<u8>>> for MsgBuf {
 
 			let mut idx: usize = 0;
 			while idx < len {
-				let len2: usize = raw[idx].len();
-				if 0 == len2 {
-					ptr.add(idx + 1).copy_from_nonoverlapping(ptr.add(idx), 1);
-				}
-				else {
-					out.buf.extend_from_slice(&raw[idx]);
-					ptr.add(idx + 1).write(*ptr.add(idx) + len2);
+				match raw[idx].len() {
+					0 => ptr.add(idx + 1).copy_from_nonoverlapping(ptr.add(idx), 1),
+					l => {
+						out.buf.extend_from_slice(&raw[idx]);
+						ptr.add(idx + 1).write(*ptr.add(idx) + l);
+					},
 				}
 
 				idx += 1;
