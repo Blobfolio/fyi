@@ -36,10 +36,10 @@ rustflags   := "-C link-arg=-s"
 	fyi print -p "{{ cargo_bin }}" -c 199 "$( "{{ cargo_bin }}" -V )"
 	fyi blank
 
-	just _ab "{{ BIN }}" 'error "Twinkle, twinkle little star, how I wonder what you are."'
-	just _ab "{{ BIN }}" 'error -t "Twinkle, twinkle little star, how I wonder what you are."'
-	just _ab "{{ BIN }}" 'error -i -t "Twinkle, twinkle little star, how I wonder what you are."'
-	just _ab "{{ BIN }}" 'print -p "Iron Maiden" -c 199 "Let he who hath understanding reckon the number of the beast."'
+	just _ab "{{ BIN }}" 'error "Twinkle, twinkle little star, how I wonder what you are."' 2>/dev/null
+	just _ab "{{ BIN }}" 'error -t "Twinkle, twinkle little star, how I wonder what you are."' 2>/dev/null
+	just _ab "{{ BIN }}" 'error -i -t "Twinkle, twinkle little star, how I wonder what you are."' 2>/dev/null
+	just _ab "{{ BIN }}" 'print -p "Iron Maiden" -c 199 "Let he who hath understanding reckon the number of the beast."' 2>/dev/null
 
 
 # A/B Test Inner
@@ -54,7 +54,7 @@ rustflags   := "-C link-arg=-s"
 		'{{ BIN }} {{ ARGS }}' \
 		'{{ cargo_bin }} {{ ARGS }}'
 
-	echo "\033[2m-----\033[0m\n"
+	echo "\n\033[2m-----\033[0m\n\n"
 
 
 # Bench it!
