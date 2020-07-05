@@ -95,7 +95,7 @@ fn _blank(opts: &mut ArgList) {
 	get_help!("blank", opts);
 
 	let count: usize = match opts.pluck_opt_usize(|x| x == "-c" || x == "--count") {
-		Some(c) => usize::min(10, usize::max(1, c)),
+		Some(c) => 10.min(1.max(c)),
 		None => 1,
 	};
 
@@ -176,7 +176,7 @@ fn _custom(opts: &mut ArgList) {
 
 	// Pull the options.
 	let exit: u8 = opts.pluck_opt_usize(match_exit).unwrap_or(0) as u8;
-	let color: u8 = usize::min(255, opts.pluck_opt_usize(|x| x == "-c" || x == "--prefix-color").unwrap_or(199)) as u8;
+	let color: u8 = 255.min(opts.pluck_opt_usize(|x| x == "-c" || x == "--prefix-color").unwrap_or(199)) as u8;
 	let prefix = opts.pluck_opt(|x| x == "-p" || x == "--prefix").unwrap_or_default();
 
 	// And finally the message bit!

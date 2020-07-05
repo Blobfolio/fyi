@@ -67,21 +67,21 @@ impl From<u32> for NiceInt {
 impl From<u64> for NiceInt {
 	fn from(num: u64) -> Self {
 		if num < 1000 { Self::from_small(num) }
-		else { Self::from_big(u64::min(999_999_999_999, num)) }
+		else { Self::from_big(999_999_999_999.min(num)) }
 	}
 }
 
 impl From<u128> for NiceInt {
 	fn from(num: u128) -> Self {
 		if num < 1000 { Self::from_small(num as u64) }
-		else { Self::from_big(u64::min(999_999_999_999, num as u64)) }
+		else { Self::from_big(999_999_999_999.min(num as u64)) }
 	}
 }
 
 impl From<usize> for NiceInt {
 	fn from(num: usize) -> Self {
 		if num < 1000 { Self::from_small(num as u64) }
-		else { Self::from_big(u64::min(999_999_999_999, num as u64)) }
+		else { Self::from_big(999_999_999_999.min(num as u64)) }
 	}
 }
 

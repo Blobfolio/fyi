@@ -614,7 +614,7 @@ impl MsgBuf {
 						p[idx + 1] = max;
 					}
 					else {
-						p[idx + 1] = usize::min(max, last + parts[idx]);
+						p[idx + 1] = max.min(last + parts[idx]);
 					}
 
 					idx += 1;

@@ -352,7 +352,7 @@ impl Msg {
 	/// msg.set_indent(0); // "Temperature: Hot, hot, hot!"
 	/// ```
 	pub fn set_indent(&mut self, indent: usize) {
-		let len: usize = usize::min(10, indent) * 4;
+		let len: usize = 10.min(indent) * 4;
 		if 0 == len {
 			self.0.clear(IDX_INDENT);
 		}

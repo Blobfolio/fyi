@@ -72,7 +72,7 @@ where S: AsRef<str> {
 /// ```
 pub fn time_format_dd(num: u32) -> &'static [u8] {
 	static TIME: [u16; 60] = [12336, 12592, 12848, 13104, 13360, 13616, 13872, 14128, 14384, 14640, 12337, 12593, 12849, 13105, 13361, 13617, 13873, 14129, 14385, 14641, 12338, 12594, 12850, 13106, 13362, 13618, 13874, 14130, 14386, 14642, 12339, 12595, 12851, 13107, 13363, 13619, 13875, 14131, 14387, 14643, 12340, 12596, 12852, 13108, 13364, 13620, 13876, 14132, 14388, 14644, 12341, 12597, 12853, 13109, 13365, 13621, 13877, 14133, 14389, 14645];
-	unsafe { slice::from_raw_parts(TIME.as_ptr().add(usize::min(59, num as usize)) as *const u8, 2) }
+	unsafe { slice::from_raw_parts(TIME.as_ptr().add(59.min(num as usize)) as *const u8, 2) }
 }
 
 #[must_use]
@@ -84,7 +84,7 @@ pub fn time_format_dd(num: u32) -> &'static [u8] {
 /// Let's don't get crazy, though. A maximum of 255 spaces can be returned.
 pub fn whitespace(num: usize) -> &'static [u8] {
 	static WHITES: [u8; 255] = [32; 255];
-	&WHITES[0..usize::min(255, num)]
+	&WHITES[0..255.min(num)]
 }
 
 

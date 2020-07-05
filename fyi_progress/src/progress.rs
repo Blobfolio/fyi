@@ -634,7 +634,7 @@ impl ProgressInner {
 			self.tasks.clear();
 		}
 		self.flags = ProgressFlags::NONE;
-		self.last_secs = u32::min(86400, self.time.elapsed().as_secs() as u32);
+		self.last_secs = 86400.min(self.time.elapsed().as_secs() as u32);
 		self.cls();
 	}
 
@@ -653,7 +653,7 @@ impl ProgressInner {
 		}
 
 		// Update our elapsed time.
-		let secs: u32 = u32::min(86400, self.time.elapsed().as_secs() as u32);
+		let secs: u32 = 86400.min(self.time.elapsed().as_secs() as u32);
 		if secs != self.last_secs {
 			self.last_secs = secs;
 			self.redraw_elapsed();
@@ -742,7 +742,7 @@ impl ProgressInner {
 		// 2: the spaces after total;
 		// 2: the braces around the bar itself (should there be one);
 		// 2: the spaces after the bar itself (should there be one);
-		let total: usize = usize::min(255, width.saturating_sub(
+		let total: usize = 255.min(width.saturating_sub(
 			unsafe {
 				11 +
 				self.buf.p_len(IDX_ELAPSED) +
