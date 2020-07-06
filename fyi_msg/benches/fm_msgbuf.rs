@@ -1,5 +1,5 @@
 /*!
-# Benchmark: `fyi_msg::Msg`
+# Benchmark: `fyi_msg::MsgBuf`
 */
 
 use criterion::{
@@ -146,7 +146,7 @@ fn clear_part(c: &mut Criterion) {
 	group.bench_function("[1].clear_part(1)", move |b| {
 		b.iter_with_setup(||
 			MsgBuf::from(LG1),
-			|mut parts| parts.clear_part(black_box(1))
+			|mut parts| parts.clear(black_box(1))
 		)
 	});
 
@@ -154,7 +154,7 @@ fn clear_part(c: &mut Criterion) {
 		group.bench_function(format!("[3].clear_part({})", i), move |b| {
 			b.iter_with_setup(||
 				MsgBuf::from(&[SM1, MD1, LG1]),
-				|mut parts| parts.clear_part(black_box(i))
+				|mut parts| parts.clear(black_box(i))
 			)
 		});
 	}
@@ -173,7 +173,7 @@ fn remove_part(c: &mut Criterion) {
 	group.bench_function("[1].remove_part(1)", move |b| {
 		b.iter_with_setup(||
 			MsgBuf::from(LG1),
-			|mut parts| parts.remove_part(black_box(1))
+			|mut parts| parts.remove(black_box(1))
 		)
 	});
 
@@ -181,7 +181,7 @@ fn remove_part(c: &mut Criterion) {
 		group.bench_function(format!("[3].remove_part({})", i), move |b| {
 			b.iter_with_setup(||
 				MsgBuf::from(&[SM1, MD1, LG1]),
-				|mut parts| parts.remove_part(black_box(i))
+				|mut parts| parts.remove(black_box(i))
 			)
 		});
 	}
@@ -208,7 +208,7 @@ fn replace_part(c: &mut Criterion) {
 		), move |b| {
 			b.iter_with_setup(||
 				MsgBuf::from(MD2),
-				|mut parts| parts.replace_part(black_box(1), black_box(buf))
+				|mut parts| parts.replace(black_box(1), black_box(buf))
 			)
 		});
 	}
@@ -221,7 +221,7 @@ fn replace_part(c: &mut Criterion) {
 		), move |b| {
 			b.iter_with_setup(||
 				MsgBuf::from(&[SM2, MD2, LG2]),
-				|mut parts| parts.replace_part(black_box(2), black_box(buf))
+				|mut parts| parts.replace(black_box(2), black_box(buf))
 			)
 		});
 	}

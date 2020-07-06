@@ -1,0 +1,16 @@
+Print a message using the built-in prefix "{0}", e.g. "{0}: Hello World".
+
+USAGE:
+    fyi {1} [FLAGS] [OPTIONS] <MSG>
+
+FLAGS:
+    -h, --help         Print this screen.
+    -i, --indent       Indent the line.
+        --stderr       Print to STDERR instead of STDOUT.
+    -t, --timestamp    Include a timestamp.
+
+OPTIONS:
+    -e, --exit <num>   Exit with this status code after printing. [default: 0]
+
+ARGS:
+    <MSG>    The message!

@@ -84,8 +84,8 @@ use crate::{
 	},
 };
 use fyi_msg::{
-	Msg,
 	MsgBuf,
+	MsgKind,
 	utility::time_format_dd,
 };
 use indexmap::set::IndexSet;
@@ -132,8 +132,8 @@ macro_rules! pb_push {
 
 
 
-static DONE:   &[u8; 255] = &[61; 255];
-static UNDONE: &[u8; 255] = &[45; 255];
+static DONE:   [u8; 255] = [61; 255];
+static UNDONE: [u8; 255] = [45; 255];
 
 const IDX_TITLE: usize = 1;
 // const IDX_ELAPSED_PRE: usize = 2;
@@ -192,7 +192,7 @@ struct ProgressBar {
 }
 
 impl Default for ProgressBar {
-	#[inline]
+
 	fn default() -> Self {
 		Self {
 			inner: [0; 289],
@@ -204,7 +204,7 @@ impl Default for ProgressBar {
 impl Deref for ProgressBar {
 	type Target = [u8];
 
-	#[inline]
+
 	fn deref(&self) -> &Self::Target {
 		&self.inner[..self.len]
 	}
@@ -578,14 +578,14 @@ impl ProgressInner {
 	/// Clear Screen
 	pub fn cls(&mut self) {
 		// Buffer 10 Line Clears
-		static CLS10: &[u8] = &[27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75];
+		static CLS10: [u8; 150] = [27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75];
 		// 0..10 moves the cursor left. This is done only once per reset.
 		// 14 is the length of each subsequent command, which moves the cursor up.
 		// To clear "n" lines, then, slice [0..(10 + 14 * n)].
 
 		if self.last_lines > 0 {
 			match self.last_lines.cmp(&10) {
-				Ordering::Equal => { Self::print(CLS10); },
+				Ordering::Equal => { Self::print(&CLS10[..]); },
 				Ordering::Less => {
 					let end: usize = 10 + 14 * self.last_lines;
 					Self::print(&CLS10[0..end]);
@@ -614,7 +614,7 @@ impl ProgressInner {
 	/// message after progress has finished.
 	pub fn finished_in(&self) {
 		if ! self.is_running() {
-			Self::print(&Msg::crunched(format!(
+			Self::print(&MsgKind::Crunched.as_msg(format!(
 				"Finished in {}.\n",
 				unsafe { std::str::from_utf8_unchecked(&*NiceElapsed::from(self.last_secs)) },
 			)));
@@ -634,7 +634,7 @@ impl ProgressInner {
 			self.tasks.clear();
 		}
 		self.flags = ProgressFlags::NONE;
-		self.last_secs = u32::min(86400, self.time.elapsed().as_secs() as u32);
+		self.last_secs = 86400.min(self.time.elapsed().as_secs() as u32);
 		self.cls();
 	}
 
@@ -653,7 +653,7 @@ impl ProgressInner {
 		}
 
 		// Update our elapsed time.
-		let secs: u32 = u32::min(86400, self.time.elapsed().as_secs() as u32);
+		let secs: u32 = 86400.min(self.time.elapsed().as_secs() as u32);
 		if secs != self.last_secs {
 			self.last_secs = secs;
 			self.redraw_elapsed();
@@ -661,19 +661,19 @@ impl ProgressInner {
 
 		// Update our done amount.
 		if self.flags.contains(ProgressFlags::TICK_DONE) {
-			self.buf.replace_part(IDX_DONE, &*NiceInt::from(self.done));
+			self.buf.replace(IDX_DONE, &*NiceInt::from(self.done));
 			self.flags &= !ProgressFlags::TICK_DONE;
 		}
 
 		// Did the total change? Probably not, but just in case...
 		if self.flags.contains(ProgressFlags::TICK_TOTAL) {
-			self.buf.replace_part(IDX_TOTAL, &*NiceInt::from(self.total));
+			self.buf.replace(IDX_TOTAL, &*NiceInt::from(self.total));
 			self.flags &= !ProgressFlags::TICK_TOTAL;
 		}
 
 		// The percent?
 		if self.flags.contains(ProgressFlags::TICK_PERCENT) {
-			self.buf.replace_part(
+			self.buf.replace(
 				IDX_PERCENT,
 				format!("{:>3.*}%", 2, self.percent() * 100.0).as_bytes(),
 			);
@@ -742,12 +742,14 @@ impl ProgressInner {
 		// 2: the spaces after total;
 		// 2: the braces around the bar itself (should there be one);
 		// 2: the spaces after the bar itself (should there be one);
-		let total: usize = usize::min(255, width.saturating_sub(
-			11 +
-			self.buf.part_len(IDX_ELAPSED) +
-			self.buf.part_len(IDX_DONE) +
-			self.buf.part_len(IDX_TOTAL) +
-			self.buf.part_len(IDX_PERCENT)
+		let total: usize = 255.min(width.saturating_sub(
+			unsafe {
+				11 +
+				self.buf.p_len(IDX_ELAPSED) +
+				self.buf.p_len(IDX_DONE) +
+				self.buf.p_len(IDX_TOTAL) +
+				self.buf.p_len(IDX_PERCENT)
+			}
 		));
 
 		if total >= 10 { total }
@@ -775,10 +777,10 @@ impl ProgressInner {
 		// We don't have room for it.
 		let bar_len: usize = self.bar_space(self.last_width);
 		if bar_len < 10 {
-			self.buf.clear_part(IDX_BAR);
+			self.buf.clear(IDX_BAR);
 		}
 		else {
-			self.buf.replace_part(
+			self.buf.replace(
 				IDX_BAR,
 				&*ProgressBar::new(self.done, self.total, bar_len)
 			);
@@ -807,13 +809,13 @@ impl ProgressInner {
 	/// This method updates the "tasks" slice.
 	fn redraw_tasks(&mut self) {
 		if self.tasks.is_empty() {
-			self.buf.clear_part(IDX_TASKS);
+			self.buf.clear(IDX_TASKS);
 		}
 		else {
 			// Our formatting eats up 7 printable spaces; the task can use up
 			// whatever else.
 			let width: usize = self.last_width - 7;
-			self.buf.replace_part(
+			self.buf.replace(
 				IDX_TASKS,
 				&self.tasks.iter()
 					.flat_map(|s|
@@ -834,14 +836,14 @@ impl ProgressInner {
 	/// This method updates the "title" slice.
 	fn redraw_title(&mut self) {
 		if self.title.is_empty() {
-			self.buf.clear_part(IDX_TITLE);
+			self.buf.clear(IDX_TITLE);
 		}
 		else {
 			let fit = self.title.fitted_range(self.last_width);
 
 			// The whole thing fits; just add a line break.
 			if fit.end == self.title.len() {
-				self.buf.replace_part(
+				self.buf.replace(
 					IDX_TITLE,
 					&self.title.as_bytes().iter()
 						//       \n
@@ -853,7 +855,7 @@ impl ProgressInner {
 			// It has to be chopped; add an ANSI clear in addition to the line
 			// break to be safe.
 			else {
-				self.buf.replace_part(
+				self.buf.replace(
 					IDX_TITLE,
 					&self.title.as_bytes()[fit].iter()
 						//       \e   [   0    m  \n

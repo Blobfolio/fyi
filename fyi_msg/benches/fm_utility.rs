@@ -1,5 +1,5 @@
 /*!
-# Benchmark: `fyi_msg::traits::Inflection`
+# Benchmark: `fyi_msg::utility`
 */
 
 use criterion::{
@@ -25,6 +25,24 @@ fn ansi_code_bold(c: &mut Criterion) {
 			|b, &color| {
 				b.iter(||
 					utility::ansi_code_bold(color)
+				);
+			}
+		);
+	}
+
+	group.finish();
+}
+
+fn str_to_u8(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_msg::utility");
+
+	for val in ["0", "1", "200", "300"].iter() {
+		group.bench_with_input(
+			BenchmarkId::from_parameter(format!("str_to_u8({})", val)),
+			val,
+			|b, &val| {
+				b.iter(||
+					utility::str_to_u8(val)
 				);
 			}
 		);
@@ -74,6 +92,7 @@ fn whitespace(c: &mut Criterion) {
 criterion_group!(
 	benches,
 	ansi_code_bold,
+	str_to_u8,
 	whitespace,
 	time_format_dd,
 );

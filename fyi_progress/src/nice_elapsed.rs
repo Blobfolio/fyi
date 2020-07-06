@@ -49,7 +49,6 @@ pub struct NiceElapsed {
 
 
 impl Default for NiceElapsed {
-	#[inline]
 	fn default() -> Self {
 		Self {
 			inner: [0; 36],
@@ -61,7 +60,6 @@ impl Default for NiceElapsed {
 impl Deref for NiceElapsed {
 	type Target = [u8];
 
-	#[inline]
 	fn deref(&self) -> &Self::Target {
 		&self.inner[..self.len]
 	}
@@ -77,7 +75,6 @@ impl fmt::Debug for NiceElapsed {
 }
 
 impl fmt::Display for NiceElapsed {
-	#[inline]
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_str(unsafe { std::str::from_utf8_unchecked(&*self) })
 	}

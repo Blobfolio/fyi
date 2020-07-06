@@ -1,6 +1,7 @@
 [workspace]
 members = [
 	"fyi",
+	"fyi_menu",
     "fyi_msg",
     "fyi_progress",
     "fyi_witcher",
@@ -10,9 +11,3 @@ members = [
 lto = true
 codegen-units = 1
 opt-level = 3
-debug = false
-debug-assertions = false
-incremental = false
-overflow-checks = false
-panic = "abort"
-rpath = false

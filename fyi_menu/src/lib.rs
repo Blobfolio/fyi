@@ -1,5 +1,5 @@
 /*!
-# FYI Msg: Table of Contents
+# FYI Menu: Table of Contents
 */
 
 #![warn(missing_docs)]
@@ -25,12 +25,5 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::missing_errors_doc)]
 
-mod msg;
-mod msgbuf;
-pub mod utility;
-
-pub use msg::{
-	Msg,
-	MsgKind,
-};
-pub use msgbuf::MsgBuf;
+pub mod arglist;
+pub use arglist::ArgList;

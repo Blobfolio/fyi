@@ -10,21 +10,23 @@
 pkg_id      := "fyi"
 pkg_name    := "FYI"
 pkg_dir1    := justfile_directory() + "/fyi"
-pkg_dir2    := justfile_directory() + "/fyi_msg"
-pkg_dir3    := justfile_directory() + "/fyi_progress"
-pkg_dir4    := justfile_directory() + "/fyi_witcher"
+pkg_dir2    := justfile_directory() + "/fyi_menu"
+pkg_dir3    := justfile_directory() + "/fyi_msg"
+pkg_dir4    := justfile_directory() + "/fyi_progress"
+pkg_dir5    := justfile_directory() + "/fyi_witcher"
 
 cargo_dir   := "/tmp/" + pkg_id + "-cargo"
 cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
 release_dir := justfile_directory() + "/release"
 
-# If we ever want to use Clang native: -Clinker-plugin-lto -Clinker=clang-9 -Clink-args=-fuse-ld=lld-9
+# If we ever want to use Clang native:
+# -Clinker-plugin-lto -Clinker=clang-9 -Clink-args=-fuse-ld=lld-9
 rustflags   := "-C link-arg=-s"
 
 
 
 # A/B Test Two Binaries (second is implied)
-@ab BIN REBUILD="":
+@ab BIN="/usr/bin/fyi" REBUILD="":
 	[ -z "{{ REBUILD }}" ] || just build
 	[ -f "{{ cargo_bin }}" ] || just build
 
@@ -34,28 +36,25 @@ rustflags   := "-C link-arg=-s"
 	fyi print -p "{{ cargo_bin }}" -c 199 "$( "{{ cargo_bin }}" -V )"
 	fyi blank
 
-	just _ab "{{ BIN }}" 'debug "Twinkle, twinkle little star, how I wonder what you are."'
-
-	just _ab "{{ BIN }}" 'debug -t "Twinkle, twinkle little star, how I wonder what you are."'
-
-	just _ab "{{ BIN }}" 'print -p "Iron Maiden" -c 199 "Let he who hath understanding reckon the number of the beast."'
+	just _ab "{{ BIN }}" 'error "Twinkle, twinkle little star, how I wonder what you are."' 2>/dev/null
+	just _ab "{{ BIN }}" 'error -t "Twinkle, twinkle little star, how I wonder what you are."' 2>/dev/null
+	just _ab "{{ BIN }}" 'error -i -t "Twinkle, twinkle little star, how I wonder what you are."' 2>/dev/null
+	just _ab "{{ BIN }}" 'print -p "Iron Maiden" -c 199 "Let he who hath understanding reckon the number of the beast."' 2>/dev/null
 
 
 # A/B Test Inner
 @_ab BIN ARGS:
 	"{{ BIN }}" {{ ARGS }}
+	"{{ cargo_bin }}" {{ ARGS }}
 
-	sleep 30
-	hyperfine --warmup 10 \
-		--runs 100 \
-		'{{ BIN }} {{ ARGS }}'
-
-	sleep 30
-	hyperfine --warmup 10 \
-		--runs 100 \
+	#sleep 30
+	hyperfine --warmup 50 \
+		--runs 1000 \
+		--style color \
+		'{{ BIN }} {{ ARGS }}' \
 		'{{ cargo_bin }} {{ ARGS }}'
 
-	echo "\033[2m-----\033[0m\n"
+	echo "\n\033[2m-----\033[0m\n\n"
 
 
 # Bench it!
@@ -83,8 +82,56 @@ bench BENCH="" FILTER="":
 	exit 0
 
 
+# Bin Test!
+@bin-test:
+	[ -f "{{ cargo_bin }}" ] || just build
+
+	"{{ cargo_bin }}" print "This message has no prefix."
+
+	"{{ cargo_bin }}" blank
+
+	"{{ cargo_bin }}" print -p "Pink" -c 199 "This message has a custom pink prefix."
+	"{{ cargo_bin }}" print -p "Blue" -c 4 "This message has a custom blue prefix."
+
+	"{{ cargo_bin }}" blank
+
+	"{{ cargo_bin }}" notice "So official!"
+	"{{ cargo_bin }}" success "Hurray! You did it!"
+	"{{ cargo_bin }}" warning "Hold it there, Sparky!"
+	"{{ cargo_bin }}" error "Oopsie."
+
+	"{{ cargo_bin }}" blank
+
+	"{{ cargo_bin }}" debug "The devil is in the details."
+	"{{ cargo_bin }}" info "Details without the word 'bug'."
+	"{{ cargo_bin }}" task "Let's get to work!"
+
+	"{{ cargo_bin }}" blank
+
+	"{{ cargo_bin }}" crunched "Some hard work just happened."
+	"{{ cargo_bin }}" done "As the French say, «FIN»."
+
+	"{{ cargo_bin }}" blank
+
+	"{{ cargo_bin }}" info -t "Messages can be timestamped."
+
+	"{{ cargo_bin }}" blank
+
+	"{{ cargo_bin }}" info "Messages can be indented."
+	"{{ cargo_bin }}" info -i "Messages can be indented."
+
+	"{{ cargo_bin }}" blank
+
+	"{{ cargo_bin }}" confirm "Did this work for you?" || "{{ cargo_bin }}" error "Well that sucks."
+
+	"{{ cargo_bin }}" blank
+
+
 # Build Release!
 @build: clean
+	# For perf runs, use RUSTFLAGS="-C force-frame-pointers=y -g", and update
+	# Cargo.toml: no lto, opt-level 1, debug = true
+
 	# First let's build the Rust bit.
 	RUSTFLAGS="{{ rustflags }}" cargo build \
 		--bin "{{ pkg_id }}" \
@@ -112,20 +159,15 @@ bench BENCH="" FILTER="":
 # Build Man.
 @build-man: build
 	# Pre-clean.
-	find "{{ release_dir }}/man" -type f -delete
+	find "{{ pkg_dir1 }}/man" -type f -delete
 
 	# Use help2man to make a crappy MAN page.
-	help2man -o "{{ release_dir }}/man/{{ pkg_id }}.1" \
+	help2man -o "{{ pkg_dir1 }}/man/{{ pkg_id }}.1" \
 		-N "{{ cargo_bin }}"
 
-	# Strip some ugly out.
-	sd '{{ pkg_name }} [0-9.]+\nBlobfolio, LLC. <hello@blobfolio.com>\n' \
-		'' \
-		"{{ release_dir }}/man/{{ pkg_id }}.1"
-
 	# Gzip it and reset ownership.
-	gzip -k -f -9 "{{ release_dir }}/man/{{ pkg_id }}.1"
-	just _fix-chown "{{ release_dir }}/man"
+	gzip -k -f -9 "{{ pkg_dir1 }}/man/{{ pkg_id }}.1"
+	just _fix-chown "{{ pkg_dir1 }}/man"
 
 
 # Check Release!
@@ -150,6 +192,9 @@ bench BENCH="" FILTER="":
 	[ ! -d "{{ pkg_dir2 }}/target" ] || rm -rf "{{ pkg_dir2 }}/target"
 	[ ! -d "{{ pkg_dir3 }}/target" ] || rm -rf "{{ pkg_dir3 }}/target"
 	[ ! -d "{{ pkg_dir4 }}/target" ] || rm -rf "{{ pkg_dir4 }}/target"
+	[ ! -d "{{ pkg_dir5 }}/target" ] || rm -rf "{{ pkg_dir5 }}/target"
+
+	cargo update
 
 
 # Clippy.
@@ -171,6 +216,16 @@ bench BENCH="" FILTER="":
 		--example "{{ DEMO }}" \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
+
+
+# Test Run.
+@run +ARGS:
+	RUSTFLAGS="{{ rustflags }}" cargo run \
+		--bin "{{ pkg_id }}" \
+		--release \
+		--target x86_64-unknown-linux-gnu \
+		--target-dir "{{ cargo_dir }}" \
+		-- {{ ARGS }}
 
 
 # Unit tests!
@@ -209,6 +264,7 @@ version:
 	just _version "{{ pkg_dir2 }}" "$_ver2"
 	just _version "{{ pkg_dir3 }}" "$_ver2"
 	just _version "{{ pkg_dir4 }}" "$_ver2"
+	just _version "{{ pkg_dir5 }}" "$_ver2"
 
 
 # Set version for real.

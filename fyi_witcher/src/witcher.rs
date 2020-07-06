@@ -11,7 +11,10 @@ bar output, or you can dereference the object to work directly with its inner
 */
 
 use crate::utility::inflect;
-use fyi_msg::Msg;
+use fyi_msg::{
+	Msg,
+	MsgKind,
+};
 use fyi_progress::{
 	NiceElapsed,
 	NiceInt,
@@ -31,7 +34,6 @@ use std::{
 	io::{
 		self,
 		BufRead,
-		Write,
 	},
 	ops::Deref,
 	path::{
@@ -99,7 +101,7 @@ impl Witcher {
 
 		Self(paths.iter()
 			// Canonicalize the search paths.
-			.filter_map(|p| fs::canonicalize(p.as_ref()).ok())
+			.filter_map(|p| fs::canonicalize(p).ok())
 			.collect::<IndexSet<PathBuf>>()
 			.into_par_iter()
 			// Walk each search path.
@@ -107,28 +109,76 @@ impl Witcher {
 				.follow_links(true)
 				.skip_hidden(false)
 				.into_iter()
-				.filter_map(|p| {
-					// Skip errors, duh.
-					if let Ok(path) = p {
-						// We don't want directories.
-						if path.file_type().is_dir() { None }
-						// We need to canonicalize again because symlinks might
-						// not actually be living with the parent directory.
-						else if let Ok(path) = fs::canonicalize(&path.path()) {
-							// The most efficient way to match regex against a
-							// `Path` is to convert it to an `OsStr` and
-							// convert that into an `&[u8]`.
-							if pattern.is_match(unsafe {
-								&*(path.as_os_str() as *const OsStr as *const [u8])
-							}) {
-								Some(path)
-							}
-							else { None }
-						}
-						else { None }
+				.filter_map(|p| p.ok()
+					.and_then(|p| if p.file_type().is_dir() { None } else { Some(p) })
+					.and_then(|p| fs::canonicalize(p.path()).ok())
+					.and_then(|p| if pattern.is_match(unsafe {
+						&*(p.as_os_str() as *const OsStr as *const [u8])
+					}) {
+						Some(p)
 					}
-					else { None }
-				})
+						else { None })
+				)
+				.collect::<IndexSet<PathBuf>>()
+			)
+			.collect()
+		)
+	}
+
+	/// New Custom
+	///
+	/// This method can be used to perform a file search with arbitrary
+	/// filtering via a callback method. This method should accept a
+	/// `Result<jwalk::DirEntry>` and return a `Some(PathBuf)` if the file is
+	/// worth keeping, or `None` to reject the entry.
+	///
+	/// # Safety
+	///
+	/// The responsibility for validating and canonicalizing file paths falls
+	/// falls to callback, so be sure you handle that, otherwise things like
+	/// `du()` might be a bit weird.
+	pub unsafe fn custom<P, F> (paths: &[P], cb: F) -> Self
+	where
+		P: AsRef<Path>,
+		F: FnMut(Result<jwalk::DirEntry<((), ())>, jwalk::Error>) -> Option<PathBuf> + Send + Sync + Copy {
+		Self(paths.iter()
+			// Canonicalize the search paths.
+			.filter_map(|p| fs::canonicalize(p).ok())
+			.collect::<IndexSet<PathBuf>>()
+			.into_par_iter()
+			// Walk each search path.
+			.flat_map(|i| WalkDir::new(i)
+				.follow_links(true)
+				.skip_hidden(false)
+				.into_iter()
+				.filter_map(cb)
+				.collect::<IndexSet<PathBuf>>()
+			)
+			.collect()
+		)
+	}
+
+	/// Simple.
+	///
+	/// Recursively search for files within the specified paths. That's it.
+	/// Unfiltered! All files in the result set will be canonicalized and
+	/// deduped for minimum confusion.
+	pub fn simple<P> (paths: &[P]) -> Self
+	where P: AsRef<Path> {
+		Self(paths.iter()
+			// Canonicalize the search paths.
+			.filter_map(|p| fs::canonicalize(p).ok())
+			.collect::<IndexSet<PathBuf>>()
+			.into_par_iter()
+			// Walk each search path.
+			.flat_map(|i| WalkDir::new(i)
+				.follow_links(true)
+				.skip_hidden(false)
+				.into_iter()
+				.filter_map(|p| p.ok()
+					.and_then(|p| if p.file_type().is_dir() { None } else { Some(p) })
+					.and_then(|p| fs::canonicalize(p.path()).ok())
+				)
 				.collect::<IndexSet<PathBuf>>()
 			)
 			.collect()
@@ -146,14 +196,12 @@ impl Witcher {
 			if let Ok(file) = File::open(path.as_ref()) {
 				Self::new(
 					&io::BufReader::new(file).lines()
-						.filter_map(|x| match x {
-							Ok(x) => {
-								let x = x.trim();
-								if x.is_empty() { None }
-								else { Some(PathBuf::from(x)) }
-							},
-							Err(_) => None,
-						})
+						.filter_map(|x| x.ok()
+							.and_then(|x| match x.trim() {
+								"" => None,
+								y => Some(PathBuf::from(y)),
+							})
+						)
 						.collect::<Vec<PathBuf>>(),
 					pattern,
 				)
@@ -253,17 +301,15 @@ impl Witcher {
 	///
 	/// Like the progress bar, this prints to `Stderr`.
 	fn finished_in(total: u64, time: u32) {
-		io::stderr().write_all(
-			&Msg::crunched(unsafe {
-				std::str::from_utf8_unchecked(
-					&inflect(total, "file in ", "files in ").iter()
-						.chain(&*NiceElapsed::from(time))
-						.chain(&[46, 10])
-						.copied()
-						.collect::<Vec<u8>>()
-				)
-			})
-		).unwrap();
+		MsgKind::Crunched.as_msg(unsafe {
+			std::str::from_utf8_unchecked(
+				&inflect(total, "file in ", "files in ").iter()
+					.chain(&*NiceElapsed::from(time))
+					.chain(&[46, 10])
+					.copied()
+					.collect::<Vec<u8>>()
+			)
+		}).eprint();
 	}
 
 	/// Crunched In Msg
@@ -275,37 +321,134 @@ impl Witcher {
 	/// Like the progress bar, this prints to `Stderr`.
 	fn crunched_in(total: u64, time: u32, before: u64, after: u64) {
 		if 0 == after || before <= after {
-			io::stderr().write_all(
-				&Msg::crunched(unsafe {
-					std::str::from_utf8_unchecked(
-						&inflect(total, "file in ", "files in ").iter()
-							.chain(&*NiceElapsed::from(time))
-							.chain(b", but nothing doing.\n")
-							.copied()
-							.collect::<Vec<u8>>()
+			MsgKind::Crunched.as_msg(unsafe {
+				std::str::from_utf8_unchecked(
+					&inflect(total, "file in ", "files in ").iter()
+						.chain(&*NiceElapsed::from(time))
+						.chain(b", but nothing doing.\n")
+						.copied()
+						.collect::<Vec<u8>>()
 
-					)
-				})
-			).unwrap();
+				)
+			}).eprint();
 		}
 		else {
-			io::stderr().write_all(
-				&Msg::crunched(unsafe {
-					std::str::from_utf8_unchecked(
-						&inflect(total, "file in ", "files in ").iter()
-							.chain(&*NiceElapsed::from(time))
-							.chain(b", saving ")
-							.chain(&*NiceInt::from(before - after))
-							.chain(format!(
-								" bytes ({:3.*}%).\n",
-								2,
-								(1.0 - (after as f64 / before as f64)) * 100.0
-							).as_bytes())
-							.copied()
-							.collect::<Vec<u8>>()
-					)
-				})
-			).unwrap();
+			MsgKind::Crunched.as_msg(unsafe {
+				std::str::from_utf8_unchecked(
+					&inflect(total, "file in ", "files in ").iter()
+						.chain(&*NiceElapsed::from(time))
+						.chain(b", saving ")
+						.chain(&*NiceInt::from(before - after))
+						.chain(format!(
+							" bytes ({:3.*}%).\n",
+							2,
+							(1.0 - (after as f64 / before as f64)) * 100.0
+						).as_bytes())
+						.copied()
+						.collect::<Vec<u8>>()
+				)
+			}).eprint();
 		}
+	}
+}
+
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn t_new() {
+		let mut abs_dir = fs::canonicalize("tests/assets/").unwrap();
+		abs_dir.push("_.txt");
+		let abs_p1 = abs_dir.with_file_name("file.txt");
+		let abs_p2 = abs_dir.with_file_name("is-executable.sh");
+		let abs_perr = abs_dir.with_file_name("foo.bar");
+
+		// Do a non-search search.
+		let mut w1 = Witcher::new(&[PathBuf::from("tests/")], ".");
+		assert!(! w1.is_empty());
+		assert_eq!(w1.len(), 2);
+		assert!(w1.contains(&abs_p1));
+		assert!(w1.contains(&abs_p2));
+		assert!(! w1.contains(&abs_perr));
+		assert_eq!(w1.du(), 162_u64);
+
+		// Look only for .txt files.
+		w1 = Witcher::new(&[PathBuf::from("tests/")], r"(?i)\.txt$");
+		assert!(! w1.is_empty());
+		assert_eq!(w1.len(), 1);
+		assert!(w1.contains(&abs_p1));
+		assert!(! w1.contains(&abs_p2));
+		assert!(! w1.contains(&abs_perr));
+		assert_eq!(w1.du(), 26_u64);
+
+		// Look for something that doesn't exist.
+		w1 = Witcher::new(&[PathBuf::from("tests/")], r"(?i)\.exe$");
+		assert!(w1.is_empty());
+		assert_eq!(w1.len(), 0);
+		assert!(! w1.contains(&abs_p1));
+		assert!(! w1.contains(&abs_p2));
+		assert!(! w1.contains(&abs_perr));
+		assert_eq!(w1.du(), 0_u64);
+	}
+
+	pub fn t_custom_cb (p: Result<jwalk::DirEntry<((), ())>, jwalk::Error>) -> Option<PathBuf> {
+		// Skip errors, duh.
+		if let Ok(path) = p {
+			// We don't want directories.
+			if path.file_type().is_dir() { None }
+			// We need to canonicalize again because symlinks might
+			// not actually be living with the parent directory.
+			else if let Ok(path) = fs::canonicalize(&path.path()) {
+				// Do a simple `ends_with()` check to filter just .sh files.
+				unsafe {
+					let p_str: *const OsStr = path.as_os_str();
+					if (&*(p_str as *const [u8])).ends_with(&[46, 115, 104]) { Some(path) }
+					else { None }
+				}
+			}
+			else { None }
+		}
+		else { None }
+	}
+
+	#[test]
+	fn t_custom() {
+		let mut abs_dir = fs::canonicalize("tests/assets/").unwrap();
+		abs_dir.push("_.txt");
+		let abs_p1 = abs_dir.with_file_name("file.txt");
+		let abs_p2 = abs_dir.with_file_name("is-executable.sh");
+		let abs_perr = abs_dir.with_file_name("foo.bar");
+
+		// Search for .sh files.
+		unsafe {
+			let w1 = Witcher::custom(&[PathBuf::from("tests/")], t_custom_cb);
+			assert!(! w1.is_empty(), "{:?}", &b".sh"[..]);
+			assert_eq!(w1.len(), 1);
+			assert!(! w1.contains(&abs_p1));
+			assert!(w1.contains(&abs_p2));
+			assert!(! w1.contains(&abs_perr));
+			assert_eq!(w1.du(), 136_u64);
+		}
+	}
+
+	#[test]
+	fn t_simple() {
+		let mut abs_dir = fs::canonicalize("tests/assets/").unwrap();
+		abs_dir.push("_.txt");
+		let abs_p1 = abs_dir.with_file_name("file.txt");
+		let abs_p2 = abs_dir.with_file_name("is-executable.sh");
+		let abs_perr = abs_dir.with_file_name("foo.bar");
+
+		// Search for all files.
+		let w1 = Witcher::simple(&[PathBuf::from("tests/")]);
+		assert!(! w1.is_empty());
+		assert_eq!(w1.len(), 2);
+		assert!(w1.contains(&abs_p1));
+		assert!(w1.contains(&abs_p2));
+		assert!(! w1.contains(&abs_perr));
+		assert_eq!(w1.du(), 162_u64);
 	}
 }
