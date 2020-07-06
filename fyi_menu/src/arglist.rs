@@ -422,12 +422,12 @@ impl ArgList {
 
 		while idx < len {
 			if cb(&self.0[idx]) {
-				if out.is_some() {
-					Self::die(format!("Duplicate option: {}", self.0[idx]));
-					unreachable!();
-				}
-				else if idx + 1 == len || self.0[idx + 1].starts_with('-') {
-					Self::die(format!("Missing option value: {}", self.0[idx]));
+				if idx + 1 == len || self.0[idx + 1].starts_with('-') {
+					Self::die({
+						let mut s: String = String::from("Missing option value: ");
+						s.push_str(&self.0[idx]);
+						s
+					});
 					unreachable!();
 				}
 
