@@ -364,18 +364,6 @@ impl ArgList {
 		&mut self.0
 	}
 
-	#[must_use]
-	/// Length.
-	pub fn len(&self) -> usize {
-		self.0.len()
-	}
-
-	#[must_use]
-	/// Is Empty.
-	pub fn is_empty(&self) -> bool {
-		self.0.len() != 0
-	}
-
 	/// Expect Something, Anything
 	pub fn expect(&self) {
 		if self.0.is_empty() {
