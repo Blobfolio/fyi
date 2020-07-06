@@ -8,7 +8,10 @@ use criterion::{
 	criterion_group,
 	criterion_main,
 };
-use fyi_msg::Msg;
+use fyi_msg::{
+	Msg,
+	MsgKind,
+};
 
 
 
@@ -34,11 +37,11 @@ fn new(c: &mut Criterion) {
 	});
 
 	group.bench_function("error(\"This is an example message!\")", move |b| {
-		b.iter(|| Msg::error(example_str))
+		b.iter(|| MsgKind::Error.as_msg(example_str))
 	});
 
 	group.bench_function("debug(\"This is an example message!\")", move |b| {
-		b.iter(|| Msg::debug(example_str))
+		b.iter(|| MsgKind::Debug.as_msg(example_str))
 	});
 
 	group.finish();
@@ -48,7 +51,10 @@ fn set_indent(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::Msg");
 
 	group.bench_function("set_indent(1)", move |b| {
-		b.iter_with_setup(|| Msg::success("This is an example message!"), |mut msg| msg.set_indent(black_box(1)))
+		b.iter_with_setup(||
+			MsgKind::Success.as_msg("This is an example message!"),
+			|mut msg| msg.set_indent(black_box(1))
+		)
 	});
 
 	group.finish();
@@ -58,7 +64,10 @@ fn set_timestamp(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::Msg");
 
 	group.bench_function("set_timestamp()", move |b| {
-		b.iter_with_setup(|| Msg::success("This is an example message!"), |mut msg| msg.set_timestamp())
+		b.iter_with_setup(||
+			MsgKind::Success.as_msg("This is an example message!"),
+			|mut msg| msg.set_timestamp()
+		)
 	});
 
 	group.finish();

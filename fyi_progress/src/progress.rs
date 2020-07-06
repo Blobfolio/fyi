@@ -53,12 +53,12 @@ ticking automatically, regularly in its own thread. Take a look at the included
 ## Example:
 
 ```no_run
-use fyi_msg::Msg;
+use fyi_msg::MsgKind;
 use fyi_progress::Progress;
 
 // Start a bar.
 let bar = Progress::new(
-    Some(Msg::info("Example message/title/whatever.")),
+    Some(MsgKind::Info.as_msg("Example message/title/whatever.")),
     1000,
 );
 assert_eq!(0, bar.done());
