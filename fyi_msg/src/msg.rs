@@ -49,21 +49,6 @@ use std::{
 
 
 
-/// Helper: Generate `Msg` preset methods like "Error:", "Success:", etc.
-macro_rules! new_prefix {
-	($fn:ident, $pre:expr, $prefix:expr) => {
-		#[must_use]
-		/// New Prefix + Msg
-		pub fn $fn<T: Borrow<str>> (msg: T) -> Self {
-			let msg = msg.borrow();
-			if msg.is_empty() { Self::new_prefix_unchecked($pre, $prefix) }
-			else { Self::new_prefix_msg_unchecked($pre, $prefix, msg.as_bytes()) }
-		}
-	};
-}
-
-
-
 /// The Message Partitions!
 const IDX_INDENT: usize = 1;
 const IDX_TIMESTAMP_PRE: usize = 2;  // ANSI.
@@ -87,6 +72,118 @@ const LBL_RESET: [u8; 4] =           [27, 91, 48, 109];
 const LBL_TIMESTAMP_POST: [u8; 12] = [27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32];
 //                                    \e   [   2    m   [  \e   [   0   ;   3   4    m
 const LBL_TIMESTAMP_PRE: [u8; 12]  = [27, 91, 50, 109, 91, 27, 91, 48, 59, 51, 52, 109];
+
+
+
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+/// Built-In Quick Prefixes.
+pub enum MsgKind {
+	/// None.
+	None,
+	/// Confirm.
+	Confirm,
+	/// Crunched.
+	Crunched,
+	/// Debug.
+	Debug,
+	/// Done.
+	Done,
+	/// Error.
+	Error,
+	/// Info.
+	Info,
+	/// Notice.
+	Notice,
+	/// Success.
+	Success,
+	/// Task.
+	Task,
+	/// Warning.
+	Warning,
+}
+
+impl Default for MsgKind {
+	fn default() -> Self { Self::None }
+}
+
+impl From<&str> for MsgKind {
+	fn from(txt: &str) -> Self {
+		match txt.to_lowercase().as_str() {
+			"confirm" | "prompt" => Self::Confirm,
+			"crunched" => Self::Crunched,
+			"debug" => Self::Debug,
+			"done" => Self::Done,
+			"error" => Self::Error,
+			"info" => Self::Info,
+			"notice" => Self::Notice,
+			"success" => Self::Success,
+			"task" => Self::Task,
+			"warning" => Self::Warning,
+			_ => Self::None,
+		}
+	}
+}
+
+impl MsgKind {
+	#[must_use]
+	/// As Str.
+	pub fn as_str(self) -> &'static str {
+		unsafe { std::str::from_utf8_unchecked(self.prefix()) }
+	}
+
+	#[must_use]
+	/// As Msg.
+	pub fn as_msg<T: Borrow<str>>(self, msg: T) -> Msg {
+		if self == Self::None {
+			Msg::default()
+		}
+		else {
+			Msg(MsgBuf::from(&[
+				// Indentation and timestamp.
+				&[], &[], &[], &[],
+				self.color(),
+				self.prefix(),
+				&LBL_PREFIX_POST[..],
+				&LBL_MSG_PRE[..],
+				msg.borrow().as_bytes(),
+				&LBL_RESET[..],
+			]))
+		}
+	}
+
+	#[must_use]
+	/// Color.
+	pub fn color(self) -> &'static [u8] {
+		match self {
+			Self::Crunched | Self::Success => &[27, 91, 49, 59, 57, 50, 109],
+			Self::Debug | Self::Done  =>  &[27, 91, 49, 59, 57, 54, 109],
+			Self::Info | Self::Notice => &[27, 91, 49, 59, 57, 53, 109],
+			Self::Confirm => &[27, 91, 49, 59, 51, 56, 59, 53, 59, 50, 48, 56, 109],
+			Self::Error => &[27, 91, 49, 59, 57, 49, 109],
+			Self::Task => &[27, 91, 49, 59, 51, 56, 59, 53, 59, 49, 57, 57, 109],
+			Self::Warning => &[27, 91, 49, 59, 57, 51, 109],
+			Self::None => &[],
+		}
+	}
+
+	#[must_use]
+	/// Prefix.
+	pub fn prefix(self) -> &'static [u8] {
+		match self {
+			Self::Confirm => &[67, 111, 110, 102, 105, 114, 109],
+			Self::Crunched => &[67, 114, 117, 110, 99, 104, 101, 100],
+			Self::Debug => &[68, 101, 98, 117, 103],
+			Self::Done => &[68, 111, 110, 101],
+			Self::Error => &[69, 114, 114, 111, 114],
+			Self::Info => &[73, 110, 102, 111],
+			Self::Notice => &[78, 111, 116, 105, 99, 101],
+			Self::Success => &[83, 117, 99, 99, 101, 115, 115],
+			Self::Task => &[84, 97, 115, 107],
+			Self::Warning => &[87, 97, 114, 110, 105, 110, 103],
+			Self::None => &[],
+		}
+	}
+}
 
 
 
@@ -570,7 +667,7 @@ impl Msg {
 				}
 			}
 
-			Self::error("Invalid input; your choices are 'N' or 'Y'.").println();
+			MsgKind::Error.as_msg("Invalid input; your choices are 'N' or 'Y'.").println();
 		}
 	}
 
@@ -620,83 +717,6 @@ impl Msg {
 	pub fn sinkln(&self) {
 		self.0.sinkln();
 	}
-
-
-
-	// ------------------------------------------------------------------------
-	// Convenience Methods
-	// ------------------------------------------------------------------------
-
-	new_prefix!(
-		confirm,
-		//\e   [   1   ;   3   8   ;   5   ;   2   0   8    m
-		&[27, 91, 49, 59, 51, 56, 59, 53, 59, 50, 48, 56, 109],
-		// C    o    n    f    i    r    m
-		&[67, 111, 110, 102, 105, 114, 109]
-	);
-	new_prefix!(
-		crunched,
-		//\e   [   1   ;   9   2    m
-		&[27, 91, 49, 59, 57, 50, 109],
-		// C    r    u    n   c    h    e    d
-		&[67, 114, 117, 110, 99, 104, 101, 100]
-	);
-	new_prefix!(
-		debug,
-		//\e   [   1   ;   9   6    m
-		&[27, 91, 49, 59, 57, 54, 109],
-		// D    e   b    u    g
-		&[68, 101, 98, 117, 103]
-	);
-	new_prefix!(
-		done,
-		//\e   [   1   ;   9   2    m
-		&[27, 91, 49, 59, 57, 50, 109],
-		// D    o    n    e
-		&[68, 111, 110, 101]
-	);
-	new_prefix!(
-		error,
-		//\e   [   1   ;   9   1    m
-		&[27, 91, 49, 59, 57, 49, 109],
-		// E    r    r    o    r
-		&[69, 114, 114, 111, 114]
-	);
-	new_prefix!(
-		info,
-		//\e   [   1   ;   9   5    m
-		&[27, 91, 49, 59, 57, 53, 109],
-		// I    n    f    o
-		&[73, 110, 102, 111]
-	);
-	new_prefix!(
-		notice,
-		//\e   [   1   ;   9   5    m
-		&[27, 91, 49, 59, 57, 53, 109],
-		// N    o    t    i   c    e
-		&[78, 111, 116, 105, 99, 101]
-	);
-	new_prefix!(
-		success,
-		//\e   [   1   ;   9   2    m
-		&[27, 91, 49, 59, 57, 50, 109],
-		// S    u   c   c    e    s    s
-		&[83, 117, 99, 99, 101, 115, 115]
-	);
-	new_prefix!(
-		task,
-		//\e   [   1   ;   3   8   ;   5   ;   1   9   9    m
-		&[27, 91, 49, 59, 51, 56, 59, 53, 59, 49, 57, 57, 109],
-		// T   a    s    k
-		&[84, 97, 115, 107]
-	);
-	new_prefix!(
-		warning,
-		//\e   [   1   ;   9   3    m
-		&[27, 91, 49, 59, 57, 51, 109],
-		// W   a    r    n    i    n    g
-		&[87, 97, 114, 110, 105, 110, 103]
-	);
 }
 
 

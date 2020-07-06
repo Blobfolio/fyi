@@ -49,7 +49,7 @@ separator in cases where those arguments are "keys", which the `pluck_arg()`
 method would reject.
 */
 
-use fyi_msg::Msg;
+use fyi_msg::MsgKind;
 use std::{
 	borrow::Borrow,
 	cmp::Ordering,
@@ -354,6 +354,28 @@ impl From<Vec<String>> for ArgList {
 }
 
 impl ArgList {
+	#[must_use]
+	/// As Mut Vec.
+	///
+	/// This method can be used to obtain a mutable Vec of any remaining args
+	/// (for e.g. manual parsing/inspection), but in general, it is safer and
+	/// saner to use the struct's `pluck_*()` methods instead.
+	pub fn as_mut_vec(&mut self) -> &mut Vec<String> {
+		&mut self.0
+	}
+
+	#[must_use]
+	/// Length.
+	pub fn len(&self) -> usize {
+		self.0.len()
+	}
+
+	#[must_use]
+	/// Is Empty.
+	pub fn is_empty(&self) -> bool {
+		self.0.len() != 0
+	}
+
 	/// Expect Something, Anything
 	pub fn expect(&self) {
 		if self.0.is_empty() {
@@ -422,7 +444,7 @@ impl ArgList {
 
 		while idx < len {
 			if cb(&self.0[idx]) {
-				if idx + 1 == len || self.0[idx + 1].starts_with('-') {
+				if idx + 1 == len {
 					Self::die({
 						let mut s: String = String::from("Missing option value: ");
 						s.push_str(&self.0[idx]);
@@ -513,7 +535,7 @@ impl ArgList {
 
 	/// Print an Error and Exit
 	pub fn die<S: Borrow<str>>(msg: S) {
-		Msg::error(msg).eprintln();
+		MsgKind::Error.as_msg(msg).eprintln();
 		process::exit(1);
 	}
 }

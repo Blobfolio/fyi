@@ -84,8 +84,8 @@ use crate::{
 	},
 };
 use fyi_msg::{
-	Msg,
 	MsgBuf,
+	MsgKind,
 	utility::time_format_dd,
 };
 use indexmap::set::IndexSet;
@@ -614,7 +614,7 @@ impl ProgressInner {
 	/// message after progress has finished.
 	pub fn finished_in(&self) {
 		if ! self.is_running() {
-			Self::print(&Msg::crunched(format!(
+			Self::print(&MsgKind::Crunched.as_msg(format!(
 				"Finished in {}.\n",
 				unsafe { std::str::from_utf8_unchecked(&*NiceElapsed::from(self.last_secs)) },
 			)));

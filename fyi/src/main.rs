@@ -26,7 +26,10 @@
 #![allow(clippy::missing_errors_doc)]
 
 use fyi_menu::ArgList;
-use fyi_msg::Msg;
+use fyi_msg::{
+	Msg,
+	MsgKind,
+};
 use std::{
 	io::{
 		self,
@@ -37,171 +40,14 @@ use std::{
 
 
 
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-enum Command {
-	Blank,
-	Confirm,
-	Crunched,
-	Debug,
-	Done,
-	Error,
-	Help,
-	Info,
-	Notice,
-	Print,
-	Success,
-	Task,
-	Warning,
-}
-
-impl From<&str> for Command {
-	fn from(raw: &str) -> Self {
-		match raw {
-			"blank" => Self::Blank,
-			"confirm" => Self::Confirm,
-			"crunched" | "prompt" => Self::Crunched,
-			"debug" => Self::Debug,
-			"done" => Self::Done,
-			"error" => Self::Error,
-			"help" => Self::Help,
-			"info" => Self::Info,
-			"notice" => Self::Notice,
-			"print" => Self::Print,
-			"success" => Self::Success,
-			"task" => Self::Task,
-			"warning" => Self::Warning,
-			_ => {
-				ArgList::die("Invalid subcommand.");
-				unreachable!();
-			},
-		}
-	}
-}
-
-impl Command {
-	/// As String.
-	pub fn as_str(self) -> &'static str {
-		match self {
-			Self::Blank => "Blank",
-			Self::Confirm => "Confirm",
-			Self::Crunched => "Crunched",
-			Self::Debug => "Debug",
-			Self::Done => "Done",
-			Self::Error => "Error",
-			Self::Help => "Help",
-			Self::Info => "Info",
-			Self::Notice => "Notice",
-			Self::Print => "Print",
-			Self::Success => "Success",
-			Self::Task => "Task",
-			Self::Warning => "Warning",
-		}
-	}
-
-	/// As `Msg`.
-	pub fn as_msg(self, args: &mut ArgList) -> Msg {
-		match self {
-			Self::Print => {
-				let color: u8 = 255.min(args.pluck_opt_usize(|x| x == "-c" || x == "--prefix-color").unwrap_or(199)) as u8;
-				let prefix = args.pluck_opt(|x| x == "-p" || x == "--prefix").unwrap_or_default();
-				Msg::new(prefix, color, args.expect_arg())
-			},
-			Self::Confirm => Msg::confirm(args.expect_arg()),
-			Self::Crunched => Msg::crunched(args.expect_arg()),
-			Self::Debug => Msg::debug(args.expect_arg()),
-			Self::Done => Msg::done(args.expect_arg()),
-			Self::Error => Msg::error(args.expect_arg()),
-			Self::Info => Msg::info(args.expect_arg()),
-			Self::Notice => Msg::notice(args.expect_arg()),
-			Self::Success => Msg::success(args.expect_arg()),
-			Self::Task => Msg::task(args.expect_arg()),
-			Self::Warning => Msg::warning(args.expect_arg()),
-			_ => Msg::default(),
-		}
-	}
-
-	/// Execute.
-	pub fn exec(self, args: &mut ArgList) {
-		if args.pluck_help() {
-			self.help();
-			return;
-		}
-
-		match self {
-			Self::Blank => {
-				let count: usize = match args.pluck_opt_usize(|x| x == "-c" || x == "--count") {
-					Some(c) => 10.min(1.max(c)),
-					None => 1,
-				};
-
-				if args.pluck_switch(match_stderr) {
-					io::stderr().write_all(&[10].repeat(count)).unwrap();
-				}
-				else {
-					io::stdout().write_all(&[10].repeat(count)).unwrap();
-				}
-			},
-			Self::Confirm => {
-				let indent = args.pluck_switch(match_indent);
-				let timestamp = args.pluck_switch(match_timestamp);
-				let mut msg = self.as_msg(args);
-
-				if indent {
-					msg.set_indent(1);
-				}
-
-				if timestamp {
-					msg.set_timestamp();
-				}
-
-				if ! msg.prompt() {
-					process::exit(1);
-				}
-			},
-			_ => {
-				let indent = args.pluck_switch(match_indent);
-				let timestamp = args.pluck_switch(match_timestamp);
-				let stderr = args.pluck_switch(match_stderr);
-				let exit: u8 = args.pluck_opt_usize(match_exit).unwrap_or(0) as u8;
-				let mut msg = self.as_msg(args);
-
-				if indent {
-					msg.set_indent(1);
-				}
-
-				if timestamp {
-					msg.set_timestamp();
-				}
-
-				// Print it to `Stderr`.
-				if stderr { msg.eprintln(); }
-				// Print it to `Stdout`.
-				else { msg.println(); }
-
-				// We might have a custom exit code.
-				if 0 != exit {
-					process::exit(i32::from(exit));
-				}
-			},
-		}
-	}
-
-	#[cold]
-	/// Help.
-	pub fn help(self) {
-		match self {
-			Self::Blank => _help(include_str!("../help/blank.txt")),
-			Self::Confirm => _help(include_str!("../help/confirm.txt")),
-			Self::Print => _help(include_str!("../help/print.txt")),
-			Self::Help => _help(include_str!("../help/help.txt")),
-			_ => _help(&format!(
-				include_str!("../help/generic.txt"),
-				self.as_str(),
-				self.as_str().to_lowercase(),
-			)),
-		}
-	}
-}
+/// -h | --help
+const FLAG_HELP: u8      = 0b0001;
+/// -i | --indent
+const FLAG_INDENT: u8    = 0b0010;
+/// --stderr
+const FLAG_STDERR: u8    = 0b0100;
+/// -t | --timestamp
+const FLAG_TIMESTAMP: u8 = 0b1000;
 
 
 
@@ -212,27 +58,182 @@ fn main() {
 	// The app might be called with version or help flags instead of a command.
 	match args.peek().unwrap() {
 		"-V" | "--version" => _version(),
-		"-h" | "--help" | "help" => Command::Help.help(),
+		"-h" | "--help" | "help" => _help(include_str!("../help/help.txt")),
 		// Otherwise just go off into the appropriate subcommand action.
-		_ => Command::from(args.expect_command().as_str()).exec(&mut args),
+		_ => match args.expect_command().as_str() {
+			"blank" => _blank(&mut args),
+			"confirm" | "prompt" => _confirm(&mut args),
+			"print" => {
+				let flags = _flags(&mut args);
+				if 0 == flags & FLAG_HELP {
+					let exit: i32 = _exit(&mut args);
+					let color: u8 = 255.min(args.pluck_opt_usize(|x| x == "-c" || x == "--prefix-color")
+						.unwrap_or(199)) as u8;
+					let prefix = args.pluck_opt(|x| x == "-p" || x == "--prefix")
+						.unwrap_or_default();
+
+					_msg(Msg::new(prefix, color, args.expect_arg()), flags, exit);
+				}
+				// Show help instead.
+				else {
+					_help(include_str!("../help/print.txt"));
+				}
+			},
+			other => match MsgKind::from(other) {
+				MsgKind::None => ArgList::die("Invalid subcommand."),
+				other => {
+					let flags = _flags(&mut args);
+					if 0 == flags & FLAG_HELP {
+						let exit: i32 = _exit(&mut args);
+						_msg(other.as_msg(args.expect_arg()), flags, exit);
+					}
+					// Show help instead.
+					else {
+						 _help(&format!(
+							include_str!("../help/generic.txt"),
+							other.as_str(),
+							other.as_str().to_lowercase(),
+						));
+					}
+				}
+			}
+		}
 	}
 }
 
-#[allow(clippy::ptr_arg)]
-/// Match: Exit Code
-fn match_exit(txt: &String) -> bool { txt == "-e" || txt == "--exit" }
+/// Fetch Exit Code.
+///
+/// Many of the subcommands accept an optional alternative exit status. This
+/// fetches it in a centralized way.
+fn _exit(args: &mut ArgList) -> i32 {
+	match args.pluck_opt(|x| x == "-e" || x == "--exit") {
+		Some(x) => x.parse::<i32>().unwrap_or_default(),
+		None => 0,
+	}
+}
 
-#[allow(clippy::ptr_arg)]
-/// Match: Indentation
-fn match_indent(txt: &String) -> bool { txt != "-i" && txt != "--indent" }
+/// Fetch Common Flags.
+///
+/// Most subcommands accept the same set of flags to control help, indentation,
+/// timestamp, and destination. This looks for and crunches all of those in one
+/// go to reduce the number of iterations that would be required to check each
+/// individually.
+fn _flags(args: &mut ArgList) -> u8 {
+	let len: usize = args.len();
+	if 0 == len { 0 }
+	else {
+		let mut flags: u8 = 0;
+		let mut del = 0;
+		let raw = args.as_mut_vec();
 
-#[allow(clippy::ptr_arg)]
-/// Match: Stderr
-fn match_stderr(txt: &String) -> bool { txt != "--stderr" }
+		// This is basically what `Vec.retain()` does, except we're hitting
+		// multiple patterns at once and sending back the results.
+		let ptr = raw.as_mut_ptr();
+		unsafe {
+			let mut idx: usize = 0;
+			while idx < len {
+				match (*ptr.add(idx)).as_str() {
+					"-i" | "--indent" => {
+						flags |= FLAG_INDENT;
+						del += 1;
+					},
+					"--stderr" => {
+						flags |= FLAG_STDERR;
+						del += 1;
+					},
+					"-t" | "--timestamp" => {
+						flags |= FLAG_TIMESTAMP;
+						del += 1;
+					},
+					"-h" | "--help" => {
+						flags |= FLAG_HELP;
+						del += 1;
+					},
+					_ => if del > 0 {
+						ptr.add(idx).swap(ptr.add(idx - del));
+					}
+				}
 
-#[allow(clippy::ptr_arg)]
-/// Match: Timestamp
-fn match_timestamp(txt: &String) -> bool { txt != "-t" && txt != "--timestamp" }
+				idx += 1;
+			}
+		}
+
+		// Did we find anything? If so, run `truncate()` to free the memory
+		// and return the flags.
+		if del > 0 {
+			raw.truncate(len - del);
+			flags
+		}
+		else { 0 }
+	}
+}
+
+/// Shoot Blanks.
+fn _blank(args: &mut ArgList) {
+	if args.pluck_help() {
+		_help(include_str!("../help/blank.txt"));
+		return;
+	}
+
+	// How many lines should we print?
+	let count: usize = match args.pluck_opt_usize(|x| x == "-c" || x == "--count") {
+		Some(c) => 100.min(1.max(c)),
+		None => 1,
+	};
+
+	// Print to `STDERR` instead of `STDOUT`.
+	if args.pluck_switch(|x| x != "--stderr") {
+		io::stderr().write_all(&[10].repeat(count)).unwrap();
+	}
+	else {
+		io::stdout().write_all(&[10].repeat(count)).unwrap();
+	}
+}
+
+/// Pop a Confirmation Prompt.
+fn _confirm(args: &mut ArgList) {
+	let flags: u8 = _flags(args);
+	if 0 == flags & FLAG_HELP {
+		let mut msg = MsgKind::Confirm.as_msg(args.expect_arg());
+
+		if 0 != flags & FLAG_INDENT {
+			msg.set_indent(1);
+		}
+
+		if 0 != flags & FLAG_TIMESTAMP {
+			msg.set_timestamp();
+		}
+
+		if ! msg.prompt() {
+			process::exit(1);
+		}
+	}
+	// Show help instead.
+	else {
+		_help(include_str!("../help/confirm.txt"));
+	}
+}
+
+/// Print Regular Message.
+fn _msg(mut msg: Msg, flags: u8, exit: i32) {
+	if 0 != flags & FLAG_INDENT {
+		msg.set_indent(1);
+	}
+
+	if 0 != flags & FLAG_TIMESTAMP {
+		msg.set_timestamp();
+	}
+
+	// Print it to `Stdout`.
+	if 0 == flags & FLAG_STDERR { msg.println(); }
+	// Print it to `Stderr`.
+	else { msg.eprintln(); }
+
+	// We might have a custom exit code.
+	if 0 != exit {
+		process::exit(exit);
+	}
+}
 
 #[cold]
 /// Print Help.

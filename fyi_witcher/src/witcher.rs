@@ -11,7 +11,10 @@ bar output, or you can dereference the object to work directly with its inner
 */
 
 use crate::utility::inflect;
-use fyi_msg::Msg;
+use fyi_msg::{
+	Msg,
+	MsgKind,
+};
 use fyi_progress::{
 	NiceElapsed,
 	NiceInt,
@@ -298,7 +301,7 @@ impl Witcher {
 	///
 	/// Like the progress bar, this prints to `Stderr`.
 	fn finished_in(total: u64, time: u32) {
-		Msg::crunched(unsafe {
+		MsgKind::Crunched.as_msg(unsafe {
 			std::str::from_utf8_unchecked(
 				&inflect(total, "file in ", "files in ").iter()
 					.chain(&*NiceElapsed::from(time))
@@ -318,7 +321,7 @@ impl Witcher {
 	/// Like the progress bar, this prints to `Stderr`.
 	fn crunched_in(total: u64, time: u32, before: u64, after: u64) {
 		if 0 == after || before <= after {
-			Msg::crunched(unsafe {
+			MsgKind::Crunched.as_msg(unsafe {
 				std::str::from_utf8_unchecked(
 					&inflect(total, "file in ", "files in ").iter()
 						.chain(&*NiceElapsed::from(time))
@@ -330,7 +333,7 @@ impl Witcher {
 			}).eprint();
 		}
 		else {
-			Msg::crunched(unsafe {
+			MsgKind::Crunched.as_msg(unsafe {
 				std::str::from_utf8_unchecked(
 					&inflect(total, "file in ", "files in ").iter()
 						.chain(&*NiceElapsed::from(time))
