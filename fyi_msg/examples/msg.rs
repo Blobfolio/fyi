@@ -4,7 +4,10 @@
 
 /// Do it.
 fn main() {
-	use fyi_msg::Msg;
+	use fyi_msg::{
+		Msg,
+		MsgKind,
+	};
 
 	Msg::from("This message has no prefix.").println();
 
@@ -15,46 +18,46 @@ fn main() {
 
 	println!();
 
-	Msg::notice("So official!").println();
-	Msg::success("Hurray! You did it!").println();
-	Msg::warning("Hold it there, Sparky!").println();
-	Msg::error("Oopsie.").println();
+	MsgKind::Notice.as_msg("So official!").println();
+	MsgKind::Success.as_msg("Hurray! You did it!").println();
+	MsgKind::Warning.as_msg("Hold it there, Sparky!").println();
+	MsgKind::Error.as_msg("Oopsie.").println();
 
 	println!();
 
-	Msg::debug("The devil is in the details.").println();
-	Msg::info("Details without the word 'bug'.").println();
-	Msg::task("Let's get to work!").println();
+	MsgKind::Debug.as_msg("The devil is in the details.").println();
+	MsgKind::Info.as_msg("Details without the word 'bug'.").println();
+	MsgKind::Task.as_msg("Let's get to work!").println();
 
 	println!();
 
-	Msg::confirm("Choose your own adventure.").println();
+	MsgKind::Confirm.as_msg("Choose your own adventure.").println();
 
 	println!();
 
-	Msg::crunched("Some hard work just happened.").println();
-	Msg::done("As the French say, «FIN».").println();
+	MsgKind::Crunched.as_msg("Some hard work just happened.").println();
+	MsgKind::Done.as_msg("As the French say, «FIN».").println();
 
 	println!();
 
-	let mut tmp = Msg::info("Messages can be timestamped.");
+	let mut tmp = MsgKind::Info.as_msg("Messages can be timestamped.");
 	tmp.set_timestamp();
 	tmp.println();
 
 	println!();
 
-	tmp = Msg::info("Messages can be indented (0).");
+	tmp = MsgKind::Info.as_msg("Messages can be indented (0).");
 	tmp.println();
 
-	tmp = Msg::info("Messages can be indented (1).");
+	tmp = MsgKind::Info.as_msg("Messages can be indented (1).");
 	tmp.set_indent(1);
 	tmp.println();
 
-	tmp = Msg::info("Messages can be indented (2).");
+	tmp = MsgKind::Info.as_msg("Messages can be indented (2).");
 	tmp.set_indent(2);
 	tmp.println();
 
-	tmp = Msg::info("Messages can be indented (3).");
+	tmp = MsgKind::Info.as_msg("Messages can be indented (3).");
 	tmp.set_indent(3);
 	tmp.println();
 
