@@ -15,14 +15,15 @@ serve much more than the simple use case of printing prefixed messages.
 
 ```no_run
 use fyi_msg::Msg;
+use fyi_msg::MsgKind;
 
 // Create a message with a custom prefix and color.
 let msg = Msg::new("Yo", 199, "How are you doing today?");
 
 // Use a short-hand method to create a message with a pre-defined prefix:
-let msg = Msg::error("Well darn.");
-let msg = Msg::debug("Token refreshed.");
-let msg = Msg::success("We did it!");
+let msg = MsgKind::Error.as_msg("Well darn.");
+let msg = MsgKind::Debug.as_msg("Token refreshed.");
+let msg = MsgKind::Success.as_msg("We did it!");
 ```
 */
 
@@ -743,9 +744,9 @@ mod tests {
 		use std::collections::hash_map::DefaultHasher;
 
 		let empty = Msg::default();
-		let one = Msg::error("Oh no!");
-		let one2 = Msg::error("Oh no!");
-		let two = Msg::warning("Oh no!");
+		let one = MsgKind::Error.as_msg("Oh no!");
+		let one2 = MsgKind::Error.as_msg("Oh no!");
+		let two = MsgKind::Warning.as_msg("Oh no!");
 		let plain = Msg::from("Dogs are better than cats.");
 		let plain2 = Msg::from("Cats are better than dogs.");
 
