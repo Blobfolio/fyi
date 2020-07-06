@@ -258,6 +258,7 @@ fn _version() {
 	io::stdout().write_all({
 		let mut s = String::from("FYI ");
 		s.push_str(env!("CARGO_PKG_VERSION"));
+		s.push('\n');
 		s
 	}.as_bytes()).unwrap();
 }
