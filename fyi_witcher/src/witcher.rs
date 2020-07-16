@@ -206,7 +206,37 @@ impl Witcher {
 					pattern,
 				)
 			}
-    		else { Self::default() }
+			else { Self::default() }
+	}
+
+	/// From File (Custom).
+	///
+	/// This works just like `custom()`, except the list of paths to search are
+	/// read from the text file at `path`.
+	///
+	/// # Safety
+	///
+	/// The responsibility for validating and canonicalizing file paths falls
+	/// falls to callback, so be sure you handle that, otherwise things like
+	/// `du()` might be a bit weird.
+	pub unsafe fn from_file_custom<P, F> (path: P, cb: F) -> Self
+	where
+		P: AsRef<Path>,
+		F: FnMut(Result<jwalk::DirEntry<((), ())>, jwalk::Error>) -> Option<PathBuf> + Send + Sync + Copy {
+			if let Ok(file) = File::open(path.as_ref()) {
+				Self::custom(
+					&io::BufReader::new(file).lines()
+						.filter_map(|x| x.ok()
+							.and_then(|x| match x.trim() {
+								"" => None,
+								y => Some(PathBuf::from(y)),
+							})
+						)
+						.collect::<Vec<PathBuf>>(),
+					cb,
+				)
+			}
+			else { Self::default() }
 	}
 
 	#[must_use]

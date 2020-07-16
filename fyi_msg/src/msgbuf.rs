@@ -248,9 +248,8 @@ impl MsgBufVec for Vec<u8> {
 					self.as_mut_ptr().add(range.start),
 					old_len - range.end
 				);
-
-				self.set_len(old_len - range.len());
 			}
+			self.truncate(old_len - range.len());
 		}
 	}
 }
