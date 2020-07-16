@@ -71,7 +71,8 @@ fn escape_chars(ch: char) -> bool {
 }
 
 #[must_use]
-#[allow(clippy::suspicious_else_formatting)]
+#[allow(clippy::suspicious_else_formatting)] // Sorry not sorry?
+#[allow(clippy::match_on_vec_items)] // While condition asserts index existence.
 /// Escape String (for shell)
 ///
 /// For our purposes, we just want to ensure strings requiring quotes are
