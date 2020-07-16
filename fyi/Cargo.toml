@@ -1,6 +1,6 @@
 [package]
 name = "fyi"
-version = "0.2.5"
+version = "0.2.6"
 license = "WTFPL"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
@@ -12,7 +12,7 @@ publish = false
 maintainer = "Blobfolio, LLC. <hello@blobfolio.com>"
 copyright = "2020, Blobfolio, LLC <hello@blobfolio.com>"
 license-file = ["../LICENSE", "0"]
-revision = "2"
+revision = "1"
 depends = "$auto"
 section = "utility"
 assets = [
