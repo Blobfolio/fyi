@@ -65,7 +65,7 @@ use std::{
 /// This returns `true` if a character requires escaping (for e.g. the shell).
 fn escape_chars(ch: char) -> bool {
 	match ch {
-		'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' | '=' | '/' | ',' | '.' | '+' => false,
+		'0'..='9' | 'A'..='Z' | 'a'..='z' | '-' | '_' | '=' | '/' | ',' | '.' | '+' => false,
 		_ => true,
 	}
 }
@@ -126,7 +126,7 @@ pub fn escape(mut s: String) -> String {
 /// Keys need an [a-z] or [A-Z] letter following the dash.
 fn is_letter(data: u8) -> bool {
 	match data {
-		b'a'..=b'z' | b'A'..=b'Z' => true,
+		b'A'..=b'Z' | b'a'..=b'z' => true,
 		_ => false,
 	}
 }
