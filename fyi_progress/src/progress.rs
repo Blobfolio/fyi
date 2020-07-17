@@ -884,14 +884,14 @@ impl Progress {
 	///
 	/// Start a new progress bar, optionally with a message.
 	pub fn new<T: Borrow<str>> (total: u64, title: Option<T>) -> Self {
-		if let Some(title) = title {
-			let mut inner = ProgressInner::new(total);
-			inner.set_title(title);
-			Self(Mutex::new(inner))
-		}
-		else {
-			Self(Mutex::new(ProgressInner::new(total)))
-		}
+		title.map_or(
+			Self(Mutex::new(ProgressInner::new(total))),
+			|title| {
+				let mut inner = ProgressInner::new(total);
+				inner.set_title(title);
+				Self(Mutex::new(inner))
+			}
+		)
 	}
 
 	#[must_use]
