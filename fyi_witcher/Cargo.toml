@@ -20,7 +20,7 @@ path = "../fyi_msg"
 path = "../fyi_progress"
 
 [dependencies.indexmap]
-version = "1.4.*"
+version = "1.5.*"
 default-features = false
 features = [ "rayon" ]
 
