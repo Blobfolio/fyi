@@ -22,13 +22,13 @@ where P: AsRef<Path> {
 	if path.is_dir() {
 		"".to_string()
 	}
-	else if let Some(ext) = path.extension() {
-		ext.to_str()
-			.unwrap_or_default()
-			.to_lowercase()
-	}
 	else {
-		"".to_string()
+		path.extension().map_or(
+			String::new(),
+			|ext| ext.to_str()
+				.unwrap_or_default()
+				.to_lowercase()
+		)
 	}
 }
 
@@ -38,11 +38,13 @@ where P: AsRef<Path> {
 /// path is invalid.
 pub fn file_size<P> (path: P) -> u64
 where P: AsRef<Path> {
-	if let Ok(meta) = path.as_ref().metadata() {
-		if meta.is_dir() { 0 }
-		else { meta.len() }
-	}
-	else { 0 }
+	path.as_ref()
+		.metadata()
+		.map_or(0,
+			|meta|
+				if meta.is_dir() { 0 }
+				else { meta.len() }
+		)
 }
 
 /// String Inflection

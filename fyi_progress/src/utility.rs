@@ -39,8 +39,7 @@ pub fn secs_chunks(num: u32) -> [u32; 3] {
 /// so that property is ignored.
 pub fn term_width() -> usize {
 	// Reserve one space at the end "just in case".
-	if let Some((w, _)) = term_size::dimensions() { w.saturating_sub(1) }
-	else { 0 }
+	term_size::dimensions().map_or(0, |(w, _)| w.saturating_sub(1))
 }
 
 

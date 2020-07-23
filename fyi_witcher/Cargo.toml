@@ -1,6 +1,6 @@
 [package]
 name = "fyi_witcher"
-version = "0.2.6"
+version = "0.2.7"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "FYI is a dead-simple status message printer for CLI use applications."
@@ -20,7 +20,7 @@ path = "../fyi_msg"
 path = "../fyi_progress"
 
 [dependencies.indexmap]
-version = "1.4.*"
+version = "1.5.*"
 default-features = false
 features = [ "rayon" ]
 

@@ -1,6 +1,6 @@
 [package]
 name = "fyi_progress"
-version = "0.2.6"
+version = "0.2.7"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "FYI is a dead-simple status message printer for CLI use applications."
@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 bitflags = "1.2.*"
-indexmap = "1.4.*"
+indexmap = "1.5.*"
 itoa = "0.4.*"
 num-format = "0.4.*"
 num-integer = "0.1.*"
