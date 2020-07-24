@@ -40,7 +40,8 @@ pub fn file_size<P> (path: P) -> u64
 where P: AsRef<Path> {
 	path.as_ref()
 		.metadata()
-		.map_or(0,
+		.map_or(
+			0,
 			|meta|
 				if meta.is_dir() { 0 }
 				else { meta.len() }
