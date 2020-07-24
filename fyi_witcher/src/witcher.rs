@@ -98,31 +98,20 @@ impl Witcher {
 		P: AsRef<Path>,
 		R: Borrow<str> {
 		let pattern: Regex = Regex::new(pattern.borrow()).expect("Invalid Regex.");
-
-		Self(paths.iter()
-			// Canonicalize the search paths.
-			.filter_map(|p| fs::canonicalize(p).ok())
-			.collect::<IndexSet<PathBuf>>()
-			.into_par_iter()
-			// Walk each search path.
-			.flat_map(|i| WalkDir::new(i)
-				.follow_links(true)
-				.skip_hidden(false)
-				.into_iter()
-				.filter_map(|p| p.ok()
+		unsafe {
+			Self::custom(
+				paths,
+				|p| p.ok()
 					.and_then(|p| if p.file_type().is_dir() { None } else { Some(p) })
 					.and_then(|p| fs::canonicalize(p.path()).ok())
-					.and_then(|p| if pattern.is_match(unsafe {
-						&*(p.as_os_str() as *const OsStr as *const [u8])
-					}) {
-						Some(p)
-					}
-						else { None })
-				)
-				.collect::<IndexSet<PathBuf>>()
+					.and_then(|p|
+						if pattern.is_match(
+							&*(p.as_os_str() as *const OsStr as *const [u8])
+						) { Some(p) }
+						else { None }
+					)
 			)
-			.collect()
-		)
+		}
 	}
 
 	/// New Custom
@@ -165,24 +154,14 @@ impl Witcher {
 	/// deduped for minimum confusion.
 	pub fn simple<P> (paths: &[P]) -> Self
 	where P: AsRef<Path> {
-		Self(paths.iter()
-			// Canonicalize the search paths.
-			.filter_map(|p| fs::canonicalize(p).ok())
-			.collect::<IndexSet<PathBuf>>()
-			.into_par_iter()
-			// Walk each search path.
-			.flat_map(|i| WalkDir::new(i)
-				.follow_links(true)
-				.skip_hidden(false)
-				.into_iter()
-				.filter_map(|p| p.ok()
+		unsafe {
+			Self::custom(
+				paths,
+				|p| p.ok()
 					.and_then(|p| if p.file_type().is_dir() { None } else { Some(p) })
 					.and_then(|p| fs::canonicalize(p.path()).ok())
-				)
-				.collect::<IndexSet<PathBuf>>()
 			)
-			.collect()
-		)
+		}
 	}
 
 	/// From File.
@@ -249,10 +228,7 @@ impl Witcher {
 	/// some stuff, then call it again and get a different result.
 	pub fn du(&self) -> u64 {
 		self.0.par_iter()
-			.map(|x| match x.metadata() {
-				Ok(meta) => meta.len(),
-				Err(_) => 0,
-			})
+			.map(|x| x.metadata().map_or(0, |m| m.len()))
 			.sum()
 	}
 
