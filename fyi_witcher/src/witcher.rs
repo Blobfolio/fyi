@@ -14,6 +14,7 @@ use crate::utility::inflect;
 use fyi_msg::{
 	Msg,
 	MsgKind,
+	traits::FYIBoolChain,
 };
 use fyi_progress::{
 	NiceElapsed,
@@ -104,11 +105,8 @@ impl Witcher {
 				|p| p.ok()
 					.and_then(|p| if p.file_type().is_dir() { None } else { Some(p) })
 					.and_then(|p| fs::canonicalize(p.path()).ok())
-					.and_then(|p|
-						if pattern.is_match(
-							&*(p.as_os_str() as *const OsStr as *const [u8])
-						) { Some(p) }
-						else { None }
+					.and_then(|p| pattern.is_match(&*(p.as_os_str() as *const OsStr as *const [u8]))
+						.true_some(p)
 					)
 			)
 		}

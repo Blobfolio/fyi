@@ -49,7 +49,10 @@ separator in cases where those arguments are "keys", which the `pluck_arg()`
 method would reject.
 */
 
-use fyi_msg::MsgKind;
+use fyi_msg::{
+	MsgKind,
+	traits::FYIBoolChain,
+};
 use std::{
 	borrow::Borrow,
 	cmp::Ordering,
@@ -378,8 +381,8 @@ impl ArgList {
 	///
 	/// Return the first entry without draining it.
 	pub fn peek(&self) -> Option<&str> {
-		if self.0.is_empty() { None }
-		else { Some(&self.0[0]) }
+		self.0.is_empty()
+			.false_some(&self.0[0])
 	}
 
 	/// Extract Command
