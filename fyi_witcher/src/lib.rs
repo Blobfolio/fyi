@@ -27,7 +27,6 @@
 
 
 
-#[cfg(feature = "witch_io")] mod witchio;
 mod witcher;
 pub mod utility;
 
@@ -36,9 +35,3 @@ pub use witcher::Witcher;
 
 /// Generic result type.
 pub type Result<T, E = String> = std::result::Result<T, E>;
-
-#[cfg(feature = "witch_io")]
-/// The `WitchIO` trait.
-pub mod traits {
-	pub use crate::witchio::WitchIO;
-}
