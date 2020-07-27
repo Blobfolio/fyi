@@ -104,6 +104,22 @@ fn peek(c: &mut Criterion) {
 	group.finish();
 }
 
+fn pluck_flags(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_menu::ArgList");
+
+	const FLAG_H: u8 = 0b0001;
+	const FLAG_S: u8 = 0b0010;
+
+	group.bench_function("pluck_flags(-h --help --single) <Err>", move |b| {
+		b.iter_with_setup(||
+			(0_u8, ArgList::from(vec!["-h", "--help", "-v", "1.0", "-b", "master", "--single", "/path/to/thing"])),
+			|(mut flags, mut al)| al.pluck_flags(&mut flags, &["-h", "--help", "--single"], &[FLAG_H, FLAG_H, FLAG_S])
+		)
+	});
+
+	group.finish();
+}
+
 fn pluck_switch(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_menu::ArgList");
 
@@ -166,6 +182,7 @@ criterion_group!(
 	parse_kv,
 	practical,
 	peek,
+	pluck_flags,
 	pluck_switch,
 	pluck_opt,
 );

@@ -57,7 +57,11 @@ use std::{
 	borrow::Borrow,
 	cmp::Ordering,
 	env,
-	ops::Deref,
+	ops::{
+		BitOr,
+		BitOrAssign,
+		Deref,
+	},
 	process,
 };
 
@@ -406,6 +410,65 @@ impl ArgList {
 		}
 	}
 
+	/// Pluck Flags
+	///
+	/// Drain all occurrences of the flags and return the results.
+	///
+	/// Panics if `keys` are empty, or `keys` and `values` have different lengths.
+	pub fn pluck_flags<U>(&mut self, flags: &mut U, keys: &[&str], values: &[U])
+	where U: Copy + BitOr + BitOrAssign {
+		assert!(! keys.is_empty() && keys.len() == values.len());
+
+		let len: usize = self.0.len();
+		if 0 == len { return; }
+
+		// This is basically what `Vec.retain()` does, except we're hitting
+		// multiple patterns at once.
+		let mut del: usize = 0;
+		let ptr = self.0.as_mut_ptr();
+		unsafe {
+			let k_len: usize = keys.len();
+			let k_ptr = keys.as_ptr();
+			let v_ptr = values.as_ptr();
+
+			// Outer loop; check our remaining values.
+			let mut idx: usize = 0;
+			while idx < len {
+				let needle: &str = (*ptr.add(idx)).as_str();
+				let last_del: usize = del;
+
+				// Inner loop: check for matches.
+				let mut k_idx = 0;
+				while k_idx < k_len {
+					// Update the flags and remove the index.
+					if (*k_ptr.add(k_idx)).eq(needle) {
+						*flags |= *v_ptr.add(k_idx);
+						del += 1;
+						break;
+					}
+
+					// Keep looking.
+					k_idx += 1;
+				}
+
+				// If this wasn't a match, we might need to shift the value
+				// down.
+				if del > 0 && last_del == del {
+					ptr.add(idx).swap(ptr.add(idx - del));
+				}
+
+				// Keep looking.
+				idx += 1;
+			}
+		}
+
+		// If we found anything, we need to run `truncate()` to free the
+		// memory.
+		if del > 0 {
+			self.0.truncate(len - del);
+		}
+	}
+
 	/// Extract Switch
 	///
 	/// Drain all occurrences from the store and return `true` if any were
@@ -572,6 +635,32 @@ mod tests {
 
 		// Empty?
 		assert!(args.is_empty());
+
+		// Let's start over and pull multiple flags at once.
+		args = ArgList::from(vec!["-v", "--help", "--num", "100", "-q", "One Arg", "Two Arg"]);
+		args.expect();
+
+		const FLAG_H: u8 = 0b0001;
+		const FLAG_Q: u8 = 0b0010;
+		const FLAG_V: u8 = 0b0100;
+		const FLAG_Z: u8 = 0b1000;
+
+		let mut flags: u8 = 0;
+		args.pluck_flags(
+			&mut flags,
+			&["--help", "-q", "-v", "-Z"],
+			&[FLAG_H, FLAG_Q, FLAG_V, FLAG_Z],
+		);
+
+		assert!(0 != (flags & FLAG_H));
+		assert!(0 != (flags & FLAG_Q));
+		assert!(0 != (flags & FLAG_V));
+		assert!(0 == (flags & FLAG_Z));
+
+		assert_eq!(
+			*args,
+			[String::from("--num"), String::from("100"), String::from("One Arg"), String::from("Two Arg")][..]
+		);
 
 		// Let's start over and look at options and multi-args.
 		args = ArgList::from(vec!["-v", "1.0", "--num", "100", "-q", "One Arg", "Two Arg"]);
