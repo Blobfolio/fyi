@@ -52,15 +52,13 @@ const FLAG_TIMESTAMP: u8 = 0b1000;
 
 
 fn main() {
-	let mut args = ArgList::default();
-	args.expect();
-
 	// The app might be called with version or help flags instead of a command.
-	match args.peek().unwrap() {
-		"-V" | "--version" => _version(),
-		"-h" | "--help" | "help" => _help(include_bytes!("../help/help.txt")),
+	let mut args = ArgList::default();
+	match args.peek() {
+		Some("-V") | Some("--version") => _version(),
+		Some("-h") | Some("--help") | Some("help") => _help(include_bytes!("../help/help.txt")),
 		// Otherwise just go off into the appropriate subcommand action.
-		_ => match args.expect_command().as_str() {
+		Some(_) => match args.expect_command().as_str() {
 			"blank" => _blank(&mut args),
 			"confirm" | "prompt" => _confirm(&mut args),
 			"print" => {
@@ -98,6 +96,10 @@ fn main() {
 				}
 			}
 		}
+		None => {
+			MsgKind::Error.as_msg("Missing options, flags, arguments, and/or ketchup.").eprintln();
+			process::exit(1);
+		}
 	}
 }
 
@@ -106,10 +108,8 @@ fn main() {
 /// Many of the subcommands accept an optional alternative exit status. This
 /// fetches it in a centralized way.
 fn _exit(args: &mut ArgList) -> i32 {
-	match args.pluck_opt(|x| x == "-e" || x == "--exit") {
-		Some(x) => x.parse::<i32>().unwrap_or_default(),
-		None => 0,
-	}
+	args.pluck_opt(|x| x == "-e" || x == "--exit")
+		.map_or(0, |x| x.parse::<i32>().unwrap_or_default())
 }
 
 /// Fetch Common Flags.
