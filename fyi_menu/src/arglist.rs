@@ -386,6 +386,16 @@ impl ArgList {
 		else { Some(&self.0[0]) }
 	}
 
+	#[must_use]
+	/// Pluck Next
+	///
+	/// Return the next thing, whatever that is. This is generally only useful
+	/// as a first operation.
+	pub fn pluck_next(&mut self) -> Option<String> {
+		if self.0.is_empty() { None }
+		else { Some(self.0.remove(0)) }
+	}
+
 	/// Extract Command
 	///
 	/// Drain and return the first element if it is not a key-like thing.
