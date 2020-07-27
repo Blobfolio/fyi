@@ -208,27 +208,23 @@ fn _msg(mut msg: Msg, flags: u8, exit: i32) {
 #[cold]
 /// Print Help.
 fn _help(txt: &str) {
-	io::stdout().write_all({
-		let mut s = String::with_capacity(1024);
-		s.push_str("FYI ");
-		s.push_str(env!("CARGO_PKG_VERSION"));
-		s.push('\n');
-		s.push_str(env!("CARGO_PKG_DESCRIPTION"));
-		s.push('\n');
-		s.push('\n');
-		s.push_str(txt);
-		s.push('\n');
-		s
-	}.as_bytes()).unwrap();
+	io::stdout().write_all(&[
+		b"FYI ",
+		env!("CARGO_PKG_VERSION").as_bytes(),
+		b"\n",
+		env!("CARGO_PKG_DESCRIPTION").as_bytes(),
+		b"\n\n",
+		txt.as_bytes(),
+		b"\n",
+	].concat()).unwrap();
 }
 
 #[cold]
 /// Print version and exit.
 fn _version() {
-	io::stdout().write_all({
-		let mut s = String::from("FYI ");
-		s.push_str(env!("CARGO_PKG_VERSION"));
-		s.push('\n');
-		s
-	}.as_bytes()).unwrap();
+	io::stdout().write_all(&[
+		b"FYI ",
+		env!("CARGO_PKG_VERSION").as_bytes(),
+		b"\n"
+	].concat()).unwrap();
 }
