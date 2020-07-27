@@ -58,7 +58,7 @@ fn main() {
 	// The app might be called with version or help flags instead of a command.
 	match args.peek().unwrap() {
 		"-V" | "--version" => _version(),
-		"-h" | "--help" | "help" => _help(include_str!("../help/help.txt")),
+		"-h" | "--help" | "help" => _help(include_bytes!("../help/help.txt")),
 		// Otherwise just go off into the appropriate subcommand action.
 		_ => match args.expect_command().as_str() {
 			"blank" => _blank(&mut args),
@@ -76,7 +76,7 @@ fn main() {
 				}
 				// Show help instead.
 				else {
-					_help(include_str!("../help/print.txt"));
+					_help(include_bytes!("../help/print.txt"));
 				}
 			},
 			other => match MsgKind::from(other) {
@@ -89,11 +89,11 @@ fn main() {
 					}
 					// Show help instead.
 					else {
-						 _help(&format!(
+						 _help(format!(
 							include_str!("../help/generic.txt"),
 							other.as_str(),
 							other.as_str().to_lowercase(),
-						));
+						).as_bytes());
 					}
 				}
 			}
@@ -141,7 +141,7 @@ fn _flags(args: &mut ArgList) -> u8 {
 /// Shoot Blanks.
 fn _blank(args: &mut ArgList) {
 	if args.pluck_help() {
-		_help(include_str!("../help/blank.txt"));
+		_help(include_bytes!("../help/blank.txt"));
 		return;
 	}
 
@@ -180,7 +180,7 @@ fn _confirm(args: &mut ArgList) {
 	}
 	// Show help instead.
 	else {
-		_help(include_str!("../help/confirm.txt"));
+		_help(include_bytes!("../help/confirm.txt"));
 	}
 }
 
@@ -207,14 +207,14 @@ fn _msg(mut msg: Msg, flags: u8, exit: i32) {
 
 #[cold]
 /// Print Help.
-fn _help(txt: &str) {
+fn _help(txt: &[u8]) {
 	io::stdout().write_all(&[
 		b"FYI ",
 		env!("CARGO_PKG_VERSION").as_bytes(),
 		b"\n",
 		env!("CARGO_PKG_DESCRIPTION").as_bytes(),
 		b"\n\n",
-		txt.as_bytes(),
+		txt,
 		b"\n",
 	].concat()).unwrap();
 }
