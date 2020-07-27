@@ -25,6 +25,7 @@
 #![allow(clippy::match_like_matches_macro)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::module_name_repetitions)]
+#![allow(clippy::unknown_clippy_lints)]
 
 pub mod arglist;
 pub use arglist::ArgList;
