@@ -52,54 +52,49 @@ const FLAG_TIMESTAMP: u8 = 0b1000;
 
 
 fn main() {
-	// The app might be called with version or help flags instead of a command.
 	let mut args = ArgList::default();
-	match args.peek() {
-		Some("-V") | Some("--version") => _version(),
-		Some("-h") | Some("--help") | Some("help") => _help(include_bytes!("../help/help.txt")),
-		// Otherwise just go off into the appropriate subcommand action.
-		Some(_) => match args.expect_command().as_str() {
-			"blank" => _blank(&mut args),
-			"confirm" | "prompt" => _confirm(&mut args),
-			"print" => {
+	args.expect();
+
+	// The app might be called with version or help flags instead of a command.
+	match args.pluck_next().unwrap().as_str() {
+		"blank" => _blank(&mut args),
+		"confirm" | "prompt" => _confirm(&mut args),
+		"print" => {
+			let flags = _flags(&mut args);
+			if 0 == flags & FLAG_HELP {
+				let exit: i32 = _exit(&mut args);
+				let color: u8 = 255.min(args.pluck_opt_usize(|x| x == "-c" || x == "--prefix-color")
+					.unwrap_or(199)) as u8;
+				let prefix = args.pluck_opt(|x| x == "-p" || x == "--prefix")
+					.unwrap_or_default();
+
+				_msg(Msg::new(prefix, color, args.expect_arg()), flags, exit);
+			}
+			// Show help instead.
+			else {
+				_help(include_bytes!("../help/print.txt"));
+			}
+		},
+		"-V" | "--version" => _version(),
+		"-h" | "--help" | "help" => _help(include_bytes!("../help/help.txt")),
+		other => match MsgKind::from(other) {
+			MsgKind::None => ArgList::die("Invalid subcommand."),
+			other => {
 				let flags = _flags(&mut args);
 				if 0 == flags & FLAG_HELP {
 					let exit: i32 = _exit(&mut args);
-					let color: u8 = 255.min(args.pluck_opt_usize(|x| x == "-c" || x == "--prefix-color")
-						.unwrap_or(199)) as u8;
-					let prefix = args.pluck_opt(|x| x == "-p" || x == "--prefix")
-						.unwrap_or_default();
-
-					_msg(Msg::new(prefix, color, args.expect_arg()), flags, exit);
+					_msg(other.as_msg(args.expect_arg()), flags, exit);
 				}
 				// Show help instead.
 				else {
-					_help(include_bytes!("../help/print.txt"));
-				}
-			},
-			other => match MsgKind::from(other) {
-				MsgKind::None => ArgList::die("Invalid subcommand."),
-				other => {
-					let flags = _flags(&mut args);
-					if 0 == flags & FLAG_HELP {
-						let exit: i32 = _exit(&mut args);
-						_msg(other.as_msg(args.expect_arg()), flags, exit);
-					}
-					// Show help instead.
-					else {
-						 _help(format!(
-							include_str!("../help/generic.txt"),
-							other.as_str(),
-							other.as_str().to_lowercase(),
-						).as_bytes());
-					}
+					 _help(format!(
+						include_str!("../help/generic.txt"),
+						other.as_str(),
+						other.as_str().to_lowercase(),
+					).as_bytes());
 				}
 			}
-		}
-		None => {
-			MsgKind::Error.as_msg("Missing options, flags, arguments, and/or ketchup.").eprintln();
-			process::exit(1);
-		}
+		},
 	}
 }
 
@@ -140,23 +135,24 @@ fn _flags(args: &mut ArgList) -> u8 {
 
 /// Shoot Blanks.
 fn _blank(args: &mut ArgList) {
-	if args.pluck_help() {
-		_help(include_bytes!("../help/blank.txt"));
-		return;
-	}
+	let flags: u8 = _flags(args);
+	if 0 == flags & FLAG_HELP {
+		// How many lines should we print?
+		let count: usize = args.pluck_opt_usize(|x| x == "-c" || x == "--count")
+			.map_or(1, |c| 100.min(1.max(c)));
 
-	// How many lines should we print?
-	let count: usize = match args.pluck_opt_usize(|x| x == "-c" || x == "--count") {
-		Some(c) => 100.min(1.max(c)),
-		None => 1,
-	};
-
-	// Print to `STDERR` instead of `STDOUT`.
-	if args.pluck_switch(|x| x != "--stderr") {
-		io::stderr().write_all(&[10].repeat(count)).unwrap();
+		// Print it to `Stdout`.
+		if 0 == flags & FLAG_STDERR {
+			io::stdout().write_all(&[10].repeat(count)).unwrap();
+		}
+		// Print it to `Stderr`.
+		else {
+			io::stderr().write_all(&[10].repeat(count)).unwrap();
+		}
 	}
+	// Show help instead.
 	else {
-		io::stdout().write_all(&[10].repeat(count)).unwrap();
+		_help(include_bytes!("../help/blank.txt"));
 	}
 }
 
