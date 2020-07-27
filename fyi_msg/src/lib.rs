@@ -29,7 +29,6 @@
 
 mod msg;
 mod msgbuf;
-pub mod traits;
 pub mod utility;
 
 pub use msg::{
