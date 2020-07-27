@@ -119,53 +119,23 @@ fn _exit(args: &mut ArgList) -> i32 {
 /// go to reduce the number of iterations that would be required to check each
 /// individually.
 fn _flags(args: &mut ArgList) -> u8 {
-	let len: usize = args.len();
-	if 0 == len { 0 }
-	else {
-		let mut flags: u8 = 0;
-		let mut del = 0;
-		let raw = args.as_mut_vec();
-
-		// This is basically what `Vec.retain()` does, except we're hitting
-		// multiple patterns at once and sending back the results.
-		let ptr = raw.as_mut_ptr();
-		unsafe {
-			let mut idx: usize = 0;
-			while idx < len {
-				match (*ptr.add(idx)).as_str() {
-					"-i" | "--indent" => {
-						flags |= FLAG_INDENT;
-						del += 1;
-					},
-					"--stderr" => {
-						flags |= FLAG_STDERR;
-						del += 1;
-					},
-					"-t" | "--timestamp" => {
-						flags |= FLAG_TIMESTAMP;
-						del += 1;
-					},
-					"-h" | "--help" => {
-						flags |= FLAG_HELP;
-						del += 1;
-					},
-					_ => if del > 0 {
-						ptr.add(idx).swap(ptr.add(idx - del));
-					}
-				}
-
-				idx += 1;
-			}
-		}
-
-		// Did we find anything? If so, run `truncate()` to free the memory
-		// and return the flags.
-		if del > 0 {
-			raw.truncate(len - del);
-			flags
-		}
-		else { 0 }
-	}
+	let mut flags: u8 = 0;
+	args.pluck_flags(
+		&mut flags,
+		&[
+			"-i", "--indent",
+			"-t", "--timestamp",
+			"--stderr",
+			"-h", "--help",
+		],
+		&[
+			FLAG_INDENT, FLAG_INDENT,
+			FLAG_TIMESTAMP, FLAG_TIMESTAMP,
+			FLAG_STDERR,
+			FLAG_HELP, FLAG_HELP,
+		],
+	);
+	flags
 }
 
 /// Shoot Blanks.
