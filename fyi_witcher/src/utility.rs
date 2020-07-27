@@ -4,7 +4,6 @@
 This mod contains miscellaneous utility functions for the crate.
 */
 
-use fyi_msg::traits::FYIBoolChain;
 use std::{
 	borrow::Borrow,
 	path::Path,
@@ -20,16 +19,17 @@ use std::{
 pub fn file_extension<P> (path: P) -> String
 where P: AsRef<Path> {
 	let path = path.as_ref();
-	path.is_dir()
-		.false_map(
+	if path.is_dir() {
+		"".to_string()
+	}
+	else {
+		path.extension().map_or(
 			String::new(),
-			|| path.extension().map_or(
-				String::new(),
-				|ext| ext.to_str()
-					.unwrap_or_default()
-					.to_lowercase()
-			)
+			|ext| ext.to_str()
+				.unwrap_or_default()
+				.to_lowercase()
 		)
+	}
 }
 
 /// Ergonomical File Size.

@@ -25,10 +25,10 @@
 #![allow(clippy::match_like_matches_macro)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::module_name_repetitions)]
+#![allow(clippy::unknown_clippy_lints)]
 
 mod msg;
 mod msgbuf;
-pub mod traits;
 pub mod utility;
 
 pub use msg::{
