@@ -41,70 +41,145 @@ use std::{
 
 
 /// -h | --help
-const FLAG_HELP: u8      = 0b0001;
+const FLAG_HELP: u8      = 0b0000_0001;
 /// -i | --indent
-const FLAG_INDENT: u8    = 0b0010;
+const FLAG_INDENT: u8    = 0b0000_0010;
 /// --stderr
-const FLAG_STDERR: u8    = 0b0100;
+const FLAG_STDERR: u8    = 0b0000_0100;
 /// -t | --timestamp
-const FLAG_TIMESTAMP: u8 = 0b1000;
+const FLAG_TIMESTAMP: u8 = 0b0000_1000;
+/// Prompt rather than Print.
+const FLAG_PROMPT: u8    = 0b0001_0000;
 
 
 
 fn main() {
 	let mut args = ArgList::default();
-	args.expect();
 
 	// The app might be called with version or help flags instead of a command.
 	match args.pluck_next().unwrap().as_str() {
+		"-h" | "--help" | "help" => _help(include_bytes!("../help/help.txt")),
+		"-V" | "--version" => _version(),
 		"blank" => _blank(&mut args),
-		"confirm" | "prompt" => _confirm(&mut args),
 		"print" => {
 			let flags = _flags(&mut args);
 			if 0 == flags & FLAG_HELP {
-				let exit: i32 = _exit(&mut args);
-				let color: u8 = 255.min(args.pluck_opt_usize(|x| x == "-c" || x == "--prefix-color")
-					.unwrap_or(199)) as u8;
-				let prefix = args.pluck_opt(|x| x == "-p" || x == "--prefix")
-					.unwrap_or_default();
-
-				_msg(Msg::new(prefix, color, args.expect_arg()), flags, exit);
+				let (exit, color, prefix, msg) = _print_opts(args);
+				_msg(Msg::new(prefix, color, msg), flags, exit);
 			}
 			// Show help instead.
 			else {
 				_help(include_bytes!("../help/print.txt"));
 			}
 		},
-		"-V" | "--version" => _version(),
-		"-h" | "--help" | "help" => _help(include_bytes!("../help/help.txt")),
 		other => match MsgKind::from(other) {
-			MsgKind::None => ArgList::die("Invalid subcommand."),
-			other => {
-				let flags = _flags(&mut args);
+			MsgKind::None => fyi_menu::die(b"Invalid subcommand."),
+			mkind => {
+				let flags =
+					if other == "confirm" || other == "prompt" {
+						_flags(&mut args) | FLAG_PROMPT
+					}
+					else {
+						_flags(&mut args)
+					};
+
 				if 0 == flags & FLAG_HELP {
-					let exit: i32 = _exit(&mut args);
-					_msg(other.as_msg(args.expect_arg()), flags, exit);
+					let (exit, msg) = _msg_opts(args);
+					_msg(mkind.as_msg(msg), flags, exit);
 				}
-				// Show help instead.
-				else {
+				// Show other help.
+				else if 0 == flags & FLAG_PROMPT {
 					 _help(format!(
 						include_str!("../help/generic.txt"),
-						other.as_str(),
-						other.as_str().to_lowercase(),
+						mkind.as_str(),
+						mkind.as_str().to_lowercase(),
 					).as_bytes());
+				}
+				// Show confirm help.
+				else {
+					_help(include_bytes!("../help/confirm.txt"));
 				}
 			}
 		},
 	}
 }
 
-/// Fetch Exit Code.
-///
-/// Many of the subcommands accept an optional alternative exit status. This
-/// fetches it in a centralized way.
-fn _exit(args: &mut ArgList) -> i32 {
-	args.pluck_opt(|x| x == "-e" || x == "--exit")
-		.map_or(0, |x| x.parse::<i32>().unwrap_or_default())
+/// Generic Message Opts.
+fn _msg_opts(mut args: ArgList) -> (i32, String) {
+	let mut out = (0_i32, String::new());
+
+	// Pull the remaining options and/or message. We don't need
+	// to clean up after ourselves here; args gets dropped at
+	// the end.
+	let len = args.len();
+	let v = args.as_mut_vec();
+	let mut idx = 0;
+	while idx < len {
+		if idx + 1 == len {
+			out.1 = v.remove(idx);
+			break;
+		}
+
+		match v[idx].as_str() {
+			"-e" | "--exit" => {
+				out.0 = v[idx + 1].parse::<i32>().unwrap_or_default();
+				idx += 2;
+			},
+			_ => {
+				out.1 = v.remove(idx);
+				break;
+			},
+		}
+	}
+
+	if out.1.is_empty() {
+		fyi_menu::die(b"Missing message.");
+	}
+
+	out
+}
+
+/// Generic Print Opts.
+fn _print_opts(mut args: ArgList) -> (i32, u8, String, String) {
+	let mut out = (0_i32, 199_u8, String::new(), String::new());
+
+	// Pull the remaining options and/or message. We don't need to
+	// clean up after ourselves here; args gets dropped at the end.
+	let mut len = args.len();
+	let v = args.as_mut_vec();
+	let mut idx = 0;
+	while idx < len {
+		if idx + 1 == len {
+			out.3 = v.remove(idx);
+			break;
+		}
+
+		match v[idx].as_str() {
+			"-e" | "--exit" => {
+				out.0 = v[idx + 1].parse::<i32>().unwrap_or_default();
+				idx += 2;
+			},
+			"-c" | "--prefix-color" => {
+				out.1 = 1.max(v[idx + 1].parse::<u8>().unwrap_or(199));
+				idx += 2;
+			},
+			"-p" | "--prefix" => {
+				out.2 = v.remove(idx + 1);
+				idx += 1;
+				len -= 1;
+			},
+			_ => {
+				out.3 = v.remove(idx);
+				break;
+			},
+		}
+	}
+
+	if out.3.is_empty() {
+		fyi_menu::die(b"Missing message.");
+	}
+
+	out
 }
 
 /// Fetch Common Flags.
@@ -138,8 +213,10 @@ fn _blank(args: &mut ArgList) {
 	let flags: u8 = _flags(args);
 	if 0 == flags & FLAG_HELP {
 		// How many lines should we print?
-		let count: usize = args.pluck_opt_usize(|x| x == "-c" || x == "--count")
-			.map_or(1, |c| 100.min(1.max(c)));
+		let count: usize = 100.min(1.max(
+			args.pluck_opt(|x| x == "-c" || x == "--count")
+				.map_or(1, |x| x.parse::<usize>().unwrap_or(1))
+		));
 
 		// Print it to `Stdout`.
 		if 0 == flags & FLAG_STDERR {
@@ -156,30 +233,6 @@ fn _blank(args: &mut ArgList) {
 	}
 }
 
-/// Pop a Confirmation Prompt.
-fn _confirm(args: &mut ArgList) {
-	let flags: u8 = _flags(args);
-	if 0 == flags & FLAG_HELP {
-		let mut msg = MsgKind::Confirm.as_msg(args.expect_arg());
-
-		if 0 != flags & FLAG_INDENT {
-			msg.set_indent(1);
-		}
-
-		if 0 != flags & FLAG_TIMESTAMP {
-			msg.set_timestamp();
-		}
-
-		if ! msg.prompt() {
-			process::exit(1);
-		}
-	}
-	// Show help instead.
-	else {
-		_help(include_bytes!("../help/confirm.txt"));
-	}
-}
-
 /// Print Regular Message.
 fn _msg(mut msg: Msg, flags: u8, exit: i32) {
 	if 0 != flags & FLAG_INDENT {
@@ -190,8 +243,16 @@ fn _msg(mut msg: Msg, flags: u8, exit: i32) {
 		msg.set_timestamp();
 	}
 
+	// Do a confirmation.
+	if 0 != flags & FLAG_PROMPT {
+		if ! msg.prompt() {
+			process::exit(1);
+		}
+
+		return;
+	}
 	// Print it to `Stdout`.
-	if 0 == flags & FLAG_STDERR { msg.println(); }
+	else if 0 == flags & FLAG_STDERR { msg.println(); }
 	// Print it to `Stderr`.
 	else { msg.eprintln(); }
 

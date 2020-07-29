@@ -49,197 +49,19 @@ separator in cases where those arguments are "keys", which the `pluck_arg()`
 method would reject.
 */
 
-use fyi_msg::MsgKind;
+use crate::{
+	FLAG_ALL,
+	die,
+	parse_args,
+	utility::vec_retain_explain,
+};
 use std::{
-	borrow::Borrow,
-	cmp::Ordering,
 	env,
 	ops::{
-		BitOr,
 		BitOrAssign,
 		Deref,
 	},
-	process,
 };
-
-
-
-/// Escape Chars
-///
-/// This returns `true` if a character requires escaping (for e.g. the shell).
-fn escape_chars(ch: char) -> bool {
-	match ch {
-		'0'..='9' | 'A'..='Z' | 'a'..='z' | '-' | '_' | '=' | '/' | ',' | '.' | '+' => false,
-		_ => true,
-	}
-}
-
-#[must_use]
-#[allow(clippy::suspicious_else_formatting)] // Sorry not sorry?
-#[allow(clippy::match_on_vec_items)] // While condition asserts index existence.
-/// Escape String (for shell)
-///
-/// For our purposes, we just want to ensure strings requiring quotes are
-/// single-quoted so as not to be lost entirely, but additional validation
-/// is definitely needed before attempting to use them!
-pub fn escape(mut s: String) -> String {
-	// Empty strings need to be quoted so as not to disappear.
-	if s == "" { String::from("''") }
-	// We need to quote it, and escape any single quotes already within it.
-	else if s.contains(escape_chars) {
-		unsafe {
-			let v = s.as_mut_vec();
-
-			{
-				let mut idx: usize = 0;
-				let mut len: usize = v.len();
-				while idx < len {
-					match v[idx] {
-						// Replace existing backslashes with forward slashes.
-						// This ain't a Windows library. Haha.
-						b'\\' => {
-							v[idx] = b'/';
-							idx += 1;
-						},
-						// Backslash any existing quotes.
-						b'\'' => {
-							v.insert(idx, b'\\');
-							idx += 2;
-							len += 1;
-						},
-						// Everything else can just pass right on through.
-						_ => { idx += 1; }
-					}
-				}
-			}
-
-			// Add quotes to the front and back when we're done!
-			v.reserve(2);
-			v.insert(0, b'\'');
-			v.push(b'\'');
-		}
-
-		s
-	}
-	// Send it through unchanged.
-	else { s }
-}
-
-/// Is Byte a Letter
-///
-/// Keys need an [a-z] or [A-Z] letter following the dash.
-fn is_letter(data: u8) -> bool {
-	match data {
-		b'A'..=b'Z' | b'a'..=b'z' => true,
-		_ => false,
-	}
-}
-
-/// Count Leading Dashes
-fn leading_dashes(data: &[u8]) -> usize {
-	match data.len().cmp(&2) {
-		// Options must be at least 2 letters long.
-		Ordering::Less => 0,
-		// This could be a short option.
-		Ordering::Equal =>
-			if data[0] == b'-' && is_letter(data[1]) { 1 }
-			else { 0 },
-		// This could be a short option (with value) or a long option (with or
-		// without value) or neither.
-		Ordering::Greater =>
-			if data[0] == b'-' {
-				if data[1] == b'-' && is_letter(data[2]) { 2 }
-				else if is_letter(data[1]) { 1 }
-				else { 0 }
-			}
-			else { 0 },
-	}
-}
-
-#[must_use]
-/// Parse Key and/or Value From Raw
-pub fn parse_kv(raw: &str) -> (Option<usize>, Option<usize>) {
-	let bytes: &[u8] = raw.as_bytes();
-	let len: usize = raw.len();
-	match leading_dashes(bytes).cmp(&1) {
-		// No dashes, treat as a value.
-		Ordering::Less => (None, Some(len)),
-		// One dash.
-		Ordering::Equal =>
-			// If the key is all there is, we're done.
-			if len == 2 { (Some(len), None) }
-			// We can't have something like "-v-v".
-			else if bytes[2] == b'-' { (None, None) }
-			// Split it down the middle.
-			else { (Some(2), Some(len - 2)) }
-		// Two dashes.
-		Ordering::Greater => {
-			let mut idx = 3;
-			while idx < len {
-				if bytes[idx] == b'=' {
-					if idx + 1 < len {
-						return (Some(idx), Some(len - idx - 1));
-					}
-					else {
-						return (Some(idx), Some(0));
-					}
-				}
-
-				idx += 1;
-			}
-
-			(Some(len), None)
-		}
-	}
-}
-
-
-
-/// Traits for Vec<String>
-///
-/// We use `retain()` in a lot of places, but usually just want to know if
-/// anything changed. We'll give Vec that power via a trait to make our lives
-/// easier.
-pub trait ArgListVec {
-	/// Retain With Answer
-	///
-	/// Identical to `retain()` except a boolean is returned.
-	fn retain_explain<F> (&mut self, f: F) -> bool
-	where F: FnMut(&String) -> bool;
-}
-
-impl ArgListVec for Vec<String> {
-	/// Retain With Answer
-	///
-	/// Identical to `retain()` except it returns `true` if changes were made,
-	/// `false` otherwise.
-	fn retain_explain<F> (&mut self, mut f: F) -> bool
-	where F: FnMut(&String) -> bool {
-		let len = self.len();
-		let mut del = 0;
-
-		let ptr = self.as_mut_ptr();
-		unsafe {
-			let mut idx: usize = 0;
-			while idx < len {
-				if !f(&*ptr.add(idx)) {
-					del += 1;
-				}
-				else if del > 0 {
-					ptr.add(idx).swap(ptr.add(idx - del));
-				}
-
-				idx += 1;
-			}
-		}
-
-		if del > 0 {
-			self.truncate(len - del);
-			true
-		}
-		else { false }
-	}
-}
 
 
 
@@ -274,86 +96,7 @@ impl From<Vec<&str>> for ArgList {
 
 impl From<Vec<String>> for ArgList {
 	fn from(mut out: Vec<String>) -> Self {
-		let mut len: usize = out.len();
-		let mut idx: usize = 0;
-		let mut any: bool = false;
-
-		// Loop it while we've got it.
-		while idx < len {
-			// Empty values.
-			if out[idx] == "" {
-				if any { idx += 1; }
-				// Drop empty values from the front.
-				else {
-					out.remove(idx);
-					len -= 1;
-				}
-			}
-			// Stupid junk entries can always be removed.
-			else if out[idx] == "-" || out[idx] == "---" {
-				out.remove(idx);
-				len -= 1;
-			}
-			// If we hit the separator, we need to reglue what comes after,
-			// then we're done.
-			else if out[idx] == "--" {
-				// If there's nothing after, there's nothing to preserve.
-				if idx + 1 == len {
-					len -= 1;
-					out.truncate(len);
-				}
-				else {
-					out[idx] = out.drain(idx+1..)
-						.map(escape)
-						.collect::<Vec<String>>()
-						.join(" ");
-					break;
-				}
-			}
-			// We have a value, a key, or both. Need to dig deeper!
-			else {
-				match parse_kv(&out[idx]) {
-					// Key or Value.
-					(Some(kv), None) | (None, Some(kv)) => {
-						any = true;
-
-						// We might need to shrink it.
-						if kv != out[idx].len() {
-							out[idx].truncate(kv);
-						}
-
-						idx += 1;
-					},
-					// Key *and* value.
-					(Some(k), Some(v)) => {
-						let el_len: usize = out[idx].len();
-
-						// Value might be empty.
-						if v == 0 {
-							out.insert(idx + 1, String::default());
-						}
-						// Otherwise chop it off the end.
-						else {
-							out.insert(idx + 1, String::from(&out[idx][el_len-v..]));
-						}
-
-						// Truncate the key to its appropriate length.
-						if k != el_len {
-							out[idx].truncate(k);
-						}
-
-						len += 1;
-						idx += 2;
-					},
-					// Bunk Entry!
-					_ => {
-						out.remove(idx);
-						len -= 1;
-					}
-				}
-			}
-		}
-
+		parse_args(&mut out, FLAG_ALL);
 		Self(out)
 	}
 }
@@ -367,14 +110,6 @@ impl ArgList {
 	/// saner to use the struct's `pluck_*()` methods instead.
 	pub fn as_mut_vec(&mut self) -> &mut Vec<String> {
 		&mut self.0
-	}
-
-	/// Expect Something, Anything
-	pub fn expect(&self) {
-		if self.0.is_empty() {
-			Self::die("Missing options, flags, arguments, and/or ketchup.");
-			unreachable!();
-		}
 	}
 
 	#[must_use]
@@ -412,7 +147,7 @@ impl ArgList {
 	pub fn expect_command(&mut self) -> String {
 		if let Some(com) = self.pluck_command() { com }
 		else {
-			Self::die("Missing command.");
+			die(b"Missing command.");
 			unreachable!();
 		}
 	}
@@ -423,7 +158,7 @@ impl ArgList {
 	///
 	/// Panics if `keys` are empty, or `keys` and `values` have different lengths.
 	pub fn pluck_flags<U>(&mut self, flags: &mut U, keys: &[&str], values: &[U])
-	where U: Copy + BitOr + BitOrAssign {
+	where U: Copy + BitOrAssign {
 		assert!(! keys.is_empty() && keys.len() == values.len());
 
 		let len: usize = self.0.len();
@@ -488,7 +223,7 @@ impl ArgList {
 	/// In other words, `true` for non-match, `false` for match. Haha.
 	pub fn pluck_switch<F> (&mut self, cb: F) -> bool
 	where F: FnMut(&String) -> bool {
-		self.0.retain_explain(cb)
+		vec_retain_explain(&mut self.0, cb)
 	}
 
 	/// Extract Option
@@ -507,12 +242,10 @@ impl ArgList {
 		while idx < len {
 			if cb(&self.0[idx]) {
 				if idx + 1 == len {
-					Self::die({
-						let mut s: String = String::from("Missing option value: ");
-						s.push_str(&self.0[idx]);
-						s
-					});
-					unreachable!();
+					die(&[
+						b"Missing option value: ",
+						self.0[idx].as_bytes(),
+					].concat());
 				}
 
 				// Remove the key and value.
@@ -523,26 +256,6 @@ impl ArgList {
 		}
 
 		out
-	}
-
-	/// Extract Option (usize)
-	///
-	/// Same as `pluck_opt()`, except the value is returned as a usize. Parsing
-	/// failures are treated as None, i.e. an error.
-	pub fn pluck_opt_usize<F> (&mut self, cb: F) -> Option<usize>
-	where F: FnMut(&String) -> bool {
-		self.pluck_opt(cb)
-			.and_then(|x| x.parse::<usize>().ok())
-	}
-
-	/// Convenience: Help
-	pub fn pluck_help(&mut self) -> bool {
-		self.0.retain_explain(|x| x != "-h" && x != "--help")
-	}
-
-	/// Convenience: Version
-	pub fn pluck_version(&mut self) -> bool {
-		self.0.retain_explain(|x| x != "-V" && x != "--version")
 	}
 
 	/// Pluck Arg(s)
@@ -563,7 +276,7 @@ impl ArgList {
 	pub fn expect_args(&mut self) -> Vec<String> {
 		if let Some(args) = self.pluck_args() { args }
 		else {
-			Self::die("Missing trailing argument(s).");
+			die(b"Missing trailing argument(s).");
 			unreachable!();
 		}
 	}
@@ -575,7 +288,7 @@ impl ArgList {
 		if
 			! self.0.is_empty() &&
 			(
-				! self.0.retain_explain(|x| x != "" && ! x.starts_with('-')) ||
+				! vec_retain_explain(&mut self.0, |x| x != "" && ! x.starts_with('-')) ||
 				! self.0.is_empty()
 			)
 		{
@@ -590,15 +303,9 @@ impl ArgList {
 	pub fn expect_arg(&mut self) -> String {
 		if let Some(arg) = self.pluck_arg() { arg }
 		else {
-			Self::die("Missing trailing argument.");
+			die(b"Missing trailing argument.");
 			unreachable!();
 		}
-	}
-
-	/// Print an Error and Exit
-	pub fn die<S: Borrow<str>>(msg: S) {
-		MsgKind::Error.as_msg(msg).eprintln();
-		process::exit(1);
 	}
 }
 
@@ -611,9 +318,6 @@ mod tests {
 	#[test]
 	fn t_extract() {
 		let mut args = ArgList::from(vec!["com", "-v", "-a", "", "-q", "--", "Apple Sauce"]);
-
-		// Not an assertion, per se, but we should have arguments.
-		args.expect();
 
 		// Check the first.
 		assert_eq!(args.peek(), Some("com"));
@@ -645,7 +349,6 @@ mod tests {
 
 		// Let's start over and pull multiple flags at once.
 		args = ArgList::from(vec!["-v", "--help", "--num", "100", "-q", "One Arg", "Two Arg"]);
-		args.expect();
 
 		const FLAG_H: u8 = 0b0001;
 		const FLAG_Q: u8 = 0b0010;
@@ -671,7 +374,6 @@ mod tests {
 
 		// Let's start over and look at options and multi-args.
 		args = ArgList::from(vec!["-v", "1.0", "--num", "100", "-q", "One Arg", "Two Arg"]);
-		args.expect();
 
 		// No command this time.
 		assert_eq!(args.peek(), Some("-v"));
@@ -684,11 +386,9 @@ mod tests {
 			[String::from("--num"), String::from("100"), String::from("-q"), String::from("One Arg"), String::from("Two Arg")][..]
 		);
 
-		// Grab the num as a number.
-		assert_eq!(args.pluck_opt_usize(|x| x == "--num"), Some(100_usize));
-
-		// Get the -q out of the way.
+		// Get the remaining options out of the way.
 		assert!(args.pluck_switch(|x| x != "-q"));
+		assert_eq!(args.pluck_opt(|x| x == "--num"), Some(String::from("100")));
 
 		// Now check that we get args!
 		assert_eq!(args.pluck_args(), Some(vec![String::from("One Arg"), String::from("Two Arg")]));
