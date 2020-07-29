@@ -41,75 +41,145 @@ use std::{
 
 
 /// -h | --help
-const FLAG_HELP: u8      = 0b0001;
+const FLAG_HELP: u8      = 0b0000_0001;
 /// -i | --indent
-const FLAG_INDENT: u8    = 0b0010;
+const FLAG_INDENT: u8    = 0b0000_0010;
 /// --stderr
-const FLAG_STDERR: u8    = 0b0100;
+const FLAG_STDERR: u8    = 0b0000_0100;
 /// -t | --timestamp
-const FLAG_TIMESTAMP: u8 = 0b1000;
+const FLAG_TIMESTAMP: u8 = 0b0000_1000;
+/// Prompt rather than Print.
+const FLAG_PROMPT: u8    = 0b0001_0000;
 
 
 
 fn main() {
 	let mut args = ArgList::default();
-	args.expect();
 
 	// The app might be called with version or help flags instead of a command.
-	match args.peek().unwrap() {
+	match args.pluck_next().unwrap().as_str() {
+		"-h" | "--help" | "help" => _help(include_bytes!("../help/help.txt")),
 		"-V" | "--version" => _version(),
-		"-h" | "--help" | "help" => _help(include_str!("../help/help.txt")),
-		// Otherwise just go off into the appropriate subcommand action.
-		_ => match args.expect_command().as_str() {
-			"blank" => _blank(&mut args),
-			"confirm" | "prompt" => _confirm(&mut args),
-			"print" => {
-				let flags = _flags(&mut args);
-				if 0 == flags & FLAG_HELP {
-					let exit: i32 = _exit(&mut args);
-					let color: u8 = 255.min(args.pluck_opt_usize(|x| x == "-c" || x == "--prefix-color")
-						.unwrap_or(199)) as u8;
-					let prefix = args.pluck_opt(|x| x == "-p" || x == "--prefix")
-						.unwrap_or_default();
-
-					_msg(Msg::new(prefix, color, args.expect_arg()), flags, exit);
-				}
-				// Show help instead.
-				else {
-					_help(include_str!("../help/print.txt"));
-				}
-			},
-			other => match MsgKind::from(other) {
-				MsgKind::None => ArgList::die("Invalid subcommand."),
-				other => {
-					let flags = _flags(&mut args);
-					if 0 == flags & FLAG_HELP {
-						let exit: i32 = _exit(&mut args);
-						_msg(other.as_msg(args.expect_arg()), flags, exit);
+		"blank" => _blank(&mut args),
+		"print" => {
+			let flags = _flags(&mut args);
+			if 0 == flags & FLAG_HELP {
+				let (exit, color, prefix, msg) = _print_opts(args);
+				_msg(Msg::new(prefix, color, msg), flags, exit);
+			}
+			// Show help instead.
+			else {
+				_help(include_bytes!("../help/print.txt"));
+			}
+		},
+		other => match MsgKind::from(other) {
+			MsgKind::None => fyi_menu::die(b"Invalid subcommand."),
+			mkind => {
+				let flags =
+					if other == "confirm" || other == "prompt" {
+						_flags(&mut args) | FLAG_PROMPT
 					}
-					// Show help instead.
 					else {
-						 _help(&format!(
-							include_str!("../help/generic.txt"),
-							other.as_str(),
-							other.as_str().to_lowercase(),
-						));
-					}
+						_flags(&mut args)
+					};
+
+				if 0 == flags & FLAG_HELP {
+					let (exit, msg) = _msg_opts(args);
+					_msg(mkind.as_msg(msg), flags, exit);
+				}
+				// Show other help.
+				else if 0 == flags & FLAG_PROMPT {
+					 _help(format!(
+						include_str!("../help/generic.txt"),
+						mkind.as_str(),
+						mkind.as_str().to_lowercase(),
+					).as_bytes());
+				}
+				// Show confirm help.
+				else {
+					_help(include_bytes!("../help/confirm.txt"));
 				}
 			}
-		}
+		},
 	}
 }
 
-/// Fetch Exit Code.
-///
-/// Many of the subcommands accept an optional alternative exit status. This
-/// fetches it in a centralized way.
-fn _exit(args: &mut ArgList) -> i32 {
-	match args.pluck_opt(|x| x == "-e" || x == "--exit") {
-		Some(x) => x.parse::<i32>().unwrap_or_default(),
-		None => 0,
+/// Generic Message Opts.
+fn _msg_opts(mut args: ArgList) -> (i32, String) {
+	let mut out = (0_i32, String::new());
+
+	// Pull the remaining options and/or message. We don't need
+	// to clean up after ourselves here; args gets dropped at
+	// the end.
+	let len = args.len();
+	let v = args.as_mut_vec();
+	let mut idx = 0;
+	while idx < len {
+		if idx + 1 == len {
+			out.1 = v.remove(idx);
+			break;
+		}
+
+		match v[idx].as_str() {
+			"-e" | "--exit" => {
+				out.0 = v[idx + 1].parse::<i32>().unwrap_or_default();
+				idx += 2;
+			},
+			_ => {
+				out.1 = v.remove(idx);
+				break;
+			},
+		}
 	}
+
+	if out.1.is_empty() {
+		fyi_menu::die(b"Missing message.");
+	}
+
+	out
+}
+
+/// Generic Print Opts.
+fn _print_opts(mut args: ArgList) -> (i32, u8, String, String) {
+	let mut out = (0_i32, 199_u8, String::new(), String::new());
+
+	// Pull the remaining options and/or message. We don't need to
+	// clean up after ourselves here; args gets dropped at the end.
+	let mut len = args.len();
+	let v = args.as_mut_vec();
+	let mut idx = 0;
+	while idx < len {
+		if idx + 1 == len {
+			out.3 = v.remove(idx);
+			break;
+		}
+
+		match v[idx].as_str() {
+			"-e" | "--exit" => {
+				out.0 = v[idx + 1].parse::<i32>().unwrap_or_default();
+				idx += 2;
+			},
+			"-c" | "--prefix-color" => {
+				out.1 = 1.max(v[idx + 1].parse::<u8>().unwrap_or(199));
+				idx += 2;
+			},
+			"-p" | "--prefix" => {
+				out.2 = v.remove(idx + 1);
+				idx += 1;
+				len -= 1;
+			},
+			_ => {
+				out.3 = v.remove(idx);
+				break;
+			},
+		}
+	}
+
+	if out.3.is_empty() {
+		fyi_menu::die(b"Missing message.");
+	}
+
+	out
 }
 
 /// Fetch Common Flags.
@@ -119,98 +189,47 @@ fn _exit(args: &mut ArgList) -> i32 {
 /// go to reduce the number of iterations that would be required to check each
 /// individually.
 fn _flags(args: &mut ArgList) -> u8 {
-	let len: usize = args.len();
-	if 0 == len { 0 }
-	else {
-		let mut flags: u8 = 0;
-		let mut del = 0;
-		let raw = args.as_mut_vec();
-
-		// This is basically what `Vec.retain()` does, except we're hitting
-		// multiple patterns at once and sending back the results.
-		let ptr = raw.as_mut_ptr();
-		unsafe {
-			let mut idx: usize = 0;
-			while idx < len {
-				match (*ptr.add(idx)).as_str() {
-					"-i" | "--indent" => {
-						flags |= FLAG_INDENT;
-						del += 1;
-					},
-					"--stderr" => {
-						flags |= FLAG_STDERR;
-						del += 1;
-					},
-					"-t" | "--timestamp" => {
-						flags |= FLAG_TIMESTAMP;
-						del += 1;
-					},
-					"-h" | "--help" => {
-						flags |= FLAG_HELP;
-						del += 1;
-					},
-					_ => if del > 0 {
-						ptr.add(idx).swap(ptr.add(idx - del));
-					}
-				}
-
-				idx += 1;
-			}
-		}
-
-		// Did we find anything? If so, run `truncate()` to free the memory
-		// and return the flags.
-		if del > 0 {
-			raw.truncate(len - del);
-			flags
-		}
-		else { 0 }
-	}
+	let mut flags: u8 = 0;
+	args.pluck_flags(
+		&mut flags,
+		&[
+			"-i", "--indent",
+			"-t", "--timestamp",
+			"--stderr",
+			"-h", "--help",
+		],
+		&[
+			FLAG_INDENT, FLAG_INDENT,
+			FLAG_TIMESTAMP, FLAG_TIMESTAMP,
+			FLAG_STDERR,
+			FLAG_HELP, FLAG_HELP,
+		],
+	);
+	flags
 }
 
 /// Shoot Blanks.
 fn _blank(args: &mut ArgList) {
-	if args.pluck_help() {
-		_help(include_str!("../help/blank.txt"));
-		return;
-	}
-
-	// How many lines should we print?
-	let count: usize = match args.pluck_opt_usize(|x| x == "-c" || x == "--count") {
-		Some(c) => 100.min(1.max(c)),
-		None => 1,
-	};
-
-	// Print to `STDERR` instead of `STDOUT`.
-	if args.pluck_switch(|x| x != "--stderr") {
-		io::stderr().write_all(&[10].repeat(count)).unwrap();
-	}
-	else {
-		io::stdout().write_all(&[10].repeat(count)).unwrap();
-	}
-}
-
-/// Pop a Confirmation Prompt.
-fn _confirm(args: &mut ArgList) {
 	let flags: u8 = _flags(args);
 	if 0 == flags & FLAG_HELP {
-		let mut msg = MsgKind::Confirm.as_msg(args.expect_arg());
+		// How many lines should we print?
+		let count: usize = 100.min(1.max(
+			args.pluck_opt(|x| x == "-c" || x == "--count")
+				.map_or(1, |x| x.parse::<usize>().unwrap_or(1))
+		));
 
-		if 0 != flags & FLAG_INDENT {
-			msg.set_indent(1);
+		// Print it to `Stdout`.
+		if 0 == flags & FLAG_STDERR {
+			io::stdout().write_all(&[10].repeat(count)).unwrap();
 		}
-
-		if 0 != flags & FLAG_TIMESTAMP {
-			msg.set_timestamp();
-		}
-
-		if ! msg.prompt() {
-			process::exit(1);
+		// Print it to `Stderr`.
+		else {
+			io::stderr().write_all(&[10].repeat(count)).unwrap();
 		}
 	}
 	// Show help instead.
 	else {
-		_help(include_str!("../help/confirm.txt"));
+		_help(include_bytes!("../help/blank.txt"));
 	}
 }
 
@@ -224,8 +243,16 @@ fn _msg(mut msg: Msg, flags: u8, exit: i32) {
 		msg.set_timestamp();
 	}
 
+	// Do a confirmation.
+	if 0 != flags & FLAG_PROMPT {
+		if ! msg.prompt() {
+			process::exit(1);
+		}
+
+		return;
+	}
 	// Print it to `Stdout`.
-	if 0 == flags & FLAG_STDERR { msg.println(); }
+	else if 0 == flags & FLAG_STDERR { msg.println(); }
 	// Print it to `Stderr`.
 	else { msg.eprintln(); }
 
@@ -235,30 +262,68 @@ fn _msg(mut msg: Msg, flags: u8, exit: i32) {
 	}
 }
 
+#[cfg(not(feature = "man"))]
 #[cold]
 /// Print Help.
-fn _help(txt: &str) {
-	io::stdout().write_all({
-		let mut s = String::with_capacity(1024);
-		s.push_str("FYI ");
-		s.push_str(env!("CARGO_PKG_VERSION"));
-		s.push('\n');
-		s.push_str(env!("CARGO_PKG_DESCRIPTION"));
-		s.push('\n');
-		s.push('\n');
-		s.push_str(txt);
-		s.push('\n');
-		s
-	}.as_bytes()).unwrap();
+fn _help(txt: &[u8]) {
+	io::stdout().write_fmt(format_args!(
+		r#"
+                      ;\
+                     |' \
+  _                  ; : ;
+ / `-.              /: : |
+|  ,-.`-.          ,': : |
+\  :  `. `.       ,'-. : |
+ \ ;    ;  `-.__,'    `-.|         {}{}{}
+  \ ;   ;  :::  ,::'`:.  `.        Simple CLI status messages.
+   \ `-. :  `    :.    `.  \
+    \   \    ,   ;   ,:    (\
+     \   :., :.    ,'o)): ` `-.
+    ,/,' ;' ,::"'`.`---'   `.  `-._
+  ,/  :  ; '"      `;'          ,--`.
+ ;/   :; ;             ,:'     (   ,:)
+   ,.,:.    ; ,:.,  ,-._ `.     \""'/
+   '::'     `:'`  ,'(  \`._____.-'"'
+      ;,   ;  `.  `. `._`-.  \\
+      ;:.  ;:       `-._`-.\  \`.
+       '`:. :        |' `. `\  ) \
+          ` ;:       |    `--\__,'
+            '`      ,'
+                 ,-'
+
+{}
+"#,
+		"\x1b[38;5;199mFYI\x1b[0;38;5;69m v",
+		env!("CARGO_PKG_VERSION"),
+		"\x1b[0m",
+		unsafe { std::str::from_utf8_unchecked(txt) }
+	)).unwrap();
+}
+
+#[cfg(feature = "man")]
+#[cold]
+/// Print Help.
+///
+/// This is a stripped-down version of the help screen made specifically for
+/// `help2man`, which gets run during the Debian package release build task.
+fn _help(txt: &[u8]) {
+	io::stdout().write_all(&[
+		b"FYI ",
+		env!("CARGO_PKG_VERSION").as_bytes(),
+		b"\n",
+		env!("CARGO_PKG_DESCRIPTION").as_bytes(),
+		b"\n\n",
+		txt,
+		b"\n",
+	].concat()).unwrap();
 }
 
 #[cold]
 /// Print version and exit.
 fn _version() {
-	io::stdout().write_all({
-		let mut s = String::from("FYI ");
-		s.push_str(env!("CARGO_PKG_VERSION"));
-		s.push('\n');
-		s
-	}.as_bytes()).unwrap();
+	io::stdout().write_all(&[
+		b"FYI ",
+		env!("CARGO_PKG_VERSION").as_bytes(),
+		b"\n"
+	].concat()).unwrap();
 }
