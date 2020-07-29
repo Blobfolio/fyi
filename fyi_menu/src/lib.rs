@@ -81,8 +81,12 @@ pub enum KeyKind {
 	None,
 	/// A short one.
 	Short,
+	/// A short one with a potential value chunk.
+	ShortV,
 	/// A long one.
 	Long,
+	/// A long one with a value chunk.
+	LongV(usize),
 }
 
 impl Default for KeyKind {
@@ -93,18 +97,17 @@ impl From<&[u8]> for KeyKind {
 	fn from(txt: &[u8]) -> Self {
 		match txt.len().cmp(&2) {
 			// This could be a short option.
-			Ordering::Equal =>
-				if txt[0] == b'-' && utility::byte_is_letter(txt[1]) {
-					Self::Short
-				}
-				else { Self::None },
+			Ordering::Equal if txt[0] == b'-' && utility::byte_is_letter(txt[1]) => Self::Short,
 			// This could be anything!
 			Ordering::Greater if txt[0] == b'-' =>
 				if txt[1] == b'-' && utility::byte_is_letter(txt[2]) {
-					Self::Long
+					if let Some(x) = txt.iter().position(|b| *b == b'=') {
+						Self::LongV(x)
+					}
+					else { Self::Long }
 				}
 				else if utility::byte_is_letter(txt[1]) {
-					Self::Short
+					Self::ShortV
 				}
 				else {
 					Self::None
@@ -168,41 +171,31 @@ pub fn parse_args(out: &mut Vec<String>, flags: u8) {
 
 		let bytes: &[u8] = out[idx].as_bytes();
 		match KeyKind::from(bytes) {
-			KeyKind::Short =>
-				if 0 != flags & FLAG_SHORT_IS_CHAR && bytes.len() != 2 {
-					out.insert(idx + 1, String::from(&out[idx][2..]));
-					out[idx].truncate(2);
+			KeyKind::ShortV if 0 != flags & FLAG_SHORT_IS_CHAR => {
+				out.insert(idx + 1, String::from(&out[idx][2..]));
+				out[idx].truncate(2);
 
-					idx += 2;
-					len += 1;
-				}
-				else {
-					idx += 1;
-				},
-			KeyKind::Long =>
-				// Split on equal sign.
-				if let Some(x) = bytes.iter().position(|b| *b == b'=') {
-					// Insert the value.
-					if x + 1 < bytes.len() {
-						out.insert(idx + 1, String::from(&out[idx][x+1..]));
-					}
-					// Otherwise insert an empty value.
-					else {
-						out.insert(idx + 1, String::new());
-					}
-
-					// Shorten the key.
-					out[idx].truncate(x);
-
-					idx += 2;
-					len += 1;
-				}
-				else {
-					idx += 1;
-				},
-			KeyKind::None => {
-				idx += 1;
+				idx += 2;
+				len += 1;
 			},
+			KeyKind::LongV(x) => {
+				// Insert the value.
+				if x + 1 < bytes.len() {
+					out.insert(idx + 1, String::from(&out[idx][x+1..]));
+				}
+				// Otherwise insert an empty value.
+				else {
+					out.insert(idx + 1, String::new());
+				}
+
+				// Shorten the key.
+				out[idx].truncate(x);
+
+				idx += 2;
+				len += 1;
+			},
+			// Everything else can go straight on through!
+			_ => { idx += 1; }
 		}
 	}
 
