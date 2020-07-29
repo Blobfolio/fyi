@@ -130,13 +130,131 @@ pub fn vec_trim_start(data: &mut Vec<String>) {
 
 	while idx < len {
 		// Got something!
-		if ! data[idx].is_empty() && ! slice_is_whitespace(data[idx].as_bytes()) {
+		if ! slice_is_whitespace(data[idx].as_bytes()) {
 			if 0 != idx {
 				data.drain(0..idx);
 			}
-			break;
+			return;
 		}
 
 		idx += 1;
+	}
+
+	// Unlikely to hit, but you never know.
+	if idx != 0 {
+		data.truncate(0);
+	}
+}
+
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn t_byte_is_letter() {
+		assert_eq!(true, byte_is_letter(b'a'));
+		assert_eq!(true, byte_is_letter(b'B'));
+		assert_eq!(true, byte_is_letter(b'c'));
+		assert_eq!(true, byte_is_letter(b'D'));
+
+		assert_eq!(false, byte_is_letter(b'!'));
+		assert_eq!(false, byte_is_letter(b' '));
+		assert_eq!(false, byte_is_letter(b'@'));
+		assert_eq!(false, byte_is_letter(b'2'));
+		assert_eq!(false, byte_is_letter(b'.'));
+	}
+
+	#[test]
+	fn t_esc_arg() {
+		assert_eq!("''", esc_arg("".into()));
+		assert_eq!("' '", esc_arg(" ".into()));
+		assert_eq!("Hello", esc_arg("Hello".into()));
+		assert_eq!("'Hello World'", esc_arg("Hello World".into()));
+		assert_eq!("/path/to/file", esc_arg(r"\path\to\file".into()));
+		assert_eq!(r"'Eat at Joe\'s'", esc_arg("Eat at Joe's".into()));
+		assert_eq!(r"'Björk\'s Vespertine'", esc_arg("Björk's Vespertine".into()));
+	}
+
+	#[test]
+	fn t_slice_is_whitespace() {
+		assert_eq!(true, slice_is_whitespace(b" "));
+		assert_eq!(true, slice_is_whitespace(b""));
+		assert_eq!(true, slice_is_whitespace(b"\t \n"));
+		assert_eq!(false, slice_is_whitespace(b" Hello World "));
+	}
+
+	#[test]
+	fn t_vec_retain_explain() {
+		let mut test = vec![
+			String::from("a"),
+			String::from("b"),
+			String::from("a"),
+			String::from("b"),
+		];
+
+		assert_eq!(true, vec_retain_explain(&mut test, |x| x == "a"));
+		assert_eq!(
+			test,
+			vec![
+				String::from("a"),
+				String::from("a"),
+			]
+		);
+
+		assert_eq!(false, vec_retain_explain(&mut test, |x| x == "a"));
+		assert_eq!(
+			test,
+			vec![
+				String::from("a"),
+				String::from("a"),
+			]
+		);
+
+		assert_eq!(true, vec_retain_explain(&mut test, |x| x == "b"));
+		assert!(test.is_empty());
+	}
+
+	#[test]
+	fn t_vec_trim_start() {
+		let mut test = vec![
+			String::from(""),
+			String::from(" "),
+			String::from("one"),
+			String::from("two"),
+			String::from(""),
+		];
+		vec_trim_start(&mut test);
+		assert_eq!(
+			test,
+			vec![
+				String::from("one"),
+				String::from("two"),
+				String::from(""),
+			]
+		);
+
+		vec_trim_start(&mut test);
+		assert_eq!(
+			test,
+			vec![
+				String::from("one"),
+				String::from("two"),
+				String::from(""),
+			]
+		);
+
+		test.truncate(0);
+		vec_trim_start(&mut test);
+		assert!(test.is_empty());
+
+		test = vec![
+			String::from(""),
+			String::from(" "),
+			String::from(" \t      \n    "),
+		];
+		vec_trim_start(&mut test);
+		assert!(test.is_empty());
 	}
 }
