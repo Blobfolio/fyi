@@ -262,8 +262,50 @@ fn _msg(mut msg: Msg, flags: u8, exit: i32) {
 	}
 }
 
+#[cfg(not(feature = "man"))]
 #[cold]
 /// Print Help.
+fn _help(txt: &[u8]) {
+	io::stdout().write_fmt(format_args!(
+		r#"
+                      ;\
+                     |' \
+  _                  ; : ;
+ / `-.              /: : |
+|  ,-.`-.          ,': : |
+\  :  `. `.       ,'-. : |
+ \ ;    ;  `-.__,'    `-.|         {}{}{}
+  \ ;   ;  :::  ,::'`:.  `.        Simple CLI status messages.
+   \ `-. :  `    :.    `.  \
+    \   \    ,   ;   ,:    (\
+     \   :., :.    ,'o)): ` `-.
+    ,/,' ;' ,::"'`.`---'   `.  `-._
+  ,/  :  ; '"      `;'          ,--`.
+ ;/   :; ;             ,:'     (   ,:)
+   ,.,:.    ; ,:.,  ,-._ `.     \""'/
+   '::'     `:'`  ,'(  \`._____.-'"'
+      ;,   ;  `.  `. `._`-.  \\
+      ;:.  ;:       `-._`-.\  \`.
+       '`:. :        |' `. `\  ) \
+          ` ;:       |    `--\__,'
+            '`      ,'
+                 ,-'
+
+{}
+"#,
+		"\x1b[38;5;199mFYI\x1b[0;38;5;69m v",
+		env!("CARGO_PKG_VERSION"),
+		"\x1b[0m",
+		unsafe { std::str::from_utf8_unchecked(txt) }
+	)).unwrap();
+}
+
+#[cfg(feature = "man")]
+#[cold]
+/// Print Help.
+///
+/// This is a stripped-down version of the help screen made specifically for
+/// `help2man`, which gets run during the Debian package release build task.
 fn _help(txt: &[u8]) {
 	io::stdout().write_all(&[
 		b"FYI ",
