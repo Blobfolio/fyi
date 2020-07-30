@@ -102,6 +102,12 @@ impl NiceInt {
 		out.len = (&mut out.inner[..]).write_formatted(&num, &num_format::Locale::en).unwrap_or_default();
 		out
 	}
+
+	#[must_use]
+	/// As Str.
+	pub fn as_str(&self) -> &str {
+		unsafe { std::str::from_utf8_unchecked(&*self) }
+	}
 }
 
 
