@@ -254,8 +254,22 @@ fn main() {
 		Some(title1),
 	));
 
-	// Launch a steady tick.
-	let handle = Progress::steady_tick(&bar, None);
+	// Spawn a thread to handle a steady-tick for us, just in case any of the
+	// empires run too long.
+	let bar2 = bar.clone();
+	rayon::spawn(move || {
+		let sleep = Duration::from_millis(60);
+
+		loop {
+			bar2.clone().tick();
+			thread::sleep(sleep);
+
+			// Are we done?
+			if ! bar2.clone().is_running() {
+				break;
+			}
+		}
+	});
 
 	// Do our "work".
 	DATA.into_par_iter().for_each(|(p, d)| {
@@ -284,7 +298,6 @@ fn main() {
 		}
 		else { bar.clone().update(1, None::<String>, Some(*p)); }
 	});
-	handle.join().unwrap();
 
 	// Print a quick summary.
 	bar.finished_in();

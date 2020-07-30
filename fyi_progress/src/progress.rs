@@ -46,10 +46,6 @@ bar.update(1, None, None);
 bar.tick();
 ```
 
-Alternatively, you can use the struct's `steady_tick()` method to handle the
-ticking automatically, regularly in its own thread. Take a look at the included
-"progress" example for an example.
-
 ## Example:
 
 ```no_run
@@ -94,18 +90,8 @@ use std::{
 	cmp::Ordering,
 	io,
 	ops::Deref,
-	sync::{
-		Arc,
-		Mutex,
-	},
-	thread::{
-		self,
-		JoinHandle,
-	},
-	time::{
-		Duration,
-		Instant,
-	},
+	sync::Mutex,
+	time::Instant,
 };
 
 
@@ -158,7 +144,7 @@ bitflags::bitflags! {
 	/// last tick and need to be redrawn.
 	///
 	/// These are handled automatically.
-	struct ProgressFlags: u32 {
+	struct ProgressFlags: u8 {
 		const NONE =         0b0000_0000;
 		const ALL =          0b0111_1111;
 		const PROGRESSED =   0b0000_0111;
@@ -892,32 +878,6 @@ impl Progress {
 				Self(Mutex::new(inner))
 			}
 		)
-	}
-
-	#[must_use]
-	/// Steady tick.
-	///
-	/// If your `Progress` instance is behind an Arc, you can pass it to this
-	/// method to spawn a steady-ticker in its own thread. When you use this,
-	/// you do not need to manually call `tick()`, but do need to remember to
-	/// join the handle when you're through with your own loop.
-	///
-	/// See the "progress" example for usage.
-	pub fn steady_tick(me: &Arc<Self>, rate: Option<u64>) -> JoinHandle<()> {
-		let sleep = Duration::from_millis(u64::max(60, rate.unwrap_or(60)));
-
-		let me2 = me.clone();
-		thread::spawn(move || {
-			loop {
-				me2.clone().tick();
-				thread::sleep(sleep);
-
-				// Are we done?
-				if ! me2.clone().is_running() {
-					break;
-				}
-			}
-		})
 	}
 
 
