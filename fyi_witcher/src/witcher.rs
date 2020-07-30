@@ -205,14 +205,7 @@ impl Witcher {
 	pub fn with_path<P> (mut self, path: P) -> Self
 	where P: Into<PathBuf> {
 		if let Ok(path) = path.into().canonicalize() {
-			if self.unique.insert(hash_path_buf(&path)) {
-				if path.is_dir() {
-					self.dirs.push(path);
-				}
-				else {
-					self.files.push(path);
-				}
-			}
+			self.enqueue_unique(path);
 		}
 
 		self
@@ -241,6 +234,20 @@ impl Witcher {
 		self.collect()
 	}
 
+	/// Enqueue If.
+	///
+	/// Insert a path into the right spot if it hasn't already been seen.
+	fn enqueue_unique(&mut self, path: PathBuf) {
+		if self.unique.insert(hash_path_buf(&path)) {
+			if path.is_dir() {
+				self.dirs.push(path);
+			}
+			else {
+				self.files.push(path);
+			}
+		}
+	}
+
 	/// Scan Directory.
 	///
 	/// This runs any time the inbox is empty, scanning the directory, and
@@ -250,14 +257,7 @@ impl Witcher {
 			paths
 				.for_each(|p|
 					if let Some(p) = p.ok().and_then(|p| p.path().canonicalize().ok()) {
-						if self.unique.insert(hash_path_buf(&p)) {
-							if p.is_dir() {
-								self.dirs.push(p);
-							}
-							else {
-								self.files.push(p);
-							}
-						}
+						self.enqueue_unique(p);
 					}
 				)
 		}
