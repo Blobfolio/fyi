@@ -10,7 +10,16 @@ bar output, or you can dereference the object to work directly with its inner
 `IndexSet`.
 */
 
-use crate::utility::inflect;
+
+
+use ahash::{
+	AHasher,
+	AHashSet
+};
+use crate::utility::{
+	du,
+	inflect,
+};
 use fyi_msg::{
 	Msg,
 	MsgKind,
@@ -20,10 +29,7 @@ use fyi_progress::{
 	NiceInt,
 	Progress,
 };
-use indexmap::set::IndexSet;
-use jwalk::WalkDir;
 use rayon::prelude::*;
-use regex::bytes::Regex;
 use std::{
 	borrow::Borrow,
 	ffi::OsStr,
@@ -31,16 +37,18 @@ use std::{
 		self,
 		File,
 	},
+	hash::Hasher,
 	io::{
 		self,
 		BufRead,
 	},
-	ops::Deref,
 	path::{
 		Path,
 		PathBuf,
 	},
 	sync::Arc,
+	thread,
+	time::Duration,
 };
 
 
@@ -55,307 +63,327 @@ macro_rules! make_progress {
 	);
 }
 
-// Helper: Loop the progress loop inline.
+/// Helper: Loop the progress loop inline.
 macro_rules! make_progress_loop {
-	($witcher:ident, $progress:ident, $cb:ident) => {
-		let handle = Progress::steady_tick(&$progress, None);
-		$witcher.0.par_iter().for_each(|x| {
+	($paths:ident, $progress:ident, $cb:ident) => {
+		// Spawn a thread to steadily tick the progress bar. This is useful
+		// when processes might be too long-running.
+		let pbar2 = $progress.clone();
+		rayon::spawn(move || {
+			let sleep = Duration::from_millis(60);
+
+			loop {
+				pbar2.clone().tick();
+				thread::sleep(sleep);
+
+				// Are we done?
+				if ! pbar2.clone().is_running() {
+					break;
+				}
+			}
+		});
+
+		// Loop the paths!
+		$paths.par_iter().for_each(|x| {
 			let file: &str = x.to_str().unwrap_or_default();
 			$progress.clone().add_task(file);
 			$cb(x);
 			$progress.clone().update(1, None::<String>, Some(file));
 		});
-		handle.join().unwrap();
 	};
 }
 
 
 
-#[derive(Debug, Default, Clone)]
-/// Witcher.
-pub struct Witcher(IndexSet<PathBuf>);
+#[derive(Debug, Clone)]
+/// Witching Stuff.
+pub struct Witcher {
+	/// Files found.
+	files: Vec<PathBuf>,
+	/// Directories found (to be scanned later).
+	dirs: Vec<PathBuf>,
+	/// Unique path hashes.
+	unique: AHashSet<u64>,
+}
 
-impl Deref for Witcher {
-	type Target = IndexSet<PathBuf>;
+impl Default for Witcher {
+	fn default() -> Self {
+		Self {
+			files: Vec::with_capacity(64),
+			dirs: Vec::with_capacity(16),
+			unique: AHashSet::with_capacity(2048),
+		}
+	}
+}
 
-	/// Deref.
-	fn deref(&self) -> &Self::Target {
-		&self.0
+impl From<&str> for Witcher {
+	fn from(src: &str) -> Self {
+		Self::default()
+			.with_path(PathBuf::from(src))
+	}
+}
+
+impl From<&Path> for Witcher {
+	fn from(src: &Path) -> Self {
+		Self::default()
+			.with_path(src.to_path_buf())
+	}
+}
+
+impl From<PathBuf> for Witcher {
+	fn from(src: PathBuf) -> Self {
+		Self::default()
+			.with_path(src)
+	}
+}
+
+impl From<Vec<&str>> for Witcher {
+	fn from(src: Vec<&str>) -> Self {
+		src.iter()
+			.fold(Self::default(), Self::with_path)
+	}
+}
+
+impl From<Vec<&Path>> for Witcher {
+	fn from(src: Vec<&Path>) -> Self {
+		src.iter()
+			.fold(Self::default(), Self::with_path)
+	}
+}
+
+impl From<Vec<PathBuf>> for Witcher {
+	fn from(src: Vec<PathBuf>) -> Self {
+		src.iter()
+			.fold(Self::default(), Self::with_path)
+	}
+}
+
+impl Iterator for Witcher {
+	type Item = PathBuf;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		match self.files.pop() {
+			Some(f) => Some(f),
+			None => match self.dirs.pop() {
+				Some(d) => {
+					self.scan(&d);
+					self.next()
+				}
+				None => None,
+			},
+		}
 	}
 }
 
 impl Witcher {
-	#[allow(trivial_casts)]
-	/// New.
+	/// From File List.
 	///
-	/// Recursively search for files within the specified paths, filtered
-	/// according to a regular expression — applied against the canonical path
-	/// — and store the results.
+	/// Seed the `Witcher` from values stored in a text file.
 	///
-	/// All results are canonicalized and deduped for minimum confusion.
-	pub fn new<P, R> (paths: &[P], pattern: R) -> Self
-	where
-		P: AsRef<Path>,
-		R: Borrow<str> {
-		let pattern: Regex = Regex::new(pattern.borrow()).expect("Invalid Regex.");
-		unsafe {
-			Self::custom(
-				paths,
-				|p| p.ok()
-					.and_then(|p| if p.file_type().is_dir() { None } else { Some(p) })
-					.and_then(|p| fs::canonicalize(p.path()).ok())
-					.and_then(|p|
-						if pattern.is_match(
-							&*(p.as_os_str() as *const OsStr as *const [u8])
-						) { Some(p) }
-						else { None }
-					)
-			)
-		}
-	}
-
-	/// New Custom
-	///
-	/// This method can be used to perform a file search with arbitrary
-	/// filtering via a callback method. This method should accept a
-	/// `Result<jwalk::DirEntry>` and return a `Some(PathBuf)` if the file is
-	/// worth keeping, or `None` to reject the entry.
-	///
-	/// # Safety
-	///
-	/// The responsibility for validating and canonicalizing file paths falls
-	/// falls to callback, so be sure you handle that, otherwise things like
-	/// `du()` might be a bit weird.
-	pub unsafe fn custom<P, F> (paths: &[P], cb: F) -> Self
-	where
-		P: AsRef<Path>,
-		F: FnMut(Result<jwalk::DirEntry<((), ())>, jwalk::Error>) -> Option<PathBuf> + Send + Sync + Copy {
-		Self(paths.iter()
-			// Canonicalize the search paths.
-			.filter_map(|p| fs::canonicalize(p).ok())
-			.collect::<IndexSet<PathBuf>>()
-			.into_par_iter()
-			// Walk each search path.
-			.flat_map(|i| WalkDir::new(i)
-				.follow_links(true)
-				.skip_hidden(false)
-				.into_iter()
-				.filter_map(cb)
-				.collect::<IndexSet<PathBuf>>()
-			)
-			.collect()
-		)
-	}
-
-	/// Simple.
-	///
-	/// Recursively search for files within the specified paths. That's it.
-	/// Unfiltered! All files in the result set will be canonicalized and
-	/// deduped for minimum confusion.
-	pub fn simple<P> (paths: &[P]) -> Self
+	/// Note: all paths within the text file must be absolute or they probably
+	/// won't be resolvable.
+	pub fn read_paths_from_file<P> (path: P) -> Self
 	where P: AsRef<Path> {
-		unsafe {
-			Self::custom(
-				paths,
-				|p| p.ok()
-					.and_then(|p| if p.file_type().is_dir() { None } else { Some(p) })
-					.and_then(|p| fs::canonicalize(p.path()).ok())
+		if let Ok(file) = File::open(path.as_ref()) {
+			Self::from(
+				io::BufReader::new(file).lines()
+					.filter_map(|x| x.ok()
+						.and_then(|x| match x.trim() {
+							"" => None,
+							y => Some(PathBuf::from(y)),
+						})
+					)
+					.collect::<Vec<PathBuf>>()
 			)
 		}
+		else { Self::default() }
 	}
 
-	/// From File.
+	/// With Path.
 	///
-	/// This works just like `new()`, except the list of paths to search are
-	/// read from the text file at `path`.
-	pub fn from_file<P, R> (path: P, pattern: R) -> Self
-	where
-		P: AsRef<Path>,
-		R: Borrow<str> {
-			if let Ok(file) = File::open(path.as_ref()) {
-				Self::new(
-					&io::BufReader::new(file).lines()
-						.filter_map(|x| x.ok()
-							.and_then(|x| match x.trim() {
-								"" => None,
-								y => Some(PathBuf::from(y)),
-							})
-						)
-						.collect::<Vec<PathBuf>>(),
-					pattern,
-				)
+	/// Add a path to the current Witcher queue.
+	pub fn with_path<P> (mut self, path: P) -> Self
+	where P: Into<PathBuf> {
+		if let Ok(path) = path.into().canonicalize() {
+			if self.unique.insert(hash_path_buf(&path)) {
+				if path.is_dir() {
+					self.dirs.push(path);
+				}
+				else {
+					self.files.push(path);
+				}
 			}
-			else { Self::default() }
+		}
+
+		self
 	}
 
-	/// From File (Custom).
+	#[allow(trivial_casts)] // Doesn't work without it.
+	/// Filter and Collect
 	///
-	/// This works just like `custom()`, except the list of paths to search are
-	/// read from the text file at `path`.
+	/// Find everything, filter according to the provided regex pattern, and
+	/// return the results as a straight Vec.
+	pub fn filter_and_collect<R> (&mut self, pattern: R) -> Vec<PathBuf>
+	where R: Borrow<str> {
+		use regex::bytes::Regex;
+		let pattern: Regex = Regex::new(pattern.borrow()).expect("Invalid Regex.");
+		self.filter(|p| pattern.is_match(unsafe {
+			&*(p.as_os_str() as *const OsStr as *const [u8])
+		}))
+			.collect::<Vec<PathBuf>>()
+	}
+
+	#[allow(clippy::wrong_self_convention)] // I mean it is what it is.
+	/// To Vec
 	///
-	/// # Safety
+	/// Find everything and return the results as a straight Vec.
+	pub fn to_vec(&mut self) -> Vec<PathBuf> {
+		self.collect()
+	}
+
+	/// Scan Directory.
 	///
-	/// The responsibility for validating and canonicalizing file paths falls
-	/// falls to callback, so be sure you handle that, otherwise things like
-	/// `du()` might be a bit weird.
-	pub unsafe fn from_file_custom<P, F> (path: P, cb: F) -> Self
-	where
-		P: AsRef<Path>,
-		F: FnMut(Result<jwalk::DirEntry<((), ())>, jwalk::Error>) -> Option<PathBuf> + Send + Sync + Copy {
-			if let Ok(file) = File::open(path.as_ref()) {
-				Self::custom(
-					&io::BufReader::new(file).lines()
-						.filter_map(|x| x.ok()
-							.and_then(|x| match x.trim() {
-								"" => None,
-								y => Some(PathBuf::from(y)),
-							})
-						)
-						.collect::<Vec<PathBuf>>(),
-					cb,
+	/// This runs any time the inbox is empty, scanning the directory, and
+	/// pushing results into the appropriate places.
+	fn scan(&mut self, path: &PathBuf) {
+		if let Ok(paths) = fs::read_dir(path) {
+			paths
+				.for_each(|p|
+					if let Some(p) = p.ok().and_then(|p| p.path().canonicalize().ok()) {
+						if self.unique.insert(hash_path_buf(&p)) {
+							if p.is_dir() {
+								self.dirs.push(p);
+							}
+							else {
+								self.files.push(p);
+							}
+						}
+					}
 				)
-			}
-			else { Self::default() }
+		}
 	}
-
-	#[must_use]
-	/// Get Disk Size.
-	///
-	/// Add up all the file sizes in the result set, using multiple threads
-	/// when possible.
-	///
-	/// Note: this value is not cached; you should be able to call it once, do
-	/// some stuff, then call it again and get a different result.
-	pub fn du(&self) -> u64 {
-		self.0.par_iter()
-			.map(|x| x.metadata().map_or(0, |m| m.len()))
-			.sum()
-	}
+}
 
 
 
-	// ------------------------------------------------------------------------
-	// Loopers
-	// ------------------------------------------------------------------------
+/// Silent Loop.
+///
+/// This will execute a callback once for each file in the result set using
+/// multiple threads.
+///
+/// This is just a convenience wrapper to prevent the implementing library
+/// having to queue up `rayon` directly.
+pub fn process<F> (paths: &[PathBuf], cb: F)
+where F: Fn(&PathBuf) + Send + Sync {
+	paths.par_iter().for_each(cb);
+}
 
-	/// Parallel Loop.
-	///
-	/// Execute your callback once for each file in the result set. Calls will
-	/// not necessarily be in a predictable order, but everything will be hit.
-	///
-	/// As the source code betrays, this literally just forwards your callback
-	/// to `par_iter().for_each()`, but it saves you having to import `rayon`
-	/// into the local scope.
-	pub fn process<F> (&self, cb: F)
-	where F: Fn(&PathBuf) + Send + Sync {
-		self.0.par_iter().for_each(cb);
-	}
+/// Parallel Loop w/ Progress.
+///
+/// Execute your callback once for each file while displaying a `Progress`
+/// progress bar from `fyi_progress`.
+///
+/// Each thread automatically adds the current file name as a "task" at the
+/// start and removes it at the end, so i.e. the progress bar will show which
+/// entries are actively being worked on.
+///
+/// At the end, the progress bar will be cleared and a message will be printed
+/// like: "Crunched: Finished 30 files in 1 minute and 3 seconds."
+pub fn progress<S, F> (paths: &[PathBuf], name: S, cb: F)
+where
+	S: Borrow<str>,
+	F: Fn(&PathBuf) + Send + Sync
+{
+	let pbar = make_progress!(name, paths.len() as u64);
+	make_progress_loop!(paths, pbar, cb);
+	finished_in(pbar.total(), pbar.time().elapsed().as_secs() as u32);
+}
 
-	/// Parallel Loop w/ Progress.
-	///
-	/// Execute your callback once for each file while displaying a `Progress`
-	/// progress bar from `fyi_progress`.
-	///
-	/// Each thread automatically adds the current file name as a "task" at the
-	/// start and removes it at the end, so i.e. the progress bar will show
-	/// which entries are actively being worked on.
-	///
-	/// At the end, the progress bar will be cleared and a message will be
-	/// printed like: "Crunched: Finished 30 files in 1 minute and 3 seconds."
-	pub fn progress<S, F> (&self, name: S, cb: F)
-	where
-		S: Borrow<str>,
-		F: Fn(&PathBuf) + Send + Sync
-	{
-		let pbar = make_progress!(name, self.0.len() as u64);
+/// Parallel Loop w/ Progress.
+///
+/// This is the same as calling `progress()`, except that it will add up the
+/// total disk size of files before and after and report any savings in the
+/// final message.
+///
+/// If your operation doesn't affect file sizes, or doesn't need a size summary
+/// at the end, use one of the other loops (or write your own) instead.
+pub fn progress_crunch<S, F> (paths: &[PathBuf], name: S, cb: F)
+where
+	S: Borrow<str>,
+	F: Fn(&PathBuf) + Send + Sync
+{
+	let pbar = make_progress!(name, paths.len() as u64);
+	let before: u64 = du(paths);
 
-		make_progress_loop!(self, pbar, cb);
+	make_progress_loop!(paths, pbar, cb);
 
-		Self::finished_in(pbar.total(), pbar.time().elapsed().as_secs() as u32);
-	}
+	crunched_in(
+		pbar.total(),
+		pbar.time().elapsed().as_secs() as u32,
+		before,
+		du(paths)
+	);
+}
 
-	/// Parallel Loop w/ Progress.
-	///
-	/// This is the same as calling `progress()`, except that it will add up
-	/// the total disk size of files before and after and report any savings
-	/// in the final message.
-	///
-	/// If your operation doesn't affect file sizes, or doesn't need a size
-	/// summary at the end, use one of the other loops (or write your own)
-	/// instead.
-	pub fn progress_crunch<S, F> (&self, name: S, cb: F)
-	where
-		S: Borrow<str>,
-		F: Fn(&PathBuf) + Send + Sync
-	{
-		let pbar = make_progress!(name, self.0.len() as u64);
-		let before: u64 = self.du();
-
-		make_progress_loop!(self, pbar, cb);
-
-		Self::crunched_in(
-			pbar.total(),
-			pbar.time().elapsed().as_secs() as u32,
-			before,
-			self.du()
-		);
-	}
-
-	/// Finished In Msg
-	///
-	/// Print a simple summary like "Crunched: 1 file in 2 seconds.".
-	///
-	/// Like the progress bar, this prints to `Stderr`.
-	fn finished_in(total: u64, time: u32) {
+/// Crunched In Msg
+///
+/// This is similar to `finished_in()`, except before/after disk usage is
+/// included in the summary. If no bytes are saved, the message will end
+/// with "…but nothing doing" instead of "…saving X bytes".
+///
+/// Like the progress bar, this prints to `Stderr`.
+fn crunched_in(total: u64, time: u32, before: u64, after: u64) {
+	if 0 == after || before <= after {
 		MsgKind::Crunched.as_msg(unsafe {
-			std::str::from_utf8_unchecked(
-				&inflect(total, "file in ", "files in ").iter()
-					.chain(&*NiceElapsed::from(time))
-					.chain(&[46, 10])
-					.copied()
-					.collect::<Vec<u8>>()
-			)
+			std::str::from_utf8_unchecked(&[
+				&inflect(total, "file in ", "files in "),
+				&*NiceElapsed::from(time),
+				b", but nothing doing.\n",
+			].concat())
 		}).eprint();
 	}
-
-	/// Crunched In Msg
-	///
-	/// This is similar to `finished_in()`, except before/after disk usage is
-	/// included in the summary. If no bytes are saved, the message will end
-	/// with "…but nothing doing" instead of "…saving X bytes".
-	///
-	/// Like the progress bar, this prints to `Stderr`.
-	fn crunched_in(total: u64, time: u32, before: u64, after: u64) {
-		if 0 == after || before <= after {
-			MsgKind::Crunched.as_msg(unsafe {
-				std::str::from_utf8_unchecked(
-					&inflect(total, "file in ", "files in ").iter()
-						.chain(&*NiceElapsed::from(time))
-						.chain(b", but nothing doing.\n")
-						.copied()
-						.collect::<Vec<u8>>()
-
-				)
-			}).eprint();
-		}
-		else {
-			MsgKind::Crunched.as_msg(unsafe {
-				std::str::from_utf8_unchecked(
-					&inflect(total, "file in ", "files in ").iter()
-						.chain(&*NiceElapsed::from(time))
-						.chain(b", saving ")
-						.chain(&*NiceInt::from(before - after))
-						.chain(format!(
-							" bytes ({:3.*}%).\n",
-							2,
-							(1.0 - (after as f64 / before as f64)) * 100.0
-						).as_bytes())
-						.copied()
-						.collect::<Vec<u8>>()
-				)
-			}).eprint();
-		}
+	else {
+		MsgKind::Crunched.as_msg(format!(
+			"{} in {}, saving {} bytes ({:3.*}%).\n",
+			unsafe { std::str::from_utf8_unchecked(&inflect(total, "file", "files")) },
+			NiceElapsed::from(time).as_str(),
+			NiceInt::from(before - after).as_str(),
+			2,
+			(1.0 - (after as f64 / before as f64)) * 100.0
+		)).eprint();
 	}
+}
+
+/// Finished In Msg
+///
+/// Print a simple summary like "Crunched: 1 file in 2 seconds.".
+///
+/// Like the progress bar, this prints to `Stderr`.
+fn finished_in(total: u64, time: u32) {
+	MsgKind::Crunched.as_msg(unsafe {
+		std::str::from_utf8_unchecked(&[
+			&inflect(total, "file in ", "files in "),
+			&*NiceElapsed::from(time),
+			&[46, 10],
+		].concat())
+	}).eprint();
+}
+
+#[must_use]
+#[allow(trivial_casts)] // Doesn't work without it.
+/// Hash Path.
+///
+/// We want to make sure we don't go over the same file twice. The fastest
+/// solution seems to be hashing the (canonicalized) path, storing that `u64`
+/// in a `HashSet` for reference.
+///
+/// Ultimately we'll probably want to use Arcs or something so the
+/// authoritative path can just live directly in the set, with the queues
+/// merely sharing a reference.
+fn hash_path_buf(path: &PathBuf) -> u64 {
+	let mut hasher = AHasher::default();
+	hasher.write(unsafe { &*(path.as_os_str() as *const OsStr as *const [u8]) });
+	hasher.finish()
 }
 
 
@@ -373,88 +401,30 @@ mod tests {
 		let abs_perr = abs_dir.with_file_name("foo.bar");
 
 		// Do a non-search search.
-		let mut w1 = Witcher::new(&[PathBuf::from("tests/")], ".");
+		let mut w1 = Witcher::from(PathBuf::from("tests/")).to_vec();
 		assert!(! w1.is_empty());
 		assert_eq!(w1.len(), 2);
 		assert!(w1.contains(&abs_p1));
 		assert!(w1.contains(&abs_p2));
 		assert!(! w1.contains(&abs_perr));
-		assert_eq!(w1.du(), 162_u64);
+		assert_eq!(du(&w1), 162_u64);
 
 		// Look only for .txt files.
-		w1 = Witcher::new(&[PathBuf::from("tests/")], r"(?i)\.txt$");
+		w1 = Witcher::from(vec![PathBuf::from("tests/")]).filter_and_collect(r"(?i)\.txt$");
 		assert!(! w1.is_empty());
 		assert_eq!(w1.len(), 1);
 		assert!(w1.contains(&abs_p1));
 		assert!(! w1.contains(&abs_p2));
 		assert!(! w1.contains(&abs_perr));
-		assert_eq!(w1.du(), 26_u64);
+		assert_eq!(du(&w1), 26_u64);
 
 		// Look for something that doesn't exist.
-		w1 = Witcher::new(&[PathBuf::from("tests/")], r"(?i)\.exe$");
+		w1 = Witcher::from(PathBuf::from("tests/")).filter_and_collect(r"(?i)\.exe$");
 		assert!(w1.is_empty());
 		assert_eq!(w1.len(), 0);
 		assert!(! w1.contains(&abs_p1));
 		assert!(! w1.contains(&abs_p2));
 		assert!(! w1.contains(&abs_perr));
-		assert_eq!(w1.du(), 0_u64);
-	}
-
-	pub fn t_custom_cb (p: Result<jwalk::DirEntry<((), ())>, jwalk::Error>) -> Option<PathBuf> {
-		// Skip errors, duh.
-		if let Ok(path) = p {
-			// We don't want directories.
-			if path.file_type().is_dir() { None }
-			// We need to canonicalize again because symlinks might
-			// not actually be living with the parent directory.
-			else if let Ok(path) = fs::canonicalize(&path.path()) {
-				// Do a simple `ends_with()` check to filter just .sh files.
-				unsafe {
-					let p_str: *const OsStr = path.as_os_str();
-					if (&*(p_str as *const [u8])).ends_with(&[46, 115, 104]) { Some(path) }
-					else { None }
-				}
-			}
-			else { None }
-		}
-		else { None }
-	}
-
-	#[test]
-	fn t_custom() {
-		let mut abs_dir = fs::canonicalize("tests/assets/").unwrap();
-		abs_dir.push("_.txt");
-		let abs_p1 = abs_dir.with_file_name("file.txt");
-		let abs_p2 = abs_dir.with_file_name("is-executable.sh");
-		let abs_perr = abs_dir.with_file_name("foo.bar");
-
-		// Search for .sh files.
-		unsafe {
-			let w1 = Witcher::custom(&[PathBuf::from("tests/")], t_custom_cb);
-			assert!(! w1.is_empty(), "{:?}", &b".sh"[..]);
-			assert_eq!(w1.len(), 1);
-			assert!(! w1.contains(&abs_p1));
-			assert!(w1.contains(&abs_p2));
-			assert!(! w1.contains(&abs_perr));
-			assert_eq!(w1.du(), 136_u64);
-		}
-	}
-
-	#[test]
-	fn t_simple() {
-		let mut abs_dir = fs::canonicalize("tests/assets/").unwrap();
-		abs_dir.push("_.txt");
-		let abs_p1 = abs_dir.with_file_name("file.txt");
-		let abs_p2 = abs_dir.with_file_name("is-executable.sh");
-		let abs_perr = abs_dir.with_file_name("foo.bar");
-
-		// Search for all files.
-		let w1 = Witcher::simple(&[PathBuf::from("tests/")]);
-		assert!(! w1.is_empty());
-		assert_eq!(w1.len(), 2);
-		assert!(w1.contains(&abs_p1));
-		assert!(w1.contains(&abs_p2));
-		assert!(! w1.contains(&abs_perr));
-		assert_eq!(w1.du(), 162_u64);
+		assert_eq!(du(&w1), 0_u64);
 	}
 }

@@ -6,10 +6,24 @@ This mod contains miscellaneous utility functions for the crate.
 
 use std::{
 	borrow::Borrow,
-	path::Path,
+	path::{
+		Path,
+		PathBuf,
+	},
 };
 
 
+
+#[must_use]
+/// Total File(s) Size.
+///
+/// Add up the size of all files in a set.
+pub fn du(paths: &[PathBuf]) -> u64 {
+	use rayon::prelude::*;
+	paths.par_iter()
+		.map(|x| x.metadata().map_or(0, |m| m.len()))
+		.sum()
+}
 
 /// Ergonomical File Extension.
 ///

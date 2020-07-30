@@ -31,7 +31,9 @@ mod witcher;
 pub mod utility;
 
 /// The Witcher!
-pub use witcher::Witcher;
-
-/// Generic result type.
-pub type Result<T, E = String> = std::result::Result<T, E>;
+pub use witcher::{
+	Witcher,
+	process,
+	progress,
+	progress_crunch,
+};
