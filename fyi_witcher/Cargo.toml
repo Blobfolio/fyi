@@ -19,11 +19,6 @@ path = "../fyi_msg"
 [dependencies.fyi_progress]
 path = "../fyi_progress"
 
-[dependencies.indexmap]
-version = "1.5.*"
-default-features = false
-features = [ "rayon" ]
-
 [dev-dependencies]
 criterion = "*"
 

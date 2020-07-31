@@ -32,6 +32,7 @@ use fyi_progress::{
 use rayon::prelude::*;
 use std::{
 	borrow::Borrow,
+	collections::VecDeque,
 	ffi::OsStr,
 	fs::{
 		self,
@@ -99,9 +100,9 @@ macro_rules! make_progress_loop {
 /// Witching Stuff.
 pub struct Witcher {
 	/// Files found.
-	files: Vec<PathBuf>,
+	files: VecDeque<PathBuf>,
 	/// Directories found (to be scanned later).
-	dirs: Vec<PathBuf>,
+	dirs: VecDeque<PathBuf>,
 	/// Unique path hashes.
 	unique: AHashSet<u64>,
 }
@@ -109,8 +110,8 @@ pub struct Witcher {
 impl Default for Witcher {
 	fn default() -> Self {
 		Self {
-			files: Vec::with_capacity(64),
-			dirs: Vec::with_capacity(16),
+			files: VecDeque::with_capacity(64),
+			dirs: VecDeque::with_capacity(16),
 			unique: AHashSet::with_capacity(2048),
 		}
 	}
@@ -162,9 +163,9 @@ impl Iterator for Witcher {
 	type Item = PathBuf;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		match self.files.pop() {
+		match self.files.pop_front() {
 			Some(f) => Some(f),
-			None => match self.dirs.pop() {
+			None => match self.dirs.pop_front() {
 				Some(d) => {
 					self.scan(&d);
 					self.next()
@@ -240,10 +241,10 @@ impl Witcher {
 	fn enqueue_unique(&mut self, path: PathBuf) {
 		if self.unique.insert(hash_path_buf(&path)) {
 			if path.is_dir() {
-				self.dirs.push(path);
+				self.dirs.push_back(path);
 			}
 			else {
-				self.files.push(path);
+				self.files.push_back(path);
 			}
 		}
 	}
