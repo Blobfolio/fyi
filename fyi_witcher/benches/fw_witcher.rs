@@ -16,7 +16,7 @@ use std::path::PathBuf;
 fn from(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::Witcher");
 
-	group.bench_function("from(/usr/share/man/man5).to_vec()", move |b| {
+	group.bench_function("from(/usr/share/man).to_vec()", move |b| {
 		b.iter_with_setup(||
 			black_box(PathBuf::from("/usr/share/man")),
 			|path| Witcher::from(path).to_vec()
