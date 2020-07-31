@@ -180,10 +180,12 @@ impl From<PathBuf> for Witcher {
 }
 
 from_many!(&[&str]);
+from_many!(&[String]);
 from_many!(&[&Path]);
 from_many!(&[PathBuf]);
 
 from_many!(Vec<&str>);
+from_many!(Vec<String>);
 from_many!(Vec<&Path>);
 from_many!(Vec<PathBuf>);
 
