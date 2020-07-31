@@ -1,13 +1,42 @@
 /*!
 # FYI Witcher: Witcher
 
-`Witcher` stores the results of a recursive file-search with all paths
-canonicalized, deduplicated, and validated against a regular expression.
+`Witcher` is a very simple recursive file searching library that returns all
+file paths within the tree(s), nice and canonicalized. Duplicates are weeded
+out, symlinks are resolved and followed, hidden files are picked up like any
+other file.
 
-It provides several multi-threaded looping helpers — `process()`, `progress()`,
-and `progress_crunch()` — to easily work through files with optional progress
-bar output, or you can dereference the object to work directly with its inner
-`IndexSet`.
+Short and sweet.
+
+While `Witcher` is light on options — there aren't any! — it can be seeded with
+multiple starting paths using the `Witcher::with_path()` builder pattern. This,
+combined with the general stripped-to-basics codebase, make this a more
+performant option than using crates such as `jwalk` or `walkdir`.
+
+## Examples
+
+`Witcher` implements `Iterator`, so you can simply initiate it and loop/map/
+filter your way to a better tomorrow:
+
+```no_run
+use fyi_witcher::Witcher;
+use std::path::PathBuf;
+
+let paths: Vec<PathBuf> = Witcher.from(PathBuf::from(.))
+    .filter(|x| x.as_str().unwrap_or_default().ends_with('.jpg'))
+    .collect();
+```
+
+Two collection convenience methods exist to short-circuit the `Iterator`
+process if you don't need it:
+
+```no_run
+// Just make it a Vec of PathBufs.
+let paths: Vec<PathBuf> = Witcher.from(PathBuf::from(.)).to_vec();
+
+// Filter (file) paths by regular expression, returning the matches as a Vec.
+let paths: Vec<PathBuf> = Witcher.from(PathBuf::from(.))
+    .filter_and_collect("(?i).+\.jpg$");
 */
 
 
@@ -54,7 +83,19 @@ use std::{
 
 
 
-// Helper: Make an Arc<Progress> for the loops.
+/// Helper: Generate "impl From" for Iterator<AsRef<Path>> types.
+macro_rules! from_many {
+	($type:ty) => {
+		impl From<$type> for Witcher {
+			fn from(src: $type) -> Self {
+				src.iter()
+					.fold(Self::default(), Self::with_path)
+			}
+		}
+	};
+}
+
+/// Helper: Make an Arc<Progress> for the loops.
 macro_rules! make_progress {
 	($name:expr, $len:expr) => (
 		Arc::new(Progress::new(
@@ -138,33 +179,22 @@ impl From<PathBuf> for Witcher {
 	}
 }
 
-impl From<Vec<&str>> for Witcher {
-	fn from(src: Vec<&str>) -> Self {
-		src.iter()
-			.fold(Self::default(), Self::with_path)
-	}
-}
+from_many!(&[&str]);
+from_many!(&[&Path]);
+from_many!(&[PathBuf]);
 
-impl From<Vec<&Path>> for Witcher {
-	fn from(src: Vec<&Path>) -> Self {
-		src.iter()
-			.fold(Self::default(), Self::with_path)
-	}
-}
-
-impl From<Vec<PathBuf>> for Witcher {
-	fn from(src: Vec<PathBuf>) -> Self {
-		src.iter()
-			.fold(Self::default(), Self::with_path)
-	}
-}
+from_many!(Vec<&str>);
+from_many!(Vec<&Path>);
+from_many!(Vec<PathBuf>);
 
 impl Iterator for Witcher {
 	type Item = PathBuf;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		match self.files.pop_front() {
+			// Return a file if there's one in the queue.
 			Some(f) => Some(f),
+			// If there's a directory in the queue, scan it and recurse.
 			None => match self.dirs.pop_front() {
 				Some(d) => {
 					self.scan(&d);
@@ -220,6 +250,7 @@ impl Witcher {
 	pub fn filter_and_collect<R> (&mut self, pattern: R) -> Vec<PathBuf>
 	where R: Borrow<str> {
 		use regex::bytes::Regex;
+
 		let pattern: Regex = Regex::new(pattern.borrow()).expect("Invalid Regex.");
 		self.filter(|p| pattern.is_match(unsafe {
 			&*(p.as_os_str() as *const OsStr as *const [u8])
@@ -255,12 +286,11 @@ impl Witcher {
 	/// pushing results into the appropriate places.
 	fn scan(&mut self, path: &PathBuf) {
 		if let Ok(paths) = fs::read_dir(path) {
-			paths
-				.for_each(|p|
-					if let Some(p) = p.ok().and_then(|p| p.path().canonicalize().ok()) {
-						self.enqueue_unique(p);
-					}
-				)
+			paths.for_each(|p|
+				if let Some(p) = p.ok().and_then(|p| p.path().canonicalize().ok()) {
+					self.enqueue_unique(p);
+				}
+			)
 		}
 	}
 }
