@@ -70,6 +70,10 @@ assert_eq!(1000, bar.done());
 ```
 */
 
+use ahash::{
+	AHasher,
+	AHashSet
+};
 use crate::{
 	NiceElapsed,
 	NiceInt,
@@ -84,10 +88,10 @@ use fyi_msg::{
 	MsgKind,
 	utility::time_format_dd,
 };
-use indexmap::set::IndexSet;
 use std::{
 	borrow::Borrow,
 	cmp::Ordering,
+	hash::Hasher,
 	io,
 	ops::Deref,
 	sync::Mutex,
@@ -305,7 +309,7 @@ struct ProgressInner {
 	/// The "total" amount.
 	total: u64,
 	/// Tasks, e.g. brief descriptions of what is being worked on now, optional.
-	tasks: IndexSet<String>,
+	tasks: AHashSet<String>,
 	/// The flags help keep track of the components that need redrawing at the
 	/// next tick.
 	flags: ProgressFlags,
@@ -370,7 +374,7 @@ impl Default for ProgressInner {
 			time: Instant::now(),
 			done: 0,
 			total: 0,
-			tasks: IndexSet::new(),
+			tasks: AHashSet::new(),
 			flags: ProgressFlags::NONE,
 			last_hash: 0,
 			last_lines: 0,
@@ -504,7 +508,7 @@ impl ProgressInner {
 	/// If you're thinking of tasks as a list of "this is happening now" stuff,
 	/// `remove_task()` is the conclusion to `add_task()`.
 	pub fn remove_task<T: Borrow<str>> (&mut self, task: T) {
-		if self.tasks.shift_remove(task.borrow()) {
+		if self.tasks.remove(task.borrow()) {
 			self.flags |= ProgressFlags::TICK_TASKS;
 		}
 	}
@@ -685,7 +689,11 @@ impl ProgressInner {
 		}
 
 		// Check the hash and see if we did something worth printing!
-		let hash: u64 = seahash::hash(&self.buf);
+		let hash: u64 = {
+			let mut hasher = AHasher::default();
+			hasher.write(&self.buf);
+			hasher.finish()
+		};
 		if hash == self.last_hash {
 			return;
 		}
