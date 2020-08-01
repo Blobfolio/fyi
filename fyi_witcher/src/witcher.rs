@@ -71,6 +71,8 @@ use std::{
 	io::{
 		self,
 		BufRead,
+		BufReader,
+		Lines,
 	},
 	path::{
 		Path,
@@ -189,6 +191,18 @@ from_many!(Vec<String>);
 from_many!(Vec<&Path>);
 from_many!(Vec<PathBuf>);
 
+impl From<Lines<BufReader<File>>> for Witcher {
+	fn from(src: Lines<BufReader<File>>) -> Self {
+		src.fold(
+			Self::default(),
+			|acc, line| match line.unwrap_or_default().trim() {
+				"" => acc,
+				l => acc.with_path(l),
+			}
+		)
+	}
+}
+
 impl Iterator for Witcher {
 	type Item = PathBuf;
 
@@ -218,16 +232,7 @@ impl Witcher {
 	pub fn read_paths_from_file<P> (path: P) -> Self
 	where P: AsRef<Path> {
 		if let Ok(file) = File::open(path.as_ref()) {
-			Self::from(
-				io::BufReader::new(file).lines()
-					.filter_map(|x| x.ok()
-						.and_then(|x| match x.trim() {
-							"" => None,
-							y => Some(PathBuf::from(y)),
-						})
-					)
-					.collect::<Vec<PathBuf>>()
-			)
+			Self::from(io::BufReader::new(file).lines())
 		}
 		else { Self::default() }
 	}
