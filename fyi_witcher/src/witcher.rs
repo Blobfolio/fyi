@@ -162,22 +162,19 @@ impl Default for Witcher {
 
 impl From<&str> for Witcher {
 	fn from(src: &str) -> Self {
-		Self::default()
-			.with_path(PathBuf::from(src))
+		Self::default().with_path(src)
 	}
 }
 
 impl From<&Path> for Witcher {
 	fn from(src: &Path) -> Self {
-		Self::default()
-			.with_path(src.to_path_buf())
+		Self::default().with_path(src)
 	}
 }
 
 impl From<PathBuf> for Witcher {
 	fn from(src: PathBuf) -> Self {
-		Self::default()
-			.with_path(src)
+		Self::default().with_path(src)
 	}
 }
 
@@ -241,9 +238,9 @@ impl Witcher {
 	///
 	/// Add a path to the current Witcher queue.
 	pub fn with_path<P> (mut self, path: P) -> Self
-	where P: Into<PathBuf> {
-		if let Ok(path) = path.into().canonicalize() {
-			self.enqueue_unique(path);
+	where P: AsRef<Path> {
+		if let Ok(path) = fs::canonicalize(path) {
+			self.push(path);
 		}
 
 		self
