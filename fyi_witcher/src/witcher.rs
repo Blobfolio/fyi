@@ -61,7 +61,6 @@ use fyi_progress::{
 use rayon::prelude::*;
 use std::{
 	borrow::Borrow,
-	collections::VecDeque,
 	ffi::OsStr,
 	fs::{
 		self,
@@ -142,20 +141,17 @@ macro_rules! make_progress_loop {
 #[derive(Debug, Clone)]
 /// Witching Stuff.
 pub struct Witcher {
-	/// Files found.
-	files: VecDeque<PathBuf>,
-	/// Directories found (to be scanned later).
-	dirs: VecDeque<PathBuf>,
-	/// Unique path hashes.
-	unique: AHashSet<u64>,
+	/// Paths waiting return or traversal.
+	stack: Vec<PathBuf>,
+	/// Unique path hashes found.
+	hash: AHashSet<u64>,
 }
 
 impl Default for Witcher {
 	fn default() -> Self {
 		Self {
-			files: VecDeque::with_capacity(64),
-			dirs: VecDeque::with_capacity(16),
-			unique: AHashSet::with_capacity(2048),
+			stack: Vec::with_capacity(64),
+			hash: AHashSet::with_capacity(2048),
 		}
 	}
 }
@@ -204,17 +200,16 @@ impl Iterator for Witcher {
 	type Item = PathBuf;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		match self.files.pop_front() {
-			// Return a file if there's one in the queue.
-			Some(f) => Some(f),
-			// If there's a directory in the queue, scan it and recurse.
-			None => match self.dirs.pop_front() {
-				Some(d) => {
-					self.scan(&d);
+		match self.stack.pop() {
+			Some(path) =>
+				// Recurse directories.
+				if path.is_dir() {
+					self.push_dir(path);
 					self.next()
 				}
-				None => None,
-			},
+				// Return files.
+				else { Some(path) }
+			None => None,
 		}
 	}
 }
@@ -270,31 +265,23 @@ impl Witcher {
 		self.collect()
 	}
 
-	/// Enqueue If.
+	/// Read Dir.
 	///
-	/// Insert a path into the right spot if it hasn't already been seen.
-	fn enqueue_unique(&mut self, path: PathBuf) {
-		if self.unique.insert(hash_path_buf(&path)) {
-			if path.is_dir() {
-				self.dirs.push_back(path);
-			}
-			else {
-				self.files.push_back(path);
-			}
+	/// Read the immediate paths under a directory and push any unique results
+	/// back to the stack.
+	fn push_dir(&mut self, path: PathBuf) {
+		if let Ok(paths) = fs::read_dir(path) {
+			paths.filter_map(|p| p.ok().and_then(|p| fs::canonicalize(p.path()).ok()))
+				.for_each(|p| self.push(p));
 		}
 	}
 
-	/// Scan Directory.
+	/// Push if Previously Unseen.
 	///
-	/// This runs any time the inbox is empty, scanning the directory, and
-	/// pushing results into the appropriate places.
-	fn scan(&mut self, path: &PathBuf) {
-		if let Ok(paths) = fs::read_dir(path) {
-			paths.for_each(|p|
-				if let Some(p) = p.ok().and_then(|p| p.path().canonicalize().ok()) {
-					self.enqueue_unique(p);
-				}
-			)
+	/// Push a (canonical) path to the stack unless it has already been seen.
+	fn push(&mut self, path: PathBuf) {
+		if self.hash.insert(hash_path_buf(&path)) {
+			self.stack.push(path);
 		}
 	}
 }
