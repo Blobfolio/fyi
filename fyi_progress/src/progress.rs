@@ -54,7 +54,7 @@ use fyi_progress::Progress;
 
 // Start a bar.
 let bar = Progress::new(
-    Some(MsgKind::Info.as_msg("Example message/title/whatever.")),
+    Some(MsgKind::Info.into_msg("Example message/title/whatever.")),
     1000,
 );
 assert_eq!(0, bar.done());
@@ -89,7 +89,6 @@ use fyi_msg::{
 	utility::time_format_dd,
 };
 use std::{
-	borrow::Borrow,
 	cmp::Ordering,
 	hash::Hasher,
 	io,
@@ -486,8 +485,8 @@ impl ProgressInner {
 	/// progress line. The main idea is to communicate ideas like, "Such and
 	/// such is being actively worked on in Thread #2" or whatever, but there
 	/// are no hard and fast rules.
-	pub fn add_task<T: Borrow<str>> (&mut self, task: T) {
-		if self.tasks.insert(task.borrow().into()) {
+	pub fn add_task<T: AsRef<str>> (&mut self, task: T) {
+		if self.tasks.insert(task.as_ref().into()) {
 			self.flags |= ProgressFlags::TICK_TASKS;
 		}
 	}
@@ -507,8 +506,8 @@ impl ProgressInner {
 	///
 	/// If you're thinking of tasks as a list of "this is happening now" stuff,
 	/// `remove_task()` is the conclusion to `add_task()`.
-	pub fn remove_task<T: Borrow<str>> (&mut self, task: T) {
-		if self.tasks.remove(task.borrow()) {
+	pub fn remove_task<T: AsRef<str>> (&mut self, task: T) {
+		if self.tasks.remove(task.as_ref()) {
 			self.flags |= ProgressFlags::TICK_TASKS;
 		}
 	}
@@ -535,8 +534,8 @@ impl ProgressInner {
 	///
 	/// Update or unset the message, which if present, prints pinned above the
 	/// progress line.
-	pub fn set_title<T: Borrow<str>> (&mut self, title: T) {
-		let title = title.borrow();
+	pub fn set_title<T: AsRef<str>> (&mut self, title: T) {
+		let title = title.as_ref();
 		if title != self.title {
 			self.title = title.to_string();
 			self.flags |= ProgressFlags::TICK_TITLE;
@@ -604,10 +603,10 @@ impl ProgressInner {
 	/// message after progress has finished.
 	pub fn finished_in(&self) {
 		if ! self.is_running() {
-			Self::print(&MsgKind::Crunched.as_msg(format!(
+			Self::print(&MsgKind::Crunched.into_msg(format!(
 				"Finished in {}.\n",
 				unsafe { std::str::from_utf8_unchecked(&*NiceElapsed::from(self.last_secs)) },
-			)));
+			)).to_vec());
 		}
 	}
 
@@ -877,7 +876,7 @@ impl Progress {
 	/// New Progress!
 	///
 	/// Start a new progress bar, optionally with a message.
-	pub fn new<T: Borrow<str>> (total: u64, title: Option<T>) -> Self {
+	pub fn new<T: AsRef<str>> (total: u64, title: Option<T>) -> Self {
 		title.map_or(
 			Self(Mutex::new(ProgressInner::new(total))),
 			|title| {
@@ -950,7 +949,7 @@ impl Progress {
 	/// progress line. The main idea is to communicate ideas like, "Such and
 	/// such is being actively worked on in Thread #2" or whatever, but there
 	/// are no hard and fast rules.
-	pub fn add_task<T: Borrow<str>> (&self, task: T) {
+	pub fn add_task<T: AsRef<str>> (&self, task: T) {
 		let mut ptr = mutex_ptr!(self);
 		ptr.add_task(task)
 	}
@@ -980,7 +979,7 @@ impl Progress {
 	///
 	/// If you're thinking of tasks as a list of "this is happening now" stuff,
 	/// `remove_task()` is the conclusion to `add_task()`.
-	pub fn remove_task<T: Borrow<str>> (&self, task: T) {
+	pub fn remove_task<T: AsRef<str>> (&self, task: T) {
 		let mut ptr = mutex_ptr!(self);
 		ptr.remove_task(task)
 	}
@@ -998,7 +997,7 @@ impl Progress {
 	///
 	/// Update or unset the message, which if present, prints pinned above the
 	/// progress line.
-	pub fn set_title<T: Borrow<str>> (&self, title: T) {
+	pub fn set_title<T: AsRef<str>> (&self, title: T) {
 		let mut ptr = mutex_ptr!(self);
 		ptr.set_title(title)
 	}
@@ -1034,8 +1033,8 @@ impl Progress {
 	/// To unset a message, pass `Some(Msg::default())` rather than `None`.
 	pub fn update<T1, T2> (&self, num: u64, title: Option<T1>, task: Option<T2>)
 	where
-	T1: Borrow<str>,
-	T2: Borrow<str> {
+	T1: AsRef<str>,
+	T2: AsRef<str> {
 		let mut ptr = mutex_ptr!(self);
 		if num > 0 {
 			ptr.increment(num);

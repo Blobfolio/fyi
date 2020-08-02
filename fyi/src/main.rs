@@ -26,10 +26,7 @@
 #![allow(clippy::missing_errors_doc)]
 
 use fyi_menu::ArgList;
-use fyi_msg::{
-	Msg,
-	MsgKind,
-};
+use fyi_msg::MsgKind;
 use std::{
 	io::{
 		self,
@@ -65,7 +62,7 @@ fn main() {
 			let flags = _flags(&mut args);
 			if 0 == flags & FLAG_HELP {
 				let (exit, color, prefix, msg) = _print_opts(args);
-				_msg(Msg::new(prefix, color, msg), flags, exit);
+				_msg(MsgKind::new(prefix, color), msg, flags, exit);
 			}
 			// Show help instead.
 			else {
@@ -75,24 +72,21 @@ fn main() {
 		other => match MsgKind::from(other) {
 			MsgKind::None => fyi_menu::die(b"Invalid subcommand."),
 			mkind => {
-				let flags =
-					if other == "confirm" || other == "prompt" {
-						_flags(&mut args) | FLAG_PROMPT
-					}
-					else {
-						_flags(&mut args)
-					};
+				let mut flags = _flags(&mut args);
+				if other == "confirm" || other == "prompt" {
+					flags |= FLAG_PROMPT
+				}
 
 				if 0 == flags & FLAG_HELP {
 					let (exit, msg) = _msg_opts(args);
-					_msg(mkind.as_msg(msg), flags, exit);
+					_msg(mkind, msg, flags, exit);
 				}
 				// Show other help.
 				else if 0 == flags & FLAG_PROMPT {
 					 _help(format!(
 						include_str!("../help/generic.txt"),
-						mkind.as_str(),
-						mkind.as_str().to_lowercase(),
+						other,
+						other.to_lowercase(),
 					).as_bytes());
 				}
 				// Show confirm help.
@@ -234,14 +228,10 @@ fn _blank(args: &mut ArgList) {
 }
 
 /// Print Regular Message.
-fn _msg(mut msg: Msg, flags: u8, exit: i32) {
-	if 0 != flags & FLAG_INDENT {
-		msg.set_indent(1);
-	}
-
-	if 0 != flags & FLAG_TIMESTAMP {
-		msg.set_timestamp();
-	}
+fn _msg(kind: MsgKind, msg: String, flags: u8, exit: i32) {
+	let msg = kind.into_msg(msg)
+		.with_indent((0 != flags & FLAG_INDENT) as u8)
+		.with_timestamp(0 != flags & FLAG_TIMESTAMP);
 
 	// Do a confirmation.
 	if 0 != flags & FLAG_PROMPT {

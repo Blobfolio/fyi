@@ -101,7 +101,7 @@ macro_rules! make_progress {
 	($name:expr, $len:expr) => (
 		Arc::new(Progress::new(
 			$len,
-			Some(Msg::new($name, 199, "Reticulating splines\u{2026}")),
+			Some(MsgKind::new($name, 199).into_msg("Reticulating splines\u{2026}").to_string()),
 		))
 	);
 }
@@ -313,7 +313,7 @@ where F: Fn(&PathBuf) + Send + Sync {
 /// like: "Crunched: Finished 30 files in 1 minute and 3 seconds."
 pub fn progress<S, F> (paths: &[PathBuf], name: S, cb: F)
 where
-	S: Borrow<str>,
+	S: AsRef<str>,
 	F: Fn(&PathBuf) + Send + Sync
 {
 	let pbar = make_progress!(name, paths.len() as u64);
@@ -331,7 +331,7 @@ where
 /// at the end, use one of the other loops (or write your own) instead.
 pub fn progress_crunch<S, F> (paths: &[PathBuf], name: S, cb: F)
 where
-	S: Borrow<str>,
+	S: AsRef<str>,
 	F: Fn(&PathBuf) + Send + Sync
 {
 	let pbar = make_progress!(name, paths.len() as u64);
@@ -356,16 +356,16 @@ where
 /// Like the progress bar, this prints to `Stderr`.
 fn crunched_in(total: u64, time: u32, before: u64, after: u64) {
 	if 0 == after || before <= after {
-		MsgKind::Crunched.as_msg(unsafe {
-			std::str::from_utf8_unchecked(&[
-				&inflect(total, "file in ", "files in "),
-				&*NiceElapsed::from(time),
-				b", but nothing doing.\n",
-			].concat())
-		}).eprint();
+		Msg::from([
+			&inflect(total, "file in ", "files in "),
+			&*NiceElapsed::from(time),
+			b", but nothing doing.\n",
+		].concat())
+			.with_prefix(MsgKind::Crunched)
+			.eprint();
 	}
 	else {
-		MsgKind::Crunched.as_msg(format!(
+		MsgKind::Crunched.into_msg(format!(
 			"{} in {}, saving {} bytes ({:3.*}%).\n",
 			unsafe { std::str::from_utf8_unchecked(&inflect(total, "file", "files")) },
 			NiceElapsed::from(time).as_str(),
@@ -382,13 +382,13 @@ fn crunched_in(total: u64, time: u32, before: u64, after: u64) {
 ///
 /// Like the progress bar, this prints to `Stderr`.
 fn finished_in(total: u64, time: u32) {
-	MsgKind::Crunched.as_msg(unsafe {
-		std::str::from_utf8_unchecked(&[
-			&inflect(total, "file in ", "files in "),
-			&*NiceElapsed::from(time),
-			&[46, 10],
-		].concat())
-	}).eprint();
+	Msg::from([
+		&inflect(total, "file in ", "files in "),
+		&*NiceElapsed::from(time),
+		&[46, 10],
+	].concat())
+		.with_prefix(MsgKind::Crunched)
+		.eprint();
 }
 
 #[must_use]

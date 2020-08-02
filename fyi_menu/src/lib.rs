@@ -121,7 +121,7 @@ impl From<&[u8]> for KeyKind {
 
 /// Print an Error and Exit.
 pub fn die(msg: &[u8]) {
-	MsgKind::Error.as_msg(unsafe { std::str::from_utf8_unchecked(msg) }).eprintln();
+	MsgKind::Error.into_msg(unsafe { std::str::from_utf8_unchecked(msg) }).eprintln();
 	process::exit(1);
 }
 
