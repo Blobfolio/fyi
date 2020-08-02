@@ -208,7 +208,7 @@ impl Iterator for Witcher {
 					self.next()
 				}
 				// Return files.
-				else { Some(path) }
+				else { Some(path) },
 			None => None,
 		}
 	}
