@@ -240,15 +240,13 @@ impl Witcher {
 	}
 }
 
+#[allow(clippy::pedantic)] // It gets eaten!
 /// Parallel Loop w/ Progress.
 ///
 /// This loops through dataset with a pretty `Progress`, but keeps track of the
 /// before and after sizes so it can print the difference after the run.
-pub fn crunch<S, F> (paths: Vec<PathBuf>, name: S, cb: F)
-where
-	S: AsRef<str>,
-	F: Fn(&PathBuf) + Send + Sync + Copy
-{
+pub fn progress_crunch<S, F> (paths: Progress<PathBuf>, cb: F)
+where F: Fn(&PathBuf) + Send + Sync + Copy {
 	// Abort if missing paths.
 	if paths.is_empty() {
 		MsgKind::Warning.into_msg("No matching files were found.")
@@ -257,21 +255,16 @@ where
 		return;
 	}
 
-	let pbar = Progress::new(
-		paths,
-		MsgKind::new(name, 199).into_msg("Reticulating splines\u{2026}")
-	);
-
 	// Add up the space used before the run.
-	let before: u64 = du(&*pbar);
+	let before: u64 = du(&*paths);
 
-	pbar.run(cb);
+	paths.run(cb);
 
 	crunched_in(
-		pbar.total().into(),
-		pbar.elapsed() as u32,
+		paths.total().into(),
+		paths.elapsed() as u32,
 		before,
-		du(&*pbar)
+		du(&*paths)
 	);
 }
 
