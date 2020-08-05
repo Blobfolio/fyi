@@ -86,6 +86,37 @@ impl FittedRange for str {
 	}
 }
 
+impl FittedRange for &[u8] {
+	fn fitted_range(&self, width: usize) -> Range<usize> {
+		unsafe { std::str::from_utf8_unchecked(self) }.fitted_range(width)
+	}
+}
+
+impl FittedRange for Vec<u8> {
+	fn fitted_range(&self, width: usize) -> Range<usize> {
+		unsafe { std::str::from_utf8_unchecked(self) }.fitted_range(width)
+	}
+}
+
+
+
+/// This trait allows for in-place chopping based on the results coughed up
+/// from `FittedRange`.
+pub trait FittedRangeMut {
+	/// Fit To Range
+	fn fit_to_range(&mut self, width: usize);
+}
+
+impl FittedRangeMut for Vec<u8> {
+	fn fit_to_range(&mut self, width: usize) {
+		let rg = self.fitted_range(width);
+		if rg.end < self.len() {
+			self.truncate(rg.end);
+		}
+	}
+}
+
+
 
 #[cfg(test)]
 mod tests {
