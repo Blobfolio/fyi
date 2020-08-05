@@ -245,7 +245,7 @@ impl Witcher {
 ///
 /// This loops through dataset with a pretty `Progress`, but keeps track of the
 /// before and after sizes so it can print the difference after the run.
-pub fn progress_crunch<S, F> (paths: Progress<PathBuf>, cb: F)
+pub fn progress_crunch<F> (paths: Progress<PathBuf>, cb: F)
 where F: Fn(&PathBuf) + Send + Sync + Copy {
 	// Abort if missing paths.
 	if paths.is_empty() {
