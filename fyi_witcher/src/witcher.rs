@@ -249,7 +249,7 @@ pub fn progress_crunch<F> (paths: Progress<PathBuf>, cb: F)
 where F: Fn(&PathBuf) + Send + Sync + Copy {
 	// Abort if missing paths.
 	if paths.is_empty() {
-		MsgKind::Warning.into_msg("No matching files were found.")
+		MsgKind::Warning.into_msg("No matching files were found.\n")
 			.eprint();
 
 		return;

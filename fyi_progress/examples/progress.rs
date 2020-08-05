@@ -4,7 +4,10 @@
 
 /// Alternate.
 fn main() {
-	use fyi_progress::Progress;
+	use fyi_progress::{
+		Progress,
+		ProgressParallelism,
+	};
 	use std::{
 		thread,
 		time::Duration,
@@ -261,7 +264,8 @@ fn main() {
 		"YE|Yemen",
 		"ZM|Zambia",
 		"ZW|Zimbabwe",
-	]);
+	])
+		.with_threads(ProgressParallelism::Heavy);
 
 	// Run it!
 	progress.run(run_task);

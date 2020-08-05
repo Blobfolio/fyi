@@ -36,5 +36,6 @@ pub use nice_elapsed::NiceElapsed;
 pub use nice_int::NiceInt;
 pub use progress::{
 	Progress,
+	ProgressParallelism,
 	ProgressTask,
 };

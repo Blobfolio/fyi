@@ -3,7 +3,10 @@
 */
 
 use fyi_msg::MsgKind;
-use fyi_progress::Progress;
+use fyi_progress::{
+	Progress,
+	ProgressParallelism,
+};
 use fyi_witcher::Witcher;
 use std::{
 	path::PathBuf,
@@ -24,7 +27,8 @@ fn main() {
 	let pbar = Progress::new(
 		witched,
 		MsgKind::new("Witcher Demo", 199).into_msg("Gzipped MAN Pages")
-	);
+	)
+		.with_threads(ProgressParallelism::Heavy);
 
 	// Simulate callback runtime variation by calculating a sleep period from
 	// the file path length.

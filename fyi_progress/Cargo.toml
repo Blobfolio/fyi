@@ -9,6 +9,7 @@ publish = false
 [dependencies]
 ahash = "0.4.*"
 itoa = "0.4.*"
+num_cpus = "1.13.*"
 num-format = "0.4.*"
 num-integer = "0.1.*"
 rayon = "1.3.*"

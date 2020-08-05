@@ -6,6 +6,10 @@ use ahash::AHasher;
 use crate::{
 	NiceElapsed,
 	NiceInt,
+	traits::{
+		FittedRange,
+		FittedRangeMut,
+	},
 	utility,
 };
 use fyi_msg::{
@@ -20,13 +24,20 @@ use std::{
 		PartialEq,
 	},
 	ffi::OsStr,
-	hash::Hasher,
+	hash::{
+		Hash,
+		Hasher,
+	},
 	io::{
 		self,
 		Write,
 	},
-	ops::Deref,
+	ops::{
+		Deref,
+		Range,
+	},
 	path::PathBuf,
+	ptr,
 	sync::{
 		Arc,
 		Mutex,
@@ -72,21 +83,310 @@ const FLAG_TICK_TOTAL: u8 =   0b0010_0000;
 
 /// Buffer Indexes.
 ///
-/// These are the indexes of the individual buffer pieces. Every other entry is
-/// constant, but commented below for reference.
-const IDX_TITLE: usize = 0;
-// const IDX_ELAPSED_PRE: usize = 1;
-const IDX_ELAPSED: usize = 2;
-// const IDX_ELAPSED_POST: usize = 3;
-const IDX_BAR: usize = 4;
-// const IDX_DONE_PRE: usize = 5;
-const IDX_DONE: usize = 6;
-// const IDX_DONE_POST: usize = 7;
-const IDX_TOTAL: usize = 8;
-// const IDX_TOTAL_POST: usize = 9;
-const IDX_PERCENT: usize = 10;
-// const IDX_PERCENT_POST: usize = 11;
-const IDX_DOING: usize = 12;
+/// These are the indexes of the individual buffer pieces.
+const PART_TITLE: usize = 0;
+const PART_ELAPSED: usize = 1;
+const PART_BARS: usize = 2;
+const PART_DONE: usize = 3;
+const PART_TOTAL: usize = 4;
+const PART_PERCENT: usize = 5;
+const PART_DOING: usize = 6;
+
+
+
+#[derive(Debug, Clone)]
+/// Progress Buffer.
+struct ProgressBuffer {
+	buf: Vec<u8>,
+	len: usize,
+	parts: [(usize, usize); 7],
+}
+
+impl Default for ProgressBuffer {
+	fn default() -> Self {
+		Self {
+			buf: vec![
+			//  Title
+
+			//  \e   [   2    m   [   \e  [   0   ;   1    m
+				27, 91, 50, 109, 91, 27, 91, 48, 59, 49, 109,
+			//   0   0   :   0   0   :   0   0
+				48, 48, 58, 48, 48, 58, 48, 48,
+			//  \e   [   0   ;   2    m   ]  \e   [   0    m   •   •
+				27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32,
+
+			//  Bar.
+
+			//  Done.
+			//  \e   [   1   ;   9   6    m
+				27, 91, 49, 59, 57, 54, 109,
+			//   0
+				48,
+
+			//  The slash between Done and Total.
+			//  \e   [   0   ;   2    m   /  \e   [   0   ;   1   ;   3   4    m
+				27, 91, 48, 59, 50, 109, 47, 27, 91, 48, 59, 49, 59, 51, 52, 109,
+
+			//  Total.
+			//   0
+				48,
+
+			//  The bit between Total and Percent.
+			//  \e   [   0   ;   1    m   •   •
+				27, 91, 48, 59, 49, 109, 32, 32,
+
+			//  Percent.
+			//   0   .   0   0   %
+				48, 46, 48, 48, 37,
+			//  \e   [   0    m  \n
+				27, 91, 48, 109, 10,
+
+			//  Doing.
+			],
+			len: 75,
+			parts: [
+				(0, 0),   // Title.
+				(11, 19), // Elapsed.
+				(32, 32), // Bar(s).
+				(39, 40), // Done.
+				(56, 57), // Total.
+				(65, 70), // Percent.
+				(75, 75), // Current Tasks.
+			],
+		}
+	}
+}
+
+impl Deref for ProgressBuffer {
+	type Target = [u8];
+
+	/// Deref to Slice.
+	fn deref(&self) -> &Self::Target { self.as_bytes() }
+}
+
+impl Hash for ProgressBuffer {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.buf[0..self.len].hash(state);
+	}
+}
+
+impl ProgressBuffer {
+	/// As Bytes.
+	pub fn as_bytes(&self) -> &[u8] {
+		&self.buf[0..self.len]
+	}
+
+	/// Get an `AHash`.
+	pub fn calculate_hash(&self) -> u64 {
+		let mut hasher = AHasher::default();
+		self.hash(&mut hasher);
+		hasher.finish()
+	}
+
+	/// Is Empty.
+	pub const fn is_empty(&self) -> bool {
+		0 == self.len
+	}
+
+	#[allow(dead_code)] // We'll probably want this some day.
+	/// Length.
+	pub const fn len(&self) -> usize {
+		self.len
+	}
+
+	/// Part Mut.
+	pub fn part_mut(&mut self, idx: usize) -> &mut [u8] {
+		let r = self.range(idx);
+		&mut self.buf[r]
+	}
+
+	/// Part Length.
+	pub const fn part_len(&self, idx: usize) -> usize {
+		self.parts[idx].1 - self.parts[idx].0
+	}
+
+	/// Range.
+	pub const fn range(&self, idx: usize) -> Range<usize> {
+		Range {
+			start: self.parts[idx].0,
+			end: self.parts[idx].1,
+		}
+	}
+
+	/// Replace Part.
+	pub fn replace_part(&mut self, idx: usize, buf: &[u8]) {
+		self.resize_part(idx, buf.len());
+		if ! buf.is_empty() {
+			self.part_mut(idx).copy_from_slice(buf);
+		}
+	}
+
+	#[allow(clippy::comparison_chain)] // We're only matching two arms.
+	/// Resize Part.
+	fn resize_part(&mut self, idx: usize, len: usize) {
+		let old_len: usize = self.part_len(idx);
+
+		// Shrink it.
+		if len < old_len {
+			self.resize_part_shrink(idx, old_len - len);
+		}
+		// Grow it.
+		else if old_len < len {
+			self.resize_part_grow(idx, len - old_len);
+		}
+	}
+
+	/// Resize Part: Grow.
+	fn resize_part_grow(&mut self, idx: usize, adj: usize) {
+		// Add extra bytes to the end.
+		self.len += adj;
+		self.buf.resize(self.len, 0);
+
+		// Shift everthing to the right so the "extra" appear in the middle.
+		if idx != PART_DOING {
+			let ptr = self.buf.as_mut_ptr();
+			unsafe {
+				ptr::copy(
+					ptr.add(self.parts[idx].1),
+					ptr.add(self.parts[idx].1 + adj),
+					self.len - adj - self.parts[idx].1,
+				);
+			}
+		}
+
+		// Adjust the parts table.
+		self.parts[idx].1 += adj;
+		self.parts.iter_mut()
+			.skip(idx + 1)
+			.for_each(|x| {
+				x.0 += adj;
+				x.1 += adj;
+			});
+	}
+
+	/// Resize Part: Shrink.
+	fn resize_part_shrink(&mut self, idx: usize, adj: usize) {
+		self.len -= adj;
+
+		// Truncate the end.
+		if idx ==  PART_DOING {
+			self.buf.truncate(self.len);
+		}
+		// Snip out the range.
+		else {
+			self.buf.drain(self.parts[idx].1 - adj..self.parts[idx].1);
+		}
+
+		// Adjust the parts table.
+		self.parts[idx].1 -= adj;
+		self.parts.iter_mut()
+			.skip(idx + 1)
+			.for_each(|x| {
+				x.0 -= adj;
+				x.1 -= adj;
+			});
+	}
+
+	/// Write Bars.
+	pub fn write_bars(&mut self, done: u8, doing: u8, undone: u8) {
+		if done + doing + undone == 0 {
+			self.resize_part(PART_BARS, 0);
+			return;
+		}
+
+		let mut buf: Vec<u8> = Vec::with_capacity(done as usize + doing as usize + undone as usize + 50);
+
+		if done == 0 { buf.extend_from_slice(b"\x1b[2m["); }
+		else {
+			buf.extend_from_slice(b"\x1b[2m[\x1b[0;1;96m");
+			buf.resize(buf.len() + done as usize, b'#');
+		}
+
+		if doing != 0 {
+			buf.extend_from_slice(b"\x1b[0;1;95m");
+			buf.resize(buf.len() + doing as usize, b'#');
+		}
+
+		if undone != 0 {
+			buf.extend_from_slice(b"\x1b[0;1;34m");
+			buf.resize(buf.len() + undone as usize, b'#');
+		}
+
+		// Always close it off.
+		buf.extend_from_slice(b"\x1b[0;2m]\x1b[0m  ");
+
+		// And update the buffer.
+		self.replace_part(PART_BARS, &buf);
+	}
+
+	/// Write Doing.
+	pub fn write_doing<T> (&mut self, doing: &[T], width: usize)
+	where T: ProgressTask + PartialEq + Clone {
+		if doing.is_empty() {
+			self.resize_part(PART_DOING, 0);
+		}
+		else {
+			self.replace_part(
+				PART_DOING,
+				&doing.iter()
+					.flat_map(|x| x.task_line(width))
+					.collect::<Vec<u8>>()
+			);
+		}
+	}
+
+	/// Write Done.
+	pub fn write_done(&mut self, done: u32) {
+		self.replace_part(PART_DONE, &*NiceInt::from(done));
+	}
+
+	/// Write Elapsed.
+	pub fn write_elapsed(&mut self, secs: u32) {
+		// The value is capped at 86400, i.e. one day.
+		if secs == 86400 {
+			self.part_mut(PART_ELAPSED).copy_from_slice(b"23:59:59");
+		}
+		// For everything else, we need to parse it into bigger units.
+		else {
+			let c = utility::secs_chunks(secs);
+			let buf = self.part_mut(PART_ELAPSED);
+			buf[..2].copy_from_slice(time_format_dd(c[0]));
+			buf[3..5].copy_from_slice(time_format_dd(c[1]));
+			buf[6..].copy_from_slice(time_format_dd(c[2]));
+		}
+	}
+
+	/// Write Percent.
+	pub fn write_percent(&mut self, percent: f32) {
+		self.replace_part(
+			PART_PERCENT,
+			format!("{:>3.*}%", 2, percent * 100.0).as_bytes()
+		);
+	}
+
+	/// Write Title.
+	pub fn write_title(&mut self, title: Option<&Msg>, width: usize) {
+		match title {
+			Some(m) => {
+				let mut m = m.to_vec();
+				m.fit_to_range(width - 1);
+				m.push(b'\n');
+
+				// Write it!
+				self.replace_part(PART_TITLE, &m);
+			},
+			None =>
+				if self.part_len(PART_TITLE) != 0 {
+					self.resize_part(PART_TITLE, 0);
+				},
+		}
+	}
+
+	/// Write Total.
+	pub fn write_total(&mut self, total: u32) {
+		self.replace_part(PART_TOTAL, &*NiceInt::from(total));
+	}
+}
 
 
 
@@ -111,7 +411,7 @@ where T: ProgressTask + PartialEq + Clone {
 	/// Each section of the progress bar is stored in its own array slot where
 	/// it can be edited independently of the others. Printing still requires
 	/// concatenation, but this lets us rest halfway.
-	buf: [Vec<u8>; 13],
+	buf: ProgressBuffer,
 	/// Flags.
 	///
 	/// These flags mostly track state changes by field since the last tick.
@@ -155,49 +455,7 @@ where T: ProgressTask + PartialEq + Clone {
 			total: 0,
 			time: Instant::now(),
 			title: None,
-			buf: [
-				// Title.
-				Vec::new(),
-
-				// Elapsed.
-				//   \e   [   2    m   [   \e  [   0   ;   1    m
-				vec![27, 91, 50, 109, 91, 27, 91, 48, 59, 49, 109],
-				//    0   0   :   0   0   :   0   0
-				vec![48, 48, 58, 48, 48, 58, 48, 48],
-				//   \e   [   0   ;   2    m   ]  \e   [   0    m   •   •
-				vec![27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32],
-
-				// Bar. This is a hugely complicated part, so we'll handle it
-				// separately.
-				Vec::new(),
-
-				// Done.
-				//   \e   [   1   ;   9   6    m
-				vec![27, 91, 49, 59, 57, 54, 109],
-				//    0
-				vec![48],
-
-				// The slash between Done and Total.
-				//   \e   [   0   ;   2    m   /  \e   [   0   ;   1   ;   3   4    m
-				vec![27, 91, 48, 59, 50, 109, 47, 27, 91, 48, 59, 49, 59, 51, 52, 109],
-
-				// Total.
-				//    0
-				vec![48],
-
-				// The bit between Total and Percent.
-				//   \e   [   0   ;   1    m   •   •
-				vec![27, 91, 48, 59, 49, 109, 32, 32],
-
-				// Percent.
-				//    0   .   0   0   %
-				vec![48, 46, 48, 48, 37],
-				//   \e   [   0    m  \n
-				vec![27, 91, 48, 109, 10],
-
-				// Tasks.
-				Vec::new(),
-			],
+			buf: ProgressBuffer::default(),
 			flags: 0,
 			last_hash: 0,
 			last_lines: 0,
@@ -234,6 +492,11 @@ where T: ProgressTask + PartialEq + Clone {
 	// ------------------------------------------------------------------------
 	// Setters
 	// ------------------------------------------------------------------------
+
+	/// Increment Done.
+	pub fn increment(&mut self) {
+		self.set_done(self.done + 1);
+	}
 
 	/// Remove A Task.
 	///
@@ -291,7 +554,7 @@ where T: ProgressTask + PartialEq + Clone {
 		self.doing.truncate(0);
 		self.title = None;
 
-		self.preprint(&[]);
+		self.print_blank();
 	}
 
 
@@ -322,7 +585,7 @@ where T: ProgressTask + PartialEq + Clone {
 		// We can't really draw anything meaningful in small spaces.
 		if self.last_width < 40 {
 			self.flags = FLAG_RUNNING;
-			self.preprint(&[]);
+			self.print_blank();
 			return true;
 		}
 
@@ -344,7 +607,7 @@ where T: ProgressTask + PartialEq + Clone {
 		self.tick_set_bar();
 
 		// Maybe we're printing, maybe we're not!
-		self.preprint(&self.buf.concat());
+		self.preprint();
 
 		true
 	}
@@ -366,10 +629,10 @@ where T: ProgressTask + PartialEq + Clone {
 		// 2: the spaces after the bar itself (should there be one);
 		let space: u8 = 255_usize.min((self.last_width as usize).saturating_sub(
 			11 +
-			self.buf[IDX_ELAPSED].len() +
-			self.buf[IDX_DONE].len() +
-			self.buf[IDX_TOTAL].len() +
-			self.buf[IDX_PERCENT].len()
+			self.buf.part_len(PART_ELAPSED) +
+			self.buf.part_len(PART_DONE) +
+			self.buf.part_len(PART_TOTAL) +
+			self.buf.part_len(PART_PERCENT)
 		)) as u8;
 
 		// Insufficient space!
@@ -396,28 +659,8 @@ where T: ProgressTask + PartialEq + Clone {
 	fn tick_set_bar(&mut self) {
 		if 0 != self.flags & FLAG_TICK_BAR {
 			self.flags &= ! FLAG_TICK_BAR;
-			self.buf[IDX_BAR].truncate(0);
 			let (done, doing, undone) = self.tick_bar_widths();
-			if done + doing + undone == 0 { return; }
-
-			if done == 0 { self.buf[IDX_BAR].extend_from_slice(b"\x1b[2m["); }
-			else {
-				self.buf[IDX_BAR].extend_from_slice(b"\x1b[2m[\x1b[0;1;96m");
-				self.buf[IDX_BAR].resize(self.buf[IDX_BAR].len() + done as usize, b'#');
-			}
-
-			if doing != 0 {
-				self.buf[IDX_BAR].extend_from_slice(b"\x1b[0;1;95m");
-				self.buf[IDX_BAR].resize(self.buf[IDX_BAR].len() + doing as usize, b'#');
-			}
-
-			if undone != 0 {
-				self.buf[IDX_BAR].extend_from_slice(b"\x1b[0;1;34m");
-				self.buf[IDX_BAR].resize(self.buf[IDX_BAR].len() + undone as usize, b'#');
-			}
-
-			// Always close it off.
-			self.buf[IDX_BAR].extend_from_slice(b"\x1b[0;2m]\x1b[0m  ");
+			self.buf.write_bars(done, doing, undone);
 		}
 	}
 
@@ -429,9 +672,7 @@ where T: ProgressTask + PartialEq + Clone {
 	fn tick_set_doing(&mut self) {
 		if 0 != self.flags & FLAG_TICK_DOING {
 			self.flags &= ! FLAG_TICK_DOING;
-			self.buf[IDX_DOING].truncate(0);
-			let w: usize = self.last_width as usize;
-			self.buf[IDX_DOING].extend(self.doing.iter().flat_map(|x| x.task_line(w)));
+			self.buf.write_doing(&self.doing, self.last_width as usize);
 		}
 	}
 
@@ -441,8 +682,7 @@ where T: ProgressTask + PartialEq + Clone {
 	fn tick_set_done(&mut self) {
 		if 0 != self.flags & FLAG_TICK_DONE {
 			self.flags &= ! FLAG_TICK_DONE;
-			self.buf[IDX_DONE].truncate(0);
-			self.buf[IDX_DONE].extend_from_slice(&*NiceInt::from(self.done));
+			self.buf.write_done(self.done);
 		}
 	}
 
@@ -452,10 +692,7 @@ where T: ProgressTask + PartialEq + Clone {
 	fn tick_set_percent(&mut self) {
 		if 0 != self.flags & FLAG_TICK_PERCENT {
 			self.flags &= ! FLAG_TICK_PERCENT;
-			self.buf[IDX_PERCENT].truncate(0);
-			self.buf[IDX_PERCENT].extend_from_slice(
-				format!("{:>3.*}%", 2, self.percent() * 100.0).as_bytes()
-			);
+			self.buf.write_percent(self.percent());
 		}
 	}
 
@@ -472,18 +709,7 @@ where T: ProgressTask + PartialEq + Clone {
 		if secs == self.last_secs { false }
 		else {
 			self.last_secs = secs;
-			// The value is capped at 86400, i.e. one day.
-			if secs == 86400 {
-				self.buf[IDX_ELAPSED].copy_from_slice(b"23:59:59");
-			}
-			// For everything else, we need to parse it into bigger units.
-			else {
-				let c = utility::secs_chunks(secs);
-				self.buf[IDX_ELAPSED][..2].copy_from_slice(time_format_dd(c[0]));
-				self.buf[IDX_ELAPSED][3..5].copy_from_slice(time_format_dd(c[1]));
-				self.buf[IDX_ELAPSED][6..].copy_from_slice(time_format_dd(c[2]));
-			}
-
+			self.buf.write_elapsed(secs);
 			true
 		}
 	}
@@ -495,28 +721,7 @@ where T: ProgressTask + PartialEq + Clone {
 	fn tick_set_title(&mut self) {
 		if 0 != self.flags & FLAG_TICK_TITLE {
 			self.flags &= ! FLAG_TICK_TITLE;
-			self.buf[IDX_TITLE].truncate(0);
-
-			if let Some(t) = &self.title {
-				let mut vt: Vec<u8> = t.to_vec();
-
-				if self.last_width as usize <= vt.len() {
-					// An easy, if inefficient, way to locate the last allowable
-					// char boundary.
-					let tmp: String = unsafe { String::from_utf8_unchecked(vt.clone()) }
-						.chars()
-						.take(self.last_width as usize - 1)
-						.collect();
-
-					vt.truncate(tmp.len());
-				}
-
-				// Add a line break.
-				vt.push(10);
-
-				// Update the buffer.
-				self.buf[IDX_TITLE].extend(vt);
-			}
+			self.buf.write_title(self.title.as_ref(), self.last_width as usize);
 		}
 	}
 
@@ -526,8 +731,7 @@ where T: ProgressTask + PartialEq + Clone {
 	fn tick_set_total(&mut self) {
 		if 0 != self.flags & FLAG_TICK_TOTAL {
 			self.flags &= ! FLAG_TICK_TOTAL;
-			self.buf[IDX_TOTAL].truncate(0);
-			self.buf[IDX_TOTAL].extend_from_slice(&*NiceInt::from(self.total));
+			self.buf.write_total(self.total);
 		}
 	}
 
@@ -554,14 +758,15 @@ where T: ProgressTask + PartialEq + Clone {
 	/// This method accepts a completed buffer ready for printing, hashing it
 	/// for comparison with the last job. If unique, the previous output is
 	/// erased and replaced with the new output.
-	fn preprint(&mut self, buf: &[u8]) {
+	fn preprint(&mut self) {
+		if self.buf.is_empty() {
+			self.print_blank();
+			return;
+		}
+
 		// Make sure the content is unique, otherwise we can leave the old bits
 		// up.
-		let hash: u64 = {
-			let mut hasher = AHasher::default();
-			hasher.write(buf);
-			hasher.finish()
-		};
+		let hash = self.buf.calculate_hash();
 		if hash == self.last_hash {
 			return;
 		}
@@ -571,10 +776,17 @@ where T: ProgressTask + PartialEq + Clone {
 		self.print_cls();
 
 		// Update the line count and print!
-		if ! buf.is_empty() {
-			self.last_lines = 1_u8.saturating_add(bytecount::count(buf, b'\n') as u8);
-			Self::print(buf);
+		self.last_lines = 1_u8.saturating_add(bytecount::count(&self.buf, b'\n') as u8);
+		Self::print(&self.buf);
+	}
+
+	/// Print Blank.
+	fn print_blank(&mut self) {
+		if self.last_hash != 0 {
+			self.last_hash = 0;
 		}
+
+		self.print_cls();
 	}
 
 	/// Print!
@@ -665,6 +877,50 @@ where T: ProgressTask + PartialEq + Clone {
 
 
 
+#[derive(Debug, Copy, Clone, Hash, PartialEq)]
+/// Degree of Parallelism.
+///
+/// By default, one parallel thread will be spawned for each (reported) CPU
+/// core. Depending on the types of workload, `Light` or `Heavy` parallelism
+/// could be a better choice.
+///
+/// Note: for steady-tick progression — where the elapsed time triggers a
+/// visual redraw at least once per second — one extra thread will be spawned
+/// to hold the counter. This is a relatively light task, so the extra thread
+/// shouldn't have much impact.
+pub enum ProgressParallelism {
+	/// One thread.
+	None,
+	/// Half cores.
+	Light,
+	/// Leave one core open.
+	Reserve,
+	/// Use all cores.
+	Default,
+	/// Double cores.
+	Heavy,
+}
+
+impl Default for ProgressParallelism {
+	fn default() -> Self { Self::Default }
+}
+
+impl ProgressParallelism {
+	#[must_use]
+	/// Number of Threads.
+	pub fn threads(self) -> usize {
+		match self {
+			Self::None => 1,
+			Self::Light => 1.max(f64::floor(num_cpus::get() as f64 / 2.0) as usize),
+			Self::Reserve => 1.max(num_cpus::get() - 1),
+			Self::Default => num_cpus::get(),
+			Self::Heavy => num_cpus::get() * 2,
+		}
+	}
+}
+
+
+
 #[derive(Debug, Default)]
 /// Progress Bar.
 ///
@@ -674,6 +930,8 @@ pub struct Progress<T>
 where T: ProgressTask + PartialEq + Clone {
 	/// The set to progress through.
 	set: Vec<T>,
+	/// Thread handling.
+	threads: ProgressParallelism,
 	/// The stateful data.
 	inner: Arc<Mutex<ProgressInner<T>>>,
 }
@@ -689,6 +947,7 @@ where T: ProgressTask + PartialEq + Clone {
 
 		Self {
 			set: src,
+			threads: ProgressParallelism::default(),
 			inner: Arc::new(Mutex::new(ProgressInner::<T> {
 				total,
 				flags,
@@ -722,6 +981,7 @@ where T: ProgressTask + PartialEq + Clone + Sync + Send + 'static {
 
 		Self {
 			set: src,
+			threads: ProgressParallelism::default(),
 			inner: Arc::new(Mutex::new(ProgressInner::<T> {
 				total,
 				flags,
@@ -731,20 +991,55 @@ where T: ProgressTask + PartialEq + Clone + Sync + Send + 'static {
 		}
 	}
 
+	/// Set Threads.
+	pub fn set_threads(&mut self, threads: ProgressParallelism) {
+		self.threads = threads;
+	}
+
+	#[must_use]
+	/// With Threads.
+	pub fn with_threads(mut self, threads: ProgressParallelism) -> Self {
+		self.threads = threads;
+		self
+	}
+
 	/// Run!
 	///
 	/// This here is the whole point. Iterate through the set in parallel with
 	/// a progress bar, while executing a custom callback.
+	///
+	/// When parallelism is such that only one thread is to be used, the
+	/// progress portion will run without a steady tick and without displaying
+	/// the current task information.
+	///
+	/// When parallelism is more than one thread, tasks will be executed in
+	/// parallel using that many threads, plus one extra thread to steadily
+	/// tick the timer, ensuring the elapsed time updates at least once per
+	/// second.
 	pub fn run<F>(&self, cb: F)
 	where F: Fn(&T) + Copy + Send + Sync {
 		// If the set is empty, skip all this nonsense.
 		if self.set.is_empty() { return; }
 
-		{
+		// Regular iter.
+		let threads = self.threads.threads();
+		if 1 == threads {
+			self.set.iter().for_each(|x| {
+				cb(x);
+				self.increment();
+				Self::tick(&self.inner);
+			});
+		}
+		else {
+			let pool = rayon::ThreadPoolBuilder::new()
+				.num_threads(threads + 1)
+				.build()
+				.unwrap();
+
 			// This extra process gives us a steady tick, ensuring slow tasks
 			// don't make the user think everything's crashed.
 			let inner = self.inner.clone();
-			rayon::spawn(move || {
+			pool.spawn(move || {
 				let sleep = Duration::from_millis(60);
 				loop {
 					if ! Self::tick(&inner) {
@@ -755,7 +1050,7 @@ where T: ProgressTask + PartialEq + Clone + Sync + Send + 'static {
 			});
 
 			// Iterate!
-			self.set.par_iter().for_each(|x| {
+			pool.install(|| self.set.par_iter().for_each(|x| {
 				// Mark the task as currently running.
 				self.set_doing(x.clone());
 
@@ -765,7 +1060,7 @@ where T: ProgressTask + PartialEq + Clone + Sync + Send + 'static {
 				// Mark the task as complete.
 				self.remove_doing(x);
 				Self::tick(&self.inner);
-			});
+			}));
 		}
 	}
 
@@ -779,7 +1074,18 @@ where T: ProgressTask + PartialEq + Clone + Sync + Send + 'static {
 	/// `rayon` as a direct dependency.
 	pub fn silent<F>(&self, cb: F)
 	where F: Fn(&T) + Copy + Send + Sync {
-		self.set.par_iter().for_each(cb);
+		let threads = self.threads.threads();
+		if 1 == threads {
+			self.set.iter().for_each(cb);
+		}
+		else {
+			let pool = rayon::ThreadPoolBuilder::new()
+				.num_threads(threads)
+				.build()
+				.unwrap();
+
+			pool.install(|| self.set.par_iter().for_each(cb));
+		}
 	}
 
 
@@ -811,6 +1117,14 @@ where T: ProgressTask + PartialEq + Clone + Sync + Send + 'static {
 	pub fn elapsed(&self) -> u64 {
 		let ptr = mutex_ptr!(self.inner);
 		ptr.elapsed()
+	}
+
+	/// Increment.
+	///
+	/// Wrapper for `ProgressInner::increment()`.
+	fn increment(&self) {
+		let mut ptr = mutex_ptr!(self.inner);
+		ptr.increment();
 	}
 
 	#[must_use]
@@ -889,10 +1203,11 @@ pub trait ProgressTask {
 	/// values as needed.
 	fn task_line(&self, width: usize) -> Vec<u8> {
 		let name: &[u8] = self.task_name();
+
 		[
 			// •   •   •   •  \e   [   3   5    m   ↳  ---  ---   •
 			&[32, 32, 32, 32, 27, 91, 51, 53, 109, 226, 134, 179, 32][..],
-			&name[0..name.len().min(width.saturating_sub(9))],
+			&name[name.fitted_range(width.saturating_sub(6))],
 			b"\x1b[0m\n",
 		].concat()
 	}
