@@ -4,6 +4,36 @@
 This mod contains miscellaneous utility functions for the crate.
 */
 
+/// String Inflection
+///
+/// Given a number, come up with a byte string like "1 thing" or "2 things".
+pub fn inflect<T> (num: u64, one: T, many: T) -> Vec<u8>
+where T: AsRef<str> {
+	if 1 == num {
+		[49, 32].iter()
+			.chain(one.as_ref().as_bytes())
+			.copied()
+			.collect::<Vec<u8>>()
+	}
+	else if num < 1000 {
+		let mut buf = itoa::Buffer::new();
+		buf.format(num).as_bytes().iter()
+			.chain(&[32])
+			.chain(many.as_ref().as_bytes())
+			.copied()
+			.collect::<Vec<u8>>()
+	}
+	else {
+		let mut buf = num_format::Buffer::default();
+		buf.write_formatted(&num, &num_format::Locale::en);
+		buf.as_bytes().iter()
+			.chain(&[32])
+			.chain(many.as_ref().as_bytes())
+			.copied()
+			.collect::<Vec<u8>>()
+	}
+}
+
 #[must_use]
 /// Chunked Seconds
 ///
@@ -47,6 +77,13 @@ pub fn term_width() -> usize {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn t_inflect() {
+		assert_eq!(&inflect(0, "book", "books").as_ref(), b"0 books");
+		assert_eq!(&inflect(1, "book", "books").as_ref(), b"1 book");
+		assert_eq!(&inflect(1000, "book", "books").as_ref(), b"1,000 books");
+	}
 
 	#[test]
 	fn t_secs_chunks() {

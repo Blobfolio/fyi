@@ -33,7 +33,5 @@ pub mod utility;
 /// The Witcher!
 pub use witcher::{
 	Witcher,
-	process,
-	progress,
-	progress_crunch,
+	crunch,
 };

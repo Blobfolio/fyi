@@ -5,7 +5,6 @@ This mod contains miscellaneous utility functions for the crate.
 */
 
 use std::{
-	borrow::Borrow,
 	path::{
 		Path,
 		PathBuf,
@@ -60,38 +59,6 @@ where P: AsRef<Path> {
 				if meta.is_dir() { 0 }
 				else { meta.len() }
 		)
-}
-
-/// String Inflection
-///
-/// Given a number, come up with a byte string like "1 thing" or "2 things".
-pub fn inflect<T1, T2> (num: u64, one: T1, many: T2) -> Vec<u8>
-where
-	T1: Borrow<str>,
-	T2: Borrow<str> {
-	if 1 == num {
-		[49, 32].iter()
-			.chain(one.borrow().as_bytes())
-			.copied()
-			.collect::<Vec<u8>>()
-	}
-	else if num < 1000 {
-		let mut buf = itoa::Buffer::new();
-		buf.format(num).as_bytes().iter()
-			.chain(&[32])
-			.chain(many.borrow().as_bytes())
-			.copied()
-			.collect::<Vec<u8>>()
-	}
-	else {
-		let mut buf = num_format::Buffer::default();
-		buf.write_formatted(&num, &num_format::Locale::en);
-		buf.as_bytes().iter()
-			.chain(&[32])
-			.chain(many.borrow().as_bytes())
-			.copied()
-			.collect::<Vec<u8>>()
-	}
 }
 
 /// Is File Executable?
@@ -154,13 +121,6 @@ mod tests {
 			path.as_ref(),
 			expected
 		);
-	}
-
-	#[test]
-	fn t_inflect() {
-		assert_eq!(&inflect(0, "book", "books").as_ref(), b"0 books");
-		assert_eq!(&inflect(1, "book", "books").as_ref(), b"1 book");
-		assert_eq!(&inflect(1000, "book", "books").as_ref(), b"1,000 books");
 	}
 
 	#[test]

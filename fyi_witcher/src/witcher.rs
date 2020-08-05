@@ -45,10 +45,7 @@ use ahash::{
 	AHasher,
 	AHashSet
 };
-use crate::utility::{
-	du,
-	inflect,
-};
+use crate::utility::du;
 use fyi_msg::{
 	Msg,
 	MsgKind,
@@ -57,8 +54,8 @@ use fyi_progress::{
 	NiceElapsed,
 	NiceInt,
 	Progress,
+	utility::inflect,
 };
-use rayon::prelude::*;
 use std::{
 	borrow::Borrow,
 	ffi::OsStr,
@@ -77,9 +74,6 @@ use std::{
 		Path,
 		PathBuf,
 	},
-	sync::Arc,
-	thread,
-	time::Duration,
 };
 
 
@@ -93,46 +87,6 @@ macro_rules! from_many {
 					.fold(Self::default(), Self::with_path)
 			}
 		}
-	};
-}
-
-/// Helper: Make an Arc<Progress> for the loops.
-macro_rules! make_progress {
-	($name:expr, $len:expr) => (
-		Arc::new(Progress::new(
-			$len,
-			Some(MsgKind::new($name, 199).into_msg("Reticulating splines\u{2026}").to_string()),
-		))
-	);
-}
-
-/// Helper: Loop the progress loop inline.
-macro_rules! make_progress_loop {
-	($paths:ident, $progress:ident, $cb:ident) => {
-		// Spawn a thread to steadily tick the progress bar. This is useful
-		// when processes might be too long-running.
-		let pbar2 = $progress.clone();
-		rayon::spawn(move || {
-			let sleep = Duration::from_millis(60);
-
-			loop {
-				pbar2.clone().tick();
-				thread::sleep(sleep);
-
-				// Are we done?
-				if ! pbar2.clone().is_running() {
-					break;
-				}
-			}
-		});
-
-		// Loop the paths!
-		$paths.par_iter().for_each(|x| {
-			let file: &str = x.to_str().unwrap_or_default();
-			$progress.clone().add_task(file);
-			$cb(x);
-			$progress.clone().update(1, None::<String>, Some(file));
-		});
 	};
 }
 
@@ -286,64 +240,38 @@ impl Witcher {
 	}
 }
 
-
-
-/// Silent Loop.
-///
-/// This will execute a callback once for each file in the result set using
-/// multiple threads.
-///
-/// This is just a convenience wrapper to prevent the implementing library
-/// having to queue up `rayon` directly.
-pub fn process<F> (paths: &[PathBuf], cb: F)
-where F: Fn(&PathBuf) + Send + Sync {
-	paths.par_iter().for_each(cb);
-}
-
 /// Parallel Loop w/ Progress.
 ///
-/// Execute your callback once for each file while displaying a `Progress`
-/// progress bar from `fyi_progress`.
-///
-/// Each thread automatically adds the current file name as a "task" at the
-/// start and removes it at the end, so i.e. the progress bar will show which
-/// entries are actively being worked on.
-///
-/// At the end, the progress bar will be cleared and a message will be printed
-/// like: "Crunched: Finished 30 files in 1 minute and 3 seconds."
-pub fn progress<S, F> (paths: &[PathBuf], name: S, cb: F)
+/// This loops through dataset with a pretty `Progress`, but keeps track of the
+/// before and after sizes so it can print the difference after the run.
+pub fn crunch<S, F> (paths: Vec<PathBuf>, name: S, cb: F)
 where
 	S: AsRef<str>,
-	F: Fn(&PathBuf) + Send + Sync
+	F: Fn(&PathBuf) + Send + Sync + Copy
 {
-	let pbar = make_progress!(name, paths.len() as u64);
-	make_progress_loop!(paths, pbar, cb);
-	finished_in(pbar.total(), pbar.time().elapsed().as_secs() as u32);
-}
+	// Abort if missing paths.
+	if paths.is_empty() {
+		MsgKind::Warning.into_msg("No matching files were found.")
+			.eprint();
 
-/// Parallel Loop w/ Progress.
-///
-/// This is the same as calling `progress()`, except that it will add up the
-/// total disk size of files before and after and report any savings in the
-/// final message.
-///
-/// If your operation doesn't affect file sizes, or doesn't need a size summary
-/// at the end, use one of the other loops (or write your own) instead.
-pub fn progress_crunch<S, F> (paths: &[PathBuf], name: S, cb: F)
-where
-	S: AsRef<str>,
-	F: Fn(&PathBuf) + Send + Sync
-{
-	let pbar = make_progress!(name, paths.len() as u64);
-	let before: u64 = du(paths);
+		return;
+	}
 
-	make_progress_loop!(paths, pbar, cb);
+	let pbar = Progress::new(
+		paths,
+		MsgKind::new(name, 199).into_msg("Reticulating splines\u{2026}")
+	);
+
+	// Add up the space used before the run.
+	let before: u64 = du(&*pbar);
+
+	pbar.run(cb);
 
 	crunched_in(
-		pbar.total(),
-		pbar.time().elapsed().as_secs() as u32,
+		pbar.total().into(),
+		pbar.elapsed() as u32,
 		before,
-		du(paths)
+		du(&*pbar)
 	);
 }
 
@@ -374,21 +302,6 @@ fn crunched_in(total: u64, time: u32, before: u64, after: u64) {
 			(1.0 - (after as f64 / before as f64)) * 100.0
 		)).eprint();
 	}
-}
-
-/// Finished In Msg
-///
-/// Print a simple summary like "Crunched: 1 file in 2 seconds.".
-///
-/// Like the progress bar, this prints to `Stderr`.
-fn finished_in(total: u64, time: u32) {
-	Msg::from([
-		&inflect(total, "file in ", "files in "),
-		&*NiceElapsed::from(time),
-		&[46, 10],
-	].concat())
-		.with_prefix(MsgKind::Crunched)
-		.eprint();
 }
 
 #[must_use]
