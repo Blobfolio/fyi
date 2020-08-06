@@ -101,7 +101,8 @@ impl FittedRange for Vec<u8> {
 
 
 /// This trait allows for in-place chopping based on the results coughed up
-/// from `FittedRange`.
+/// from `FittedRange`. Only owned types can implement this, so at the moment
+/// it is limited to byte vectors.
 pub trait FittedRangeMut {
 	/// Fit To Range
 	fn fit_to_range(&mut self, width: usize);

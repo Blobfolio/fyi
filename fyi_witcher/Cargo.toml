@@ -23,10 +23,6 @@ path = "../fyi_progress"
 criterion = "*"
 
 [[bench]]
-name = "fw_utility"
-harness = false
-
-[[bench]]
 name = "fw_witcher"
 harness = false
 

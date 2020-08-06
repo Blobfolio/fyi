@@ -8,9 +8,13 @@ A number of basic prefixes like "Error" and "Success" are built in. Custom
 prefixes with arbitrary coloring can be used via `MsgKind::new()`.
 
 The `with_indent()` and `with_timestamp()` build patterns can prepend
-indentation or a timestamp respectively.
+indentation or a timestamp to the message, respectively.
 
 That's it. Nice and boring!
+
+Two important limitations to note:
+1. Custom prefixes are limited to 64 bytes, including the formatting code. This leaves roughly 45 bytes for the label itself.
+2. Messages are limited to 1024 bytes.
 
 ## Example:
 
@@ -34,19 +38,122 @@ let res: bool = MsgKind::Confirm.into_msg("Are you OK?").prompt();
 
 use crate::utility;
 use std::{
+	cmp::Ordering,
 	fmt,
+	hash::{
+		Hash,
+		Hasher,
+	},
 	io::{
 		self,
 		Write,
 	},
+	ops::Deref,
 };
 
 
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, Copy)]
+/// Prefix Buffer.
+///
+/// This is a simple fixed-array buffer to store custom prefixes for
+/// `MsgKind::Other`. This is implemented as a custom struct in order to take
+/// advantage of `Copy`, etc.
+pub struct PrefixBuffer {
+	buf: [u8; 64],
+	len: usize,
+}
+
+impl Deref for PrefixBuffer {
+	type Target = [u8];
+
+	/// Deref to Slice.
+	fn deref(&self) -> &Self::Target { self.as_bytes() }
+}
+
+impl fmt::Debug for PrefixBuffer {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("PrefixBuffer")
+			.field("buf", &self.as_bytes())
+			.finish()
+	}
+}
+
+impl Default for PrefixBuffer {
+	fn default() -> Self {
+		Self {
+			buf: [0; 64],
+			len: 0,
+		}
+	}
+}
+
+impl Eq for PrefixBuffer {}
+
+impl From<Vec<u8>> for PrefixBuffer {
+	fn from(src: Vec<u8>) -> Self {
+		match src.len() {
+			1..=64 => {
+				let mut out = Self::default();
+				out.len = src.len();
+				out.buf[0..out.len].copy_from_slice(&src);
+				out
+			},
+			_ => Self::default(),
+		}
+	}
+}
+
+impl Hash for PrefixBuffer {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.as_bytes().hash(state);
+	}
+}
+
+impl Ord for PrefixBuffer {
+	fn cmp(&self, other: &Self) -> Ordering {
+		self.as_bytes().cmp(other.as_bytes())
+	}
+}
+
+impl PartialEq for PrefixBuffer {
+	fn eq(&self, other: &Self) -> bool {
+		self.as_bytes() == other.as_bytes()
+	}
+}
+
+impl PartialOrd for PrefixBuffer {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.as_bytes().cmp(other.as_bytes()))
+	}
+}
+
+impl PrefixBuffer {
+	/// As Bytes.
+	pub fn as_bytes(&self) -> &[u8] {
+		&self.buf[0..self.len]
+	}
+
+	/// Is Empty.
+	pub const fn is_empty(&self) -> bool {
+		0 == self.len
+	}
+
+	/// Length.
+	pub const fn len(&self) -> usize {
+		self.len
+	}
+}
+
+
+
+
+
+#[derive(Debug, Copy, Clone, Hash, PartialEq)]
 /// Message Kind.
 ///
-/// This is the prefix, basically.
+/// This is the prefix, basically. `Other` owns a `Vec<u8>` — its byte string
+/// equivalent — while all other options are static.
 pub enum MsgKind {
 	/// None.
 	None,
@@ -71,14 +178,23 @@ pub enum MsgKind {
 	/// Warning.
 	Warning,
 	/// Custom.
-	Other(Vec<u8>),
+	Other(PrefixBuffer),
 }
 
 impl Default for MsgKind {
 	fn default() -> Self { Self::None }
 }
 
+impl fmt::Display for MsgKind {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.write_str(unsafe { std::str::from_utf8_unchecked(self.as_bytes()) })
+	}
+}
+
 impl From<&str> for MsgKind {
+	/// This is a convenience method to convert a lower case string constant to
+	/// the equivalent kind. `Other` is not reachable this way; non-matches
+	/// match to `None` instead.
 	fn from(txt: &str) -> Self {
 		match txt {
 			"confirm" | "prompt" => Self::Confirm,
@@ -97,17 +213,21 @@ impl From<&str> for MsgKind {
 }
 
 impl MsgKind {
-	/// New.
+	/// Custom Prefix.
+	///
+	/// A custom prefix requires a string label and ANSI color code. The value
+	/// will automatically be suffixed with a colon and space for clean joining
+	/// to the message bit.
 	pub fn new<S> (prefix: S, color: u8) -> Self
 	where S: AsRef<str> {
 		let prefix = prefix.as_ref().trim();
 		if prefix.is_empty() { Self::None }
 		else {
-			Self::Other([
+			Self::Other(PrefixBuffer::from([
 				utility::ansi_code_bold(color),
 				prefix.as_bytes(),
 				b":\x1b[0m ",
-			].concat())
+			].concat()))
 		}
 	}
 
@@ -126,7 +246,7 @@ impl MsgKind {
 			Self::Success => b"\x1b[92;1mSuccess:\x1b[0m ",
 			Self::Task => b"\x1b[1;38;5;199mTask:\x1b[0m ",
 			Self::Warning => b"\x1b[93;1mWarning:\x1b[0m ",
-			Self::Other(x) => &x[..],
+			Self::Other(x) => x.as_bytes(),
 		}
 	}
 
@@ -141,17 +261,135 @@ impl MsgKind {
 	where S: AsRef<str> {
 		Msg::new(msg).with_prefix(self)
 	}
+
+	#[must_use]
+	/// Is Empty.
+	pub fn is_empty(&self) -> bool {
+		match self {
+			Self::None => true,
+			Self::Other(x) => x.is_empty(),
+			_ => false,
+		}
+	}
+
+	#[must_use]
+	/// Length.
+	pub fn len(&self) -> usize {
+		match self {
+			Self::None => 0,
+			Self::Other(x) => x.len(),
+			_ => self.as_bytes().len(),
+		}
+	}
 }
 
 
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Clone, Copy)]
+/// Message Buffer.
+///
+/// This is a simple fixed-array buffer to store messages so that `Copy`, etc.,
+/// can be used.
+pub struct MsgBuffer {
+	buf: [u8; 1024],
+	len: usize,
+}
+
+impl Deref for MsgBuffer {
+	type Target = [u8];
+
+	/// Deref to Slice.
+	fn deref(&self) -> &Self::Target { self.as_bytes() }
+}
+
+impl fmt::Debug for MsgBuffer {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("MsgBuffer")
+			.field("buf", &self.as_bytes())
+			.finish()
+	}
+}
+
+impl Default for MsgBuffer {
+	fn default() -> Self {
+		Self {
+			buf: [0; 1024],
+			len: 0,
+		}
+	}
+}
+
+impl Eq for MsgBuffer {}
+
+impl From<Vec<u8>> for MsgBuffer {
+	fn from(src: Vec<u8>) -> Self {
+		match src.len() {
+			1..=1024 => {
+				let mut out = Self::default();
+				out.len = src.len();
+				out.buf[0..out.len].copy_from_slice(&src);
+				out
+			},
+			_ => Self::default(),
+		}
+	}
+}
+
+impl Hash for MsgBuffer {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.as_bytes().hash(state);
+	}
+}
+
+impl Ord for MsgBuffer {
+	fn cmp(&self, other: &Self) -> Ordering {
+		self.as_bytes().cmp(other.as_bytes())
+	}
+}
+
+impl PartialEq for MsgBuffer {
+	fn eq(&self, other: &Self) -> bool {
+		self.as_bytes() == other.as_bytes()
+	}
+}
+
+impl PartialOrd for MsgBuffer {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.as_bytes().cmp(other.as_bytes()))
+	}
+}
+
+impl MsgBuffer {
+	/// As Bytes.
+	pub fn as_bytes(&self) -> &[u8] {
+		&self.buf[0..self.len]
+	}
+
+	/// Extend from Slice.
+	pub fn extend_from_slice(&mut self, src: &[u8]) {
+		if self.len + src.len() <= 1024 {
+			self.buf[self.len..self.len + src.len()].copy_from_slice(src);
+			self.len += src.len();
+		}
+	}
+}
+
+
+
+#[derive(Debug, Clone, Copy, Default, Hash, PartialEq)]
 /// Message.
+///
+/// This is it! The whole point of the crate! See the library documentation for
+/// more information.
 pub struct Msg {
+	/// Indent this many levels.
 	indent: u8,
+	/// Include a timestamp?
 	timestamp: bool,
+	/// The prefix to use, if any.
 	prefix: MsgKind,
-	msg: Vec<u8>,
+	/// The message component.
+	msg: MsgBuffer,
 }
 
 impl fmt::Display for Msg {
@@ -163,7 +401,7 @@ impl fmt::Display for Msg {
 impl From<Vec<u8>> for Msg {
 	fn from(src: Vec<u8>) -> Self {
 		Self {
-			msg: src,
+			msg: MsgBuffer::from(src),
 			..Self::default()
 		}
 	}
@@ -171,10 +409,14 @@ impl From<Vec<u8>> for Msg {
 
 impl Msg {
 	/// New.
+	///
+	/// Create a new message without a prefix. This is basically just a string,
+	/// but might have its uses, particularly when combined with the build
+	/// pattern methods.
 	pub fn new<S> (msg: S) -> Self
 	where S: AsRef<str> {
 		Self {
-			msg: msg.as_ref().as_bytes().to_vec(),
+			msg: MsgBuffer::from(msg.as_ref().as_bytes().to_vec()),
 			..Self::default()
 		}
 	}
@@ -189,6 +431,9 @@ impl Msg {
 
 	#[must_use]
 	/// With Timestamp.
+	///
+	/// Messages are not timestamped by default, but can be if `true` is passed
+	/// to this method.
 	pub const fn with_timestamp(mut self, on: bool) -> Self {
 		self.timestamp = on;
 		self
@@ -196,6 +441,10 @@ impl Msg {
 
 	#[must_use]
 	/// With Indent.
+	///
+	/// Use this method to indent the message `indent` number of levels. Each
+	/// level is equivalent to four spaces, e.g. `1 == "    "`,
+	/// `2 == "        "`, etc.
 	pub const fn with_indent(mut self, indent: u8) -> Self {
 		self.indent = indent;
 		self
@@ -208,7 +457,7 @@ impl Msg {
 			self.indent(),
 			self.timestamp(),
 			self.prefix.as_bytes(),
-			self.msg.as_slice(),
+			self.msg.as_bytes(),
 		].concat()
 	}
 
@@ -249,10 +498,14 @@ impl Msg {
 
 	#[must_use]
 	/// Prompt.
+	///
+	/// This produces a simple y/N input prompt, requiring the user type "Y" or
+	/// "N" to proceed. Positive values return `true`, negative values return
+	/// `false`. The default is No.
 	pub fn prompt(&self) -> bool {
 		// Clone the message and append a little [y/N] instructional bit to the
 		// end.
-		let mut q = self.clone();
+		let mut q = *self;
 		q.msg.extend_from_slice(b" \x1b[2m[y/\x1b[4mN\x1b[0;2m]\x1b[0m ");
 
 		// Ask and collect input, looping until a valid response is typed.
@@ -273,32 +526,32 @@ impl Msg {
 		}
 	}
 
-	/// Print.
+	/// Print: `Stdout`.
 	pub fn print(&self) {
 		locked_print(&self.to_vec(), false);
 	}
 
-	/// Print.
+	/// Print w/ Line: `Stdout`.
 	pub fn println(&self) {
 		locked_print(&self.to_vec(), true);
 	}
 
-	/// Print.
+	/// Print: `Stderr`.
 	pub fn eprint(&self) {
 		locked_eprint(&self.to_vec(), false);
 	}
 
-	/// Print.
+	/// Print w/ Line: `Stderr`.
 	pub fn eprintln(&self) {
 		locked_eprint(&self.to_vec(), true);
 	}
 
-	/// Print.
+	/// Simulated Print.
 	pub fn sink(&self) {
 		locked_sink(&self.to_vec(), false);
 	}
 
-	/// Print.
+	/// Simulated Print w/ Line.
 	pub fn sinkln(&self) {
 		locked_sink(&self.to_vec(), true);
 	}
@@ -306,7 +559,7 @@ impl Msg {
 
 
 
-/// Locked Print: Stdout.
+/// Locked Print: `Stdout`.
 fn locked_print(buf: &[u8], line: bool) {
 	let writer = std::io::stdout();
 	let mut handle = writer.lock();
@@ -319,7 +572,7 @@ fn locked_print(buf: &[u8], line: bool) {
 	handle.flush().unwrap();
 }
 
-/// Locked Print: Stderr.
+/// Locked Print: `Stderr`.
 fn locked_eprint(buf: &[u8], line: bool) {
 	let writer = std::io::stderr();
 	let mut handle = writer.lock();
@@ -332,7 +585,7 @@ fn locked_eprint(buf: &[u8], line: bool) {
 	handle.flush().unwrap();
 }
 
-/// Locked Print: Sink.
+/// Locked Print: `Sink`.
 fn locked_sink(buf: &[u8], line: bool) {
 	let mut handle = io::sink();
 	handle.write_all(buf).unwrap();
@@ -346,9 +599,8 @@ fn locked_sink(buf: &[u8], line: bool) {
 
 /// Input Prompt
 ///
-/// This prints a question and collects the raw answer. It is up to
-/// `Msg::prompt()` to figure out if it makes sense or not. (If not, that
-/// method's loop will just recall this method.)
+/// This is used by `Msg.prompt()` to read/normalize the user response to the
+/// question.
 fn read_prompt() -> io::Result<String> {
 	let mut result = String::new();
 	io::stdin().read_line(&mut result)?;

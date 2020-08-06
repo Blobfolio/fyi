@@ -1,5 +1,5 @@
 /*!
-# FYI Menu: Odds and Ends
+# FYI Menu: Utility Methods
 */
 
 
@@ -76,6 +76,10 @@ pub fn esc_arg(mut s: String) -> String {
 
 #[must_use]
 /// Is A String Only Whitespace?
+///
+/// This will return `true` if the string is empty or only includes ASCII
+/// whitespace. Other characters, including weird Unicode whitespace, result in
+/// a response of `false`.
 pub fn slice_is_whitespace(data: &[u8]) -> bool {
 	let len: usize = data.len();
 	let mut idx: usize = 0;
@@ -123,7 +127,8 @@ where F: FnMut(&String) -> bool {
 
 /// Trim Start.
 ///
-/// Remove all leading values that are empty or contain only ASCII whitespace.
+/// Remove all leading values that are empty or contain only ASCII whitespace
+/// from the beginning of a Vec.
 pub fn vec_trim_start(data: &mut Vec<String>) {
 	let mut idx: usize = 0;
 	let len: usize = data.len();
@@ -140,7 +145,8 @@ pub fn vec_trim_start(data: &mut Vec<String>) {
 		idx += 1;
 	}
 
-	// Unlikely to hit, but you never know.
+	// The loop exits on the first non-empty entry. If we reach this condition,
+	// the whole Vec is empty!
 	if idx != 0 {
 		data.truncate(0);
 	}

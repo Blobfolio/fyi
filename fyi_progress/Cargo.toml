@@ -41,10 +41,6 @@ name = "fp_nice_int"
 harness = false
 
 [[bench]]
-name = "fp_progress"
-harness = false
-
-[[bench]]
 name = "fp_utility"
 harness = false
 

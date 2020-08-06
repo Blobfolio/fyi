@@ -1,7 +1,10 @@
-Print a message using the built-in prefix "{0}", e.g. "{0}: Hello World".
+Print a message using the built-in "{0}" prefix.
+
+EXAMPLE:
+    {1}
 
 USAGE:
-    fyi {1} [FLAGS] [OPTIONS] <MSG>
+    fyi {2} [FLAGS] [OPTIONS] <MSG>
 
 FLAGS:
     -h, --help         Print this screen.

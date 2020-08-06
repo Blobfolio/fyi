@@ -17,10 +17,6 @@ name = "fm_msg"
 harness = false
 
 [[bench]]
-name = "fm_msgbuf"
-harness = false
-
-[[bench]]
 name = "fm_utility"
 harness = false
 

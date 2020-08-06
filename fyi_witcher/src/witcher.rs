@@ -11,7 +11,7 @@ Short and sweet.
 While `Witcher` is light on options — there aren't any! — it can be seeded with
 multiple starting paths using the `Witcher::with_path()` builder pattern. This,
 combined with the general stripped-to-basics codebase, make this a more
-performant option than using crates such as `jwalk` or `walkdir`.
+performant option than using crates such as `jwalk` or `walkdir` in many cases.
 
 ## Examples
 
@@ -93,7 +93,9 @@ macro_rules! from_many {
 
 
 #[derive(Debug, Clone)]
-/// Witching Stuff.
+/// Witcher.
+///
+/// This is the it, folks! See the library documentation for more information.
 pub struct Witcher {
 	/// Paths waiting return or traversal.
 	stack: Vec<PathBuf>,
@@ -171,10 +173,11 @@ impl Iterator for Witcher {
 impl Witcher {
 	/// From File List.
 	///
-	/// Seed the `Witcher` from values stored in a text file.
+	/// Seed the `Witcher` from values stored in a text file, one path per
+	/// line.
 	///
-	/// Note: all paths within the text file must be absolute or they probably
-	/// won't be resolvable.
+	/// Note: relative paths parsed in this manner probably won't resolve
+	/// correctly; it is recommended only absolute paths be used.
 	pub fn read_paths_from_file<P> (path: P) -> Self
 	where P: AsRef<Path> {
 		if let Ok(file) = File::open(path.as_ref()) {
@@ -188,10 +191,7 @@ impl Witcher {
 	/// Add a path to the current Witcher queue.
 	pub fn with_path<P> (mut self, path: P) -> Self
 	where P: AsRef<Path> {
-		if let Ok(path) = fs::canonicalize(path) {
-			self.push(path);
-		}
-
+		if let Ok(path) = fs::canonicalize(path) { self.push(path); }
 		self
 	}
 
@@ -243,8 +243,10 @@ impl Witcher {
 #[allow(clippy::pedantic)] // It gets eaten!
 /// Parallel Loop w/ Progress.
 ///
-/// This loops through dataset with a pretty `Progress`, but keeps track of the
-/// before and after sizes so it can print the difference after the run.
+/// This is an add-on for `Progress` that tallies the before and after sizes,
+/// useful for applications that modify the files being iterated.
+///
+/// See the documentation for `fyi_progress::Progress` for more details.
 pub fn progress_crunch<F> (paths: Progress<PathBuf>, cb: F)
 where F: Fn(&PathBuf) + Send + Sync + Copy {
 	// Abort if missing paths.
@@ -262,7 +264,7 @@ where F: Fn(&PathBuf) + Send + Sync + Copy {
 
 	crunched_in(
 		paths.total().into(),
-		paths.elapsed() as u32,
+		paths.elapsed(),
 		before,
 		du(&*paths)
 	);
@@ -270,12 +272,10 @@ where F: Fn(&PathBuf) + Send + Sync + Copy {
 
 /// Crunched In Msg
 ///
-/// This is similar to `finished_in()`, except before/after disk usage is
-/// included in the summary. If no bytes are saved, the message will end
-/// with "…but nothing doing" instead of "…saving X bytes".
-///
-/// Like the progress bar, this prints to `Stderr`.
+/// This is an alternative progress summary that includes the number of bytes
+/// saved. It is called after `progress_crunch()`.
 fn crunched_in(total: u64, time: u32, before: u64, after: u64) {
+	// No savings or weird values.
 	if 0 == after || before <= after {
 		Msg::from([
 			&inflect(total, "file in ", "files in "),
@@ -285,6 +285,7 @@ fn crunched_in(total: u64, time: u32, before: u64, after: u64) {
 			.with_prefix(MsgKind::Crunched)
 			.eprint();
 	}
+	// Something happened!
 	else {
 		MsgKind::Crunched.into_msg(format!(
 			"{} in {}, saving {} bytes ({:3.*}%).\n",
@@ -301,13 +302,10 @@ fn crunched_in(total: u64, time: u32, before: u64, after: u64) {
 #[allow(trivial_casts)] // Doesn't work without it.
 /// Hash Path.
 ///
-/// We want to make sure we don't go over the same file twice. The fastest
-/// solution seems to be hashing the (canonicalized) path, storing that `u64`
-/// in a `HashSet` for reference.
-///
-/// Ultimately we'll probably want to use Arcs or something so the
-/// authoritative path can just live directly in the set, with the queues
-/// merely sharing a reference.
+/// This method calculates a unique `u64` hash from a canonical `PathBuf` using
+/// the `AHash` algorithm. It is faster than the default `Hash` implementation
+/// because it works against the full byte string, rather than crunching each
+/// path component individually.
 fn hash_path_buf(path: &PathBuf) -> u64 {
 	let mut hasher = AHasher::default();
 	hasher.write(unsafe { &*(path.as_os_str() as *const OsStr as *const [u8]) });

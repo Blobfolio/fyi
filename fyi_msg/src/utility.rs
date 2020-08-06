@@ -1,10 +1,11 @@
 /*!
 # FYI Msg: Utility Methods
-
-A few odds and ends required by this crate.
 */
 
-use std::slice;
+use std::{
+	ptr,
+	slice,
+};
 
 
 
@@ -20,7 +21,8 @@ use std::slice;
 /// value they want, #256 is unsupported.
 ///
 /// The codes are packed as `u128`s as that's a touch more efficient and
-/// compact.
+/// compact. Also worth noting, the packed state requires a Little Endian
+/// to unpack; Big Endian is not supported.
 ///
 /// # Examples
 ///
@@ -39,16 +41,33 @@ pub fn ansi_code_bold(num: u8) -> &'static [u8] {
 	unsafe { slice::from_raw_parts(ANSI.as_ptr().add(num as usize) as *const u8, len) }
 }
 
-#[must_use]
-/// Parse Str Wrapper
+/// Grow `Vec<u8>` From Middle.
 ///
-/// This is just shorthand for parsing an `AsRef<str>` as a `u8`, defaulting to
-/// `0_u8` for gibberish.
+/// This is like `resize()` combined with `range_replace()`, except all it does
+/// is efficiently expand the vector length from the middle out. No particular
+/// data is written to the created space; it might contain values from the
+/// previous occupants (now copied right), or zeroes.
 ///
-/// Nothing fancy, just annoying to type repeatedly.
-pub fn str_to_u8<S> (val: S) -> u8
-where S: AsRef<str> {
-	val.as_ref().parse::<u8>().unwrap_or_default()
+/// If `idx` is out of range, this acts just like `resize()`, with new bytes
+/// added to the end.
+///
+/// The main idea is after calling this, new data should be written to the
+/// slice.
+pub fn grow_buffer_mid(src: &mut Vec<u8>, idx: usize, adj: usize) {
+	let old_len: usize = src.len();
+	src.resize(old_len + adj, 0);
+
+	// Copy everything from the split point to the right.
+	if idx < old_len {
+		let ptr = src.as_mut_ptr();
+		unsafe {
+			ptr::copy(
+				ptr.add(idx),
+				ptr.add(idx + adj),
+				old_len - idx,
+			)
+		}
+	}
 }
 
 #[must_use]
@@ -61,8 +80,8 @@ where S: AsRef<str> {
 /// Out of range always comes back as "59".
 ///
 /// The codes are packed as `u32`s as that's a touch more efficient and
-/// compact.
-///
+/// compact. Also worth noting, the packed state requires a Little Endian
+/// to unpack; Big Endian is not supported.
 ///
 /// # Examples
 ///
@@ -107,14 +126,19 @@ mod tests {
 	}
 
 	#[test]
-	fn t_str_to_u8() {
-		for i in 1..=255 {
-			assert_eq!(
-				str_to_u8(format!("{}", i)),
-				i,
-				"Str-to-u8 is incorrect."
-			);
-		}
+	fn t_grow_buffer_mid() {
+		let mut test: Vec<u8> = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+		grow_buffer_mid(&mut test, 4, 5);
+		assert_eq!(
+			test,
+			vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 4, 5, 6, 7, 8, 9],
+		);
+
+		grow_buffer_mid(&mut test, 15, 5);
+		assert_eq!(
+			test,
+			vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0],
+		);
 	}
 
 	#[test]

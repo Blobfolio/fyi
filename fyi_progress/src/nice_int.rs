@@ -2,7 +2,13 @@
 # FYI Progress: "Nice" Integer
 
 This is a quick way to convert an integer — any unsigned value under a trillion
-— into a formatted byte string. That's it!
+— into a formatted byte string.
+
+That's it!
+
+For values under `1000`, the `itoa` crate is used; for values requiring
+punctuation, `num_format` is used instead. Both are faster than relying on
+`to_string()` or the like.
 */
 
 use std::{

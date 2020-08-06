@@ -1,7 +1,5 @@
 /*!
-# FYI Progress: Utility
-
-This mod contains miscellaneous utility functions for the crate.
+# FYI Progress: Utility Methods
 */
 
 /// String Inflection
@@ -10,27 +8,27 @@ This mod contains miscellaneous utility functions for the crate.
 pub fn inflect<T> (num: u64, one: T, many: T) -> Vec<u8>
 where T: AsRef<str> {
 	if 1 == num {
-		[49, 32].iter()
-			.chain(one.as_ref().as_bytes())
-			.copied()
-			.collect::<Vec<u8>>()
+		[
+			&[49, 32],
+			one.as_ref().as_bytes(),
+		].concat()
 	}
 	else if num < 1000 {
 		let mut buf = itoa::Buffer::new();
-		buf.format(num).as_bytes().iter()
-			.chain(&[32])
-			.chain(many.as_ref().as_bytes())
-			.copied()
-			.collect::<Vec<u8>>()
+		[
+			buf.format(num).as_bytes(),
+			&[32],
+			many.as_ref().as_bytes(),
+		].concat()
 	}
 	else {
 		let mut buf = num_format::Buffer::default();
 		buf.write_formatted(&num, &num_format::Locale::en);
-		buf.as_bytes().iter()
-			.chain(&[32])
-			.chain(many.as_ref().as_bytes())
-			.copied()
-			.collect::<Vec<u8>>()
+		[
+			buf.as_bytes(),
+			&[32],
+			many.as_ref().as_bytes(),
+		].concat()
 	}
 }
 
@@ -67,8 +65,10 @@ pub fn secs_chunks(num: u32) -> [u32; 3] {
 /// This is a simple wrapper around `term_size::dimensions()` to provide
 /// the current terminal column width. We don't have any use for height,
 /// so that property is ignored.
+///
+/// Note: The actual width returned is `1` less than the true value. This helps
+/// account for inconsistent handling of trailing whitespace, etc.
 pub fn term_width() -> usize {
-	// Reserve one space at the end "just in case".
 	term_size::dimensions().map_or(0, |(w, _)| w.saturating_sub(1))
 }
 
