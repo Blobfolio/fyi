@@ -1231,7 +1231,6 @@ where T: ProgressTask + PartialEq + Clone + Sync + Send + 'static {
 
 			// Mark the task as complete.
 			self.remove_doing(x);
-			Self::tick(&self.inner);
 		}));
 	}
 
