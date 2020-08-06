@@ -936,7 +936,7 @@ where T: ProgressTask + PartialEq + Clone {
 		self.print_cls();
 
 		// Update the line count and print!
-		self.last_lines = 1 + bytecount::count(&self.buf, b'\n');
+		self.last_lines = bytecount::count(&self.buf, b'\n');
 		Self::print(&self.buf);
 	}
 
