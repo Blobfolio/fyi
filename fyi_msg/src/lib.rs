@@ -28,11 +28,9 @@
 #![allow(clippy::unknown_clippy_lints)]
 
 mod msg;
-mod msgbuf;
 pub mod utility;
 
 pub use msg::{
 	Msg,
 	MsgKind,
 };
-pub use msgbuf::MsgBuf;

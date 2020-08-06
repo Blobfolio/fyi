@@ -1,6 +1,6 @@
 [package]
 name = "fyi_witcher"
-version = "0.2.8"
+version = "0.2.9"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "FYI is a dead-simple status message printer for CLI use applications."
@@ -21,10 +21,6 @@ path = "../fyi_progress"
 
 [dev-dependencies]
 criterion = "*"
-
-[[bench]]
-name = "fw_utility"
-harness = false
 
 [[bench]]
 name = "fw_witcher"

@@ -33,24 +33,6 @@ fn ansi_code_bold(c: &mut Criterion) {
 	group.finish();
 }
 
-fn str_to_u8(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_msg::utility");
-
-	for val in ["0", "1", "200", "300"].iter() {
-		group.bench_with_input(
-			BenchmarkId::from_parameter(format!("str_to_u8({})", val)),
-			val,
-			|b, &val| {
-				b.iter(||
-					utility::str_to_u8(val)
-				);
-			}
-		);
-	}
-
-	group.finish();
-}
-
 fn time_format_dd(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::utility");
 
@@ -92,7 +74,6 @@ fn whitespace(c: &mut Criterion) {
 criterion_group!(
 	benches,
 	ansi_code_bold,
-	str_to_u8,
 	whitespace,
 	time_format_dd,
 );

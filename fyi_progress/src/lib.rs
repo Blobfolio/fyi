@@ -19,6 +19,7 @@
 #![warn(clippy::suboptimal_flops)]
 #![warn(clippy::unneeded_field_pattern)]
 
+#![allow(clippy::suspicious_else_formatting)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::cast_sign_loss)]
@@ -33,4 +34,8 @@ pub mod utility;
 
 pub use nice_elapsed::NiceElapsed;
 pub use nice_int::NiceInt;
-pub use progress::Progress;
+pub use progress::{
+	Progress,
+	ProgressParallelism,
+	ProgressTask,
+};

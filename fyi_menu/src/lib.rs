@@ -1,5 +1,16 @@
 /*!
-# FYI Menu: Table of Contents
+# FYI Menu
+
+This crate provides a very simple CLI argument parser. It differs from
+`std::env::args()` primarily in that key/value formatting is normalized,
+splitting joint entries like `-kValue` and `--key=Value`.
+
+Actual processing and interpretation of the arguments is left to the coder.
+
+This sort of approach can significantly reduce the overhead of simple CLI apps
+compared to using (excellent but heavy) crates like `clap`.
+
+See the flag documentation below for handling options.
 */
 
 #![warn(missing_docs)]
@@ -27,11 +38,7 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::unknown_clippy_lints)]
 
-pub mod arglist;
-pub use arglist::ArgList;
 pub mod utility;
-
-
 
 use fyi_msg::MsgKind;
 use std::{
@@ -85,7 +92,8 @@ pub enum KeyKind {
 	ShortV,
 	/// A long one.
 	Long,
-	/// A long one with a value chunk.
+	/// A long one with a value chunk. The `usize` indicates the position of
+	/// the `=` character.
 	LongV(usize),
 }
 
@@ -121,7 +129,7 @@ impl From<&[u8]> for KeyKind {
 
 /// Print an Error and Exit.
 pub fn die(msg: &[u8]) {
-	MsgKind::Error.as_msg(unsafe { std::str::from_utf8_unchecked(msg) }).eprintln();
+	MsgKind::Error.into_msg(unsafe { std::str::from_utf8_unchecked(msg) }).eprintln();
 	process::exit(1);
 }
 

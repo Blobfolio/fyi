@@ -1,4 +1,5 @@
-Ask a Yes/No question using the prefix "Confirm", like, "Confirm: Do you like chickens?". FYI will exit with a code of "0" for positive responses, or "1" for negative responses.
+Ask a Yes/No question using the built-in prefix "confirm".
+The exit code corresponds to the positivity of the answer.
 
 USAGE:
     fyi confirm [FLAGS] <MSG>

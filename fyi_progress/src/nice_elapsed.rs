@@ -61,7 +61,7 @@ impl Deref for NiceElapsed {
 	type Target = [u8];
 
 	fn deref(&self) -> &Self::Target {
-		&self.inner[..self.len]
+		&self.inner[0..self.len]
 	}
 }
 
@@ -308,7 +308,7 @@ impl NiceElapsed {
 	#[must_use]
 	/// As String.
 	pub fn as_str(&self) -> &str {
-		unsafe { std::str::from_utf8_unchecked(&*self) }
+		unsafe { std::str::from_utf8_unchecked(&self.inner[0..self.len]) }
 	}
 }
 

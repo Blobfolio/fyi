@@ -11,7 +11,7 @@ Short and sweet.
 While `Witcher` is light on options — there aren't any! — it can be seeded with
 multiple starting paths using the `Witcher::with_path()` builder pattern. This,
 combined with the general stripped-to-basics codebase, make this a more
-performant option than using crates such as `jwalk` or `walkdir`.
+performant option than using crates such as `jwalk` or `walkdir` in many cases.
 
 ## Examples
 
@@ -45,10 +45,7 @@ use ahash::{
 	AHasher,
 	AHashSet
 };
-use crate::utility::{
-	du,
-	inflect,
-};
+use crate::utility::du;
 use fyi_msg::{
 	Msg,
 	MsgKind,
@@ -57,8 +54,8 @@ use fyi_progress::{
 	NiceElapsed,
 	NiceInt,
 	Progress,
+	utility::inflect,
 };
-use rayon::prelude::*;
 use std::{
 	borrow::Borrow,
 	ffi::OsStr,
@@ -77,9 +74,6 @@ use std::{
 		Path,
 		PathBuf,
 	},
-	sync::Arc,
-	thread,
-	time::Duration,
 };
 
 
@@ -96,50 +90,12 @@ macro_rules! from_many {
 	};
 }
 
-/// Helper: Make an Arc<Progress> for the loops.
-macro_rules! make_progress {
-	($name:expr, $len:expr) => (
-		Arc::new(Progress::new(
-			$len,
-			Some(Msg::new($name, 199, "Reticulating splines\u{2026}")),
-		))
-	);
-}
-
-/// Helper: Loop the progress loop inline.
-macro_rules! make_progress_loop {
-	($paths:ident, $progress:ident, $cb:ident) => {
-		// Spawn a thread to steadily tick the progress bar. This is useful
-		// when processes might be too long-running.
-		let pbar2 = $progress.clone();
-		rayon::spawn(move || {
-			let sleep = Duration::from_millis(60);
-
-			loop {
-				pbar2.clone().tick();
-				thread::sleep(sleep);
-
-				// Are we done?
-				if ! pbar2.clone().is_running() {
-					break;
-				}
-			}
-		});
-
-		// Loop the paths!
-		$paths.par_iter().for_each(|x| {
-			let file: &str = x.to_str().unwrap_or_default();
-			$progress.clone().add_task(file);
-			$cb(x);
-			$progress.clone().update(1, None::<String>, Some(file));
-		});
-	};
-}
-
 
 
 #[derive(Debug, Clone)]
-/// Witching Stuff.
+/// Witcher.
+///
+/// This is the it, folks! See the library documentation for more information.
 pub struct Witcher {
 	/// Paths waiting return or traversal.
 	stack: Vec<PathBuf>,
@@ -208,7 +164,7 @@ impl Iterator for Witcher {
 					self.next()
 				}
 				// Return files.
-				else { Some(path) }
+				else { Some(path) },
 			None => None,
 		}
 	}
@@ -217,10 +173,11 @@ impl Iterator for Witcher {
 impl Witcher {
 	/// From File List.
 	///
-	/// Seed the `Witcher` from values stored in a text file.
+	/// Seed the `Witcher` from values stored in a text file, one path per
+	/// line.
 	///
-	/// Note: all paths within the text file must be absolute or they probably
-	/// won't be resolvable.
+	/// Note: relative paths parsed in this manner probably won't resolve
+	/// correctly; it is recommended only absolute paths be used.
 	pub fn read_paths_from_file<P> (path: P) -> Self
 	where P: AsRef<Path> {
 		if let Ok(file) = File::open(path.as_ref()) {
@@ -234,10 +191,7 @@ impl Witcher {
 	/// Add a path to the current Witcher queue.
 	pub fn with_path<P> (mut self, path: P) -> Self
 	where P: AsRef<Path> {
-		if let Ok(path) = fs::canonicalize(path) {
-			self.push(path);
-		}
-
+		if let Ok(path) = fs::canonicalize(path) { self.push(path); }
 		self
 	}
 
@@ -286,86 +240,54 @@ impl Witcher {
 	}
 }
 
-
-
-/// Silent Loop.
-///
-/// This will execute a callback once for each file in the result set using
-/// multiple threads.
-///
-/// This is just a convenience wrapper to prevent the implementing library
-/// having to queue up `rayon` directly.
-pub fn process<F> (paths: &[PathBuf], cb: F)
-where F: Fn(&PathBuf) + Send + Sync {
-	paths.par_iter().for_each(cb);
-}
-
+#[allow(clippy::pedantic)] // It gets eaten!
 /// Parallel Loop w/ Progress.
 ///
-/// Execute your callback once for each file while displaying a `Progress`
-/// progress bar from `fyi_progress`.
+/// This is an add-on for `Progress` that tallies the before and after sizes,
+/// useful for applications that modify the files being iterated.
 ///
-/// Each thread automatically adds the current file name as a "task" at the
-/// start and removes it at the end, so i.e. the progress bar will show which
-/// entries are actively being worked on.
-///
-/// At the end, the progress bar will be cleared and a message will be printed
-/// like: "Crunched: Finished 30 files in 1 minute and 3 seconds."
-pub fn progress<S, F> (paths: &[PathBuf], name: S, cb: F)
-where
-	S: Borrow<str>,
-	F: Fn(&PathBuf) + Send + Sync
-{
-	let pbar = make_progress!(name, paths.len() as u64);
-	make_progress_loop!(paths, pbar, cb);
-	finished_in(pbar.total(), pbar.time().elapsed().as_secs() as u32);
-}
+/// See the documentation for `fyi_progress::Progress` for more details.
+pub fn progress_crunch<F> (paths: Progress<PathBuf>, cb: F)
+where F: Fn(&PathBuf) + Send + Sync + Copy {
+	// Abort if missing paths.
+	if paths.is_empty() {
+		MsgKind::Warning.into_msg("No matching files were found.\n")
+			.eprint();
 
-/// Parallel Loop w/ Progress.
-///
-/// This is the same as calling `progress()`, except that it will add up the
-/// total disk size of files before and after and report any savings in the
-/// final message.
-///
-/// If your operation doesn't affect file sizes, or doesn't need a size summary
-/// at the end, use one of the other loops (or write your own) instead.
-pub fn progress_crunch<S, F> (paths: &[PathBuf], name: S, cb: F)
-where
-	S: Borrow<str>,
-	F: Fn(&PathBuf) + Send + Sync
-{
-	let pbar = make_progress!(name, paths.len() as u64);
-	let before: u64 = du(paths);
+		return;
+	}
 
-	make_progress_loop!(paths, pbar, cb);
+	// Add up the space used before the run.
+	let before: u64 = du(&*paths);
+
+	paths.run(cb);
 
 	crunched_in(
-		pbar.total(),
-		pbar.time().elapsed().as_secs() as u32,
+		paths.total().into(),
+		paths.elapsed(),
 		before,
-		du(paths)
+		du(&*paths)
 	);
 }
 
 /// Crunched In Msg
 ///
-/// This is similar to `finished_in()`, except before/after disk usage is
-/// included in the summary. If no bytes are saved, the message will end
-/// with "…but nothing doing" instead of "…saving X bytes".
-///
-/// Like the progress bar, this prints to `Stderr`.
+/// This is an alternative progress summary that includes the number of bytes
+/// saved. It is called after `progress_crunch()`.
 fn crunched_in(total: u64, time: u32, before: u64, after: u64) {
+	// No savings or weird values.
 	if 0 == after || before <= after {
-		MsgKind::Crunched.as_msg(unsafe {
-			std::str::from_utf8_unchecked(&[
-				&inflect(total, "file in ", "files in "),
-				&*NiceElapsed::from(time),
-				b", but nothing doing.\n",
-			].concat())
-		}).eprint();
+		Msg::from([
+			&inflect(total, "file in ", "files in "),
+			&*NiceElapsed::from(time),
+			b", but nothing doing.\n",
+		].concat())
+			.with_prefix(MsgKind::Crunched)
+			.eprint();
 	}
+	// Something happened!
 	else {
-		MsgKind::Crunched.as_msg(format!(
+		MsgKind::Crunched.into_msg(format!(
 			"{} in {}, saving {} bytes ({:3.*}%).\n",
 			unsafe { std::str::from_utf8_unchecked(&inflect(total, "file", "files")) },
 			NiceElapsed::from(time).as_str(),
@@ -376,32 +298,14 @@ fn crunched_in(total: u64, time: u32, before: u64, after: u64) {
 	}
 }
 
-/// Finished In Msg
-///
-/// Print a simple summary like "Crunched: 1 file in 2 seconds.".
-///
-/// Like the progress bar, this prints to `Stderr`.
-fn finished_in(total: u64, time: u32) {
-	MsgKind::Crunched.as_msg(unsafe {
-		std::str::from_utf8_unchecked(&[
-			&inflect(total, "file in ", "files in "),
-			&*NiceElapsed::from(time),
-			&[46, 10],
-		].concat())
-	}).eprint();
-}
-
 #[must_use]
 #[allow(trivial_casts)] // Doesn't work without it.
 /// Hash Path.
 ///
-/// We want to make sure we don't go over the same file twice. The fastest
-/// solution seems to be hashing the (canonicalized) path, storing that `u64`
-/// in a `HashSet` for reference.
-///
-/// Ultimately we'll probably want to use Arcs or something so the
-/// authoritative path can just live directly in the set, with the queues
-/// merely sharing a reference.
+/// This method calculates a unique `u64` hash from a canonical `PathBuf` using
+/// the `AHash` algorithm. It is faster than the default `Hash` implementation
+/// because it works against the full byte string, rather than crunching each
+/// path component individually.
 fn hash_path_buf(path: &PathBuf) -> u64 {
 	let mut hasher = AHasher::default();
 	hasher.write(unsafe { &*(path.as_os_str() as *const OsStr as *const [u8]) });
