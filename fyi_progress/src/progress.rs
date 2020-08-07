@@ -20,7 +20,7 @@ list of the currently running tasks is printed after the main line.
 ```no_run
 use fyi_msg::MsgKind;
 use fyi_progress::Progress;
-use fyi_progress::ProgressParallelism;
+use fyi_progress::utility;
 
 // An example callback function.
 fn tally_food(food: &str) { ... }
@@ -35,9 +35,10 @@ let p2 = Progress::new(
     MsgKind::Info.into_msg("Checking out the produce."),
 );
 
-// Parallelism can be disabled or modified:
+// Parallelism can be disabled or modified. Use `0` for auto — number of
+// reported threads — or any positive number for that specific number.
 let p3 = Progress::from(vec!["Apples", "Bananas", "Carrots"])
-    .with_threads(ProgressParallelism::Heavy);
+    .with_threads(utility::num_threads() * 2);
 
 // If you want to iterate a collection *without* a progress bar, but using the
 // built-in parallelism, you could use this method instead of `run()`:
@@ -45,7 +46,10 @@ p3.silent(|f| tally_food(f));
 ```
 */
 
-use ahash::AHasher;
+use ahash::{
+	AHasher,
+	AHashSet,
+};
 use crate::{
 	NiceElapsed,
 	NiceInt,
@@ -65,10 +69,7 @@ use fyi_msg::{
 };
 use rayon::prelude::*;
 use std::{
-	cmp::{
-		Ordering,
-		PartialEq,
-	},
+	cmp::Ordering,
 	ffi::OsStr,
 	hash::{
 		Hash,
@@ -85,6 +86,10 @@ use std::{
 	path::PathBuf,
 	sync::{
 		Arc,
+		atomic::{
+			AtomicBool,
+			Ordering::SeqCst,
+		},
 		Mutex,
 	},
 	thread,
@@ -117,7 +122,6 @@ macro_rules! mutex_ptr {
 const FLAG_ALL: u8 =          0b0111_1111;
 const FLAG_RESIZED: u8 =      0b0001_0011;
 const FLAG_START_FROM: u8 =   0b0110_0001;
-const FLAG_START_NEW: u8 =    0b0111_0001;
 
 const FLAG_RUNNING: u8 =      0b0100_0000;
 
@@ -130,10 +134,8 @@ const FLAG_TICK_TOTAL: u8 =   0b0010_0000;
 
 /// Buffer Indexes.
 ///
-/// The `ProgressBuffer` stores the entire output as a single byte stream. The
-/// start and end points of the malleable components are stored separately to
-/// make it easier to surgically modify the buffer. The indexes of those parts
-/// are as follows.
+/// The start and end points of the malleable progress components are stored in
+/// an array for easy access. These are their indexes.
 const PART_TITLE: usize = 0;
 const PART_ELAPSED: usize = 1;
 const PART_BARS: usize = 2;
@@ -141,6 +143,10 @@ const PART_DONE: usize = 3;
 const PART_TOTAL: usize = 4;
 const PART_PERCENT: usize = 5;
 const PART_DOING: usize = 6;
+
+/// Misc Variables.
+const MIN_BARS_WIDTH: usize = 10;
+const MIN_DRAW_WIDTH: usize = 40;
 
 
 
@@ -166,10 +172,7 @@ impl ProgressBufferRange {
 	/// however `start` must be less than or equal to `end`. The struct is
 	/// private, so this is more a Note-to-Self than anything.
 	pub const fn new(start: usize, end: usize) -> Self {
-		Self {
-			start,
-			end,
-		}
+		Self { start, end }
 	}
 
 	/// Range.
@@ -203,6 +206,7 @@ impl ProgressBufferRange {
 		self.end += adj;
 	}
 
+	#[allow(dead_code)] // We'll probably want this some day.
 	/// Is Empty.
 	///
 	/// Returns true if the range is empty.
@@ -227,19 +231,27 @@ impl ProgressBufferRange {
 
 
 
-#[derive(Debug, Clone)]
-/// Progress Buffer.
-///
-/// To cut down on rewrites and allocations, the components of the progress bar
-/// are stored in a single `Vec<u8>` buffer. A partition table keeps track of
-/// the start end end bounds of the malleable bits so that they can be updated
-/// in-place.
-struct ProgressBuffer {
+#[derive(Debug)]
+struct ProgressInner<T>
+where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 	buf: Vec<u8>,
-	parts: [ProgressBufferRange; 7],
+	buf_toc: [ProgressBufferRange; 7],
+	doing: AHashSet<T>,
+	done: u32,
+	elapsed: u32,
+	flags: u8,
+	last_hash: u64,
+	last_lines: usize,
+	last_time: u128,
+	last_width: usize,
+	threads: usize,
+	time: Instant,
+	title: Vec<u8>,
+	total: u32,
 }
 
-impl Default for ProgressBuffer {
+impl<T> Default for ProgressInner<T>
+where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 	fn default() -> Self {
 		Self {
 			buf: vec![
@@ -280,7 +292,7 @@ impl Default for ProgressBuffer {
 
 			//  Doing would go here.
 			],
-			parts: [
+			buf_toc: [
 				ProgressBufferRange::new(0, 0),   // Title.
 				ProgressBufferRange::new(11, 19), // Elapsed.
 				ProgressBufferRange::new(32, 32), // Bar(s).
@@ -289,343 +301,51 @@ impl Default for ProgressBuffer {
 				ProgressBufferRange::new(65, 70), // Percent.
 				ProgressBufferRange::new(75, 75), // Current Tasks.
 			],
-		}
-	}
-}
-
-impl Deref for ProgressBuffer {
-	type Target = [u8];
-
-	/// Deref to Slice.
-	fn deref(&self) -> &Self::Target { self.as_bytes() }
-}
-
-impl Hash for ProgressBuffer {
-	fn hash<H: Hasher>(&self, state: &mut H) {
-		self.buf.hash(state);
-	}
-}
-
-impl ProgressBuffer {
-	/// As Bytes.
-	pub fn as_bytes(&self) -> &[u8] { &self.buf }
-
-	/// Get an `AHash`.
-	pub fn calculate_hash(&self) -> u64 {
-		let mut hasher = AHasher::default();
-		self.hash(&mut hasher);
-		hasher.finish()
-	}
-
-	/// Part Length.
-	///
-	/// Get the length of a given part.
-	///
-	/// Panics if `idx` is out of range.
-	pub const fn part_len(&self, idx: usize) -> usize {
-		self.parts[idx].len()
-	}
-
-	/// Part Mut.
-	///
-	/// Return a mutable buffer slice corresponding to a given part.
-	///
-	/// Panics if `idx` is out of range.
-	pub fn part_mut(&mut self, idx: usize) -> &mut [u8] {
-		assert!(idx < 7);
-
-		let r = self.parts[idx].as_range();
-		&mut self.buf[r]
-	}
-
-	/// Replace Part.
-	///
-	/// Replace a part. The new value can be of any size, including no size.
-	/// The buffer and partition table will be updated accordingly.
-	///
-	/// Panics if `idx` is out of range.
-	pub fn replace_part(&mut self, idx: usize, buf: &[u8]) {
-		self.resize_part(idx, buf.len());
-		if ! buf.is_empty() {
-			self.part_mut(idx).copy_from_slice(buf);
-		}
-	}
-
-	#[allow(clippy::comparison_chain)] // We're only matching two arms.
-	/// Resize Part.
-	///
-	/// This is a helper method to resize the part (without writing any
-	/// particular data to it).
-	///
-	/// If the new length is shorter, the part will be shrunk; if it is bigger,
-	/// it will be expanded. When expanding from the middle, data at the split
-	/// is copied to the right. No guarantees are made about the content in the
-	/// newly created space. It might reflect old values or zeroes. Either way
-	/// it will need to be written to after this action.
-	fn resize_part(&mut self, idx: usize, len: usize) {
-		let old_len: usize = self.parts[idx].len();
-
-		// Shrink it.
-		if len < old_len {
-			self.resize_part_shrink(idx, old_len - len);
-		}
-		// Grow it.
-		else if old_len < len {
-			self.resize_part_grow(idx, len - old_len);
-		}
-	}
-
-	/// Resize Part: Grow.
-	fn resize_part_grow(&mut self, idx: usize, adj: usize) {
-		// Add extra bytes to the end.
-		grow_buffer_mid(&mut self.buf, self.parts[idx].end, adj);
-
-		// Adjust the parts table.
-		self.parts[idx].grow(adj);
-		self.parts.iter_mut()
-			.skip(idx + 1)
-			.for_each(|x| x.increment(adj));
-	}
-
-	/// Resize Part: Shrink.
-	fn resize_part_shrink(&mut self, idx: usize, adj: usize) {
-		// Truncate the end.
-		if idx ==  PART_DOING {
-			self.buf.truncate(self.buf.len() - adj);
-		}
-		// Snip out the range.
-		else {
-			self.buf.drain(self.parts[idx].end - adj..self.parts[idx].end);
-		}
-
-		// Adjust the parts table.
-		self.parts[idx].shrink(adj);
-		self.parts.iter_mut()
-			.skip(idx + 1)
-			.for_each(|x| x.decrement(adj));
-	}
-
-	/// Write Bars.
-	///
-	/// Update the bar component of the buffer. There are actually three bars:
-	/// completed tasks; in-progress tasks; and remaining tasks. Each is
-	/// represented by a width relative to the total number of tasks, and
-	/// color-coded for beauty.
-	pub fn write_bars(&mut self, done: usize, doing: usize, undone: usize) {
-		static BAR: &[u8; 255] = &[b'#'; 255];
-
-		// No bar.
-		if done + doing + undone == 0 {
-			self.resize_part(PART_BARS, 0);
-		}
-		// Some bar.
-		else {
-			self.replace_part(PART_BARS, &[
-				b"\x1b[2m[\x1b[0;1;96m",
-				&BAR[0..done],
-				b"\x1b[0;1;95m",
-				&BAR[0..doing],
-				b"\x1b[0;1;34m",
-				&BAR[0..undone],
-				b"\x1b[0;2m]\x1b[0m  ",
-			].concat());
-		}
-	}
-
-	/// Write Doing.
-	///
-	/// Update the in-progress task portion of the buffer, which prints after
-	/// the main line.
-	///
-	/// Tasks are not outputted when running in single-threaded mode as that
-	/// would require ticking twice per run, which is a bit much.
-	pub fn write_doing<T> (&mut self, doing: &[T], width: usize)
-	where T: ProgressTask + PartialEq + Clone {
-		if doing.is_empty() {
-			self.resize_part(PART_DOING, 0);
-		}
-		else {
-			self.replace_part(
-				PART_DOING,
-				&doing.iter()
-					.flat_map(|x| x.task_line(width))
-					.collect::<Vec<u8>>()
-			);
-		}
-	}
-
-	/// Write Done.
-	///
-	/// Update the "done" portion of the buffer. This is just a number, but
-	/// optimized table-based byte conversions are done instead of calling
-	/// `to_string()`.
-	pub fn write_done(&mut self, done: u32) {
-		self.replace_part(PART_DONE, &*NiceInt::from(done));
-	}
-
-	/// Write Elapsed.
-	///
-	/// Update the elapsed time portion of the buffer. This is displayed in
-	/// `hh:mm:ss` format. It is assumed no single progress will be running for
-	/// longer than a day, but if that should happen, the value will remain
-	/// fixed at `23:59:59`.
-	pub fn write_elapsed(&mut self, secs: u32) {
-		// The value is capped at 86400, i.e. one day.
-		if secs == 86400 {
-			self.part_mut(PART_ELAPSED).copy_from_slice(b"23:59:59");
-		}
-		// For everything else, we need to parse it into bigger units.
-		else {
-			let c = utility::secs_chunks(secs);
-			let buf = self.part_mut(PART_ELAPSED);
-			buf[..2].copy_from_slice(time_format_dd(c[0]));
-			buf[3..5].copy_from_slice(time_format_dd(c[1]));
-			buf[6..].copy_from_slice(time_format_dd(c[2]));
-		}
-	}
-
-	/// Write Percent.
-	///
-	/// Update the "percent" portion of the buffer. Values are displayed to two
-	/// decimal places.
-	pub fn write_percent(&mut self, percent: f64) {
-		self.replace_part(
-			PART_PERCENT,
-			format!("{:>3.*}%", 2, percent * 100.0).as_bytes()
-		);
-	}
-
-	/// Write Title.
-	///
-	/// Update the "title" portion of the buffer, which, if present, is printed
-	/// before the main line.
-	pub fn write_title(&mut self, title: Option<&Msg>, width: usize) {
-		match title {
-			Some(m) => {
-				let mut m = m.to_vec();
-				m.fit_to_range(width - 1);
-				m.push(b'\n');
-
-				// Write it!
-				self.replace_part(PART_TITLE, &m);
-			},
-			None =>
-				if ! self.parts[PART_TITLE].is_empty() {
-					self.resize_part(PART_TITLE, 0);
-				},
-		}
-	}
-
-	/// Write Total.
-	///
-	/// Update the "total" portion of the buffer. This is just a number, but
-	/// optimized table-based byte conversions are done instead of calling
-	/// `to_string()`.
-	pub fn write_total(&mut self, total: u32) {
-		self.replace_part(PART_TOTAL, &*NiceInt::from(total));
-	}
-}
-
-
-
-#[derive(Debug, Clone)]
-/// Inner Progress.
-///
-/// This struct holds the "stateful" data for a `Progress`. This includes all
-/// of the progress-related values, the buffer, and information about the last
-/// print job.
-///
-/// None of these values are themselves thread-safe, but the `Progress` struct
-/// holds an `Arc<Mutex<ProgressInner>>`, which serves the same purpose with
-/// less overhead.
-struct ProgressInner<T>
-where T: ProgressTask + PartialEq + Clone {
-	/// Current tasks.
-	doing: Vec<T>,
-	/// Amount complete.
-	done: u32,
-	/// Total amount.
-	total: u32,
-	/// The initiation time.
-	time: Instant,
-	/// Progress bar title.
-	title: Option<Msg>,
-	/// Formatted progress bar components.
-	///
-	/// Each section of the progress bar is stored in its own array slot where
-	/// it can be edited independently of the others. Printing still requires
-	/// concatenation, but this lets us rest halfway.
-	buf: ProgressBuffer,
-	/// Flags.
-	///
-	/// These flags mostly track state changes by field since the last tick.
-	/// This way, the buffer need not be rewritten on each individual update,
-	/// but once — for changed fields only — during the global `tick()` call.
-	flags: u8,
-	/// Hash.
-	///
-	/// This is a hash of the last buffer sent for print, allowing us to avoid
-	/// duplicate consecutive print jobs.
-	last_hash: u64,
-	/// Lines Printed.
-	///
-	/// This keeps track of the number of lines in the last print job so that
-	/// as many lines can be erased before starting the next print job.
-	last_lines: usize,
-	/// Elapsed Time.
-	///
-	/// This stores the number of seconds elapsed at the time of the last
-	/// print. This is compared against the current elapsed seconds from `time`
-	/// to see if the buffer requires an update.
-	last_secs: u32,
-	/// Screen Width.
-	///
-	/// This keeps track of the terminal width from the last print as a change
-	/// could require redrawing portions of the progress bar whose values may
-	/// remain the same.
-	last_width: usize,
-}
-
-impl<T> Default for ProgressInner<T>
-where T: ProgressTask + PartialEq + Clone {
-	/// Default.
-	///
-	/// The default is empty with a few of the constant (formatting-related)
-	/// pieces pre-entered.
-	fn default() -> Self {
-		Self {
-			doing: Vec::new(),
+			doing: AHashSet::new(),
 			done: 0,
-			total: 0,
-			time: Instant::now(),
-			title: None,
-			buf: ProgressBuffer::default(),
-			flags: 0,
+			elapsed: 0,
+			flags: FLAG_ALL & ! FLAG_RUNNING,
 			last_hash: 0,
 			last_lines: 0,
-			last_secs: 0,
+			last_time: 0,
 			last_width: 0,
+			threads: 0,
+			time: Instant::now(),
+			title: Vec::new(),
+			total: 0,
 		}
 	}
 }
 
 impl<T> ProgressInner<T>
-where T: ProgressTask + PartialEq + Clone {
+where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 	// ------------------------------------------------------------------------
 	// Getters
 	// ------------------------------------------------------------------------
 
-	/// Number Done.
+	/// Done.
 	pub fn done(&self) -> u32 { self.done }
 
 	/// Elapsed (Seconds).
-	pub fn elapsed(&self) -> u32 { 86400.min(self.time.elapsed().as_secs() as u32) }
+	pub fn elapsed(&self) -> u32 {
+		86400.min(self.time.elapsed().as_secs() as u32)
+	}
 
-	/// Percent Done.
+	/// Percent.
 	pub fn percent(&self) -> f64 {
 		if self.total == 0 || self.done == 0 { 0.0 }
 		else if self.done == self.total { 1.0 }
-		else { f64::from(self.done) / f64::from(self.total) }
+		else {
+			f64::from(self.done) / f64::from(self.total)
+		}
+	}
+
+	/// Threads.
+	pub fn threads(&self) -> usize {
+		match self.threads {
+			0 => num_cpus::get(),
+			x => x,
+		}
 	}
 
 	/// Total.
@@ -637,280 +357,75 @@ where T: ProgressTask + PartialEq + Clone {
 	// Setters
 	// ------------------------------------------------------------------------
 
-	/// Increment Done.
+	/// End Task.
 	///
-	/// Increase the number of tasks completed by one.
-	pub fn increment(&mut self) {
-		self.set_done(self.done + 1);
-	}
-
-	/// Remove A Task.
-	///
-	/// Remove a task from the currently-running list, and increment `done` by
+	/// Remove a task from the currently-running list and increment `done` by
 	/// one.
-	pub fn remove_doing(&mut self, task: &T) {
-		if let Some(idx) = self.doing.iter().position(|x| x == task) {
+	pub fn end_task(&mut self, task: &T) {
+		if self.doing.remove(task) {
 			self.flags |= FLAG_TICK_DOING | FLAG_TICK_BAR;
-			self.doing.remove(idx);
 			self.increment();
 		}
 	}
 
-	/// Add A Task.
+	/// Increment.
 	///
-	/// A new task to the currently-running list.
-	pub fn set_doing(&mut self, task: T) {
-		if ! self.doing.contains(&task) {
-			self.flags |= FLAG_TICK_DOING | FLAG_TICK_BAR;
-			self.doing.push(task);
-		}
-	}
-
-	/// Set Done.
-	///
-	/// Update the amount done. Once this value reaches or exceeds the total,
-	/// the progress bar is stopped.
-	fn set_done(&mut self, done: u32) {
-		let done: u32 = self.total.min(done);
-		if done != self.done {
-			// We're done!
-			if done == self.total {
-				self.stop();
-			}
-			// We just moved a bit.
+	/// Increment `done` by one. If this reaches the total, it will
+	/// automatically trigger a stop.
+	pub fn increment(&mut self) {
+		let new_done = self.total.min(self.done + 1);
+		if new_done != self.done {
+			if new_done == self.total { self.stop(); }
 			else {
 				self.flags |= FLAG_TICK_DONE | FLAG_TICK_PERCENT | FLAG_TICK_BAR;
-				self.done = done;
+				self.done = new_done;
 			}
 		}
 	}
 
-	/// Update the title.
-	pub fn set_title(&mut self, title: Option<Msg>) {
-		if self.title != title {
+	/// Set Threads.
+	///
+	/// The number of threads to use for iteration. A value of `0` implies
+	/// "auto", which defaults to the number of available threads. Any other
+	/// value indicates exactly that number of threads.
+	///
+	/// To not run anything in parallel, use a value of `1`.
+	pub fn set_threads(&mut self, threads: usize) {
+		self.threads = match threads {
+			0 => num_cpus::get(),
+			x => x,
+		};
+	}
+
+	/// Set Title.
+	///
+	/// To remove a title, pass an empty string.
+	pub fn set_title<S> (&mut self, title: S)
+	where S: AsRef<str> {
+		let title: &[u8] = title.as_ref().as_bytes();
+		if self.title.ne(&title) {
+			self.title.truncate(0);
+			if ! title.is_empty() {
+				self.title.extend_from_slice(title);
+			}
+
 			self.flags |= FLAG_TICK_TITLE;
-			self.title = title;
 		}
 	}
 
-	/// Stop Progress.
+	/// Start Task.
 	///
-	/// This operation disables the running state. More specifically, it will
-	/// reset the flags, set `done` equal to `total`, clear the title and
-	/// tasks, and erase any output from the screen.
-	pub fn stop(&mut self) {
-		self.flags = FLAG_ALL & ! FLAG_RUNNING;
-		self.done = self.total;
-		self.doing.truncate(0);
-		self.title = None;
-
-		self.print_blank();
-	}
-
-
-
-	// ------------------------------------------------------------------------
-	// Tick
-	// ------------------------------------------------------------------------
-
-	/// Tick.
-	///
-	/// This method will rewrite and print the buffer (e.g. progress bar) if
-	/// any of that data changed since the last call.
-	///
-	/// If the progress bar is inactive, no action is taken.
-	///
-	/// This method returns `true` if a print was at least considered, `false`
-	/// if the instance is inactive.
-	pub fn tick(&mut self) -> bool {
-		// We aren't running!
-		if 0 == self.flags & FLAG_RUNNING {
-			return false;
-		}
-
-		// Check the current terminal width first as that affects a lot of what
-		// follows.
-		self.tick_set_width();
-
-		// We can't really draw anything meaningful in small spaces.
-		if self.last_width < 40 {
-			self.flags = FLAG_RUNNING;
-			self.print_blank();
-			return true;
-		}
-
-		// If the time hasn't changed, and nothing else has changed, we can
-		// abort without all the tedious checking.
-		if ! self.tick_set_secs() && self.flags == FLAG_RUNNING {
-			return true;
-		}
-
-		// Handle the rest!
-		self.tick_set_doing();
-		self.tick_set_done();
-		self.tick_set_percent();
-		self.tick_set_title();
-		self.tick_set_total();
-
-		// The bar's width depends on how much space remains after the other
-		// elements sharing its line so it needs to go last.
-		self.tick_set_bar();
-
-		// Maybe we're printing, maybe we're not!
-		self.preprint();
-
-		true
-	}
-
-	/// Tick Bar Dimensions.
-	///
-	/// This calculates the available widths for each of the three progress
-	/// bars (done, doing, remaining).
-	///
-	/// If the total available space winds up being less than 10, all three
-	/// values are set to zero, indicating this component should be removed.
-	fn tick_bar_widths(&self) -> (usize, usize, usize) {
-		// The magic "11" is made up of the following hard-coded pieces:
-		// 2: braces around elapsed time;
-		// 2: spaces after elapsed time;
-		// 1: the "/" between done and total;
-		// 2: the spaces after total;
-		// 2: the braces around the bar itself (should there be one);
-		// 2: the spaces after the bar itself (should there be one);
-		let space: usize = 255_usize.min(self.last_width.saturating_sub(
-			11 +
-			self.buf.part_len(PART_ELAPSED) +
-			self.buf.part_len(PART_DONE) +
-			self.buf.part_len(PART_TOTAL) +
-			self.buf.part_len(PART_PERCENT)
-		));
-
-		// Insufficient space!
-		if space < 10 || 0 == self.total { (0, 0, 0) }
-		// Done!
-		else if self.done == self.total { (space, 0, 0) }
-		// Working on it!
-		else {
-			// Done and doing are both floored to prevent rounding-related
-			// overflow. Any remaining space will be counted as "pending".
-			let done: usize = num_integer::div_floor(
-				self.done as usize * space,
-				self.total as usize
-			);
-			let doing: usize = num_integer::div_floor(
-				self.doing.len() * space,
-				self.total as usize
-			);
-			(done, doing, space - doing - done)
-		}
-	}
-
-	/// Tick Bar.
-	///
-	/// This redraws the actual progress *bar* portion of the buffer, which is
-	/// actually three different bars squished together: Done, Doing, and
-	/// Pending.
-	///
-	/// The combined width of the `###` will never exceed 255, and will never
-	/// be less than 10.
-	fn tick_set_bar(&mut self) {
-		if 0 != self.flags & FLAG_TICK_BAR {
-			self.flags &= ! FLAG_TICK_BAR;
-			let (done, doing, undone) = self.tick_bar_widths();
-			self.buf.write_bars(done, doing, undone);
-		}
-	}
-
-	/// Tick Doing.
-	///
-	/// Update the task list portion of the buffer. This is triggered both by
-	/// changes to the task list as well as resoluation changes (as long values
-	/// may require lazy cropping).
-	fn tick_set_doing(&mut self) {
-		if 0 != self.flags & FLAG_TICK_DOING {
-			self.flags &= ! FLAG_TICK_DOING;
-			self.buf.write_doing(&self.doing, self.last_width);
-		}
-	}
-
-	/// Tick Done.
-	///
-	/// This updates the "done" portion of the buffer as needed.
-	fn tick_set_done(&mut self) {
-		if 0 != self.flags & FLAG_TICK_DONE {
-			self.flags &= ! FLAG_TICK_DONE;
-			self.buf.write_done(self.done);
-		}
-	}
-
-	/// Tick Percent.
-	///
-	/// This updates the "percent" portion of the buffer as needed.
-	fn tick_set_percent(&mut self) {
-		if 0 != self.flags & FLAG_TICK_PERCENT {
-			self.flags &= ! FLAG_TICK_PERCENT;
-			self.buf.write_percent(self.percent());
-		}
-	}
-
-	/// Tick Elapsed Seconds.
-	///
-	/// The precision of `Instant` is greater than we need for printing
-	/// purposes; here we're just looking to see if one or more seconds have
-	/// elapsed since the last tick.
-	///
-	/// Because this is relative to the tick rather than the overall state of
-	/// progress, it has no corresponding tick flag.
-	///
-	/// A value of `true` is returned if one or more seconds has elapsed since
-	/// the last tick, otherwise `false` is returned.
-	fn tick_set_secs(&mut self) -> bool {
-		let secs: u32 = self.elapsed();
-		if secs == self.last_secs { false }
-		else {
-			self.last_secs = secs;
-			self.buf.write_elapsed(secs);
-			true
-		}
-	}
-
-	/// Tick Title.
-	///
-	/// The title needs to be rewritten both on direct change and resolution
-	/// change. Long titles are lazy-cropped as needed.
-	fn tick_set_title(&mut self) {
-		if 0 != self.flags & FLAG_TICK_TITLE {
-			self.flags &= ! FLAG_TICK_TITLE;
-			self.buf.write_title(self.title.as_ref(), self.last_width);
-		}
-	}
-
-	/// Tick Total.
-	///
-	/// This updates the "total" portion of the buffer as needed.
-	fn tick_set_total(&mut self) {
-		if 0 != self.flags & FLAG_TICK_TOTAL {
-			self.flags &= ! FLAG_TICK_TOTAL;
-			self.buf.write_total(self.total);
-		}
-	}
-
-	/// Tick Width.
-	///
-	/// Check to see if the terminal width has changed since the last run and
-	/// update values — i.e. the relevant tick flags — as necessary.
-	fn tick_set_width(&mut self) {
-		let width = utility::term_width();
-		if width != self.last_width {
-			self.flags |= FLAG_RESIZED;
-			self.last_width = width;
+	/// Add a task to the currently-running list.
+	pub fn start_task(&mut self, task: T) {
+		if self.doing.insert(task) {
+			self.flags |= FLAG_TICK_DOING | FLAG_TICK_BAR;
 		}
 	}
 
 
 
 	// ------------------------------------------------------------------------
-	// Render
+	// Other Ops
 	// ------------------------------------------------------------------------
 
 	/// Preprint.
@@ -926,7 +441,11 @@ where T: ProgressTask + PartialEq + Clone {
 
 		// Make sure the content is unique, otherwise we can leave the old bits
 		// up.
-		let hash = self.buf.calculate_hash();
+		let hash = {
+			let mut hasher = AHasher::default();
+			self.buf.hash(&mut hasher);
+			hasher.finish()
+		};
 		if hash == self.last_hash {
 			return;
 		}
@@ -936,11 +455,13 @@ where T: ProgressTask + PartialEq + Clone {
 		self.print_cls();
 
 		// Update the line count and print!
-		self.last_lines = 1 + bytecount::count(&self.buf, b'\n');
+		self.last_lines = bytecount::count(&self.buf, b'\n');
 		Self::print(&self.buf);
 	}
 
 	/// Print Blank.
+	///
+	/// This simply resets the hash and clears any prior output.
 	fn print_blank(&mut self) {
 		if self.last_hash != 0 {
 			self.last_hash = 0;
@@ -1033,59 +554,317 @@ where T: ProgressTask + PartialEq + Clone {
 			.eprint()
 		}
 	}
-}
 
-
-
-#[derive(Debug, Copy, Clone, Hash, PartialEq)]
-/// Degree of Parallelism.
-///
-/// By default, one parallel thread will be spawned for each (reported) CPU
-/// core. Depending on the types of workload, `Light` or `Heavy` parallelism
-/// could be a better choice.
-///
-/// Parallelism can be explicitly disabled using `None`.
-pub enum ProgressParallelism {
-	/// One thread.
-	None,
-	/// Half cores.
-	Light,
-	/// Leave one core open.
-	Reserve,
-	/// Use all cores.
-	Default,
-	/// Double cores.
-	Heavy,
-}
-
-impl Default for ProgressParallelism {
-	fn default() -> Self { Self::Default }
-}
-
-impl Eq for ProgressParallelism {}
-
-impl Ord for ProgressParallelism {
-	fn cmp(&self, other: &Self) -> Ordering {
-		self.threads().cmp(&other.threads())
+	/// Stop.
+	pub fn stop(&mut self) {
+		self.flags = FLAG_ALL & ! FLAG_RUNNING;
+		self.done = self.total;
+		self.doing.clear();
+		self.print_blank();
 	}
-}
 
-impl PartialOrd for ProgressParallelism {
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		Some(self.cmp(other))
+	/// Tick.
+	///
+	/// Ticking takes all of the changed values (since the last tick), updates
+	/// their corresponding parts in the buffer, and prints the result, if any.
+	pub fn tick(&mut self) -> bool {
+		// We aren't running!
+		if 0 == self.flags & FLAG_RUNNING {
+			return false;
+		}
+
+		// We don't want to tick too often... that will just look bad.
+		let ms = self.time.elapsed().as_millis();
+		if ms.saturating_sub(self.last_time) < 50 {
+			return true;
+		}
+		self.last_time = ms;
+
+		// Check the terminal width first because it affects most of what
+		// follows.
+		self.tick_set_width();
+		if self.last_width < MIN_DRAW_WIDTH {
+			self.flags = FLAG_RUNNING;
+			self.print_blank();
+			return true;
+		}
+
+		// If the time hasn't changed, and nothing else has changed, we can
+		// abort without all the tedious checking.
+		if ! self.tick_set_secs() && self.flags == FLAG_RUNNING {
+			return true;
+		}
+
+		// Handle the rest!
+		self.tick_set_doing();
+		self.tick_set_done();
+		self.tick_set_percent();
+		self.tick_set_title();
+		self.tick_set_total();
+
+		// The bar's width depends on how much space remains after the other
+		// elements sharing its line so it needs to go last.
+		self.tick_set_bar();
+
+		// Maybe we're printing, maybe we're not!
+		self.preprint();
+
+		true
 	}
-}
 
-impl ProgressParallelism {
-	#[must_use]
-	/// Number of Threads.
-	pub fn threads(self) -> usize {
-		match self {
-			Self::None => 1,
-			Self::Light => 1.max(num_integer::div_floor(num_cpus::get(), 2)),
-			Self::Reserve => 1.max(num_cpus::get() - 1),
-			Self::Default => num_cpus::get(),
-			Self::Heavy => num_cpus::get() * 2,
+	/// Tick Bar Dimensions.
+	///
+	/// This calculates the available widths for each of the three progress
+	/// bars (done, doing, remaining).
+	///
+	/// If the total available space winds up being less than 10, all three
+	/// values are set to zero, indicating this component should be removed.
+	fn tick_bar_widths(&self) -> (usize, usize, usize) {
+		// The magic "11" is made up of the following hard-coded pieces:
+		// 2: braces around elapsed time;
+		// 2: spaces after elapsed time;
+		// 1: the "/" between done and total;
+		// 2: the spaces after total;
+		// 2: the braces around the bar itself (should there be one);
+		// 2: the spaces after the bar itself (should there be one);
+		let space: usize = 255_usize.min(self.last_width.saturating_sub(
+			11 +
+			self.buf_toc[PART_ELAPSED].len() +
+			self.buf_toc[PART_DONE].len() +
+			self.buf_toc[PART_TOTAL].len() +
+			self.buf_toc[PART_PERCENT].len()
+		));
+
+		// Insufficient space!
+		if space < MIN_BARS_WIDTH || 0 == self.total { (0, 0, 0) }
+		// Done!
+		else if self.done == self.total { (space, 0, 0) }
+		// Working on it!
+		else {
+			// Done and doing are both floored to prevent rounding-related
+			// overflow. Any remaining space will be counted as "pending".
+			let done: usize = num_integer::div_floor(
+				self.done as usize * space,
+				self.total as usize
+			);
+			let doing: usize = num_integer::div_floor(
+				self.doing.len() * space,
+				self.total as usize
+			);
+			(done, doing, space - doing - done)
+		}
+	}
+
+	/// Tick Bar.
+	///
+	/// This redraws the actual progress *bar* portion of the buffer, which is
+	/// actually three different bars squished together: Done, Doing, and
+	/// Pending.
+	///
+	/// The combined width of the `###` will never exceed 255, and will never
+	/// be less than 10.
+	fn tick_set_bar(&mut self) {
+		static BAR: &[u8; 255] = &[b'#'; 255];
+
+		if 0 != self.flags & FLAG_TICK_BAR {
+			self.flags &= ! FLAG_TICK_BAR;
+			match self.tick_bar_widths() {
+				// No bars.
+				(0, 0, 0) => {
+					self.resize_part(PART_BARS, 0);
+				},
+				// Skip active tasks.
+				(done, 0, undone) => {
+					self.replace_part(PART_BARS, &[
+						b"\x1b[2m[\x1b[0;1;96m",
+						&BAR[0..done],
+						b"\x1b[0;1;34m",
+						&BAR[0..undone],
+						b"\x1b[0;2m]\x1b[0m  ",
+					].concat());
+				},
+				// Do all three.
+				(done, doing, undone) => {
+					self.replace_part(PART_BARS, &[
+						b"\x1b[2m[\x1b[0;1;96m",
+						&BAR[0..done],
+						b"\x1b[0;1;95m",
+						&BAR[0..doing],
+						b"\x1b[0;1;34m",
+						&BAR[0..undone],
+						b"\x1b[0;2m]\x1b[0m  ",
+					].concat());
+				}
+			}
+		}
+	}
+
+	/// Tick Doing.
+	///
+	/// Update the task list portion of the buffer. This is triggered both by
+	/// changes to the task list as well as resoluation changes (as long values
+	/// may require lazy cropping).
+	fn tick_set_doing(&mut self) {
+		if 0 != self.flags & FLAG_TICK_DOING {
+			self.flags &= ! FLAG_TICK_DOING;
+			if self.doing.is_empty() {
+				self.resize_part(PART_DOING, 0);
+			}
+			else {
+				self.replace_part(
+					PART_DOING,
+					&self.doing.iter()
+						.flat_map(|x| x.task_line(self.last_width))
+						.collect::<Vec<u8>>()
+				);
+			}
+		}
+	}
+
+	/// Tick Done.
+	///
+	/// This updates the "done" portion of the buffer as needed.
+	fn tick_set_done(&mut self) {
+		if 0 != self.flags & FLAG_TICK_DONE {
+			self.flags &= ! FLAG_TICK_DONE;
+			self.replace_part(PART_DONE, &*NiceInt::from(self.done));
+		}
+	}
+
+	/// Tick Percent.
+	///
+	/// This updates the "percent" portion of the buffer as needed.
+	fn tick_set_percent(&mut self) {
+		if 0 != self.flags & FLAG_TICK_PERCENT {
+			self.flags &= ! FLAG_TICK_PERCENT;
+			self.replace_part(
+				PART_PERCENT,
+				format!("{:>3.*}%", 2, self.percent() * 100.0).as_bytes()
+			);
+		}
+	}
+
+	/// Tick Elapsed Seconds.
+	///
+	/// The precision of `Instant` is greater than we need for printing
+	/// purposes; here we're just looking to see if one or more seconds have
+	/// elapsed since the last tick.
+	///
+	/// Because this is relative to the tick rather than the overall state of
+	/// progress, it has no corresponding tick flag.
+	///
+	/// A value of `true` is returned if one or more seconds has elapsed since
+	/// the last tick, otherwise `false` is returned.
+	fn tick_set_secs(&mut self) -> bool {
+		let secs: u32 = self.elapsed();
+		if secs == self.elapsed { false }
+		else {
+			self.elapsed = secs;
+
+			if secs == 86400 {
+				self.replace_part(PART_ELAPSED, b"23:59:59");
+			}
+			else {
+				let c = utility::secs_chunks(secs);
+				let rgs: usize = self.buf_toc[PART_ELAPSED].start;
+				self.buf[rgs..rgs + 2].copy_from_slice(time_format_dd(c[0]));
+				self.buf[rgs + 3..rgs + 5].copy_from_slice(time_format_dd(c[1]));
+				self.buf[rgs + 6..rgs + 8].copy_from_slice(time_format_dd(c[2]));
+			}
+
+			true
+		}
+	}
+
+	/// Tick Title.
+	///
+	/// The title needs to be rewritten both on direct change and resolution
+	/// change. Long titles are lazy-cropped as needed.
+	fn tick_set_title(&mut self) {
+		if 0 != self.flags & FLAG_TICK_TITLE {
+			self.flags &= ! FLAG_TICK_TITLE;
+			if self.title.is_empty() {
+				self.resize_part(PART_TITLE, 0);
+			}
+			else {
+				self.replace_part(
+					PART_TITLE,
+					&{
+						let mut m = self.title.clone();
+						m.fit_to_range(self.last_width - 1);
+						m.push(b'\n');
+						m
+					}
+				);
+			}
+		}
+	}
+
+	/// Tick Total.
+	///
+	/// This updates the "total" portion of the buffer as needed.
+	fn tick_set_total(&mut self) {
+		if 0 != self.flags & FLAG_TICK_TOTAL {
+			self.flags &= ! FLAG_TICK_TOTAL;
+			self.replace_part(PART_TOTAL, &*NiceInt::from(self.total));
+		}
+	}
+
+	/// Tick Width.
+	///
+	/// Check to see if the terminal width has changed since the last run and
+	/// update values — i.e. the relevant tick flags — as necessary.
+	fn tick_set_width(&mut self) {
+		let width = utility::term_width();
+		if width != self.last_width {
+			self.flags |= FLAG_RESIZED;
+			self.last_width = width;
+		}
+	}
+
+
+
+	// ------------------------------------------------------------------------
+	// Buffer Business
+	// ------------------------------------------------------------------------
+
+	/// Replace Part.
+	fn replace_part(&mut self, idx: usize, buf: &[u8]) {
+		self.resize_part(idx, buf.len());
+		if ! buf.is_empty() {
+			let rg = self.buf_toc[idx].as_range();
+			self.buf[rg].copy_from_slice(buf);
+		}
+	}
+
+	/// Resize Part.
+	fn resize_part(&mut self, idx: usize, len: usize) {
+		let old_len: usize = self.buf_toc[idx].len();
+		match len.cmp(&old_len) {
+			// Expand it.
+			Ordering::Greater => {
+				let adj: usize = len - old_len;
+				grow_buffer_mid(&mut self.buf, self.buf_toc[idx].end, adj);
+				self.buf_toc[idx].grow(adj);
+				self.buf_toc.iter_mut()
+					.skip(idx + 1)
+					.for_each(|x| x.increment(adj));
+			},
+			// Shrink it.
+			Ordering::Less => {
+				let adj: usize = old_len - len;
+				if idx == PART_DOING {
+					self.buf.truncate(self.buf.len() - adj);
+				}
+				else {
+					self.buf.drain(self.buf_toc[idx].end - adj..self.buf_toc[idx].end);
+				}
+				self.buf_toc[idx].shrink(adj);
+				self.buf_toc.iter_mut()
+					.skip(idx + 1)
+					.for_each(|x| x.decrement(adj));
+			},
+			Ordering::Equal => {},
 		}
 	}
 }
@@ -1098,28 +877,25 @@ impl ProgressParallelism {
 /// This is it! The whole point of the crate! See the library documentation for
 /// more information.
 pub struct Progress<T>
-where T: ProgressTask + PartialEq + Clone {
+where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 	/// The set to progress through.
 	set: Vec<T>,
-	/// Thread handling.
-	threads: ProgressParallelism,
 	/// The stateful data.
 	inner: Arc<Mutex<ProgressInner<T>>>,
 }
 
 impl<T> Default for Progress<T>
-where T: ProgressTask + PartialEq + Clone {
+where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 	fn default() -> Self {
 		Self {
 			set: Vec::new(),
-			threads: ProgressParallelism::Default,
 			inner: Arc::new(Mutex::new(ProgressInner::<T>::default())),
 		}
 	}
 }
 
 impl<T> From<Vec<T>> for Progress<T>
-where T: ProgressTask + PartialEq + Clone {
+where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 	fn from(src: Vec<T>) -> Self {
 		let total: u32 = src.len() as u32;
 		if total == 0 {
@@ -1128,7 +904,6 @@ where T: ProgressTask + PartialEq + Clone {
 		else {
 			Self {
 				set: src,
-				threads: ProgressParallelism::default(),
 				inner: Arc::new(Mutex::new(ProgressInner::<T> {
 					total,
 					flags: FLAG_START_FROM,
@@ -1140,49 +915,56 @@ where T: ProgressTask + PartialEq + Clone {
 }
 
 impl<T> Deref for Progress<T>
-where T: ProgressTask + PartialEq + Clone {
+where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 	type Target = [T];
-
-	/// Deref to Slice.
 	fn deref(&self) -> &Self::Target { &self.set }
 }
 
 impl<T> Progress<T>
-where T: ProgressTask + PartialEq + Clone + Sync + Send + 'static {
-	#[must_use]
-	/// New Progress.
-	///
-	/// Start a new progress bar with a dataset and title. If you don't need a
-	/// title, just use `Progress::from()` instead.
-	pub fn new(src: Vec<T>, title: Msg) -> Self {
-		let total: u32 = src.len() as u32;
-		if total == 0 {
-			Self::default()
-		}
-		else {
-			Self {
-				set: src,
-				threads: ProgressParallelism::default(),
-				inner: Arc::new(Mutex::new(ProgressInner::<T> {
-					total,
-					title: Some(title),
-					flags: FLAG_START_NEW,
-					..ProgressInner::<T>::default()
-				})),
-			}
-		}
-	}
-
-	/// Set Threads.
-	pub fn set_threads(&mut self, threads: ProgressParallelism) {
-		self.threads = threads;
-	}
-
+where T: ProgressTask + Clone + Eq + Hash + PartialEq + Sync + Send + 'static {
 	#[must_use]
 	/// With Threads.
-	pub fn with_threads(mut self, threads: ProgressParallelism) -> Self {
-		self.threads = threads;
+	pub fn with_threads(self, threads: usize) -> Self {
+		let mut ptr = mutex_ptr!(self.inner);
+		ptr.set_threads(threads);
+		drop(ptr);
 		self
+	}
+
+	#[must_use]
+	/// With Title.
+	pub fn with_title<S> (self, title: S) -> Self
+	where S: AsRef<str> {
+		let mut ptr = mutex_ptr!(self.inner);
+		ptr.set_title(title);
+		drop(ptr);
+		self
+	}
+
+	/// Reset.
+	///
+	/// Reset the progress-related values so you can loop again.
+	pub fn reset(&self) {
+		// There is nothing to reset.
+		if self.set.is_empty() { return; }
+
+		let mut ptr = mutex_ptr!(self.inner);
+
+		// We can't reset in the middle of a run!
+		if 0 != ptr.flags & FLAG_RUNNING { return; }
+
+		// Reset the tickable values.
+		ptr.doing.clear();
+		ptr.done = 0;
+		ptr.elapsed = 0;
+		ptr.time = Instant::now();
+
+		// Reset the flags and hashes.
+		ptr.flags = FLAG_ALL;
+		ptr.last_hash = 0;
+		ptr.last_lines = 0;
+		ptr.last_time = 0;
+		ptr.last_width = 0;
 	}
 
 	/// Run!
@@ -1201,9 +983,9 @@ where T: ProgressTask + PartialEq + Clone + Sync + Send + 'static {
 	pub fn run<F>(&self, cb: F)
 	where F: Fn(&T) + Copy + Send + Sync {
 		if ! self.set.is_empty() {
-			match self.threads.threads() {
+			match self.threads() {
 				1 => self.run_single(cb),
-				t => self.run_parallel(t + 1, cb),
+				x => self.run_parallel(x + 1, cb),
 			}
 		}
 	}
@@ -1211,6 +993,7 @@ where T: ProgressTask + PartialEq + Clone + Sync + Send + 'static {
 	/// Run Multi.
 	fn run_parallel<F>(&self, threads: usize, cb: F)
 	where F: Fn(&T) + Copy + Send + Sync {
+		let running = Arc::new(AtomicBool::new(true));
 		let pool = rayon::ThreadPoolBuilder::new()
 			.num_threads(threads)
 			.build()
@@ -1219,19 +1002,25 @@ where T: ProgressTask + PartialEq + Clone + Sync + Send + 'static {
 		// This extra process gives us a steady tick, ensuring slow tasks
 		// don't make the user think everything's crashed.
 		let inner = self.inner.clone();
-		pool.spawn(move || Self::steady_tick(&inner));
+		let running2 = running.clone();
+		pool.spawn(move || {
+			let sleep = Duration::from_millis(60);
+			loop {
+				if ! running2.load(SeqCst) || ! Self::tick(&inner) { break; }
+				thread::sleep(sleep);
+			}
+		});
 
 		// Iterate!
 		pool.install(|| self.set.par_iter().for_each(|x| {
-			// Mark the task as currently running.
-			self.set_doing(x.clone());
-
-			// Do whatever.
+			self.start_task(x.clone());
 			cb(x);
-
-			// Mark the task as complete.
-			self.remove_doing(x);
+			self.end_task(x);
 		}));
+
+		// This might keep running if we don't tell it to stop.
+		running.store(false, SeqCst);
+		drop(pool);
 	}
 
 	/// Run Single.
@@ -1252,36 +1041,24 @@ where T: ProgressTask + PartialEq + Clone + Sync + Send + 'static {
 	/// are triggered by the run. In the end, `done` will still be `0`, etc.
 	pub fn silent<F>(&self, cb: F)
 	where F: Fn(&T) + Copy + Send + Sync {
-		match self.threads.threads() {
-			1 => { self.set.iter().for_each(cb); },
-			t => {
-				let pool = rayon::ThreadPoolBuilder::new()
-					.num_threads(t)
-					.build()
-					.unwrap();
+		if ! self.set.is_empty() {
+			match self.threads() {
+				1 => { self.set.iter().for_each(cb); },
+				x => {
+					let pool = rayon::ThreadPoolBuilder::new()
+						.num_threads(x)
+						.build()
+						.unwrap();
 
-				pool.install(|| self.set.par_iter().for_each(cb));
-			},
-		}
-	}
-
-	/// Steady Tick.
-	///
-	/// This is a simple endless timer thread used to auto-tick the progress
-	/// bar once every 60ms. As ticks otherwise only occur at the completion of
-	/// a task, this ensures independent values like the time elapsed are
-	/// repainted consistently.
-	///
-	/// Note: As steady ticking requires its own thread — to avoid blocking the
-	/// actual taskwork! — it is only available for parallel requests. In
-	/// single-threaded mode it is disabled.
-	fn steady_tick(inner: &Arc<Mutex<ProgressInner<T>>>) {
-		let sleep = Duration::from_millis(60);
-		loop {
-			if ! Self::tick(inner) {
-				break;
+					pool.install(|| self.set.par_iter().for_each(cb));
+					drop(pool);
+				},
 			}
-			thread::sleep(sleep);
+
+			// Because the loops wouldn't have ticked anything, we need to
+			// manually call stop in case the user wants a summary after.
+			let mut ptr = mutex_ptr!(self.inner);
+			ptr.stop();
 		}
 	}
 
@@ -1316,6 +1093,14 @@ where T: ProgressTask + PartialEq + Clone + Sync + Send + 'static {
 		ptr.elapsed()
 	}
 
+	/// End Task.
+	///
+	/// Wrapper for `ProgressInner::end_task()`.
+	fn end_task(&self, task: &T) {
+		let mut ptr = mutex_ptr!(self.inner);
+		ptr.end_task(task);
+	}
+
 	/// Increment.
 	///
 	/// Wrapper for `ProgressInner::increment()`.
@@ -1342,31 +1127,39 @@ where T: ProgressTask + PartialEq + Clone + Sync + Send + 'static {
 		ptr.print_summary(one, many);
 	}
 
-	/// Remove a Task.
-	///
-	/// Wrapper for `ProgressInner::remove_doing()`.
-	fn remove_doing(&self, task: &T) {
+	/// With Threads.
+	pub fn set_threads(&self, threads: usize) {
 		let mut ptr = mutex_ptr!(self.inner);
-		ptr.remove_doing(task);
-	}
-
-	/// Add a Task.
-	///
-	/// Wrapper for `ProgressInner::set_doing()`.
-	fn set_doing(&self, task: T) {
-		let mut ptr = mutex_ptr!(self.inner);
-		ptr.set_doing(task);
+		ptr.set_threads(threads);
 	}
 
 	/// Set Title.
 	///
 	/// Wrapper for `ProgressInner::set_title()`.
-	pub fn set_title(&self, title: Option<Msg>) {
+	pub fn set_title<S> (&self, title: S)
+	where S: AsRef<str> {
 		let mut ptr = mutex_ptr!(self.inner);
 		ptr.set_title(title);
 	}
 
-	/// Steady Tick.
+	/// Start Task.
+	///
+	/// Wrapper for `ProgressInner::start_task()`.
+	fn start_task(&self, task: T) {
+		let mut ptr = mutex_ptr!(self.inner);
+		ptr.start_task(task);
+	}
+
+	#[must_use]
+	/// Get Threads.
+	///
+	/// Wrapper for `ProgressInner::threads()`.
+	pub fn threads(&self) -> usize {
+		let ptr = mutex_ptr!(self.inner);
+		ptr.threads()
+	}
+
+	/// Tick.
 	///
 	/// Wrapper for `ProgressInner::tick()`.
 	fn tick(inner: &Arc<Mutex<ProgressInner<T>>>) -> bool {
