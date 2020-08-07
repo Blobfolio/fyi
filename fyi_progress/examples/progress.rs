@@ -4,9 +4,10 @@
 
 /// Alternate.
 fn main() {
+	use fyi_msg::MsgKind;
 	use fyi_progress::{
 		Progress,
-		ProgressParallelism,
+		utility::num_threads,
 	};
 	use std::{
 		thread,
@@ -18,7 +19,7 @@ fn main() {
 	/// To simulate a bit of variation, each "task" triggers a delay based on
 	/// the length of the country name.
 	fn run_task(task: &&str) {
-		thread::sleep(Duration::from_millis(50 * task.len() as u64));
+		thread::sleep(Duration::from_millis(10 * task.len() as u64));
 	}
 
 	// Initialize with data.
@@ -265,9 +266,25 @@ fn main() {
 		"ZM|Zambia",
 		"ZW|Zimbabwe",
 	])
-		.with_threads(ProgressParallelism::Heavy);
-
-	// Run it!
+		.with_title(MsgKind::new("Demo", 199).into_msg("Looping in parallel…").to_string())
+		.with_threads(num_threads() * 2);
 	progress.run(run_task);
 	progress.print_summary("country", "countries");
+
+	// Do a single-threaded loop.
+	println!("");
+	progress.reset();
+	progress.set_threads(1);
+	progress.set_title(MsgKind::new("Demo", 199).into_msg("Looping with one thread…").to_string());
+	progress.run(run_task);
+	progress.print_summary("country", "countries");
+
+	println!("");
+	progress.reset();
+	progress.set_threads(num_threads() * 2);
+	MsgKind::new("Demo", 199).into_msg("Looping without any progress bar (but in parallel)…").println();
+	MsgKind::Info.into_msg("The above title is not part of the progress bar (as there isn't any), so won't be cleared upon completion.").println();
+	progress.silent(run_task);
+	progress.print_summary("invisible country", "invisible countries");
+
 }

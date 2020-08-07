@@ -5,7 +5,7 @@
 use fyi_msg::MsgKind;
 use fyi_progress::{
 	Progress,
-	ProgressParallelism,
+	utility::num_threads,
 };
 use fyi_witcher::Witcher;
 use std::{
@@ -24,11 +24,9 @@ fn main() {
 	assert!(! witched.is_empty());
 
 	// A progress bar is a good way to visualize the results!
-	let pbar = Progress::new(
-		witched,
-		MsgKind::new("Witcher Demo", 199).into_msg("Gzipped MAN Pages")
-	)
-		.with_threads(ProgressParallelism::Heavy);
+	let pbar = Progress::from(witched)
+		.with_title(MsgKind::new("Witcher Demo", 199).into_msg("Gzipped MAN Pages").to_string())
+		.with_threads(num_threads() * 2);
 
 	// Simulate callback runtime variation by calculating a sleep period from
 	// the file path length.
