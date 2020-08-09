@@ -25,7 +25,7 @@ fn main() {
 
 	// A progress bar is a good way to visualize the results!
 	let pbar = Progress::from(witched)
-		.with_title(MsgKind::new("Witcher Demo", 199).into_msg("Gzipped MAN Pages").to_string())
+		.with_title(MsgKind::new("Witcher Demo", 199).into_msg("Gzipped MAN Pages"))
 		.with_threads(num_threads() * 2);
 
 	// Simulate callback runtime variation by calculating a sleep period from

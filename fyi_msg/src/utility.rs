@@ -2,10 +2,7 @@
 # FYI Msg: Utility Methods
 */
 
-use std::{
-	ptr,
-	slice,
-};
+use std::slice;
 
 
 
@@ -39,35 +36,6 @@ pub fn ansi_code_bold(num: u8) -> &'static [u8] {
 		else { 13 };
 
 	unsafe { slice::from_raw_parts(ANSI.as_ptr().add(num as usize) as *const u8, len) }
-}
-
-/// Grow `Vec<u8>` From Middle.
-///
-/// This is like `resize()` combined with `range_replace()`, except all it does
-/// is efficiently expand the vector length from the middle out. No particular
-/// data is written to the created space; it might contain values from the
-/// previous occupants (now copied right), or zeroes.
-///
-/// If `idx` is out of range, this acts just like `resize()`, with new bytes
-/// added to the end.
-///
-/// The main idea is after calling this, new data should be written to the
-/// slice.
-pub fn grow_buffer_mid(src: &mut Vec<u8>, idx: usize, adj: usize) {
-	let old_len: usize = src.len();
-	src.resize(old_len + adj, 0);
-
-	// Copy everything from the split point to the right.
-	if idx < old_len {
-		let ptr = src.as_mut_ptr();
-		unsafe {
-			ptr::copy(
-				ptr.add(idx),
-				ptr.add(idx + adj),
-				old_len - idx,
-			)
-		}
-	}
 }
 
 #[must_use]
@@ -123,22 +91,6 @@ mod tests {
 				ansi_code_bold(i),
 			);
 		}
-	}
-
-	#[test]
-	fn t_grow_buffer_mid() {
-		let mut test: Vec<u8> = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-		grow_buffer_mid(&mut test, 4, 5);
-		assert_eq!(
-			test,
-			vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 4, 5, 6, 7, 8, 9],
-		);
-
-		grow_buffer_mid(&mut test, 15, 5);
-		assert_eq!(
-			test,
-			vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0],
-		);
 	}
 
 	#[test]

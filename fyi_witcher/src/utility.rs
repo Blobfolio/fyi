@@ -31,9 +31,7 @@ pub fn du(paths: &[PathBuf]) -> u64 {
 pub fn file_extension<P> (path: P) -> String
 where P: AsRef<Path> {
 	let path = path.as_ref();
-	if path.is_dir() {
-		"".to_string()
-	}
+	if path.is_dir() { String::new() }
 	else {
 		path.extension().map_or(
 			String::new(),

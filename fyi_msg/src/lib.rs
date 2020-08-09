@@ -28,9 +28,16 @@
 #![allow(clippy::unknown_clippy_lints)]
 
 mod msg;
+mod bufrange;
 pub mod utility;
 
 pub use msg::{
 	Msg,
 	MsgKind,
+};
+pub use bufrange::{
+	BufRange,
+	replace_buf_range,
+	resize_buf_range,
+	vec_resize_at,
 };

@@ -60,12 +60,12 @@ use crate::{
 	utility,
 };
 use fyi_msg::{
+	BufRange,
 	Msg,
 	MsgKind,
-	utility::{
-		grow_buffer_mid,
-		time_format_dd,
-	},
+	replace_buf_range,
+	resize_buf_range,
+	utility::time_format_dd,
 };
 use rayon::prelude::*;
 use std::{
@@ -79,10 +79,7 @@ use std::{
 		self,
 		Write,
 	},
-	ops::{
-		Deref,
-		Range,
-	},
+	ops::Deref,
 	path::PathBuf,
 	sync::{
 		Arc,
@@ -150,92 +147,11 @@ const MIN_DRAW_WIDTH: usize = 40;
 
 
 
-#[derive(Debug, Clone, Copy, Default, Hash, PartialEq)]
-/// Progress Buffer Range.
-///
-/// This is essentially a copyable `Range<usize>`, used to store the
-/// (inclusive) start and (exclusive) end points of malleable buffer parts like
-/// the title and elapsed times.
-struct ProgressBufferRange {
-	/// The start index, inclusive.
-	pub start: usize,
-	/// The end index, exclusive.
-	pub end: usize,
-}
-
-impl ProgressBufferRange {
-	/// New.
-	///
-	/// Create a new range from `start` to `end`.
-	///
-	/// Note: this method is `const` and therefore cannot explicitly assert,
-	/// however `start` must be less than or equal to `end`. The struct is
-	/// private, so this is more a Note-to-Self than anything.
-	pub const fn new(start: usize, end: usize) -> Self {
-		Self { start, end }
-	}
-
-	/// Range.
-	pub const fn as_range(&self) -> Range<usize> {
-		Range {
-			start: self.start,
-			end: self.end,
-		}
-	}
-
-	/// Decrement.
-	///
-	/// Decrease both `start` and `end` by `adj`.
-	pub fn decrement(&mut self, adj: usize) {
-		self.start -= adj;
-		self.end -= adj;
-	}
-
-	/// Increment.
-	///
-	/// Increase both `start` and `end` by `adj`.
-	pub fn increment(&mut self, adj: usize) {
-		self.start += adj;
-		self.end += adj;
-	}
-
-	/// Grow.
-	///
-	/// Increase `end` by `adj`.
-	pub fn grow(&mut self, adj: usize) {
-		self.end += adj;
-	}
-
-	#[allow(dead_code)] // We'll probably want this some day.
-	/// Is Empty.
-	///
-	/// Returns true if the range is empty.
-	pub const fn is_empty(&self) -> bool {
-		self.end == self.start
-	}
-
-	/// Length.
-	///
-	/// Returns the length of the range.
-	pub const fn len(&self) -> usize {
-		self.end - self.start
-	}
-
-	/// Shrink.
-	///
-	/// Decrease `end` by `adj`.
-	pub fn shrink(&mut self, adj: usize) {
-		self.end -= adj;
-	}
-}
-
-
-
 #[derive(Debug)]
 struct ProgressInner<T>
 where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 	buf: Vec<u8>,
-	buf_toc: [ProgressBufferRange; 7],
+	toc: [BufRange; 7],
 	doing: AHashSet<T>,
 	done: u32,
 	elapsed: u32,
@@ -292,14 +208,14 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 
 			//  Doing would go here.
 			],
-			buf_toc: [
-				ProgressBufferRange::new(0, 0),   // Title.
-				ProgressBufferRange::new(11, 19), // Elapsed.
-				ProgressBufferRange::new(32, 32), // Bar(s).
-				ProgressBufferRange::new(39, 40), // Done.
-				ProgressBufferRange::new(56, 57), // Total.
-				ProgressBufferRange::new(65, 70), // Percent.
-				ProgressBufferRange::new(75, 75), // Current Tasks.
+			toc: [
+				BufRange::new(0, 0),   // Title.
+				BufRange::new(11, 19), // Elapsed.
+				BufRange::new(32, 32), // Bar(s).
+				BufRange::new(39, 40), // Done.
+				BufRange::new(56, 57), // Total.
+				BufRange::new(65, 70), // Percent.
+				BufRange::new(75, 75), // Current Tasks.
 			],
 			doing: AHashSet::new(),
 			done: 0,
@@ -629,10 +545,10 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 		// 2: the spaces after the bar itself (should there be one);
 		let space: usize = 255_usize.min(self.last_width.saturating_sub(
 			11 +
-			self.buf_toc[PART_ELAPSED].len() +
-			self.buf_toc[PART_DONE].len() +
-			self.buf_toc[PART_TOTAL].len() +
-			self.buf_toc[PART_PERCENT].len()
+			self.toc[PART_ELAPSED].len() +
+			self.toc[PART_DONE].len() +
+			self.toc[PART_TOTAL].len() +
+			self.toc[PART_PERCENT].len()
 		));
 
 		// Insufficient space!
@@ -671,29 +587,44 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 			match self.tick_bar_widths() {
 				// No bars.
 				(0, 0, 0) => {
-					self.resize_part(PART_BARS, 0);
+					resize_buf_range(
+						&mut self.buf,
+						&mut self.toc,
+						PART_BARS,
+						0
+					);
 				},
 				// Skip active tasks.
 				(done, 0, undone) => {
-					self.replace_part(PART_BARS, &[
-						b"\x1b[2m[\x1b[0;1;96m",
-						&BAR[0..done],
-						b"\x1b[0;1;34m",
-						&BAR[0..undone],
-						b"\x1b[0;2m]\x1b[0m  ",
-					].concat());
+					replace_buf_range(
+						&mut self.buf,
+						&mut self.toc,
+						PART_BARS,
+						&[
+							b"\x1b[2m[\x1b[0;1;96m",
+							&BAR[0..done],
+							b"\x1b[0;1;34m",
+							&BAR[0..undone],
+							b"\x1b[0;2m]\x1b[0m  ",
+						].concat()
+					);
 				},
 				// Do all three.
 				(done, doing, undone) => {
-					self.replace_part(PART_BARS, &[
-						b"\x1b[2m[\x1b[0;1;96m",
-						&BAR[0..done],
-						b"\x1b[0;1;95m",
-						&BAR[0..doing],
-						b"\x1b[0;1;34m",
-						&BAR[0..undone],
-						b"\x1b[0;2m]\x1b[0m  ",
-					].concat());
+					replace_buf_range(
+						&mut self.buf,
+						&mut self.toc,
+						PART_BARS,
+						&[
+							b"\x1b[2m[\x1b[0;1;96m",
+							&BAR[0..done],
+							b"\x1b[0;1;95m",
+							&BAR[0..doing],
+							b"\x1b[0;1;34m",
+							&BAR[0..undone],
+							b"\x1b[0;2m]\x1b[0m  ",
+						].concat()
+					);
 				}
 			}
 		}
@@ -708,14 +639,23 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 		if 0 != self.flags & FLAG_TICK_DOING {
 			self.flags &= ! FLAG_TICK_DOING;
 			if self.doing.is_empty() {
-				self.resize_part(PART_DOING, 0);
+				resize_buf_range(
+					&mut self.buf,
+					&mut self.toc,
+					PART_DOING,
+					0
+				);
 			}
 			else {
-				self.replace_part(
+				let tasks: &[u8] = &self.doing.iter()
+					.flat_map(|x| x.task_line(self.last_width))
+					.collect::<Vec<u8>>();
+
+				replace_buf_range(
+					&mut self.buf,
+					&mut self.toc,
 					PART_DOING,
-					&self.doing.iter()
-						.flat_map(|x| x.task_line(self.last_width))
-						.collect::<Vec<u8>>()
+					tasks
 				);
 			}
 		}
@@ -727,7 +667,12 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 	fn tick_set_done(&mut self) {
 		if 0 != self.flags & FLAG_TICK_DONE {
 			self.flags &= ! FLAG_TICK_DONE;
-			self.replace_part(PART_DONE, &*NiceInt::from(self.done));
+			replace_buf_range(
+				&mut self.buf,
+				&mut self.toc,
+				PART_DONE,
+				&*NiceInt::from(self.done)
+			);
 		}
 	}
 
@@ -737,9 +682,12 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 	fn tick_set_percent(&mut self) {
 		if 0 != self.flags & FLAG_TICK_PERCENT {
 			self.flags &= ! FLAG_TICK_PERCENT;
-			self.replace_part(
+			let p: String = format!("{:>3.*}%", 2, self.percent() * 100.0);
+			replace_buf_range(
+				&mut self.buf,
+				&mut self.toc,
 				PART_PERCENT,
-				format!("{:>3.*}%", 2, self.percent() * 100.0).as_bytes()
+				p.as_bytes(),
 			);
 		}
 	}
@@ -762,11 +710,16 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 			self.elapsed = secs;
 
 			if secs == 86400 {
-				self.replace_part(PART_ELAPSED, b"23:59:59");
+				replace_buf_range(
+					&mut self.buf,
+					&mut self.toc,
+					PART_ELAPSED,
+					b"23:59:59"
+				);
 			}
 			else {
 				let c = utility::secs_chunks(secs);
-				let rgs: usize = self.buf_toc[PART_ELAPSED].start;
+				let rgs: usize = self.toc[PART_ELAPSED].start();
 				self.buf[rgs..rgs + 2].copy_from_slice(time_format_dd(c[0]));
 				self.buf[rgs + 3..rgs + 5].copy_from_slice(time_format_dd(c[1]));
 				self.buf[rgs + 6..rgs + 8].copy_from_slice(time_format_dd(c[2]));
@@ -784,10 +737,17 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 		if 0 != self.flags & FLAG_TICK_TITLE {
 			self.flags &= ! FLAG_TICK_TITLE;
 			if self.title.is_empty() {
-				self.resize_part(PART_TITLE, 0);
+				resize_buf_range(
+					&mut self.buf,
+					&mut self.toc,
+					PART_TITLE,
+					0
+				);
 			}
 			else {
-				self.replace_part(
+				replace_buf_range(
+					&mut self.buf,
+					&mut self.toc,
 					PART_TITLE,
 					&{
 						let mut m = self.title.clone();
@@ -806,7 +766,12 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 	fn tick_set_total(&mut self) {
 		if 0 != self.flags & FLAG_TICK_TOTAL {
 			self.flags &= ! FLAG_TICK_TOTAL;
-			self.replace_part(PART_TOTAL, &*NiceInt::from(self.total));
+			replace_buf_range(
+				&mut self.buf,
+				&mut self.toc,
+				PART_TOTAL,
+				&*NiceInt::from(self.total)
+			);
 		}
 	}
 
@@ -819,52 +784,6 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 		if width != self.last_width {
 			self.flags |= FLAG_RESIZED;
 			self.last_width = width;
-		}
-	}
-
-
-
-	// ------------------------------------------------------------------------
-	// Buffer Business
-	// ------------------------------------------------------------------------
-
-	/// Replace Part.
-	fn replace_part(&mut self, idx: usize, buf: &[u8]) {
-		self.resize_part(idx, buf.len());
-		if ! buf.is_empty() {
-			let rg = self.buf_toc[idx].as_range();
-			self.buf[rg].copy_from_slice(buf);
-		}
-	}
-
-	/// Resize Part.
-	fn resize_part(&mut self, idx: usize, len: usize) {
-		let old_len: usize = self.buf_toc[idx].len();
-		match len.cmp(&old_len) {
-			// Expand it.
-			Ordering::Greater => {
-				let adj: usize = len - old_len;
-				grow_buffer_mid(&mut self.buf, self.buf_toc[idx].end, adj);
-				self.buf_toc[idx].grow(adj);
-				self.buf_toc.iter_mut()
-					.skip(idx + 1)
-					.for_each(|x| x.increment(adj));
-			},
-			// Shrink it.
-			Ordering::Less => {
-				let adj: usize = old_len - len;
-				if idx == PART_DOING {
-					self.buf.truncate(self.buf.len() - adj);
-				}
-				else {
-					self.buf.drain(self.buf_toc[idx].end - adj..self.buf_toc[idx].end);
-				}
-				self.buf_toc[idx].shrink(adj);
-				self.buf_toc.iter_mut()
-					.skip(idx + 1)
-					.for_each(|x| x.decrement(adj));
-			},
-			Ordering::Equal => {},
 		}
 	}
 }
