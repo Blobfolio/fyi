@@ -157,7 +157,7 @@ fn _msg(com: &str, args: &[String]) {
 					 _help(format!(
 						include_str!("../help/generic.txt"),
 						com,
-						kind.into_msg("Hello World").to_string(),
+						kind.into_msg("Hello World").as_str(),
 						com.to_lowercase(),
 					).as_bytes());
 				}

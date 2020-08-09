@@ -266,7 +266,7 @@ fn main() {
 		"ZM|Zambia",
 		"ZW|Zimbabwe",
 	])
-		.with_title(MsgKind::new("Demo", 199).into_msg("Looping in parallel…").to_string())
+		.with_title(MsgKind::new("Demo", 199).into_msg("Looping in parallel…"))
 		.with_threads(num_threads() * 2);
 	progress.run(run_task);
 	progress.print_summary("country", "countries");
@@ -275,7 +275,7 @@ fn main() {
 	println!("");
 	progress.reset();
 	progress.set_threads(1);
-	progress.set_title(MsgKind::new("Demo", 199).into_msg("Looping with one thread…").to_string());
+	progress.set_title(MsgKind::new("Demo", 199).into_msg("Looping with one thread…"));
 	progress.run(run_task);
 	progress.print_summary("country", "countries");
 

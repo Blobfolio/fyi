@@ -45,10 +45,22 @@ fn new(c: &mut Criterion) {
 	group.finish();
 }
 
+fn with_timestamp(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_msg::Msg");
+
+	group.bench_function("with_timestamp()", move |b| {
+		b.iter_with_setup(||
+			MsgKind::Error.into_msg("The rain in spain is plain."),
+			|m| m.with_timestamp(true)
+		)
+	});
+}
+
 
 
 criterion_group!(
 	benches,
 	new,
+	with_timestamp,
 );
 criterion_main!(benches);

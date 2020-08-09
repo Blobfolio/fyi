@@ -12,9 +12,10 @@ indentation or a timestamp to the message, respectively.
 
 That's it. Nice and boring!
 
-Two important limitations to note:
-1. Custom prefixes are limited to 64 bytes, including the formatting code. This leaves roughly 45 bytes for the label itself.
-2. Messages are limited to 1024 bytes.
+## Restrictions:
+
+Custom prefixes are limited to 64 bytes, including the formatting code. This
+leaves roughly 45 bytes for the label itself.
 
 ## Example:
 
@@ -36,7 +37,12 @@ let res: bool = MsgKind::Confirm.into_msg("Are you OK?").prompt();
 ```
 */
 
-use crate::utility;
+use crate::{
+	BufRange,
+	replace_buf_range,
+	resize_buf_range,
+	utility,
+};
 use std::{
 	cmp::Ordering,
 	fmt,
@@ -53,6 +59,17 @@ use std::{
 
 
 
+/// Buffer Indexes.
+///
+/// The start and end points of the malleable progress components are stored in
+/// an array for easy access. These are their indexes.
+const PART_INDENT: usize = 0;
+const PART_TIMESTAMP: usize = 1;
+const PART_PREFIX: usize = 2;
+const PART_MSG: usize = 3;
+
+
+
 #[derive(Clone, Copy)]
 /// Prefix Buffer.
 ///
@@ -62,13 +79,6 @@ use std::{
 pub struct PrefixBuffer {
 	buf: [u8; 64],
 	len: usize,
-}
-
-impl Deref for PrefixBuffer {
-	type Target = [u8];
-
-	/// Deref to Slice.
-	fn deref(&self) -> &Self::Target { self.as_bytes() }
 }
 
 impl fmt::Debug for PrefixBuffer {
@@ -86,6 +96,11 @@ impl Default for PrefixBuffer {
 			len: 0,
 		}
 	}
+}
+
+impl Deref for PrefixBuffer {
+	type Target = [u8];
+	fn deref(&self) -> &Self::Target { self.as_bytes() }
 }
 
 impl Eq for PrefixBuffer {}
@@ -144,8 +159,6 @@ impl PrefixBuffer {
 		self.len
 	}
 }
-
-
 
 
 
@@ -285,98 +298,7 @@ impl MsgKind {
 
 
 
-#[derive(Clone, Copy)]
-/// Message Buffer.
-///
-/// This is a simple fixed-array buffer to store messages so that `Copy`, etc.,
-/// can be used.
-pub struct MsgBuffer {
-	buf: [u8; 1024],
-	len: usize,
-}
-
-impl Deref for MsgBuffer {
-	type Target = [u8];
-
-	/// Deref to Slice.
-	fn deref(&self) -> &Self::Target { self.as_bytes() }
-}
-
-impl fmt::Debug for MsgBuffer {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("MsgBuffer")
-			.field("buf", &self.as_bytes())
-			.finish()
-	}
-}
-
-impl Default for MsgBuffer {
-	fn default() -> Self {
-		Self {
-			buf: [0; 1024],
-			len: 0,
-		}
-	}
-}
-
-impl Eq for MsgBuffer {}
-
-impl From<Vec<u8>> for MsgBuffer {
-	fn from(src: Vec<u8>) -> Self {
-		match src.len() {
-			1..=1024 => {
-				let mut out = Self::default();
-				out.len = src.len();
-				out.buf[0..out.len].copy_from_slice(&src);
-				out
-			},
-			_ => Self::default(),
-		}
-	}
-}
-
-impl Hash for MsgBuffer {
-	fn hash<H: Hasher>(&self, state: &mut H) {
-		self.as_bytes().hash(state);
-	}
-}
-
-impl Ord for MsgBuffer {
-	fn cmp(&self, other: &Self) -> Ordering {
-		self.as_bytes().cmp(other.as_bytes())
-	}
-}
-
-impl PartialEq for MsgBuffer {
-	fn eq(&self, other: &Self) -> bool {
-		self.as_bytes() == other.as_bytes()
-	}
-}
-
-impl PartialOrd for MsgBuffer {
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		Some(self.as_bytes().cmp(other.as_bytes()))
-	}
-}
-
-impl MsgBuffer {
-	/// As Bytes.
-	pub fn as_bytes(&self) -> &[u8] {
-		&self.buf[0..self.len]
-	}
-
-	/// Extend from Slice.
-	pub fn extend_from_slice(&mut self, src: &[u8]) {
-		if self.len + src.len() <= 1024 {
-			self.buf[self.len..self.len + src.len()].copy_from_slice(src);
-			self.len += src.len();
-		}
-	}
-}
-
-
-
-#[derive(Debug, Clone, Copy, Default, Hash, PartialEq)]
+#[derive(Debug, Clone)]
 /// Message.
 ///
 /// This is it! The whole point of the crate! See the library documentation for
@@ -388,22 +310,95 @@ pub struct Msg {
 	timestamp: bool,
 	/// The prefix to use, if any.
 	prefix: MsgKind,
-	/// The message component.
-	msg: MsgBuffer,
+	/// The compiled buffer!
+	buf: Vec<u8>,
+	/// A Table of Contents.
+	toc: [BufRange; 4],
+}
+
+impl AsRef<str> for Msg {
+	fn as_ref(&self) -> &str { self.as_str() }
+}
+
+impl Default for Msg {
+	fn default() -> Self {
+		Self {
+			indent: 0,
+			timestamp: false,
+			prefix: MsgKind::None,
+			buf: Vec::new(),
+			toc: [
+				BufRange::default(),
+				BufRange::default(),
+				BufRange::default(),
+				BufRange::default(),
+			],
+		}
+	}
+}
+
+impl Deref for Msg {
+	type Target = [u8];
+	fn deref(&self) -> &Self::Target { self.as_bytes() }
 }
 
 impl fmt::Display for Msg {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str(unsafe { std::str::from_utf8_unchecked(&self.to_vec()) })
+		f.write_str(self.as_str())
+	}
+}
+
+impl From<&[u8]> for Msg {
+	fn from(src: &[u8]) -> Self {
+		Self {
+			toc: [
+				BufRange::default(),
+				BufRange::default(),
+				BufRange::default(),
+				BufRange::new(0, src.len()),
+			],
+			buf: src.to_vec(),
+			..Self::default()
+		}
 	}
 }
 
 impl From<Vec<u8>> for Msg {
 	fn from(src: Vec<u8>) -> Self {
 		Self {
-			msg: MsgBuffer::from(src),
+			toc: [
+				BufRange::default(),
+				BufRange::default(),
+				BufRange::default(),
+				BufRange::new(0, src.len()),
+			],
+			buf: src,
 			..Self::default()
 		}
+	}
+}
+
+impl Hash for Msg {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.buf.hash(state);
+	}
+}
+
+impl PartialEq for Msg {
+	fn eq(&self, other: &Self) -> bool {
+		self.buf == other.buf
+	}
+}
+
+impl PartialEq<[u8]> for Msg {
+	fn eq(&self, other: &[u8]) -> bool {
+		self.as_bytes() == other
+	}
+}
+
+impl PartialEq<&str> for Msg {
+	fn eq(&self, other: &&str) -> bool {
+		self.as_str() == *other
 	}
 }
 
@@ -415,28 +410,7 @@ impl Msg {
 	/// pattern methods.
 	pub fn new<S> (msg: S) -> Self
 	where S: AsRef<str> {
-		Self {
-			msg: MsgBuffer::from(msg.as_ref().as_bytes().to_vec()),
-			..Self::default()
-		}
-	}
-
-	#[allow(clippy::missing_const_for_fn)] // Doesn't work.
-	#[must_use]
-	/// With Prefix.
-	pub fn with_prefix(mut self, prefix: MsgKind) -> Self {
-		self.prefix = prefix;
-		self
-	}
-
-	#[must_use]
-	/// With Timestamp.
-	///
-	/// Messages are not timestamped by default, but can be if `true` is passed
-	/// to this method.
-	pub const fn with_timestamp(mut self, on: bool) -> Self {
-		self.timestamp = on;
-		self
+		Self::from(msg.as_ref().as_bytes())
 	}
 
 	#[must_use]
@@ -445,55 +419,106 @@ impl Msg {
 	/// Use this method to indent the message `indent` number of levels. Each
 	/// level is equivalent to four spaces, e.g. `1 == "    "`,
 	/// `2 == "        "`, etc.
-	pub const fn with_indent(mut self, indent: u8) -> Self {
-		self.indent = indent;
+	pub fn with_indent(mut self, indent: u8) -> Self {
+		if indent != self.indent {
+			self.indent = indent;
+			replace_buf_range(
+				&mut self.buf,
+				&mut self.toc,
+				PART_INDENT,
+				utility::whitespace(self.indent as usize * 4),
+			);
+		}
+		self
+	}
+
+	#[allow(clippy::missing_const_for_fn)] // Doesn't work.
+	#[must_use]
+	/// With Prefix.
+	pub fn with_prefix(mut self, prefix: MsgKind) -> Self {
+		if prefix != self.prefix {
+			self.prefix = prefix;
+			replace_buf_range(
+				&mut self.buf,
+				&mut self.toc,
+				PART_PREFIX,
+				prefix.as_bytes(),
+			);
+		}
 		self
 	}
 
 	#[must_use]
-	/// To Vec.
-	pub fn to_vec(&self) -> Vec<u8> {
-		[
-			self.indent(),
-			self.timestamp(),
-			self.prefix.as_bytes(),
-			self.msg.as_bytes(),
-		].concat()
+	/// With Timestamp.
+	///
+	/// Messages are not timestamped by default, but can be if `true` is passed
+	/// to this method.
+	pub fn with_timestamp(mut self, on: bool) -> Self {
+		if on != self.timestamp {
+			self.timestamp = on;
+			if on { self.write_timestamp(); }
+			else {
+				resize_buf_range(
+					&mut self.buf,
+					&mut self.toc,
+					PART_TIMESTAMP,
+					0,
+				);
+			}
+		}
+
+		self
 	}
 
-	/// Indentation bit.
-	fn indent(&self) -> &[u8] {
-		utility::whitespace(self.indent as usize * 4)
+	#[must_use]
+	/// As Bytes.
+	pub fn as_bytes(&self) -> &[u8] { &self.buf }
+
+	#[must_use]
+	/// As Str.
+	pub fn as_str(&self) -> &str {
+		unsafe { std::str::from_utf8_unchecked(&self.buf) }
 	}
 
 	/// Timestamp bit.
-	fn timestamp(&self) -> &[u8] {
-		static mut BUF: [u8; 44] = *b"\x1b[2m[\x1b[0;34m2000-00-00 00:00:00\x1b[39;2m]\x1b[0m ";
+	fn write_timestamp(&mut self) {
+		use chrono::{
+			Datelike,
+			Local,
+			Timelike,
+		};
 
-		// Update the timestamp.
-		if self.timestamp {
-			use chrono::{
-				Datelike,
-				Local,
-				Timelike,
-			};
-
-			// Chrono's formatter is slow as shit. It is faster for us to call
-			// each of their time part methods individually, convert those
-			// integers to bytes, and copy them into our static buffer.
-			let now = Local::now();
-			unsafe {
-				BUF[14..16].copy_from_slice(utility::time_format_dd((now.year() as u32).saturating_sub(2000)));
-				BUF[17..19].copy_from_slice(utility::time_format_dd(now.month()));
-				BUF[20..22].copy_from_slice(utility::time_format_dd(now.day()));
-				BUF[23..25].copy_from_slice(utility::time_format_dd(now.hour()));
-				BUF[26..28].copy_from_slice(utility::time_format_dd(now.minute()));
-				BUF[29..31].copy_from_slice(utility::time_format_dd(now.second()));
-
-				&BUF
-			}
+		// Make sure we have something in place.
+		if self.toc[PART_TIMESTAMP].is_empty() {
+			replace_buf_range(
+				&mut self.buf,
+				&mut self.toc,
+				PART_TIMESTAMP,
+				b"\x1b[2m[\x1b[0;34m2000-00-00 00:00:00\x1b[39;2m]\x1b[0m ",
+			);
 		}
-		else { &[] }
+
+		// Chrono's formatter is slow as shit. It is faster for us to call
+		// each of their time part methods individually, convert those
+		// integers to bytes, and copy them into our static buffer.
+		let now = Local::now();
+		let ptr = self.buf.as_mut_ptr();
+		unsafe {
+			[
+				(now.year() as u32).saturating_sub(2000),
+				now.month(),
+				now.day(),
+				now.hour(),
+				now.minute(),
+				now.second(),
+			].iter()
+				.fold(
+					self.toc[PART_TIMESTAMP].start() + 14,
+					|dst_off, x| {
+					ptr.add(dst_off).copy_from_nonoverlapping(utility::time_format_dd(*x).as_ptr(), 2);
+					dst_off + 3
+				});
+		}
 	}
 
 	#[must_use]
@@ -505,8 +530,9 @@ impl Msg {
 	pub fn prompt(&self) -> bool {
 		// Clone the message and append a little [y/N] instructional bit to the
 		// end.
-		let mut q = *self;
-		q.msg.extend_from_slice(b" \x1b[2m[y/\x1b[4mN\x1b[0;2m]\x1b[0m ");
+		let mut q = self.clone();
+		q.buf.extend_from_slice(b" \x1b[2m[y/\x1b[4mN\x1b[0;2m]\x1b[0m ");
+		BufRange::grow_set_at(&mut q.toc, PART_MSG, 25);
 
 		// Ask and collect input, looping until a valid response is typed.
 		loop {
@@ -528,32 +554,32 @@ impl Msg {
 
 	/// Print: `Stdout`.
 	pub fn print(&self) {
-		locked_print(&self.to_vec(), false);
+		locked_print(&self.buf, false);
 	}
 
 	/// Print w/ Line: `Stdout`.
 	pub fn println(&self) {
-		locked_print(&self.to_vec(), true);
+		locked_print(&self.buf, true);
 	}
 
 	/// Print: `Stderr`.
 	pub fn eprint(&self) {
-		locked_eprint(&self.to_vec(), false);
+		locked_eprint(&self.buf, false);
 	}
 
 	/// Print w/ Line: `Stderr`.
 	pub fn eprintln(&self) {
-		locked_eprint(&self.to_vec(), true);
+		locked_eprint(&self.buf, true);
 	}
 
 	/// Simulated Print.
 	pub fn sink(&self) {
-		locked_sink(&self.to_vec(), false);
+		locked_sink(&self.buf, false);
 	}
 
 	/// Simulated Print w/ Line.
 	pub fn sinkln(&self) {
-		locked_sink(&self.to_vec(), true);
+		locked_sink(&self.buf, true);
 	}
 }
 
