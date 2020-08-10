@@ -70,7 +70,10 @@ use fyi_msg::{
 use rayon::prelude::*;
 use std::{
 	cmp::Ordering,
-	ffi::OsStr,
+	ffi::{
+		OsStr,
+		OsString,
+	},
 	hash::{
 		Hash,
 		Hasher,
@@ -80,6 +83,7 @@ use std::{
 		Write,
 	},
 	ops::Deref,
+	os::unix::ffi::OsStrExt,
 	path::PathBuf,
 	sync::{
 		Arc,
@@ -1126,6 +1130,24 @@ pub trait ProgressTask {
 			&name[name.fitted_range(width.saturating_sub(6))],
 			b"\x1b[0m\n",
 		].concat()
+	}
+}
+
+impl ProgressTask for OsStr {
+	/// Task Name.
+	fn task_name(&self) -> &[u8] { self.as_bytes() }
+}
+
+impl ProgressTask for &OsStr {
+	/// Task Name.
+	fn task_name(&self) -> &[u8] { self.as_bytes() }
+}
+
+impl ProgressTask for OsString {
+	#[allow(trivial_casts)]
+	/// Task Name.
+	fn task_name(&self) -> &[u8] {
+		unsafe { &*(self.as_os_str() as *const OsStr as *const [u8]) }
 	}
 }
 
