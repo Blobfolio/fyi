@@ -26,10 +26,24 @@ fn from(c: &mut Criterion) {
 	group.finish();
 }
 
+fn du(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_witcher::utility::du");
+
+	group.bench_function("/usr/share/man", move |b| {
+		b.iter_with_setup(||
+			Witcher::from("/usr/share/man").to_vec(),
+			|paths| fyi_witcher::utility::du(&paths)
+		)
+	});
+
+	group.finish();
+}
+
 
 
 criterion_group!(
 	benches,
 	from,
+	du,
 );
 criterion_main!(benches);
