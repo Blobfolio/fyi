@@ -267,7 +267,7 @@ fn main() {
 		"ZW|Zimbabwe",
 	])
 		.with_title(MsgKind::new("Demo", 199).into_msg("Looping in parallel…"))
-		.with_threads(num_threads() * 2);
+		.with_threads(num_threads());
 	progress.run(run_task);
 	progress.print_summary("country", "countries");
 
@@ -282,9 +282,10 @@ fn main() {
 	println!("");
 	progress.reset();
 	progress.set_threads(num_threads() * 2);
+	progress.set_display(false);
 	MsgKind::new("Demo", 199).into_msg("Looping without any progress bar (but in parallel)…").println();
 	MsgKind::Info.into_msg("The above title is not part of the progress bar (as there isn't any), so won't be cleared upon completion.").println();
-	progress.silent(run_task);
+	progress.run(run_task);
 	progress.print_summary("invisible country", "invisible countries");
 
 }

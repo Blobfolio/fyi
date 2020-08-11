@@ -54,8 +54,8 @@ use crate::{
 	NiceElapsed,
 	NiceInt,
 	traits::{
-		FittedRange,
 		FittedRangeMut,
+		ProgressTask,
 	},
 	utility,
 };
@@ -67,13 +67,8 @@ use fyi_msg::{
 	resize_buf_range,
 	utility::time_format_dd,
 };
-use rayon::prelude::*;
 use std::{
 	cmp::Ordering,
-	ffi::{
-		OsStr,
-		OsString,
-	},
 	hash::{
 		Hash,
 		Hasher,
@@ -83,22 +78,16 @@ use std::{
 		Write,
 	},
 	ops::Deref,
-	os::unix::ffi::OsStrExt,
-	path::PathBuf,
 	sync::{
 		Arc,
-		atomic::{
-			AtomicBool,
-			Ordering::SeqCst,
-		},
 		Mutex,
 	},
-	thread,
 	time::{
 		Duration,
 		Instant,
 	},
 };
+use threadpool::ThreadPool;
 
 
 
@@ -113,6 +102,18 @@ macro_rules! mutex_ptr {
 	);
 }
 
+/// Helper: Pass through a getter to the `ProgressInner`.
+macro_rules! get_inner {
+	($func:ident, $type:ty) => {
+		#[must_use]
+		/// Wrapper.
+		pub fn $func(&self) -> $type {
+			let ptr = mutex_ptr!(self.inner);
+			ptr.$func()
+		}
+	};
+}
+
 
 
 /// Progress Bar Flags.
@@ -120,11 +121,10 @@ macro_rules! mutex_ptr {
 /// Rather than rewrite the buffer on each value change, change states are
 /// tracked with these flags. If a flag is on during tick time, then the
 /// corresponding buffer is updated.
-const FLAG_ALL: u8 =          0b0111_1111;
-const FLAG_RESIZED: u8 =      0b0001_0011;
-const FLAG_START_FROM: u8 =   0b0110_0001;
-
-const FLAG_RUNNING: u8 =      0b0100_0000;
+const FLAGS_ALL: u8 =         0b0111_1111;
+const FLAGS_DEFAULT: u8 =     0b0000_0001;
+const FLAGS_NEW: u8 =         0b0110_0001;
+const FLAGS_RESIZED: u8 =     0b0001_0011;
 
 const FLAG_TICK_BAR: u8 =     0b0000_0001;
 const FLAG_TICK_DOING: u8 =   0b0000_0010;
@@ -132,6 +132,9 @@ const FLAG_TICK_DONE: u8 =    0b0000_0100;
 const FLAG_TICK_PERCENT: u8 = 0b0000_1000;
 const FLAG_TICK_TITLE: u8 =   0b0001_0000;
 const FLAG_TICK_TOTAL: u8 =   0b0010_0000;
+
+const FLAG_RUNNING: u8 =      0b0100_0000;
+const FLAG_SILENT: u8 =       0b1000_0000;
 
 /// Buffer Indexes.
 ///
@@ -153,25 +156,26 @@ const MIN_DRAW_WIDTH: usize = 40;
 
 #[derive(Debug)]
 struct ProgressInner<T>
-where T: ProgressTask + Clone + Eq + Hash + PartialEq {
+where T: ProgressTask {
 	buf: Vec<u8>,
 	toc: [BufRange; 7],
-	doing: AHashSet<T>,
-	done: u32,
 	elapsed: u32,
-	flags: u8,
 	last_hash: u64,
 	last_lines: usize,
 	last_time: u128,
 	last_width: usize,
+
+	doing: AHashSet<T>,
+	done: u32,
+	flags: u8,
 	threads: usize,
-	time: Instant,
+	started: Instant,
 	title: Vec<u8>,
 	total: u32,
 }
 
 impl<T> Default for ProgressInner<T>
-where T: ProgressTask + Clone + Eq + Hash + PartialEq {
+where T: ProgressTask {
 	fn default() -> Self {
 		Self {
 			buf: vec![
@@ -224,13 +228,13 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 			doing: AHashSet::new(),
 			done: 0,
 			elapsed: 0,
-			flags: FLAG_ALL & ! FLAG_RUNNING,
+			flags: FLAGS_DEFAULT,
 			last_hash: 0,
 			last_lines: 0,
 			last_time: 0,
 			last_width: 0,
-			threads: 0,
-			time: Instant::now(),
+			started: Instant::now(),
+			threads: num_cpus::get(),
 			title: Vec::new(),
 			total: 0,
 		}
@@ -238,7 +242,7 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 }
 
 impl<T> ProgressInner<T>
-where T: ProgressTask + Clone + Eq + Hash + PartialEq {
+where T: ProgressTask {
 	// ------------------------------------------------------------------------
 	// Getters
 	// ------------------------------------------------------------------------
@@ -248,7 +252,7 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 
 	/// Elapsed (Seconds).
 	pub fn elapsed(&self) -> u32 {
-		86400.min(self.time.elapsed().as_secs() as u32)
+		86400.min(self.started.elapsed().as_secs() as u32)
 	}
 
 	/// Percent.
@@ -260,13 +264,11 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 		}
 	}
 
+	/// Is Running?
+	pub fn is_running(&self) -> bool { 0 != self.flags & FLAG_RUNNING }
+
 	/// Threads.
-	pub fn threads(&self) -> usize {
-		match self.threads {
-			0 => num_cpus::get(),
-			x => x,
-		}
-	}
+	pub fn threads(&self) -> usize { self.threads }
 
 	/// Total.
 	pub fn total(&self) -> u32 { self.total }
@@ -345,7 +347,7 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 
 
 	// ------------------------------------------------------------------------
-	// Other Ops
+	// Render
 	// ------------------------------------------------------------------------
 
 	/// Preprint.
@@ -452,7 +454,7 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 	/// If the total is zero, a warning is printed instead.
 	pub fn print_summary<S> (&mut self, one: S, many: S)
 	where S: AsRef<str> {
-		if 0 == self.flags & FLAG_RUNNING {
+		if ! self.is_running() {
 			// Print a warning.
 			if self.total == 0 {
 				Msg::from([
@@ -477,7 +479,7 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 
 	/// Stop.
 	pub fn stop(&mut self) {
-		self.flags = FLAG_ALL & ! FLAG_RUNNING;
+		self.flags = FLAGS_ALL & ! FLAG_RUNNING;
 		self.done = self.total;
 		self.doing.clear();
 		self.print_blank();
@@ -489,12 +491,16 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 	/// their corresponding parts in the buffer, and prints the result, if any.
 	pub fn tick(&mut self) -> bool {
 		// We aren't running!
-		if 0 == self.flags & FLAG_RUNNING {
+		if ! self.is_running() {
 			return false;
+		}
+		// We aren't ticking!
+		else if 0 != self.flags & FLAG_SILENT {
+			return true;
 		}
 
 		// We don't want to tick too often... that will just look bad.
-		let ms = self.time.elapsed().as_millis();
+		let ms = self.started.elapsed().as_millis();
 		if ms.saturating_sub(self.last_time) < 50 {
 			return true;
 		}
@@ -786,7 +792,7 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 	fn tick_set_width(&mut self) {
 		let width = utility::term_width();
 		if width != self.last_width {
-			self.flags |= FLAG_RESIZED;
+			self.flags |= FLAGS_RESIZED;
 			self.last_width = width;
 		}
 	}
@@ -800,7 +806,7 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 /// This is it! The whole point of the crate! See the library documentation for
 /// more information.
 pub struct Progress<T>
-where T: ProgressTask + Clone + Eq + Hash + PartialEq {
+where T: ProgressTask {
 	/// The set to progress through.
 	set: Vec<T>,
 	/// The stateful data.
@@ -808,7 +814,7 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 }
 
 impl<T> Default for Progress<T>
-where T: ProgressTask + Clone + Eq + Hash + PartialEq {
+where T: ProgressTask {
 	fn default() -> Self {
 		Self {
 			set: Vec::new(),
@@ -818,18 +824,16 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 }
 
 impl<T> From<Vec<T>> for Progress<T>
-where T: ProgressTask + Clone + Eq + Hash + PartialEq {
+where T: ProgressTask {
 	fn from(src: Vec<T>) -> Self {
 		let total: u32 = src.len() as u32;
-		if total == 0 {
-			Self::default()
-		}
+		if total == 0 { Self::default() }
 		else {
 			Self {
 				set: src,
 				inner: Arc::new(Mutex::new(ProgressInner::<T> {
 					total,
-					flags: FLAG_START_FROM,
+					flags: FLAGS_NEW,
 					..ProgressInner::<T>::default()
 				})),
 			}
@@ -838,19 +842,21 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq {
 }
 
 impl<T> Deref for Progress<T>
-where T: ProgressTask + Clone + Eq + Hash + PartialEq {
+where T: ProgressTask {
 	type Target = [T];
 	fn deref(&self) -> &Self::Target { &self.set }
 }
 
 impl<T> Progress<T>
-where T: ProgressTask + Clone + Eq + Hash + PartialEq + Sync + Send + 'static {
+where T: ProgressTask + Sync + Send + 'static {
+	// ------------------------------------------------------------------------
+	// Setup
+	// ------------------------------------------------------------------------
+
 	#[must_use]
 	/// With Threads.
 	pub fn with_threads(self, threads: usize) -> Self {
-		let mut ptr = mutex_ptr!(self.inner);
-		ptr.set_threads(threads);
-		drop(ptr);
+		self.set_threads(threads);
 		self
 	}
 
@@ -858,36 +864,15 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq + Sync + Send + 'static {
 	/// With Title.
 	pub fn with_title<S> (self, title: S) -> Self
 	where S: AsRef<str> {
-		let mut ptr = mutex_ptr!(self.inner);
-		ptr.set_title(title);
-		drop(ptr);
+		self.set_title(title);
 		self
 	}
 
-	/// Reset.
-	///
-	/// Reset the progress-related values so you can loop again.
-	pub fn reset(&self) {
-		// There is nothing to reset.
-		if self.set.is_empty() { return; }
-
-		let mut ptr = mutex_ptr!(self.inner);
-
-		// We can't reset in the middle of a run!
-		if 0 != ptr.flags & FLAG_RUNNING { return; }
-
-		// Reset the tickable values.
-		ptr.doing.clear();
-		ptr.done = 0;
-		ptr.elapsed = 0;
-		ptr.time = Instant::now();
-
-		// Reset the flags and hashes.
-		ptr.flags = FLAG_ALL;
-		ptr.last_hash = 0;
-		ptr.last_lines = 0;
-		ptr.last_time = 0;
-		ptr.last_width = 0;
+	#[must_use]
+	/// Toggle Progress Barness.
+	pub fn with_display(self, on: bool) -> Self {
+		self.set_display(on);
+		self
 	}
 
 	/// Run!
@@ -897,91 +882,95 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq + Sync + Send + 'static {
 	///
 	/// When parallelism is such that only one thread is to be used, the
 	/// progress portion will run without a steady tick and without displaying
-	/// the current task information.
+	/// the current task information, but will otherwise still produce a
+	/// progress bar to watch.
 	///
 	/// When parallelism is more than one thread, tasks will be executed in
-	/// parallel using that many threads, plus one extra thread to steadily
-	/// tick the timer, ensuring the elapsed time updates at least once per
-	/// second.
+	/// parallel using that many threads, with the display updated at a steady
+	/// pace (60ms) throughout.
 	pub fn run<F>(&self, cb: F)
-	where F: Fn(&T) + Copy + Send + Sync {
+	where F: Fn(&T) + Copy + Send + Sync + 'static {
 		if ! self.set.is_empty() {
 			match self.threads() {
-				1 => self.run_single(cb),
-				x => self.run_parallel(x + 1, cb),
+				1 => self.set.iter().for_each(|x| {
+					cb(x);
+					self.increment();
+					progress_tick(&self.inner);
+				}),
+				x => self.run_parallel(x, cb),
 			}
 		}
 	}
 
-	/// Run Multi.
+	/// Loop in Parallel!
 	fn run_parallel<F>(&self, threads: usize, cb: F)
-	where F: Fn(&T) + Copy + Send + Sync {
-		let running = Arc::new(AtomicBool::new(true));
-		let pool = rayon::ThreadPoolBuilder::new()
-			.num_threads(threads)
-			.build()
-			.unwrap();
+	where F: Fn(&T) + Copy + Send + Sync + 'static {
+		// The thread pool.
+		let pool = ThreadPool::new(threads);
 
-		// This extra process gives us a steady tick, ensuring slow tasks
-		// don't make the user think everything's crashed.
-		let inner = self.inner.clone();
-		let running2 = running.clone();
-		pool.spawn(move || {
-			let sleep = Duration::from_millis(60);
-			loop {
-				if ! running2.load(SeqCst) || ! Self::tick(&inner) { break; }
-				thread::sleep(sleep);
+		// The task sender and receiver.
+		let (tx, rx) = crossbeam_channel::unbounded();
+
+		// A separate sender/receiver for steady ticking.
+		let ticker = crossbeam_channel::tick(Duration::from_millis(60));
+
+		// Do the main loop!
+		self.set.iter().cloned().for_each(|x| {
+			let tx = tx.clone();
+			let inner = self.inner.clone();
+			pool.execute(move|| {
+				progress_start(&inner, x.clone());
+				cb(&x);
+				progress_end(&inner, &x);
+				tx.send(()).unwrap();
+			});
+		});
+
+		// Run steady tick until we're out of tasks.
+		loop {
+			ticker.recv().unwrap();
+			if ! progress_tick(&self.inner) {
+				drop(ticker);
+				break;
 			}
-		});
+		}
 
-		// Iterate!
-		pool.install(|| self.set.par_iter().for_each(|x| {
-			self.start_task(x.clone());
-			cb(x);
-			self.end_task(x);
-		}));
-
-		// This might keep running if we don't tell it to stop.
-		running.store(false, SeqCst);
-		drop(pool);
+		// Make sure we've actually finished processing before leaving.
+		drop(tx);
+		let _: Vec<_> = rx.iter().collect();
 	}
 
-	/// Run Single.
-	fn run_single<F>(&self, cb: F)
-	where F: Fn(&T) + Copy + Send + Sync {
-		self.set.iter().for_each(|x| {
-			cb(x);
-			self.increment();
-			Self::tick(&self.inner);
-		});
-	}
 
-	/// Silent Run.
+
+	// ------------------------------------------------------------------------
+	// Breakdown
+	// ------------------------------------------------------------------------
+
+	#[must_use]
+	/// Consume.
 	///
-	/// This is a convenience function for looping the set *without* any
-	/// progress bar output, but with the built-in parallel iterators. Being
-	/// that no progress output is happening, no progress-related data changes
-	/// are triggered by the run. In the end, `done` will still be `0`, etc.
-	pub fn silent<F>(&self, cb: F)
-	where F: Fn(&T) + Copy + Send + Sync {
-		if ! self.set.is_empty() {
-			match self.threads() {
-				1 => { self.set.iter().for_each(cb); },
-				x => {
-					let pool = rayon::ThreadPoolBuilder::new()
-						.num_threads(x)
-						.build()
-						.unwrap();
+	/// Return the loopable vector.
+	pub fn consume(self) -> Vec<T> { self.set }
 
-					pool.install(|| self.set.par_iter().for_each(cb));
-					drop(pool);
-				},
-			}
-
-			// Because the loops wouldn't have ticked anything, we need to
-			// manually call stop in case the user wants a summary after.
+	/// Reset the Counts.
+	///
+	/// This resets the totals so the source can be looped a second time.
+	pub fn reset(&self) {
+		if ! self.set.is_empty() && ! self.is_running() {
 			let mut ptr = mutex_ptr!(self.inner);
-			ptr.stop();
+
+			// Reset the tickable values.
+			ptr.doing.clear();
+			ptr.done = 0;
+			ptr.elapsed = 0;
+			ptr.started = Instant::now();
+
+			// Reset the flags and hashes.
+			ptr.flags = FLAGS_ALL;
+			ptr.last_hash = 0;
+			ptr.last_lines = 0;
+			ptr.last_time = 0;
+			ptr.last_width = 0;
 		}
 	}
 
@@ -991,37 +980,19 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq + Sync + Send + 'static {
 	// `ProgressInner` Wrappers
 	// ------------------------------------------------------------------------
 
+	// These just return the inner values.
+	get_inner!(done, u32);
+	get_inner!(elapsed, u32);
+	get_inner!(percent, f64);
+	get_inner!(threads, usize);
+	get_inner!(total, u32);
+	get_inner!(is_running, bool);
+
 	#[must_use]
 	/// Get Doing.
 	pub fn doing(&self) -> u32 {
 		let ptr = mutex_ptr!(self.inner);
 		ptr.doing.len() as u32
-	}
-
-	#[must_use]
-	/// Get Done.
-	///
-	/// Wrapper for `ProgressInner::done()`.
-	pub fn done(&self) -> u32 {
-		let ptr = mutex_ptr!(self.inner);
-		ptr.done()
-	}
-
-	#[must_use]
-	/// Get Elapsed.
-	///
-	/// Wrapper for `ProgressInner::elapsed()`.
-	pub fn elapsed(&self) -> u32 {
-		let ptr = mutex_ptr!(self.inner);
-		ptr.elapsed()
-	}
-
-	/// End Task.
-	///
-	/// Wrapper for `ProgressInner::end_task()`.
-	fn end_task(&self, task: &T) {
-		let mut ptr = mutex_ptr!(self.inner);
-		ptr.end_task(task);
 	}
 
 	/// Increment.
@@ -1032,15 +1003,6 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq + Sync + Send + 'static {
 		ptr.increment();
 	}
 
-	#[must_use]
-	/// Get Percent.
-	///
-	/// Wrapper for `ProgressInner::percent()`.
-	pub fn percent(&self) -> f64 {
-		let ptr = mutex_ptr!(self.inner);
-		ptr.percent()
-	}
-
 	/// Print Finish Message.
 	///
 	/// Wrapper for `ProgressInner::print_summary()`.
@@ -1048,6 +1010,13 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq + Sync + Send + 'static {
 	where S: AsRef<str> {
 		let mut ptr = mutex_ptr!(self.inner);
 		ptr.print_summary(one, many);
+	}
+
+	/// Toggle Progress Barness.
+	pub fn set_display(&self, on: bool) {
+		let mut ptr = mutex_ptr!(self.inner);
+		if on { ptr.flags &= ! FLAG_SILENT; }
+		else { ptr.flags |= FLAG_SILENT; }
 	}
 
 	/// With Threads.
@@ -1064,107 +1033,31 @@ where T: ProgressTask + Clone + Eq + Hash + PartialEq + Sync + Send + 'static {
 		let mut ptr = mutex_ptr!(self.inner);
 		ptr.set_title(title);
 	}
-
-	/// Start Task.
-	///
-	/// Wrapper for `ProgressInner::start_task()`.
-	fn start_task(&self, task: T) {
-		let mut ptr = mutex_ptr!(self.inner);
-		ptr.start_task(task);
-	}
-
-	#[must_use]
-	/// Get Threads.
-	///
-	/// Wrapper for `ProgressInner::threads()`.
-	pub fn threads(&self) -> usize {
-		let ptr = mutex_ptr!(self.inner);
-		ptr.threads()
-	}
-
-	/// Tick.
-	///
-	/// Wrapper for `ProgressInner::tick()`.
-	fn tick(inner: &Arc<Mutex<ProgressInner<T>>>) -> bool {
-		let mut ptr = mutex_ptr!(inner);
-		ptr.tick()
-	}
-
-	#[must_use]
-	/// Get Total.
-	///
-	/// Wrapper for `ProgressInner::total()`.
-	pub fn total(&self) -> u32 {
-		let ptr = mutex_ptr!(self.inner);
-		ptr.total()
-	}
 }
 
-
-
-/// Progressable Type.
+/// Tick.
 ///
-/// Types with this trait may be used to seed a `Progress`. Right now that
-/// just means strings and paths.
+/// Wrapper for `ProgressInner::tick()`.
+fn progress_tick<T>(inner: &Arc<Mutex<ProgressInner<T>>>) -> bool
+where T: ProgressTask + Sync + Send + 'static {
+	let mut ptr = mutex_ptr!(inner);
+	ptr.tick()
+}
+
+/// End Task.
 ///
-/// The only required method is `task_name()`, which must convert the value
-/// into a meaningful byte slice.
+/// Wrapper for `ProgressInner::end_task()`.
+fn progress_end<T>(inner: &Arc<Mutex<ProgressInner<T>>>, task: &T)
+where T: ProgressTask + Sync + Send + 'static {
+	let mut ptr = mutex_ptr!(inner);
+	ptr.end_task(task);
+}
+
+/// Start Task.
 ///
-/// Anything convertable to bytes could implement this trait; we've just
-/// started with the types we're actually using. If you would like to see
-/// other `std` types added, just open a request ticket.
-pub trait ProgressTask {
-	/// Task Name.
-	fn task_name(&self) -> &[u8];
-
-	/// The Full Task Line.
-	///
-	/// This combines an indented arrow with the task name, lazy chopping long
-	/// values as needed.
-	fn task_line(&self, width: usize) -> Vec<u8> {
-		let name: &[u8] = self.task_name();
-
-		[
-			// •   •   •   •  \e   [   3   5    m   ↳  ---  ---   •
-			&[32, 32, 32, 32, 27, 91, 51, 53, 109, 226, 134, 179, 32][..],
-			&name[name.fitted_range(width.saturating_sub(6))],
-			b"\x1b[0m\n",
-		].concat()
-	}
-}
-
-impl ProgressTask for OsStr {
-	/// Task Name.
-	fn task_name(&self) -> &[u8] { self.as_bytes() }
-}
-
-impl ProgressTask for &OsStr {
-	/// Task Name.
-	fn task_name(&self) -> &[u8] { self.as_bytes() }
-}
-
-impl ProgressTask for OsString {
-	#[allow(trivial_casts)]
-	/// Task Name.
-	fn task_name(&self) -> &[u8] {
-		unsafe { &*(self.as_os_str() as *const OsStr as *const [u8]) }
-	}
-}
-
-impl ProgressTask for PathBuf {
-	#[allow(trivial_casts)]
-	/// Task Name.
-	fn task_name(&self) -> &[u8] {
-		unsafe { &*(self.as_os_str() as *const OsStr as *const [u8]) }
-	}
-}
-
-impl ProgressTask for &str {
-	/// Task Name.
-	fn task_name(&self) -> &[u8] { self.as_bytes() }
-}
-
-impl ProgressTask for String {
-	/// Task Name.
-	fn task_name(&self) -> &[u8] { self.as_bytes() }
+/// Wrapper for `ProgressInner::start_task()`.
+fn progress_start<T>(inner: &Arc<Mutex<ProgressInner<T>>>, task: T)
+where T: ProgressTask + Sync + Send + 'static {
+	let mut ptr = mutex_ptr!(inner);
+	ptr.start_task(task);
 }

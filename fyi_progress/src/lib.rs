@@ -34,7 +34,4 @@ pub mod utility;
 
 pub use nice_elapsed::NiceElapsed;
 pub use nice_int::NiceInt;
-pub use progress::{
-	Progress,
-	ProgressTask,
-};
+pub use progress::Progress;
