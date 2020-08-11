@@ -234,7 +234,7 @@ where T: ProgressTask {
 			last_time: 0,
 			last_width: 0,
 			started: Instant::now(),
-			threads: num_cpus::get(),
+			threads: utility::num_threads(),
 			title: Vec::new(),
 			total: 0,
 		}
@@ -314,7 +314,7 @@ where T: ProgressTask {
 	/// To not run anything in parallel, use a value of `1`.
 	pub fn set_threads(&mut self, threads: usize) {
 		self.threads = match threads {
-			0 => num_cpus::get(),
+			0 => utility::num_threads(),
 			x => x,
 		};
 	}
