@@ -909,7 +909,7 @@ where T: ProgressTask + Sync + Send + 'static {
 		let pool = ThreadPool::new(threads);
 
 		// The task sender and receiver.
-		let (tx, rx) = crossbeam_channel::unbounded();
+		let (tx, rx) = crossbeam_channel::bounded(self.set.len());
 
 		// A separate sender/receiver for steady ticking.
 		let ticker = crossbeam_channel::tick(Duration::from_millis(60));
