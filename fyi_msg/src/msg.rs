@@ -259,7 +259,7 @@ impl MsgKind {
 			Self::Success => b"\x1b[92;1mSuccess:\x1b[0m ",
 			Self::Task => b"\x1b[1;38;5;199mTask:\x1b[0m ",
 			Self::Warning => b"\x1b[93;1mWarning:\x1b[0m ",
-			Self::Other(x) => x.as_bytes(),
+			Self::Other(x) => x,
 		}
 	}
 
