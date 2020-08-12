@@ -16,23 +16,10 @@ use std::path::PathBuf;
 fn from(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::Witcher");
 
-	group.bench_function("from(/usr/share/man).to_vec()", move |b| {
+	group.bench_function("from(/usr/share/man).into_vec()", move |b| {
 		b.iter_with_setup(||
 			black_box(PathBuf::from("/usr/share/man")),
-			|path| Witcher::from(path).to_vec()
-		)
-	});
-
-	group.finish();
-}
-
-fn du(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_witcher::utility::du");
-
-	group.bench_function("/usr/share/man", move |b| {
-		b.iter_with_setup(||
-			Witcher::from("/usr/share/man").to_vec(),
-			|paths| fyi_witcher::utility::du(&paths)
+			|path| Witcher::from(path).into_vec()
 		)
 	});
 

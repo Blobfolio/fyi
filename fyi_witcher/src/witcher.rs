@@ -3,15 +3,15 @@
 
 `Witcher` is a very simple recursive file searching library that returns all
 file paths within the tree(s), nice and canonicalized. Duplicates are weeded
-out, symlinks are resolved and followed, hidden files are picked up like any
-other file.
+out, symlinks are resolved and followed, hidden files are *seen* and counted as
+normal.
 
-Short and sweet.
+Short and sweet!
 
 While `Witcher` is light on options — there aren't any! — it can be seeded with
 multiple starting paths using the `Witcher::with_path()` builder pattern. This,
 combined with the general stripped-to-basics codebase, make this a more
-performant option than using crates such as `jwalk` or `walkdir` in many cases.
+performant option than using crates such as `jwalk` or `walkdir` in some cases.
 
 ## Examples
 
@@ -22,7 +22,7 @@ filter your way to a better tomorrow:
 use fyi_witcher::Witcher;
 use std::path::PathBuf;
 
-let paths: Vec<PathBuf> = Witcher.from(PathBuf::from(.))
+let paths: Vec<PathBuf> = Witcher::from(PathBuf::from(.))
     .filter(|x| x.as_str().unwrap_or_default().ends_with('.jpg'))
     .collect();
 ```
@@ -32,11 +32,24 @@ process if you don't need it:
 
 ```no_run
 // Just make it a Vec of PathBufs.
-let paths: Vec<PathBuf> = Witcher.from(PathBuf::from(.)).to_vec();
+let paths = Witcher::from(PathBuf::from(.)).into_vec();
 
-// Filter (file) paths by regular expression, returning the matches as a Vec.
-let paths: Vec<PathBuf> = Witcher.from(PathBuf::from(.))
-    .filter_and_collect("(?i).+\.jpg$");
+// Turn it straight into a `Progress<PathBuf>`:
+let paths = Witcher::from(PathBuf::from(.)).into_progress();
+```
+
+There are also two Regex-filtering collection methods. Same as the above, but
+they accept a (literal) regular expression and only yield matching results.
+
+```no_run
+// The Vec version.
+let paths = Witcher::from(PathBuf::from(.))
+    .filter_into_vec("(?i).+\.jpg$");
+
+// The Progress version.
+let paths = Witcher::from(PathBuf::from(.))
+    .filter_into_progress("(?i).+\.jpg$");
+```
 */
 
 
@@ -48,7 +61,10 @@ use ahash::{
 use fyi_progress::Progress;
 use std::{
 	borrow::Borrow,
-	ffi::OsStr,
+	ffi::{
+		OsStr,
+		OsString,
+	},
 	fs::{
 		self,
 		File,
@@ -120,15 +136,19 @@ impl From<PathBuf> for Witcher {
 	}
 }
 
-from_many!(&[&str]);
-from_many!(&[String]);
+from_many!(&[&OsStr]);
 from_many!(&[&Path]);
+from_many!(&[&str]);
+from_many!(&[OsString]);
 from_many!(&[PathBuf]);
+from_many!(&[String]);
 
-from_many!(Vec<&str>);
-from_many!(Vec<String>);
+from_many!(Vec<&OsStr>);
 from_many!(Vec<&Path>);
+from_many!(Vec<&str>);
+from_many!(Vec<OsString>);
 from_many!(Vec<PathBuf>);
+from_many!(Vec<String>);
 
 impl From<Lines<BufReader<File>>> for Witcher {
 	fn from(src: Lines<BufReader<File>>) -> Self {
@@ -168,7 +188,7 @@ impl Witcher {
 	///
 	/// Note: relative paths parsed in this manner probably won't resolve
 	/// correctly; it is recommended only absolute paths be used.
-	pub fn read_paths_from_file<P> (path: P) -> Self
+	pub fn from_list<P> (path: P) -> Self
 	where P: AsRef<Path> {
 		if let Ok(file) = File::open(path.as_ref()) {
 			Self::from(io::BufReader::new(file).lines())
@@ -190,7 +210,7 @@ impl Witcher {
 	///
 	/// Find everything, filter according to the provided regex pattern, and
 	/// return the results as a straight Vec.
-	pub fn filter_and_collect<R> (&mut self, pattern: R) -> Vec<PathBuf>
+	pub fn filter_into_vec<R> (self, pattern: R) -> Vec<PathBuf>
 	where R: Borrow<str> {
 		use regex::bytes::Regex;
 
@@ -201,12 +221,36 @@ impl Witcher {
 			.collect::<Vec<PathBuf>>()
 	}
 
+	#[allow(trivial_casts)] // Doesn't work without it.
+	/// Filter and Collect
+	///
+	/// Find everything, filter according to the provided regex pattern, and
+	/// return the results as a straight Vec.
+	pub fn filter_into_progress<R> (self, pattern: R) -> Progress::<PathBuf>
+	where R: Borrow<str> {
+		use regex::bytes::Regex;
+
+		let pattern: Regex = Regex::new(pattern.borrow()).expect("Invalid Regex.");
+
+		Progress::<PathBuf>::from(
+			self.filter(|p| pattern.is_match(unsafe {
+				&*(p.as_os_str() as *const OsStr as *const [u8])
+			}))
+				.collect::<Vec<PathBuf>>()
+		)
+	}
+
 	#[allow(clippy::wrong_self_convention)] // I mean it is what it is.
+	#[must_use]
 	/// To Vec
 	///
 	/// Find everything and return the results as a straight Vec.
-	pub fn to_vec(&mut self) -> Vec<PathBuf> {
-		self.collect()
+	pub fn into_vec(self) -> Vec<PathBuf> { self.collect() }
+
+	#[must_use]
+	/// To Progress.
+	pub fn into_progress(self) -> Progress::<PathBuf> {
+		Progress::<PathBuf>::from(self.into_vec())
 	}
 
 	/// Read Dir.
@@ -259,30 +303,27 @@ mod tests {
 		let abs_perr = abs_dir.with_file_name("foo.bar");
 
 		// Do a non-search search.
-		let mut w1 = Witcher::from(PathBuf::from("tests/")).to_vec();
+		let mut w1 = Witcher::from(PathBuf::from("tests/")).into_vec();
 		assert!(! w1.is_empty());
 		assert_eq!(w1.len(), 2);
 		assert!(w1.contains(&abs_p1));
 		assert!(w1.contains(&abs_p2));
 		assert!(! w1.contains(&abs_perr));
-		assert_eq!(du(&w1), 162_u64);
 
 		// Look only for .txt files.
-		w1 = Witcher::from(vec![PathBuf::from("tests/")]).filter_and_collect(r"(?i)\.txt$");
+		w1 = Witcher::from(vec![PathBuf::from("tests/")]).filter_into_vec(r"(?i)\.txt$");
 		assert!(! w1.is_empty());
 		assert_eq!(w1.len(), 1);
 		assert!(w1.contains(&abs_p1));
 		assert!(! w1.contains(&abs_p2));
 		assert!(! w1.contains(&abs_perr));
-		assert_eq!(du(&w1), 26_u64);
 
 		// Look for something that doesn't exist.
-		w1 = Witcher::from(PathBuf::from("tests/")).filter_and_collect(r"(?i)\.exe$");
+		w1 = Witcher::from(PathBuf::from("tests/")).filter_into_vec(r"(?i)\.exe$");
 		assert!(w1.is_empty());
 		assert_eq!(w1.len(), 0);
 		assert!(! w1.contains(&abs_p1));
 		assert!(! w1.contains(&abs_p2));
 		assert!(! w1.contains(&abs_perr));
-		assert_eq!(du(&w1), 0_u64);
 	}
 }
