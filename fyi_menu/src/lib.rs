@@ -109,10 +109,8 @@ impl From<&[u8]> for KeyKind {
 			// This could be anything!
 			Ordering::Greater if txt[0] == b'-' =>
 				if txt[1] == b'-' && utility::byte_is_letter(txt[2]) {
-					if let Some(x) = txt.iter().position(|b| *b == b'=') {
-						Self::LongV(x)
-					}
-					else { Self::Long }
+					txt.iter().position(|b| *b == b'=')
+						.map_or(Self::Long, Self::LongV)
 				}
 				else if utility::byte_is_letter(txt[1]) {
 					Self::ShortV
