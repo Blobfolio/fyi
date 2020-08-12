@@ -268,6 +268,9 @@ where T: ProgressTask {
 	/// Is Running?
 	pub fn is_running(&self) -> bool { 0 != self.flags & FLAG_RUNNING }
 
+	/// Is Silent?
+	pub fn is_silent(&self) -> bool { 0 != self.flags & FLAG_SILENT }
+
 	/// Threads.
 	pub fn threads(&self) -> usize { self.threads }
 
@@ -892,13 +895,18 @@ where T: ProgressTask + Sync + Send + 'static {
 	pub fn run<F>(&self, cb: F)
 	where F: Fn(&T) + Copy + Send + Sync + 'static {
 		if ! self.set.is_empty() {
-			match self.threads() {
-				1 => self.set.iter().for_each(|x| {
+			match (self.is_silent(), self.threads()) {
+				(false, 1) => self.set.iter().for_each(|x| {
 					cb(x);
 					self.increment();
 					progress_tick(&self.inner);
 				}),
-				x => self.run_parallel(x, cb),
+				(true, 1) => self.set.iter().for_each(|x| {
+					cb(x);
+					self.increment();
+				}),
+				(true, x) => self.run_parallel_silent(x, cb),
+				(false, x) => self.run_parallel(x, cb),
 			}
 		}
 	}
@@ -908,12 +916,7 @@ where T: ProgressTask + Sync + Send + 'static {
 	where F: Fn(&T) + Copy + Send + Sync + 'static {
 		// The thread pool.
 		let pool = ThreadPool::new(threads);
-
-		// The task sender and receiver.
 		let (tx, rx) = crossbeam_channel::bounded(self.set.len());
-
-		// A separate sender/receiver for steady ticking.
-		let ticker = crossbeam_channel::tick(Duration::from_millis(60));
 
 		// Do the main loop!
 		self.set.iter().cloned().for_each(|x| {
@@ -928,6 +931,7 @@ where T: ProgressTask + Sync + Send + 'static {
 		});
 
 		// Run steady tick until we're out of tasks.
+		let ticker = crossbeam_channel::tick(Duration::from_millis(60));
 		loop {
 			ticker.recv().unwrap();
 			if ! progress_tick(&self.inner) {
@@ -936,7 +940,45 @@ where T: ProgressTask + Sync + Send + 'static {
 			}
 		}
 
-		// Make sure we've actually finished processing before leaving.
+		// The ticker loop should be blocking, but let's make sure we've
+		// consumed all of the signals before leaving.
+		drop(tx);
+		let _: Vec<_> = rx.iter().collect();
+	}
+
+	/// Loop (Silently) in Parallel!
+	///
+	/// This is just like `run_parallel()`, except it avoids calls to tick-
+	/// related methods as there is no ticking needed.
+	fn run_parallel_silent<F>(&self, threads: usize, cb: F)
+	where F: Fn(&T) + Copy + Send + Sync + 'static {
+		// The thread pool.
+		let pool = ThreadPool::new(threads);
+		let (tx, rx) = crossbeam_channel::bounded(self.set.len());
+
+		// Do the main loop!
+		self.set.iter().cloned().for_each(|x| {
+			let tx = tx.clone();
+			let inner = self.inner.clone();
+			pool.execute(move|| {
+				cb(&x);
+				progress_increment(&inner);
+				tx.send(()).unwrap();
+			});
+		});
+
+		// Run steady tick until we're out of tasks.
+		let ticker = crossbeam_channel::tick(Duration::from_millis(30));
+		loop {
+			ticker.recv().unwrap();
+			if ! progress_is_running(&self.inner) {
+				drop(ticker);
+				break;
+			}
+		}
+
+		// The ticker loop should be blocking, but let's make sure we've
+		// consumed all of the signals before leaving.
 		drop(tx);
 		let _: Vec<_> = rx.iter().collect();
 	}
@@ -988,6 +1030,7 @@ where T: ProgressTask + Sync + Send + 'static {
 	get_inner!(threads, usize);
 	get_inner!(total, u32);
 	get_inner!(is_running, bool);
+	get_inner!(is_silent, bool);
 
 	#[must_use]
 	/// Get Doing.
@@ -1105,6 +1148,24 @@ fn progress_start<T>(inner: &Arc<Mutex<ProgressInner<T>>>, task: T)
 where T: ProgressTask + Sync + Send + 'static {
 	let mut ptr = mutex_ptr!(inner);
 	ptr.start_task(task);
+}
+
+/// Increment.
+///
+/// Wrapper for `ProgressInner::increment()`.
+fn progress_increment<T>(inner: &Arc<Mutex<ProgressInner<T>>>)
+where T: ProgressTask + Sync + Send + 'static {
+	let mut ptr = mutex_ptr!(inner);
+	ptr.increment();
+}
+
+/// Is Running?
+///
+/// Wrapper for `ProgressInner::is_running()`.
+fn progress_is_running<T>(inner: &Arc<Mutex<ProgressInner<T>>>) -> bool
+where T: ProgressTask + Sync + Send + 'static {
+	let ptr = mutex_ptr!(inner);
+	ptr.is_running()
 }
 
 /// Crunched In Msg
