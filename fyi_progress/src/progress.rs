@@ -483,7 +483,8 @@ where T: ProgressTask {
 
 	/// Stop.
 	pub fn stop(&mut self) {
-		self.flags = FLAGS_ALL & ! FLAG_RUNNING;
+		self.flags |= FLAGS_ALL;
+		self.flags &= ! FLAG_RUNNING;
 		self.done = self.total;
 		self.doing.clear();
 		self.print_blank();
@@ -993,7 +994,7 @@ where T: ProgressTask + Sync + Send + 'static {
 	/// Consume.
 	///
 	/// Return the loopable vector.
-	pub fn consume(self) -> Vec<T> { self.set }
+	pub fn into_vec(self) -> Vec<T> { self.set }
 
 	/// Reset the Counts.
 	///
@@ -1005,11 +1006,15 @@ where T: ProgressTask + Sync + Send + 'static {
 			// Reset the tickable values.
 			ptr.doing.clear();
 			ptr.done = 0;
-			ptr.elapsed = 0;
+
+			// Force a rewrite of the time part, otherwise it will reflect the
+			// old value for a second or so.
+			ptr.elapsed = 666;
 			ptr.started = Instant::now();
+			ptr.tick_set_secs();
 
 			// Reset the flags and hashes.
-			ptr.flags = FLAGS_ALL;
+			ptr.flags |= FLAGS_ALL;
 			ptr.last_hash = 0;
 			ptr.last_lines = 0;
 			ptr.last_time = 0;
