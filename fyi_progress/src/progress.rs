@@ -897,15 +897,17 @@ where T: ProgressTask + Sync + Send + 'static {
 	where F: Fn(&T) + Copy + Send + Sync + 'static {
 		if ! self.set.is_empty() {
 			match (self.is_silent(), self.threads()) {
-				(false, 1) => self.set.iter().for_each(|x| {
-					cb(x);
-					self.increment();
-					progress_tick(&self.inner);
-				}),
-				(true, 1) => self.set.iter().for_each(|x| {
-					cb(x);
-					self.increment();
-				}),
+				(false, 1) => self.set.iter()
+					.for_each(|x| {
+						cb(x);
+						self.increment();
+						progress_tick(&self.inner);
+					}),
+				(true, 1) => {
+					self.set.iter().for_each(cb);
+					let mut ptr = mutex_ptr!(self.inner);
+					ptr.stop();
+				},
 				(true, x) => self.run_parallel_silent(x, cb),
 				(false, x) => self.run_parallel(x, cb),
 			}
