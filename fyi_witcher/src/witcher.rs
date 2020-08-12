@@ -45,17 +45,7 @@ use ahash::{
 	AHasher,
 	AHashSet
 };
-use crate::utility::du;
-use fyi_msg::{
-	Msg,
-	MsgKind,
-};
-use fyi_progress::{
-	NiceElapsed,
-	NiceInt,
-	Progress,
-	utility::inflect,
-};
+use fyi_progress::Progress;
 use std::{
 	borrow::Borrow,
 	ffi::OsStr,
@@ -237,64 +227,6 @@ impl Witcher {
 		if self.hash.insert(hash_path_buf(&path)) {
 			self.stack.push(path);
 		}
-	}
-}
-
-#[allow(clippy::pedantic)] // It gets eaten!
-/// Parallel Loop w/ Progress.
-///
-/// This is an add-on for `Progress` that tallies the before and after sizes,
-/// useful for applications that modify the files being iterated.
-///
-/// See the documentation for `fyi_progress::Progress` for more details.
-pub fn progress_crunch<F> (paths: Progress<PathBuf>, cb: F)
-where F: Fn(&PathBuf) + Send + Sync + Copy + 'static {
-	// Abort if missing paths.
-	if paths.is_empty() {
-		MsgKind::Warning.into_msg("No matching files were found.\n")
-			.eprint();
-
-		return;
-	}
-
-	// Add up the space used before the run.
-	let before: u64 = du(&*paths);
-
-	paths.run(cb);
-
-	crunched_in(
-		paths.total().into(),
-		paths.elapsed(),
-		before,
-		du(&*paths)
-	);
-}
-
-/// Crunched In Msg
-///
-/// This is an alternative progress summary that includes the number of bytes
-/// saved. It is called after `progress_crunch()`.
-fn crunched_in(total: u64, time: u32, before: u64, after: u64) {
-	// No savings or weird values.
-	if 0 == after || before <= after {
-		Msg::from([
-			&inflect(total, "file in ", "files in "),
-			&*NiceElapsed::from(time),
-			b", but nothing doing.\n",
-		].concat())
-			.with_prefix(MsgKind::Crunched)
-			.eprint();
-	}
-	// Something happened!
-	else {
-		MsgKind::Crunched.into_msg(format!(
-			"{} in {}, saving {} bytes ({:3.*}%).\n",
-			unsafe { std::str::from_utf8_unchecked(&inflect(total, "file", "files")) },
-			NiceElapsed::from(time).as_str(),
-			NiceInt::from(before - after).as_str(),
-			2,
-			(1.0 - (after as f64 / before as f64)) * 100.0
-		)).eprint();
 	}
 }
 

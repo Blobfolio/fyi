@@ -78,6 +78,7 @@ use std::{
 		Write,
 	},
 	ops::Deref,
+	path::PathBuf,
 	sync::{
 		Arc,
 		Mutex,
@@ -501,7 +502,7 @@ where T: ProgressTask {
 
 		// We don't want to tick too often... that will just look bad.
 		let ms = self.started.elapsed().as_millis();
-		if ms.saturating_sub(self.last_time) < 50 {
+		if ms.saturating_sub(self.last_time) < 60 {
 			return true;
 		}
 		self.last_time = ms;
@@ -1035,6 +1036,50 @@ where T: ProgressTask + Sync + Send + 'static {
 	}
 }
 
+impl Progress<PathBuf> {
+	/// Crunch Run.
+	///
+	/// This is a special version of `run()` for `PathBuf` collections that
+	/// compares the before and after sizes, reporting any savings in a summary
+	/// at the end.
+	///
+	/// Note: a warning is printed if the contents of the set are empty.
+	///
+	/// Note: the summary is printed regardless of whether or not the progress
+	/// display has been silenced.
+	pub fn crunch<F> (&self, cb: F)
+	where F: Fn(&PathBuf) + Copy + Send + Sync + 'static {
+		if self.set.is_empty() {
+			MsgKind::Warning.into_msg("No matching files were found.\n")
+				.eprint();
+
+			return;
+		}
+
+		let before: u64 = self.du();
+		self.run(cb);
+
+		crunched_in(
+			self.total().into(),
+			self.elapsed(),
+			before,
+			self.du(),
+		);
+	}
+
+	#[must_use]
+	/// Total File(s) Size.
+	///
+	/// Add up the size of all files in a set. Calculations are run in parallel so
+	/// should be fairly fast depending on the file system.
+	fn du(&self) -> u64 {
+		use rayon::prelude::*;
+		self.set.par_iter()
+			.map(|x| x.metadata().map_or(0, |m| m.len()))
+			.sum()
+	}
+}
+
 /// Tick.
 ///
 /// Wrapper for `ProgressInner::tick()`.
@@ -1060,4 +1105,32 @@ fn progress_start<T>(inner: &Arc<Mutex<ProgressInner<T>>>, task: T)
 where T: ProgressTask + Sync + Send + 'static {
 	let mut ptr = mutex_ptr!(inner);
 	ptr.start_task(task);
+}
+
+/// Crunched In Msg
+///
+/// This is an alternative progress summary that includes the number of bytes
+/// saved. It is called after `progress_crunch()`.
+fn crunched_in(total: u64, time: u32, before: u64, after: u64) {
+	// No savings or weird values.
+	if 0 == after || before <= after {
+		Msg::from([
+			&utility::inflect(total, "file in ", "files in "),
+			&*NiceElapsed::from(time),
+			b", but nothing doing.\n",
+		].concat())
+			.with_prefix(MsgKind::Crunched)
+			.eprint();
+	}
+	// Something happened!
+	else {
+		MsgKind::Crunched.into_msg(format!(
+			"{} in {}, saving {} bytes ({:3.*}%).\n",
+			unsafe { std::str::from_utf8_unchecked(&utility::inflect(total, "file", "files")) },
+			NiceElapsed::from(time).as_str(),
+			NiceInt::from(before - after).as_str(),
+			2,
+			(1.0 - (after as f64 / before as f64)) * 100.0
+		)).eprint();
+	}
 }

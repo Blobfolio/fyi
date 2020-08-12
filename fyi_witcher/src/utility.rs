@@ -2,26 +2,9 @@
 # FYI Witcher: Utility Methods
 */
 
-use std::{
-	path::{
-		Path,
-		PathBuf,
-	},
-};
+use std::path::Path;
 
 
-
-#[must_use]
-/// Total File(s) Size.
-///
-/// Add up the size of all files in a set. Calculations are run in parallel so
-/// should be fairly fast depending on the file system.
-pub fn du(paths: &[PathBuf]) -> u64 {
-	use rayon::prelude::*;
-	paths.par_iter()
-		.map(|x| x.metadata().map_or(0, |m| m.len()))
-		.sum()
-}
 
 /// Ergonomical File Extension.
 ///

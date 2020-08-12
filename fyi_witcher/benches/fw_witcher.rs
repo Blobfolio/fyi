@@ -44,6 +44,5 @@ fn du(c: &mut Criterion) {
 criterion_group!(
 	benches,
 	from,
-	du,
 );
 criterion_main!(benches);
