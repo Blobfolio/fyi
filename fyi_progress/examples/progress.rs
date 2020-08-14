@@ -280,7 +280,7 @@ fn main() {
 	progress.print_summary("country", "countries");
 
 	println!("");
-	MsgKind::Info.into_msg("The following are 'silent'. The titles are printed manually so won't be cleared after.").println();
+	MsgKind::Info.into_msg("The next two runs are 'silent'.\n      Their titles are printed manually so won't be auto-cleared.").println();
 
 	println!("");
 	progress.reset();
