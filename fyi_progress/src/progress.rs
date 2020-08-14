@@ -67,6 +67,10 @@ use fyi_msg::{
 	resize_buf_range,
 	utility::time_format_dd,
 };
+use rayon::{
+	prelude::*,
+	ThreadPoolBuilder,
+};
 use std::{
 	cmp::Ordering,
 	hash::{
@@ -88,7 +92,6 @@ use std::{
 		Instant,
 	},
 };
-use threadpool::ThreadPool;
 
 
 
@@ -918,23 +921,24 @@ where T: ProgressTask + Sync + Send + 'static {
 	fn run_parallel<F>(&self, threads: usize, cb: F)
 	where F: Fn(&T) + Copy + Send + Sync + 'static {
 		// The thread pool.
-		let pool = ThreadPool::new(threads);
-		let (tx, rx) = crossbeam_channel::bounded(self.set.len());
-
-		// Do the main loop!
-		self.set.iter().cloned().for_each(|x| {
-			let tx = tx.clone();
-			let inner = self.inner.clone();
-			pool.execute(move|| {
-				progress_start(&inner, x.clone());
-				cb(&x);
-				progress_end(&inner, &x);
-				tx.send(()).unwrap();
-			});
-		});
+		let pool = ThreadPoolBuilder::new()
+			.num_threads(threads)
+			.build()
+			.unwrap();
 
 		// Run steady tick until we're out of tasks.
 		let ticker = crossbeam_channel::tick(Duration::from_millis(60));
+
+		// Do the main loop!
+		self.set.iter().cloned().for_each(|x| {
+			let inner = self.inner.clone();
+			pool.spawn(move|| {
+				progress_start(&inner, x.clone());
+				cb(&x);
+				progress_end(&inner, &x);
+			});
+		});
+
 		loop {
 			ticker.recv().unwrap();
 			if ! progress_tick(&self.inner) {
@@ -943,10 +947,7 @@ where T: ProgressTask + Sync + Send + 'static {
 			}
 		}
 
-		// The ticker loop should be blocking, but let's make sure we've
-		// consumed all of the signals before leaving.
-		drop(tx);
-		let _: Vec<_> = rx.iter().collect();
+		drop(pool);
 	}
 
 	/// Loop (Silently) in Parallel!
@@ -956,34 +957,15 @@ where T: ProgressTask + Sync + Send + 'static {
 	fn run_parallel_silent<F>(&self, threads: usize, cb: F)
 	where F: Fn(&T) + Copy + Send + Sync + 'static {
 		// The thread pool.
-		let pool = ThreadPool::new(threads);
-		let (tx, rx) = crossbeam_channel::bounded(self.set.len());
+		ThreadPoolBuilder::new()
+			.num_threads(threads)
+			.build_global()
+			.unwrap();
 
-		// Do the main loop!
-		self.set.iter().cloned().for_each(|x| {
-			let tx = tx.clone();
-			let inner = self.inner.clone();
-			pool.execute(move|| {
-				cb(&x);
-				progress_increment(&inner);
-				tx.send(()).unwrap();
-			});
-		});
+		self.set.par_iter().for_each(cb);
 
-		// Run steady tick until we're out of tasks.
-		let ticker = crossbeam_channel::tick(Duration::from_millis(30));
-		loop {
-			ticker.recv().unwrap();
-			if ! progress_is_running(&self.inner) {
-				drop(ticker);
-				break;
-			}
-		}
-
-		// The ticker loop should be blocking, but let's make sure we've
-		// consumed all of the signals before leaving.
-		drop(tx);
-		let _: Vec<_> = rx.iter().collect();
+		let mut ptr = mutex_ptr!(self.inner);
+		ptr.stop();
 	}
 
 
@@ -1123,7 +1105,6 @@ impl Progress<PathBuf> {
 	/// Add up the size of all files in a set. Calculations are run in parallel so
 	/// should be fairly fast depending on the file system.
 	fn du(&self) -> u64 {
-		use rayon::prelude::*;
 		self.set.par_iter()
 			.map(|x| x.metadata().map_or(0, |m| m.len()))
 			.sum()
@@ -1155,24 +1136,6 @@ fn progress_start<T>(inner: &Arc<Mutex<ProgressInner<T>>>, task: T)
 where T: ProgressTask + Sync + Send + 'static {
 	let mut ptr = mutex_ptr!(inner);
 	ptr.start_task(task);
-}
-
-/// Increment.
-///
-/// Wrapper for `ProgressInner::increment()`.
-fn progress_increment<T>(inner: &Arc<Mutex<ProgressInner<T>>>)
-where T: ProgressTask + Sync + Send + 'static {
-	let mut ptr = mutex_ptr!(inner);
-	ptr.increment();
-}
-
-/// Is Running?
-///
-/// Wrapper for `ProgressInner::is_running()`.
-fn progress_is_running<T>(inner: &Arc<Mutex<ProgressInner<T>>>) -> bool
-where T: ProgressTask + Sync + Send + 'static {
-	let ptr = mutex_ptr!(inner);
-	ptr.is_running()
 }
 
 /// Crunched In Msg
