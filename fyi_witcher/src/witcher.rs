@@ -175,6 +175,18 @@ impl Witcher {
 		self
 	}
 
+	/// With Path(s) Helper
+	///
+	/// This is a convenience method that triggers either `with_paths()` or
+	/// `with_paths_from_file()`, depending on whether or not `list` is set.
+	pub fn with<P>(self, paths: &[P], list: bool) -> Self
+	where P: AsRef<Path> {
+		if list && ! paths.is_empty() {
+			self.with_paths_from_file(&paths[0])
+		}
+		else { self.with_paths(paths) }
+	}
+
 	#[must_use]
 	/// Build!
 	///
