@@ -50,7 +50,7 @@ use ahash::{
 	AHasher,
 	AHashSet
 };
-use fyi_progress::Progress;
+use crate::Witching;
 use rayon::prelude::*;
 use std::{
 	borrow::Borrow,
@@ -190,9 +190,7 @@ impl Witcher {
 	///
 	/// This is identical to `build()`, except a ready-to-go `Progress` struct
 	/// is returned instead.
-	pub fn into_progress(self) -> Progress::<PathBuf> {
-		Progress::<PathBuf>::from(self.build())
-	}
+	pub fn into_witching(self) -> Witching { Witching::from(self.build()) }
 
 	/// Digest.
 	///

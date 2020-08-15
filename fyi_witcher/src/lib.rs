@@ -27,8 +27,21 @@
 
 
 
+mod nice_elapsed;
+mod nice_int;
 mod witcher;
+mod witching;
+pub mod traits;
 pub mod utility;
 
 /// The Witcher!
+pub use nice_elapsed::NiceElapsed;
+pub use nice_int::NiceInt;
 pub use witcher::Witcher;
+pub use witching::{
+	Witching,
+	WITCHING_DIFF,
+	WITCHING_QUIET,
+	WITCHING_SERIAL,
+	WITCHING_SUMMARIZE,
+};

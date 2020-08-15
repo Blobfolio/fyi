@@ -1,5 +1,5 @@
 /*!
-# FYI Progress: "Nice" Elapsed
+# FYI Witcher: "Nice" Elapsed
 
 Convert seconds into an oxford-joined byte string like, "3 hours, 2 minutes,
 and 1 second".

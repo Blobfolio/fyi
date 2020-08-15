@@ -1,5 +1,5 @@
 /*!
-# FYI Progress: Traits: Fitted Range
+# FYI Witcher: Traits: Fitted Range
 
 This helps deal with the distinction between "length" and "width".
 */

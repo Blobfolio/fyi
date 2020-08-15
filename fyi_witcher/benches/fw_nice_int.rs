@@ -1,5 +1,5 @@
 /*!
-# Benchmark: `fyi_progress::nice_int`
+# Benchmark: `fyi_witcher::nice_int`
 */
 
 use criterion::{
@@ -8,12 +8,12 @@ use criterion::{
 	criterion_group,
 	criterion_main,
 };
-use fyi_progress::NiceInt;
+use fyi_witcher::NiceInt;
 
 
 
 fn from(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_progress::NiceInt");
+	let mut group = c.benchmark_group("fyi_witcher::NiceInt");
 
 	for ints in [10_u64, 113_u64, 10_502_u64, 46_489_320_013_u64].iter() {
 		group.bench_with_input(

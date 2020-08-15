@@ -1,50 +1,22 @@
 /*!
-# FYI Progress
+# FYI Witcher: `Witching`
 
-The `Progress` struct is a simple wrapper that prints an animated progress bar
-to `Stderr` during iteration over a supported set (`Vec<&str>`, `Vec<String>`,
-or `Vec<PathBuf>`).
+`Witching` is a progress bar wrapper built around a collection of paths. Each
+(parallel) iteration of the set results in a tick, providing a nice little
+ASCII animation to follow while data is being processed.
 
-It is thread-safe and applies the specified callback against each entry in
-parallel.
+Compared with more general-purpose libraries like `indicatif`, `Witching` is
+incredibly lightweight and efficient, but it also lacks much in the way of
+customizability.
 
-It is relatively lightweight compared to crates like `indicatif`, but this
-largely due to its lack of customizability. All progress bars display elapsed
-time, running counts of done over total, and a percentage. If space allows, an
-ASCII art progress bar is also printed. An optional title, if present, is
-printed before the main progress line, and if executing tasks in parallel, a
-list of the currently running tasks is printed after the main line.
+All progress bars include an elapsed time and progress shown as a ratio and
+percent. If the window is large enough, an actual "bar" is displayed as well.
+`Witching`s can optionally include a title and a list of active tasks.
 
-## Examples:
-
-```no_run
-use fyi_msg::MsgKind;
-use fyi_progress::Progress;
-use fyi_progress::utility;
-
-// An example callback function.
-fn tally_food(food: &str) { ... }
-
-let p1 = Progress::from(vec!["Apples", "Bananas", "Carrots"]);
-p1.run(|f| tally_food(f));
-p1.print_summary();
-
-// Progress bars can also have a title:
-let p2 = Progress::new(
-    vec!["Apples", "Bananas", "Carrots"],
-    MsgKind::Info.into_msg("Checking out the produce."),
-);
-
-// Parallelism can be disabled or modified. Use `0` for auto — number of
-// reported threads — or any positive number for that specific number.
-let p3 = Progress::from(vec!["Apples", "Bananas", "Carrots"])
-    .with_threads(utility::num_threads() * 2);
-
-// If you want to iterate a collection *without* a progress bar, but using the
-// built-in parallelism, you could use this method instead of `run()`:
-p3.silent(|f| tally_food(f));
-```
+That's it! Short and sweet.
 */
+
+
 
 use ahash::{
 	AHasher,
@@ -54,8 +26,8 @@ use crate::{
 	NiceElapsed,
 	NiceInt,
 	traits::{
+		FittedRange,
 		FittedRangeMut,
-		ProgressTask,
 	},
 	utility,
 };
@@ -73,6 +45,7 @@ use rayon::{
 };
 use std::{
 	cmp::Ordering,
+	ffi::OsStr,
 	hash::{
 		Hash,
 		Hasher,
@@ -106,7 +79,7 @@ macro_rules! mutex_ptr {
 	);
 }
 
-/// Helper: Pass through a getter to the `ProgressInner`.
+/// Helper: Pass through a getter to the `WitchingInner`.
 macro_rules! get_inner {
 	($func:ident, $type:ty) => {
 		#[must_use]
@@ -120,25 +93,50 @@ macro_rules! get_inner {
 
 
 
-/// Progress Bar Flags.
+/// Witching Flags: Diff
 ///
-/// Rather than rewrite the buffer on each value change, change states are
-/// tracked with these flags. If a flag is on during tick time, then the
-/// corresponding buffer is updated.
-const FLAGS_ALL: u8 =         0b0111_1111;
-const FLAGS_DEFAULT: u8 =     0b0000_0001;
-const FLAGS_NEW: u8 =         0b0110_0001;
-const FLAGS_RESIZED: u8 =     0b0001_0011;
+/// When summarizing, track the before and after sizes of the files in the set
+/// to see how many bytes were "saved".
+pub const WITCHING_DIFF: u8 =      0b0001;
 
-const FLAG_TICK_BAR: u8 =     0b0000_0001;
-const FLAG_TICK_DOING: u8 =   0b0000_0010;
-const FLAG_TICK_DONE: u8 =    0b0000_0100;
-const FLAG_TICK_PERCENT: u8 = 0b0000_1000;
-const FLAG_TICK_TITLE: u8 =   0b0001_0000;
-const FLAG_TICK_TOTAL: u8 =   0b0010_0000;
+/// Witching Flags: Quiet
+///
+/// Run silently, i.e. without any progress bar. Kinda pointless, but it allows
+/// for code re-use in libraries that offer the option.
+pub const WITCHING_QUIET: u8 =     0b0010;
 
-const FLAG_RUNNING: u8 =      0b0100_0000;
-const FLAG_SILENT: u8 =       0b1000_0000;
+/// Witching Flags: Serial
+///
+/// Iterate through the file set serially (rather than parallel).
+pub const WITCHING_SERIAL: u8 =    0b0100;
+
+/// Witching Flags: Summarize
+///
+/// Summarize results at the end of the run.
+pub const WITCHING_SUMMARIZE: u8 = 0b1000;
+
+
+
+/// Tick Flags.
+///
+/// These flags indicate whether or not a given component has changed since the
+/// last tick, saving the overhead of recalculating the buffer values each time
+/// a value changes. (Instead they're only recalculated at most once per tick.)
+const TICK_ALL: u8 =     0b0111_1111;
+const TICK_DEFAULT: u8 = 0b0000_0001;
+const TICK_NEW: u8 =     0b0110_0001;
+const TICK_RESIZED: u8 = 0b0001_0011;
+
+const TICK_BAR: u8 =     0b0000_0001;
+const TICK_DOING: u8 =   0b0000_0010;
+const TICK_DONE: u8 =    0b0000_0100;
+const TICK_PERCENT: u8 = 0b0000_1000;
+const TICK_TITLE: u8 =   0b0001_0000;
+const TICK_TOTAL: u8 =   0b0010_0000;
+
+const TICKING: u8 =      0b0100_0000;
+
+
 
 /// Buffer Indexes.
 ///
@@ -152,6 +150,8 @@ const PART_TOTAL: usize = 4;
 const PART_PERCENT: usize = 5;
 const PART_DOING: usize = 6;
 
+
+
 /// Misc Variables.
 const MIN_BARS_WIDTH: usize = 10;
 const MIN_DRAW_WIDTH: usize = 40;
@@ -159,8 +159,8 @@ const MIN_DRAW_WIDTH: usize = 40;
 
 
 #[derive(Debug)]
-struct ProgressInner<T>
-where T: ProgressTask {
+/// Inner Witching.
+struct WitchingInner {
 	buf: Vec<u8>,
 	toc: [BufRange; 7],
 	elapsed: u32,
@@ -169,17 +169,15 @@ where T: ProgressTask {
 	last_time: u128,
 	last_width: usize,
 
-	doing: AHashSet<T>,
+	doing: AHashSet<Vec<u8>>,
 	done: u32,
 	flags: u8,
-	threads: usize,
 	started: Instant,
 	title: Vec<u8>,
 	total: u32,
 }
 
-impl<T> Default for ProgressInner<T>
-where T: ProgressTask {
+impl Default for WitchingInner {
 	fn default() -> Self {
 		Self {
 			buf: vec![
@@ -232,27 +230,28 @@ where T: ProgressTask {
 			doing: AHashSet::new(),
 			done: 0,
 			elapsed: 0,
-			flags: FLAGS_DEFAULT,
+			flags: TICK_DEFAULT,
 			last_hash: 0,
 			last_lines: 0,
 			last_time: 0,
 			last_width: 0,
 			started: Instant::now(),
-			threads: utility::num_threads(),
 			title: Vec::new(),
 			total: 0,
 		}
 	}
 }
 
-impl<T> ProgressInner<T>
-where T: ProgressTask {
+impl WitchingInner {
 	// ------------------------------------------------------------------------
 	// Getters
 	// ------------------------------------------------------------------------
 
+	/// Doing.
+	pub fn doing(&self) -> u32 { self.doing.len() as u32 }
+
 	/// Done.
-	pub fn done(&self) -> u32 { self.done }
+	pub const fn done(&self) -> u32 { self.done }
 
 	/// Elapsed (Seconds).
 	pub fn elapsed(&self) -> u32 {
@@ -269,16 +268,10 @@ where T: ProgressTask {
 	}
 
 	/// Is Running?
-	pub fn is_running(&self) -> bool { 0 != self.flags & FLAG_RUNNING }
-
-	/// Is Silent?
-	pub fn is_silent(&self) -> bool { 0 != self.flags & FLAG_SILENT }
-
-	/// Threads.
-	pub fn threads(&self) -> usize { self.threads }
+	pub const fn is_running(&self) -> bool { 0 != self.flags & TICKING }
 
 	/// Total.
-	pub fn total(&self) -> u32 { self.total }
+	pub const fn total(&self) -> u32 { self.total }
 
 
 
@@ -286,13 +279,14 @@ where T: ProgressTask {
 	// Setters
 	// ------------------------------------------------------------------------
 
+	#[allow(trivial_casts)] // We need triviality!
 	/// End Task.
 	///
 	/// Remove a task from the currently-running list and increment `done` by
 	/// one.
-	pub fn end_task(&mut self, task: &T) {
-		if self.doing.remove(task) {
-			self.flags |= FLAG_TICK_DOING | FLAG_TICK_BAR;
+	pub fn end_task(&mut self, task: &PathBuf) {
+		if self.doing.remove(unsafe { &*(task.as_os_str() as *const OsStr as *const [u8]) }) {
+			self.flags |= TICK_DOING | TICK_BAR;
 			self.increment();
 		}
 	}
@@ -306,24 +300,10 @@ where T: ProgressTask {
 		if new_done != self.done {
 			if new_done == self.total { self.stop(); }
 			else {
-				self.flags |= FLAG_TICK_DONE | FLAG_TICK_PERCENT | FLAG_TICK_BAR;
+				self.flags |= TICK_DONE | TICK_PERCENT | TICK_BAR;
 				self.done = new_done;
 			}
 		}
-	}
-
-	/// Set Threads.
-	///
-	/// The number of threads to use for iteration. A value of `0` implies
-	/// "auto", which defaults to the number of available threads. Any other
-	/// value indicates exactly that number of threads.
-	///
-	/// To not run anything in parallel, use a value of `1`.
-	pub fn set_threads(&mut self, threads: usize) {
-		self.threads = match threads {
-			0 => utility::num_threads(),
-			x => x,
-		};
 	}
 
 	/// Set Title.
@@ -338,16 +318,18 @@ where T: ProgressTask {
 				self.title.extend_from_slice(title);
 			}
 
-			self.flags |= FLAG_TICK_TITLE;
+			self.flags |= TICK_TITLE;
 		}
 	}
 
+	#[allow(trivial_casts)] // We need triviality!
 	/// Start Task.
 	///
 	/// Add a task to the currently-running list.
-	pub fn start_task(&mut self, task: T) {
+	pub fn start_task(&mut self, task: &PathBuf) {
+		let task: Vec<u8> = unsafe { &*(task.as_os_str() as *const OsStr as *const [u8]) }.to_vec();
 		if self.doing.insert(task) {
-			self.flags |= FLAG_TICK_DOING | FLAG_TICK_BAR;
+			self.flags |= TICK_DOING | TICK_BAR;
 		}
 	}
 
@@ -453,41 +435,10 @@ where T: ProgressTask {
 		}
 	}
 
-	/// Print Generic Finish Message.
-	///
-	/// This method can be called after a progress bar has finished to
-	/// summarize what went down.
-	///
-	/// If the total is zero, a warning is printed instead.
-	pub fn print_summary<S> (&mut self, one: S, many: S)
-	where S: AsRef<str> {
-		if ! self.is_running() {
-			// Print a warning.
-			if self.total == 0 {
-				Msg::from([
-					b"No ",
-					many.as_ref().as_bytes(),
-					b" were found.\n",
-				].concat())
-					.with_prefix(MsgKind::Warning)
-			}
-			else {
-				Msg::from([
-					&utility::inflect(u64::from(self.total), one, many),
-					&b" in "[..],
-					&*NiceElapsed::from(self.elapsed()),
-					&[46, 10],
-				].concat())
-					.with_prefix(MsgKind::Done)
-			}
-			.eprint()
-		}
-	}
-
 	/// Stop.
 	pub fn stop(&mut self) {
-		self.flags |= FLAGS_ALL;
-		self.flags &= ! FLAG_RUNNING;
+		self.flags |= TICK_ALL;
+		self.flags &= ! TICKING;
 		self.done = self.total;
 		self.doing.clear();
 		self.print_blank();
@@ -502,10 +453,6 @@ where T: ProgressTask {
 		if ! self.is_running() {
 			return false;
 		}
-		// We aren't ticking!
-		else if 0 != self.flags & FLAG_SILENT {
-			return true;
-		}
 
 		// We don't want to tick too often... that will just look bad.
 		let ms = self.started.elapsed().as_millis();
@@ -518,14 +465,14 @@ where T: ProgressTask {
 		// follows.
 		self.tick_set_width();
 		if self.last_width < MIN_DRAW_WIDTH {
-			self.flags = FLAG_RUNNING;
+			self.flags = TICKING;
 			self.print_blank();
 			return true;
 		}
 
 		// If the time hasn't changed, and nothing else has changed, we can
 		// abort without all the tedious checking.
-		if ! self.tick_set_secs() && self.flags == FLAG_RUNNING {
+		if ! self.tick_set_secs() && self.flags == TICKING {
 			return true;
 		}
 
@@ -600,8 +547,8 @@ where T: ProgressTask {
 	fn tick_set_bar(&mut self) {
 		static BAR: &[u8; 255] = &[b'#'; 255];
 
-		if 0 != self.flags & FLAG_TICK_BAR {
-			self.flags &= ! FLAG_TICK_BAR;
+		if 0 != self.flags & TICK_BAR {
+			self.flags &= ! TICK_BAR;
 			match self.tick_bar_widths() {
 				// No bars.
 				(0, 0, 0) => {
@@ -654,8 +601,8 @@ where T: ProgressTask {
 	/// changes to the task list as well as resoluation changes (as long values
 	/// may require lazy cropping).
 	fn tick_set_doing(&mut self) {
-		if 0 != self.flags & FLAG_TICK_DOING {
-			self.flags &= ! FLAG_TICK_DOING;
+		if 0 != self.flags & TICK_DOING {
+			self.flags &= ! TICK_DOING;
 			if self.doing.is_empty() {
 				resize_buf_range(
 					&mut self.buf,
@@ -665,8 +612,16 @@ where T: ProgressTask {
 				);
 			}
 			else {
+				let width: usize = self.last_width.saturating_sub(6);
 				let tasks: &[u8] = &self.doing.iter()
-					.flat_map(|x| x.task_line(self.last_width))
+					.flat_map(|x|
+						[
+							// •   •   •   •  \e   [   3   5    m   ↳  ---  ---   •
+							&[32, 32, 32, 32, 27, 91, 51, 53, 109, 226, 134, 179, 32][..],
+							&x[x.fitted_range(width)],
+							b"\x1b[0m\n",
+						].concat()
+					)
 					.collect::<Vec<u8>>();
 
 				replace_buf_range(
@@ -683,8 +638,8 @@ where T: ProgressTask {
 	///
 	/// This updates the "done" portion of the buffer as needed.
 	fn tick_set_done(&mut self) {
-		if 0 != self.flags & FLAG_TICK_DONE {
-			self.flags &= ! FLAG_TICK_DONE;
+		if 0 != self.flags & TICK_DONE {
+			self.flags &= ! TICK_DONE;
 			replace_buf_range(
 				&mut self.buf,
 				&mut self.toc,
@@ -698,8 +653,8 @@ where T: ProgressTask {
 	///
 	/// This updates the "percent" portion of the buffer as needed.
 	fn tick_set_percent(&mut self) {
-		if 0 != self.flags & FLAG_TICK_PERCENT {
-			self.flags &= ! FLAG_TICK_PERCENT;
+		if 0 != self.flags & TICK_PERCENT {
+			self.flags &= ! TICK_PERCENT;
 			let p: String = format!("{:>3.*}%", 2, self.percent() * 100.0);
 			replace_buf_range(
 				&mut self.buf,
@@ -752,8 +707,8 @@ where T: ProgressTask {
 	/// The title needs to be rewritten both on direct change and resolution
 	/// change. Long titles are lazy-cropped as needed.
 	fn tick_set_title(&mut self) {
-		if 0 != self.flags & FLAG_TICK_TITLE {
-			self.flags &= ! FLAG_TICK_TITLE;
+		if 0 != self.flags & TICK_TITLE {
+			self.flags &= ! TICK_TITLE;
 			if self.title.is_empty() {
 				resize_buf_range(
 					&mut self.buf,
@@ -782,8 +737,8 @@ where T: ProgressTask {
 	///
 	/// This updates the "total" portion of the buffer as needed.
 	fn tick_set_total(&mut self) {
-		if 0 != self.flags & FLAG_TICK_TOTAL {
-			self.flags &= ! FLAG_TICK_TOTAL;
+		if 0 != self.flags & TICK_TOTAL {
+			self.flags &= ! TICK_TOTAL;
 			replace_buf_range(
 				&mut self.buf,
 				&mut self.toc,
@@ -800,7 +755,7 @@ where T: ProgressTask {
 	fn tick_set_width(&mut self) {
 		let width = utility::term_width();
 		if width != self.last_width {
-			self.flags |= FLAGS_RESIZED;
+			self.flags |= TICK_RESIZED;
 			self.last_width = width;
 		}
 	}
@@ -809,62 +764,72 @@ where T: ProgressTask {
 
 
 #[derive(Debug)]
-/// Progress Bar.
+/// Witching Bar.
 ///
 /// This is it! The whole point of the crate! See the library documentation for
 /// more information.
-pub struct Progress<T>
-where T: ProgressTask {
+pub struct Witching {
 	/// The set to progress through.
-	set: Vec<T>,
+	set: Vec<PathBuf>,
 	/// The stateful data.
-	inner: Arc<Mutex<ProgressInner<T>>>,
+	inner: Arc<Mutex<WitchingInner>>,
+	/// Flags.
+	flags: u8,
+	/// Summary labels.
+	labels: (String, String),
 }
 
-impl<T> Default for Progress<T>
-where T: ProgressTask {
+impl Default for Witching {
 	fn default() -> Self {
 		Self {
 			set: Vec::new(),
-			inner: Arc::new(Mutex::new(ProgressInner::<T>::default())),
+			inner: Arc::new(Mutex::new(WitchingInner::default())),
+			flags: 0,
+			labels: (String::from("file"), String::from("files")),
 		}
 	}
 }
 
-impl<T> From<Vec<T>> for Progress<T>
-where T: ProgressTask {
-	fn from(src: Vec<T>) -> Self {
+impl From<Vec<PathBuf>> for Witching {
+	fn from(src: Vec<PathBuf>) -> Self {
 		let total: u32 = src.len() as u32;
 		if total == 0 { Self::default() }
 		else {
 			Self {
 				set: src,
-				inner: Arc::new(Mutex::new(ProgressInner::<T> {
+				inner: Arc::new(Mutex::new(WitchingInner {
 					total,
-					flags: FLAGS_NEW,
-					..ProgressInner::<T>::default()
+					flags: TICK_NEW,
+					..WitchingInner::default()
 				})),
+				..Self::default()
 			}
 		}
 	}
 }
 
-impl<T> Deref for Progress<T>
-where T: ProgressTask {
-	type Target = [T];
+impl Deref for Witching {
+	type Target = [PathBuf];
 	fn deref(&self) -> &Self::Target { &self.set }
 }
 
-impl<T> Progress<T>
-where T: ProgressTask + Sync + Send + 'static {
+impl Witching {
 	// ------------------------------------------------------------------------
 	// Setup
 	// ------------------------------------------------------------------------
 
 	#[must_use]
-	/// With Threads.
-	pub fn with_threads(self, threads: usize) -> Self {
-		self.set_threads(threads);
+	/// With Flags.
+	pub fn with_flags(mut self, flags: u8) -> Self {
+		self.set_flags(flags);
+		self
+	}
+
+	#[must_use]
+	/// With Labels.
+	pub fn with_labels<S>(mut self, one: S, many: S) -> Self
+	where S: Into<String> {
+		self.set_labels(one, many);
 		self
 	}
 
@@ -876,64 +841,118 @@ where T: ProgressTask + Sync + Send + 'static {
 		self
 	}
 
+	/// Set Flags.
+	pub fn set_flags(&mut self, flags: u8) { self.flags = flags; }
+
+	/// Set Labels.
+	pub fn set_labels<S>(&mut self, one: S, many: S)
+	where S: Into<String> {
+		self.labels.0 = one.into();
+		self.labels.1 = many.into();
+	}
+
 	#[must_use]
-	/// Toggle Progress Barness.
-	pub fn with_display(self, on: bool) -> Self {
-		self.set_display(on);
-		self
+	#[allow(clippy::missing_const_for_fn)] // Evidently it can't!
+	/// Into Vec.
+	///
+	/// Consume and return the path collection.
+	pub fn into_vec(self) -> Vec<PathBuf> { self.set }
+
+
+
+	// ------------------------------------------------------------------------
+	// Operations
+	// ------------------------------------------------------------------------
+
+	#[must_use]
+	/// Total File(s) Size.
+	///
+	/// Add up the size of all files in a set. Calculations are run in parallel so
+	/// should be fairly fast depending on the file system.
+	fn du(&self) -> u64 {
+		self.set.par_iter()
+			.map(|x| x.metadata().map_or(0, |m| m.len()))
+			.sum()
+	}
+
+	/// Label.
+	///
+	/// What label should we be using? One or many?
+	fn label(&self) -> &str {
+		if self.set.len() == 1 { &self.labels.0 }
+		else { &self.labels.1 }
 	}
 
 	/// Run!
-	///
-	/// This here is the whole point. Iterate through the set in parallel with
-	/// a progress bar, while executing a custom callback on each entry.
-	///
-	/// When parallelism is such that only one thread is to be used, the
-	/// progress portion will run without a steady tick and without displaying
-	/// the current task information, but will otherwise still produce a
-	/// progress bar to watch.
-	///
-	/// When parallelism is more than one thread, tasks will be executed in
-	/// parallel using that many threads, with the display updated at a steady
-	/// pace (60ms) throughout.
 	pub fn run<F>(&self, cb: F)
-	where F: Fn(&T) + Copy + Send + Sync + 'static {
-		if ! self.set.is_empty() {
-			match (self.is_silent(), self.threads()) {
-				(false, 1) => self.set.iter()
-					.for_each(|x| {
+	where F: Fn(&PathBuf) + Copy + Send + Sync + 'static {
+		// Empty set?
+		if self.set.is_empty() {
+			if 0 != self.flags & WITCHING_SUMMARIZE {
+				Msg::from([
+					b"No ",
+					self.labels.1.as_bytes(),
+					b" were found.\n",
+				].concat())
+					.with_prefix(MsgKind::Warning)
+					.eprint();
+			}
+		}
+		else {
+			// We might need to note our starting size.
+			let before: u64 =
+				if 0 == self.flags & WITCHING_DIFF { 0 }
+				else { self.du() };
+
+			match (0 != self.flags & WITCHING_SERIAL, 0 != self.flags & WITCHING_QUIET) {
+				// Serial and quiet.
+				(true, true) => {
+					self.set.iter().for_each(cb);
+					self.stop();
+				},
+				// Serial and noisy.
+				(true, false) =>
+					self.set.iter().for_each(|x| {
 						cb(x);
 						self.increment();
 						progress_tick(&self.inner);
 					}),
-				(true, 1) => {
-					self.set.iter().for_each(cb);
-					let mut ptr = mutex_ptr!(self.inner);
-					ptr.stop();
+				// Parallel but quiet.
+				(false, true) => {
+					self.set.par_iter().for_each(cb);
+					self.stop();
 				},
-				(true, x) => self.run_parallel_silent(x, cb),
-				(false, x) => self.run_parallel(x, cb),
+				// The whole show!
+				(false, false) => self.run_sexy(cb),
+			};
+
+			// Summarize?
+			if 0 != self.flags & WITCHING_SUMMARIZE {
+				// Just the time.
+				if 0 == self.flags & WITCHING_DIFF { self.summarize(); }
+				// Time and savings.
+				else { self.summarize_diff(before); }
 			}
 		}
 	}
 
-	/// Loop in Parallel!
-	fn run_parallel<F>(&self, threads: usize, cb: F)
-	where F: Fn(&T) + Copy + Send + Sync + 'static {
-		// The thread pool.
-		let pool = ThreadPoolBuilder::new()
-			.num_threads(threads)
-			.build()
-			.unwrap();
-
+	/// Run!
+	fn run_sexy<F>(&self, cb: F)
+	where F: Fn(&PathBuf) + Copy + Send + Sync + 'static {
 		// Run steady tick until we're out of tasks.
 		let ticker = crossbeam_channel::tick(Duration::from_millis(60));
+
+		// The thread pool.
+		let pool = ThreadPoolBuilder::new()
+			.num_threads(1.max(num_cpus::get()))
+			.build()
+			.unwrap();
 
 		// Do the main loop!
 		self.set.iter().cloned().for_each(|x| {
 			let inner = self.inner.clone();
 			pool.spawn(move|| {
-				progress_start(&inner, x.clone());
+				progress_start(&inner, &x);
 				cb(&x);
 				progress_end(&inner, &x);
 			});
@@ -950,117 +969,83 @@ where T: ProgressTask + Sync + Send + 'static {
 		drop(pool);
 	}
 
-	/// Loop (Silently) in Parallel!
-	///
-	/// This is just like `run_parallel()`, except it avoids calls to tick-
-	/// related methods as there is no ticking needed.
-	fn run_parallel_silent<F>(&self, threads: usize, cb: F)
-	where F: Fn(&T) + Copy + Send + Sync + 'static {
-		// The thread pool.
-		ThreadPoolBuilder::new()
-			.num_threads(threads)
-			.build_global()
-			.unwrap();
-
-		self.set.par_iter().for_each(cb);
-
-		let mut ptr = mutex_ptr!(self.inner);
-		ptr.stop();
+	/// Summarize.
+	fn summarize(&self) {
+		Msg::from([
+			&*NiceInt::from(u64::from(self.total())),
+			b" ",
+			self.label().as_bytes(),
+			b" in ",
+			&*NiceElapsed::from(self.elapsed()),
+			b".\n",
+		].concat())
+			.with_prefix(MsgKind::Done)
+			.eprint();
 	}
 
+	/// Summarize.
+	fn summarize_diff(&self, before: u64) {
+		let after: u64 = self.du();
 
-
-	// ------------------------------------------------------------------------
-	// Breakdown
-	// ------------------------------------------------------------------------
-
-	#[must_use]
-	/// Consume.
-	///
-	/// Return the loopable vector.
-	pub fn into_vec(self) -> Vec<T> { self.set }
-
-	/// Reset the Counts.
-	///
-	/// This resets the totals so the source can be looped a second time.
-	pub fn reset(&self) {
-		if ! self.set.is_empty() && ! self.is_running() {
-			let mut ptr = mutex_ptr!(self.inner);
-
-			// Reset the tickable values.
-			ptr.doing.clear();
-			ptr.done = 0;
-
-			// Force a rewrite of the time part, otherwise it will reflect the
-			// old value for a second or so.
-			ptr.elapsed = 666;
-			ptr.started = Instant::now();
-			ptr.tick_set_secs();
-
-			// Reset the flags and hashes.
-			ptr.flags |= FLAGS_ALL;
-			ptr.last_hash = 0;
-			ptr.last_lines = 0;
-			ptr.last_time = 0;
-			ptr.last_width = 0;
+		// No savings. Boo.
+		if 0 == after || before <= after {
+			Msg::from([
+				&*NiceInt::from(u64::from(self.total())),
+				b" ",
+				self.label().as_bytes(),
+				b" in ",
+				&*NiceElapsed::from(self.elapsed()),
+				b", but nothing doing.\n",
+			].concat())
+				.with_prefix(MsgKind::Crunched)
+				.eprint();
+		}
+		else {
+			MsgKind::Crunched.into_msg(format!(
+				"{} {} in {}, saving {} bytes ({:3.*}%).\n",
+				NiceInt::from(u64::from(self.total())).as_str(),
+				self.label(),
+				NiceElapsed::from(self.elapsed()).as_str(),
+				NiceInt::from(before - after).as_str(),
+				2,
+				(1.0 - (after as f64 / before as f64)) * 100.0
+			)).eprint();
 		}
 	}
 
 
 
 	// ------------------------------------------------------------------------
-	// `ProgressInner` Wrappers
+	// `WitchingInner` Wrappers
 	// ------------------------------------------------------------------------
 
 	// These just return the inner values.
+	get_inner!(doing, u32);
 	get_inner!(done, u32);
 	get_inner!(elapsed, u32);
 	get_inner!(percent, f64);
-	get_inner!(threads, usize);
 	get_inner!(total, u32);
 	get_inner!(is_running, bool);
-	get_inner!(is_silent, bool);
-
-	#[must_use]
-	/// Get Doing.
-	pub fn doing(&self) -> u32 {
-		let ptr = mutex_ptr!(self.inner);
-		ptr.doing.len() as u32
-	}
 
 	/// Increment.
 	///
-	/// Wrapper for `ProgressInner::increment()`.
+	/// Wrapper for `WitchingInner::increment()`.
 	fn increment(&self) {
 		let mut ptr = mutex_ptr!(self.inner);
 		ptr.increment();
 	}
 
-	/// Print Finish Message.
+	/// Stop.
 	///
-	/// Wrapper for `ProgressInner::print_summary()`.
-	pub fn print_summary<S> (&self, one: S, many: S)
-	where S: AsRef<str> {
+	/// Wrapper for `WitchingInner::stop()`.
+	fn stop(&self) {
 		let mut ptr = mutex_ptr!(self.inner);
-		ptr.print_summary(one, many);
-	}
-
-	/// Toggle Progress Barness.
-	pub fn set_display(&self, on: bool) {
-		let mut ptr = mutex_ptr!(self.inner);
-		if on { ptr.flags &= ! FLAG_SILENT; }
-		else { ptr.flags |= FLAG_SILENT; }
-	}
-
-	/// With Threads.
-	pub fn set_threads(&self, threads: usize) {
-		let mut ptr = mutex_ptr!(self.inner);
-		ptr.set_threads(threads);
+		ptr.stop();
 	}
 
 	/// Set Title.
 	///
-	/// Wrapper for `ProgressInner::set_title()`.
+	/// Wrapper for `WitchingInner::set_title()`.
 	pub fn set_title<S> (&self, title: S)
 	where S: AsRef<str> {
 		let mut ptr = mutex_ptr!(self.inner);
@@ -1068,100 +1053,26 @@ where T: ProgressTask + Sync + Send + 'static {
 	}
 }
 
-impl Progress<PathBuf> {
-	/// Crunch Run.
-	///
-	/// This is a special version of `run()` for `PathBuf` collections that
-	/// compares the before and after sizes, reporting any savings in a summary
-	/// at the end.
-	///
-	/// Note: a warning is printed if the contents of the set are empty.
-	///
-	/// Note: the summary is printed regardless of whether or not the progress
-	/// display has been silenced.
-	pub fn crunch<F> (&self, cb: F)
-	where F: Fn(&PathBuf) + Copy + Send + Sync + 'static {
-		if self.set.is_empty() {
-			MsgKind::Warning.into_msg("No matching files were found.\n")
-				.eprint();
-
-			return;
-		}
-
-		let before: u64 = self.du();
-		self.run(cb);
-
-		crunched_in(
-			self.total().into(),
-			self.elapsed(),
-			before,
-			self.du(),
-		);
-	}
-
-	#[must_use]
-	/// Total File(s) Size.
-	///
-	/// Add up the size of all files in a set. Calculations are run in parallel so
-	/// should be fairly fast depending on the file system.
-	fn du(&self) -> u64 {
-		self.set.par_iter()
-			.map(|x| x.metadata().map_or(0, |m| m.len()))
-			.sum()
-	}
-}
-
 /// Tick.
 ///
-/// Wrapper for `ProgressInner::tick()`.
-fn progress_tick<T>(inner: &Arc<Mutex<ProgressInner<T>>>) -> bool
-where T: ProgressTask + Sync + Send + 'static {
+/// Wrapper for `WitchingInner::tick()`.
+fn progress_tick(inner: &Arc<Mutex<WitchingInner>>) -> bool {
 	let mut ptr = mutex_ptr!(inner);
 	ptr.tick()
 }
 
 /// End Task.
 ///
-/// Wrapper for `ProgressInner::end_task()`.
-fn progress_end<T>(inner: &Arc<Mutex<ProgressInner<T>>>, task: &T)
-where T: ProgressTask + Sync + Send + 'static {
+/// Wrapper for `WitchingInner::end_task()`.
+fn progress_end(inner: &Arc<Mutex<WitchingInner>>, task: &PathBuf) {
 	let mut ptr = mutex_ptr!(inner);
 	ptr.end_task(task);
 }
 
 /// Start Task.
 ///
-/// Wrapper for `ProgressInner::start_task()`.
-fn progress_start<T>(inner: &Arc<Mutex<ProgressInner<T>>>, task: T)
-where T: ProgressTask + Sync + Send + 'static {
+/// Wrapper for `WitchingInner::start_task()`.
+fn progress_start(inner: &Arc<Mutex<WitchingInner>>, task: &PathBuf) {
 	let mut ptr = mutex_ptr!(inner);
 	ptr.start_task(task);
-}
-
-/// Crunched In Msg
-///
-/// This is an alternative progress summary that includes the number of bytes
-/// saved. It is called after `progress_crunch()`.
-fn crunched_in(total: u64, time: u32, before: u64, after: u64) {
-	// No savings or weird values.
-	if 0 == after || before <= after {
-		Msg::from([
-			&utility::inflect(total, "file in ", "files in "),
-			&*NiceElapsed::from(time),
-			b", but nothing doing.\n",
-		].concat())
-			.with_prefix(MsgKind::Crunched)
-			.eprint();
-	}
-	// Something happened!
-	else {
-		MsgKind::Crunched.into_msg(format!(
-			"{} in {}, saving {} bytes ({:3.*}%).\n",
-			unsafe { std::str::from_utf8_unchecked(&utility::inflect(total, "file", "files")) },
-			NiceElapsed::from(time).as_str(),
-			NiceInt::from(before - after).as_str(),
-			2,
-			(1.0 - (after as f64 / before as f64)) * 100.0
-		)).eprint();
-	}
 }
