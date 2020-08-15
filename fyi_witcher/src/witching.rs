@@ -947,27 +947,32 @@ impl Witching {
 		Msg::from([
 			&*NiceInt::from(u64::from(self.total())),
 			b" ",
-			self.label().as_bytes(),
+			self.label(),
 			b" in ",
 			&*NiceElapsed::from(self.elapsed()),
+		].concat()
+	}
+
+	/// Summarize.
+	fn summarize(&self) {
+		Msg::from([
+			&self.summary_stub()[..],
 			b".\n",
 		].concat())
 			.with_prefix(MsgKind::Done)
 			.eprint();
 	}
 
-	/// Summarize.
+	/// Summarize (with savings).
+	///
+	/// This summary compares the before and after bytes.
 	fn summarize_diff(&self, before: u64) {
 		let after: u64 = self.du();
 
 		// No savings. Boo.
 		if 0 == after || before <= after {
 			Msg::from([
-				&*NiceInt::from(u64::from(self.total())),
-				b" ",
-				self.label().as_bytes(),
-				b" in ",
-				&*NiceElapsed::from(self.elapsed()),
+				&self.summary_stub()[..],
 				b", but nothing doing.\n",
 			].concat())
 				.with_prefix(MsgKind::Crunched)
@@ -975,15 +980,26 @@ impl Witching {
 		}
 		else {
 			MsgKind::Crunched.into_msg(format!(
-				"{} {} in {}, saving {} bytes ({:3.*}%).\n",
-				NiceInt::from(u64::from(self.total())).as_str(),
-				self.label(),
-				NiceElapsed::from(self.elapsed()).as_str(),
+				"{}, saving {} bytes ({:3.*}%).\n",
+				unsafe { std::str::from_utf8_unchecked(&self.summary_stub()[..]) },
 				NiceInt::from(before - after).as_str(),
 				2,
 				(1.0 - (after as f64 / before as f64)) * 100.0
 			)).eprint();
 		}
+	}
+
+	/// Summarize empty.
+	///
+	/// This summary prints when the set is empty.
+	fn summarize_empty(&self) {
+		Msg::from([
+			&b"No "[..],
+			&self.many,
+			b" were found.\n",
+		].concat())
+			.with_prefix(MsgKind::Warning)
+			.eprint();
 	}
 
 
