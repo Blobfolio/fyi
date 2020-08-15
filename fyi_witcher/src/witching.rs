@@ -542,6 +542,7 @@ impl WitchingInner {
 	/// be less than 10.
 	fn tick_set_bar(&mut self) {
 		static BAR: &[u8; 255] = &[b'#'; 255];
+		static DASH: &[u8; 255] = &[b'-'; 255];
 
 		if 0 != self.flags & TICK_BAR {
 			self.flags &= ! TICK_BAR;
@@ -565,7 +566,7 @@ impl WitchingInner {
 							b"\x1b[2m[\x1b[0;1;96m",
 							&BAR[0..done],
 							b"\x1b[0;1;34m",
-							&BAR[0..undone],
+							&DASH[0..undone],
 							b"\x1b[0;2m]\x1b[0m  ",
 						].concat()
 					);
@@ -580,9 +581,9 @@ impl WitchingInner {
 							b"\x1b[2m[\x1b[0;1;96m",
 							&BAR[0..done],
 							b"\x1b[0;1;95m",
-							&BAR[0..doing],
+							&DASH[0..doing],
 							b"\x1b[0;1;34m",
-							&BAR[0..undone],
+							&DASH[0..undone],
 							b"\x1b[0;2m]\x1b[0m  ",
 						].concat()
 					);
