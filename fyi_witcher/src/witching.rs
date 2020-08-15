@@ -55,6 +55,10 @@ use std::{
 	path::PathBuf,
 	sync::{
 		Arc,
+		atomic::{
+			AtomicBool,
+			Ordering::SeqCst,
+		},
 		Mutex,
 	},
 	time::{
@@ -912,39 +916,38 @@ impl Witching {
 	/// Run!
 	fn run_sexy<F>(&self, cb: F)
 	where F: Fn(&PathBuf) + Copy + Send + Sync + 'static {
+		// Track the run independently of `WitchingInner`, just in case a
+		// `Mutex` crashes or something.
+		let done = Arc::new(AtomicBool::new(false));
+
 		// Run steady tick until we're out of tasks.
-		let ticker = crossbeam_channel::tick(Duration::from_millis(60));
-
-		// The thread pool.
-		let pool = ThreadPoolBuilder::new()
-			.num_threads(1.max(num_cpus::get()))
-			.build()
-			.unwrap();
-
-		// Do the main loop!
-		self.set.iter().cloned().for_each(|x| {
-			let inner = self.inner.clone();
-			pool.spawn(move|| {
-				progress_start(&inner, &x);
-				cb(&x);
-				progress_end(&inner, &x);
-			});
+		let t_inner = self.inner.clone();
+		let t_sleep = Duration::from_millis(60);
+		let t_done = done.clone();
+		let t_handle = std::thread::spawn(move|| loop {
+			if t_done.load(SeqCst) || ! progress_tick(&t_inner) { break; }
+			std::thread::sleep(t_sleep);
 		});
 
-		loop {
-			ticker.recv().unwrap();
-			if ! progress_tick(&self.inner) {
-				drop(ticker);
-				break;
-			}
-		}
+		// Do the main loop!
+		let inner = self.inner.clone();
+		self.set.par_iter().for_each(|x| {
+			progress_start(&inner, x);
+			cb(x);
+			progress_end(&inner, x);
+		});
 
-		drop(pool);
+		// The steady tick loop should close on its own, but just in case,
+		// let's give it another reason to do so.
+		done.store(true, SeqCst);
+		t_handle.join().unwrap();
 	}
 
-	/// Summarize.
-	fn summarize(&self) {
-		Msg::from([
+	/// Summary Stub.
+	///
+	/// Almost all of the summaries start the same way. This is that way.
+	fn summary_stub(&self) -> Vec<u8> {
+		[
 			&*NiceInt::from(u64::from(self.total())),
 			b" ",
 			self.label(),
