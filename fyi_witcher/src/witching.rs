@@ -39,10 +39,7 @@ use fyi_msg::{
 	resize_buf_range,
 	utility::time_format_dd,
 };
-use rayon::{
-	prelude::*,
-	ThreadPoolBuilder,
-};
+use rayon::prelude::*;
 use std::{
 	cmp::Ordering,
 	ffi::OsStr,
@@ -105,15 +102,10 @@ pub const WITCHING_DIFF: u8 =      0b0001;
 /// for code re-use in libraries that offer the option.
 pub const WITCHING_QUIET: u8 =     0b0010;
 
-/// Witching Flags: Serial
-///
-/// Iterate through the file set serially (rather than parallel).
-pub const WITCHING_SERIAL: u8 =    0b0100;
-
 /// Witching Flags: Summarize
 ///
 /// Summarize results at the end of the run.
-pub const WITCHING_SUMMARIZE: u8 = 0b1000;
+pub const WITCHING_SUMMARIZE: u8 = 0b0100;
 
 
 
@@ -889,13 +881,7 @@ impl Witching {
 		// Empty set?
 		if self.set.is_empty() {
 			if 0 != self.flags & WITCHING_SUMMARIZE {
-				Msg::from([
-					b"No ",
-					self.labels.1.as_bytes(),
-					b" were found.\n",
-				].concat())
-					.with_prefix(MsgKind::Warning)
-					.eprint();
+				self.summarize_empty();
 			}
 		}
 		else {
@@ -904,27 +890,14 @@ impl Witching {
 				if 0 == self.flags & WITCHING_DIFF { 0 }
 				else { self.du() };
 
-			match (0 != self.flags & WITCHING_SERIAL, 0 != self.flags & WITCHING_QUIET) {
-				// Serial and quiet.
-				(true, true) => {
-					self.set.iter().for_each(cb);
-					self.stop();
-				},
-				// Serial and noisy.
-				(true, false) =>
-					self.set.iter().for_each(|x| {
-						cb(x);
-						self.increment();
-						progress_tick(&self.inner);
-					}),
-				// Parallel but quiet.
-				(false, true) => {
-					self.set.par_iter().for_each(cb);
-					self.stop();
-				},
-				// The whole show!
-				(false, false) => self.run_sexy(cb),
-			};
+			if 0 == self.flags & WITCHING_QUIET {
+				self.run_sexy(cb);
+			}
+			// Quiet iteration.
+			else {
+				self.set.par_iter().for_each(cb);
+				self.stop();
+			}
 
 			// Summarize?
 			if 0 != self.flags & WITCHING_SUMMARIZE {

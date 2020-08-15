@@ -42,6 +42,5 @@ pub use witching::{
 	Witching,
 	WITCHING_DIFF,
 	WITCHING_QUIET,
-	WITCHING_SERIAL,
 	WITCHING_SUMMARIZE,
 };
