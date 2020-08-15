@@ -773,7 +773,8 @@ pub struct Witching {
 	/// Flags.
 	flags: u8,
 	/// Summary labels.
-	labels: (String, String),
+	one: Vec<u8>,
+	many: Vec<u8>,
 }
 
 impl Default for Witching {
@@ -782,7 +783,8 @@ impl Default for Witching {
 			set: Vec::new(),
 			inner: Arc::new(Mutex::new(WitchingInner::default())),
 			flags: 0,
-			labels: (String::from("file"), String::from("files")),
+			one: vec![102, 105, 108, 101],
+			many: vec![102, 105, 108, 101, 115],
 		}
 	}
 }
@@ -825,7 +827,7 @@ impl Witching {
 	#[must_use]
 	/// With Labels.
 	pub fn with_labels<S>(mut self, one: S, many: S) -> Self
-	where S: Into<String> {
+	where S: AsRef<str> {
 		self.set_labels(one, many);
 		self
 	}
@@ -843,9 +845,12 @@ impl Witching {
 
 	/// Set Labels.
 	pub fn set_labels<S>(&mut self, one: S, many: S)
-	where S: Into<String> {
-		self.labels.0 = one.into();
-		self.labels.1 = many.into();
+	where S: AsRef<str> {
+		self.one.truncate(0);
+		self.one.extend_from_slice(one.as_ref().as_bytes());
+
+		self.many.truncate(0);
+		self.many.extend_from_slice(many.as_ref().as_bytes());
 	}
 
 	#[must_use]
@@ -875,9 +880,9 @@ impl Witching {
 	/// Label.
 	///
 	/// What label should we be using? One or many?
-	fn label(&self) -> &str {
-		if self.set.len() == 1 { &self.labels.0 }
-		else { &self.labels.1 }
+	fn label(&self) -> &[u8] {
+		if self.set.len() == 1 { &self.one }
+		else { &self.many }
 	}
 
 	/// Run!
@@ -1019,14 +1024,6 @@ impl Witching {
 	get_inner!(percent, f64);
 	get_inner!(total, u32);
 	get_inner!(is_running, bool);
-
-	/// Increment.
-	///
-	/// Wrapper for `WitchingInner::increment()`.
-	fn increment(&self) {
-		let mut ptr = mutex_ptr!(self.inner);
-		ptr.increment();
-	}
 
 	/// Stop.
 	///
