@@ -171,7 +171,7 @@ pub fn resize_buf_range(
 		// Shrink it.
 		Ordering::Less => {
 			let adj: usize = toc[idx].len() - len;
-			if idx == src.len() { src.truncate(idx - adj); }
+			if toc[idx].end == src.len() { src.truncate(toc[idx].end - adj); }
 			else { src.drain(toc[idx].end - adj..toc[idx].end); }
 			BufRange::shrink_set_at(toc, idx, adj);
 		},
