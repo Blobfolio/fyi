@@ -98,7 +98,10 @@ impl BufRange {
 		set[idx].end += adj;
 		set.iter_mut()
 			.skip(idx + 1)
-			.for_each(|x| x.increment(adj));
+			.for_each(|x| {
+				x.start += adj;
+				x.end += adj;
+			});
 	}
 
 	/// Grow Set At.
@@ -106,23 +109,10 @@ impl BufRange {
 		set[idx].end -= adj;
 		set.iter_mut()
 			.skip(idx + 1)
-			.for_each(|x| x.decrement(adj));
-	}
-
-	/// Decrement.
-	///
-	/// Decrease both `start` and `end` by `adj`.
-	fn decrement(&mut self, adj: usize) {
-		self.start -= adj;
-		self.end -= adj;
-	}
-
-	/// Increment.
-	///
-	/// Increase both `start` and `end` by `adj`.
-	fn increment(&mut self, adj: usize) {
-		self.start += adj;
-		self.end += adj;
+			.for_each(|x| {
+				x.start -= adj;
+				x.end -= adj;
+			});
 	}
 }
 
