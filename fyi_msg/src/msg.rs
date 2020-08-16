@@ -182,7 +182,7 @@ impl MsgKind {
 	/// Into `Msg`.
 	pub fn into_msg<S> (self, msg: S) -> Msg
 	where S: AsRef<str> {
-		Msg::new(msg).with_prefix(self)
+		Msg::from(msg.as_ref()).with_prefix(self)
 	}
 
 	#[must_use]
@@ -258,19 +258,12 @@ impl fmt::Display for Msg {
 	}
 }
 
+impl From<&str> for Msg {
+	fn from(src: &str) -> Self { Self::from(src.as_bytes().to_vec()) }
+}
+
 impl From<&[u8]> for Msg {
-	fn from(src: &[u8]) -> Self {
-		Self {
-			toc: [
-				BufRange::default(),
-				BufRange::default(),
-				BufRange::default(),
-				BufRange::new(0, src.len()),
-			],
-			buf: src.to_vec(),
-			..Self::default()
-		}
-	}
+	fn from(src: &[u8]) -> Self { Self::from(src.to_vec()) }
 }
 
 impl From<Vec<u8>> for Msg {
@@ -319,9 +312,7 @@ impl Msg {
 	/// but might have its uses, particularly when combined with the build
 	/// pattern methods.
 	pub fn new<S> (msg: S) -> Self
-	where S: AsRef<str> {
-		Self::from(msg.as_ref().as_bytes())
-	}
+	where S: AsRef<str> { Self::from(msg.as_ref()) }
 
 	#[must_use]
 	/// With Indent.
