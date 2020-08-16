@@ -181,15 +181,15 @@ pub fn vec_resize_at(src: &mut Vec<u8>, idx: usize, adj: usize) {
 		unsafe {
 			{
 				let ptr = src.as_mut_ptr().add(idx);
+				let after: usize = old_len - idx;
 
 				// Shift the data over.
-				ptr::copy(ptr, ptr.add(adj), old_len - idx);
+				ptr::copy(ptr, ptr.add(adj), after);
 
 				// If we're adding more than we just copied, we'll need to
 				// initialize those values.
-				if adj > old_len - idx {
-					let from = old_len - idx;
-					ptr::write_bytes(ptr.add(from), 0, adj - from);
+				if adj > after {
+					ptr::write_bytes(ptr.add(after), 0, adj - after);
 				}
 			}
 			src.set_len(old_len + adj);
