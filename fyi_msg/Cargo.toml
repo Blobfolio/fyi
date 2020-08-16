@@ -8,6 +8,7 @@ publish = false
 
 [dependencies]
 chrono = "0.4.*"
+ustr = "0.7.*"
 
 [dev-dependencies]
 criterion = "*"
