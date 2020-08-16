@@ -141,11 +141,13 @@ const TICKING: u8 =      0b0100_0000;
 /// an array for easy access. These are their indexes.
 const PART_TITLE: usize = 0;
 const PART_ELAPSED: usize = 1;
-const PART_BARS: usize = 2;
-const PART_DONE: usize = 3;
-const PART_TOTAL: usize = 4;
-const PART_PERCENT: usize = 5;
-const PART_DOING: usize = 6;
+const PART_BAR_DONE: usize = 2;
+const PART_BAR_DOING: usize = 3;
+const PART_BAR_UNDONE: usize = 4;
+const PART_DONE: usize = 5;
+const PART_TOTAL: usize = 6;
+const PART_PERCENT: usize = 7;
+const PART_DOING: usize = 8;
 
 
 
@@ -159,7 +161,7 @@ const MIN_DRAW_WIDTH: usize = 40;
 /// Inner Witching.
 struct WitchingInner {
 	buf: Vec<u8>,
-	toc: [BufRange; 7],
+	toc: [BufRange; 9],
 	elapsed: u32,
 	last_hash: u64,
 	last_lines: usize,
@@ -187,7 +189,23 @@ impl Default for WitchingInner {
 			//  \e   [   0   ;   2    m   ]  \e   [   0    m   •   •
 				27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32,
 
-			//  Bar would go here.
+			//  \e   [   2    m   [  \e   [   0   ;   1   ;   9   6    m
+				27, 91, 50, 109, 91, 27, 91, 48, 59, 49, 59, 57, 54, 109,
+
+			//  Bar Done would go here.
+
+			//  \e   [   0   ;   1   ;   9   5    m
+				27, 91, 48, 59, 49, 59, 57, 53, 109,
+
+			//  Bar Doing would go here.
+
+			//  \e   [   0   ;   1   ;   3   4    m
+				27, 91, 48, 59, 49, 59, 51, 52, 109,
+
+			//  Bar Undone would go here.
+
+			//  \e   [   0   ;   2    m   ]  \e   [   0    m   •   •
+				27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32,
 
 			//  Done.
 			//  \e   [   1   ;   9   6    m
@@ -218,11 +236,13 @@ impl Default for WitchingInner {
 			toc: [
 				BufRange::new(0, 0),   // Title.
 				BufRange::new(11, 19), // Elapsed.
-				BufRange::new(32, 32), // Bar(s).
-				BufRange::new(39, 40), // Done.
-				BufRange::new(56, 57), // Total.
-				BufRange::new(65, 70), // Percent.
-				BufRange::new(75, 75), // Current Tasks.
+				BufRange::new(46, 46), // Bar Done.
+				BufRange::new(55, 55), // Bar Doing.
+				BufRange::new(64, 64), // Bar Undone.
+				BufRange::new(84, 85), // Done.
+				BufRange::new(101, 102), // Total.
+				BufRange::new(110, 115), // Percent.
+				BufRange::new(120, 120), // Current Tasks.
 			],
 			doing: AHashSet::new(),
 			done: 0,
@@ -543,48 +563,33 @@ impl WitchingInner {
 
 		if 0 != self.flags & TICK_BAR {
 			self.flags &= ! TICK_BAR;
-			match self.tick_bar_widths() {
-				// No bars.
-				(0, 0, 0) => {
-					resize_buf_range(
-						&mut self.buf,
-						&mut self.toc,
-						PART_BARS,
-						0
-					);
-				},
-				// Skip active tasks.
-				(done, 0, undone) => {
-					replace_buf_range(
-						&mut self.buf,
-						&mut self.toc,
-						PART_BARS,
-						&[
-							b"\x1b[2m[\x1b[0;1;96m",
-							&BAR[0..done],
-							b"\x1b[0;1;34m",
-							&DASH[0..undone],
-							b"\x1b[0;2m]\x1b[0m  ",
-						].concat()
-					);
-				},
-				// Do all three.
-				(done, doing, undone) => {
-					replace_buf_range(
-						&mut self.buf,
-						&mut self.toc,
-						PART_BARS,
-						&[
-							b"\x1b[2m[\x1b[0;1;96m",
-							&BAR[0..done],
-							b"\x1b[0;1;95m",
-							&DASH[0..doing],
-							b"\x1b[0;1;34m",
-							&DASH[0..undone],
-							b"\x1b[0;2m]\x1b[0m  ",
-						].concat()
-					);
-				}
+			let (w_done, w_doing, w_undone) = self.tick_bar_widths();
+
+			if self.toc[PART_BAR_DONE].len() != w_done {
+				replace_buf_range(
+					&mut self.buf,
+					&mut self.toc,
+					PART_BAR_DONE,
+					&BAR[0..w_done],
+				);
+			}
+
+			if self.toc[PART_BAR_DOING].len() != w_doing {
+				replace_buf_range(
+					&mut self.buf,
+					&mut self.toc,
+					PART_BAR_DOING,
+					&DASH[0..w_doing],
+				);
+			}
+
+			if self.toc[PART_BAR_UNDONE].len() != w_undone {
+				replace_buf_range(
+					&mut self.buf,
+					&mut self.toc,
+					PART_BAR_UNDONE,
+					&DASH[0..w_undone],
+				);
 			}
 		}
 	}
