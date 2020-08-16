@@ -4,7 +4,6 @@
 
 use criterion::{
 	BenchmarkId,
-	black_box,
 	Criterion,
 	criterion_group,
 	criterion_main,
