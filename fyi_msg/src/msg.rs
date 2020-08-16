@@ -44,6 +44,7 @@ use crate::{
 	utility,
 };
 use std::{
+	cmp::Ordering,
 	fmt,
 	hash::{
 		Hash,
@@ -55,7 +56,6 @@ use std::{
 	},
 	ops::Deref,
 };
-use ustr::Ustr;
 
 
 
@@ -67,6 +67,98 @@ const PART_INDENT: usize = 0;
 const PART_TIMESTAMP: usize = 1;
 const PART_PREFIX: usize = 2;
 const PART_MSG: usize = 3;
+
+
+
+#[derive(Clone, Copy)]
+/// Prefix Buffer.
+///
+/// This is a simple fixed-array buffer to store custom prefixes for
+/// `MsgKind::Other`. This is implemented as a custom struct in order to take
+/// advantage of `Copy`, etc.
+pub struct PrefixBuffer {
+	buf: [u8; 64],
+	len: usize,
+}
+
+impl fmt::Debug for PrefixBuffer {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("PrefixBuffer")
+			.field("buf", &self.as_bytes())
+			.finish()
+	}
+}
+
+impl Default for PrefixBuffer {
+	fn default() -> Self {
+		Self {
+			buf: [0; 64],
+			len: 0,
+		}
+	}
+}
+
+impl Deref for PrefixBuffer {
+	type Target = [u8];
+	fn deref(&self) -> &Self::Target { self.as_bytes() }
+}
+
+impl Eq for PrefixBuffer {}
+
+impl From<Vec<u8>> for PrefixBuffer {
+	fn from(src: Vec<u8>) -> Self {
+		match src.len() {
+			1..=64 => {
+				let mut out = Self::default();
+				out.len = src.len();
+				out.buf[0..out.len].copy_from_slice(&src);
+				out
+			},
+			_ => Self::default(),
+		}
+	}
+}
+
+impl Hash for PrefixBuffer {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.as_bytes().hash(state);
+	}
+}
+
+impl Ord for PrefixBuffer {
+	fn cmp(&self, other: &Self) -> Ordering {
+		self.as_bytes().cmp(other.as_bytes())
+	}
+}
+
+impl PartialEq for PrefixBuffer {
+	fn eq(&self, other: &Self) -> bool {
+		self.as_bytes() == other.as_bytes()
+	}
+}
+
+impl PartialOrd for PrefixBuffer {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.as_bytes().cmp(other.as_bytes()))
+	}
+}
+
+impl PrefixBuffer {
+	/// As Bytes.
+	pub fn as_bytes(&self) -> &[u8] {
+		&self.buf[0..self.len]
+	}
+
+	/// Is Empty.
+	pub const fn is_empty(&self) -> bool {
+		0 == self.len
+	}
+
+	/// Length.
+	pub const fn len(&self) -> usize {
+		self.len
+	}
+}
 
 
 
@@ -99,7 +191,7 @@ pub enum MsgKind {
 	/// Warning.
 	Warning,
 	/// Custom.
-	Other(Ustr),
+	Other(PrefixBuffer),
 }
 
 impl Default for MsgKind {
@@ -144,13 +236,11 @@ impl MsgKind {
 		let prefix = prefix.as_ref().trim();
 		if prefix.is_empty() { Self::None }
 		else {
-			Self::Other(Ustr::from(unsafe { std::str::from_utf8_unchecked(
-				&[
-					utility::ansi_code_bold(color),
-					prefix.as_bytes(),
-					b":\x1b[0m ",
-				].concat()
-			)}))
+			Self::Other(PrefixBuffer::from([
+				utility::ansi_code_bold(color),
+				prefix.as_bytes(),
+				b":\x1b[0m ",
+			].concat()))
 		}
 	}
 
@@ -169,7 +259,7 @@ impl MsgKind {
 			Self::Success => b"\x1b[92;1mSuccess:\x1b[0m ",
 			Self::Task => b"\x1b[1;38;5;199mTask:\x1b[0m ",
 			Self::Warning => b"\x1b[93;1mWarning:\x1b[0m ",
-			Self::Other(x) => x.as_bytes(),
+			Self::Other(x) => x,
 		}
 	}
 

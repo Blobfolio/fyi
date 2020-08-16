@@ -66,7 +66,6 @@ use std::{
 		Instant,
 	},
 };
-use ustr::Ustr;
 
 
 
@@ -172,7 +171,7 @@ struct WitchingInner {
 	done: u32,
 	flags: u8,
 	started: Instant,
-	title: Ustr,
+	title: Vec<u8>,
 	total: u32,
 }
 
@@ -253,7 +252,7 @@ impl Default for WitchingInner {
 			last_time: 0,
 			last_width: 0,
 			started: Instant::now(),
-			title: Ustr::default(),
+			title: Vec::new(),
 			total: 0,
 		}
 	}
@@ -328,9 +327,13 @@ impl WitchingInner {
 	/// To remove a title, pass an empty string.
 	pub fn set_title<S> (&mut self, title: S)
 	where S: AsRef<str> {
-		let title: Ustr = Ustr::from(title.as_ref());
+		let title: &[u8] = title.as_ref().as_bytes();
 		if self.title.ne(&title) {
-			self.title = title;
+			self.title.truncate(0);
+			if ! title.is_empty() {
+				self.title.extend_from_slice(title);
+			}
+
 			self.flags |= TICK_TITLE;
 		}
 	}
@@ -722,7 +725,7 @@ impl WitchingInner {
 					&mut self.toc,
 					PART_TITLE,
 					&{
-						let mut m = self.title.as_bytes().to_vec();
+						let mut m = self.title.clone();
 						m.fit_to_range(self.last_width - 1);
 						m.push(b'\n');
 						m
@@ -775,8 +778,8 @@ pub struct Witching {
 	/// Flags.
 	flags: u8,
 	/// Summary labels.
-	one: Ustr,
-	many: Ustr,
+	one: Vec<u8>,
+	many: Vec<u8>,
 }
 
 impl Default for Witching {
@@ -785,8 +788,8 @@ impl Default for Witching {
 			set: Vec::new(),
 			inner: Arc::new(Mutex::new(WitchingInner::default())),
 			flags: 0,
-			one: Ustr::from("file"),
-			many: Ustr::from("files"),
+			one: vec![102, 105, 108, 101],
+			many: vec![102, 105, 108, 101, 115],
 		}
 	}
 }
@@ -848,8 +851,11 @@ impl Witching {
 	/// Set Labels.
 	pub fn set_labels<S>(&mut self, one: S, many: S)
 	where S: AsRef<str> {
-		self.one = Ustr::from(one.as_ref());
-		self.many = Ustr::from(many.as_ref());
+		self.one.truncate(0);
+		self.one.extend_from_slice(one.as_ref().as_bytes());
+
+		self.many.truncate(0);
+		self.many.extend_from_slice(many.as_ref().as_bytes());
 	}
 
 	#[must_use]
@@ -880,8 +886,8 @@ impl Witching {
 	///
 	/// What label should we be using? One or many?
 	fn label(&self) -> &[u8] {
-		if self.set.len() == 1 { self.one.as_bytes() }
-		else { self.many.as_bytes() }
+		if self.set.len() == 1 { &self.one }
+		else { &self.many }
 	}
 
 	/// Run!
@@ -1003,7 +1009,7 @@ impl Witching {
 	fn summarize_empty(&self) {
 		Msg::from([
 			&b"No "[..],
-			self.many.as_bytes(),
+			&self.many,
 			b" were found.\n",
 		].concat())
 			.with_prefix(MsgKind::Warning)
