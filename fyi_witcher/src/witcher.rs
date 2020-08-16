@@ -216,11 +216,10 @@ impl Witcher {
 			// Read each directory.
 			let (tx, rx) = crossbeam_channel::unbounded();
 			self.dirs.par_iter()
-				.for_each(|p| {
-					if let Ok(paths) = fs::read_dir(p) {
-						paths.filter_map(|p| p.ok().and_then(|p| fs::canonicalize(p.path()).ok()))
-							.for_each(|p| tx.send(p).unwrap());
-					}
+				.filter_map(|p| fs::read_dir(p).ok())
+				.for_each(|paths| {
+					paths.filter_map(|p| p.ok().and_then(|p| fs::canonicalize(p.path()).ok()))
+						.for_each(|p| tx.send(p).unwrap());
 				});
 
 			// Clear the queue.
