@@ -50,7 +50,10 @@ use ahash::{
 	AHasher,
 	AHashSet
 };
-use crate::Witching;
+use crate::{
+	utility,
+	Witching,
+};
 use rayon::prelude::*;
 use std::{
 	borrow::Borrow,
@@ -100,6 +103,58 @@ impl Witcher {
 	pub fn with_filter<F>(mut self, cb: F) -> Self
 	where F: Fn(&PathBuf) -> bool + 'static {
 		self.cb = Box::new(cb);
+		self
+	}
+
+	#[must_use]
+	#[allow(trivial_casts)] // Triviality is required!
+	/// With Extension Filter.
+	///
+	/// This method — and `with_ext2()`, `with_ext3()` — can be faster for
+	/// matching simple file extensions than `with_regex()`.
+	///
+	/// Note: The extension should include the period and be in lower case.
+	pub fn with_ext1(mut self, ext: &'static [u8]) -> Self {
+		self.cb = Box::new(move |p: &PathBuf|
+			utility::ends_with_ignore_ascii_case(
+				unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) },
+				ext
+			)
+		);
+		self
+	}
+
+	#[must_use]
+	#[allow(trivial_casts)] // Triviality is required!
+	/// With Extensions (2) Filter.
+	///
+	/// Note: The extension should include the period and be in lower case.
+	pub fn with_ext2(mut self, ext1: &'static [u8], ext2: &'static [u8]) -> Self {
+		self.cb = Box::new(move |p: &PathBuf| {
+			let bytes: &[u8] = unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) };
+			utility::ends_with_ignore_ascii_case(bytes, ext1) ||
+			utility::ends_with_ignore_ascii_case(bytes, ext2)
+		});
+		self
+	}
+
+	#[must_use]
+	#[allow(trivial_casts)] // Triviality is required!
+	/// With Extensions (3) Filter.
+	///
+	/// Note: The extension should include the period and be in lower case.
+	pub fn with_ext3(
+		mut self,
+		ext1: &'static [u8],
+		ext2: &'static [u8],
+		ext3: &'static [u8]
+	) -> Self {
+		self.cb = Box::new(move |p: &PathBuf| {
+			let bytes: &[u8] = unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) };
+			utility::ends_with_ignore_ascii_case(bytes, ext1) ||
+			utility::ends_with_ignore_ascii_case(bytes, ext2) ||
+			utility::ends_with_ignore_ascii_case(bytes, ext3)
+		});
 		self
 	}
 

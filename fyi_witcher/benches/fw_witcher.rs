@@ -54,12 +54,38 @@ fn filter(c: &mut Criterion) {
 	group.finish();
 }
 
+fn with_ext1(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_witcher::Witcher");
+
+	group.bench_function(r"with_ext1(.gz).with_path(/usr/share/man).build()", move |b| {
+		b.iter(||
+			Witcher::default().with_ext1(b".gz").with_path("/usr/share/man").build()
+		)
+	});
+
+	group.finish();
+}
+
+fn with_ext2(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_witcher::Witcher");
+
+	group.bench_function(r"with_ext2(.jpg, .png).with_path(/usr/share).build()", move |b| {
+		b.iter(||
+			Witcher::default().with_ext2(b".jpg", b".png").with_path("/usr/share").build()
+		)
+	});
+
+	group.finish();
+}
+
 
 
 criterion_group!(
 	benches,
 	build,
 	regex,
+	with_ext1,
+	with_ext2,
 	filter,
 );
 criterion_main!(benches);

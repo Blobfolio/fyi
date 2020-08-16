@@ -6,6 +6,16 @@ use std::path::Path;
 
 
 
+#[must_use]
+/// Ends With Ignore ASCII Case
+///
+/// This combines `ends_with()` and `eq_ignore_ascii_case()`, but skips an
+/// operation by assuming the needle `end` is already in lower case.
+pub fn ends_with_ignore_ascii_case(src: &[u8], end: &[u8]) -> bool {
+	let (m, n) = (src.len(), end.len());
+	m >= n && src.iter().skip(m - n).zip(end).all(|(a, b)| a == b || a.to_ascii_lowercase() == *b)
+}
+
 /// Ergonomical File Extension.
 ///
 /// This one-liner returns the file extension as a lower-cased `String` for
@@ -104,6 +114,19 @@ pub fn term_width() -> usize {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn t_ends_with_ignore_ascii_case() {
+		assert!(
+			ends_with_ignore_ascii_case(b"/path/to/file.jpg", b".jpg")
+		);
+		assert!(
+			ends_with_ignore_ascii_case(b"/path/to/file.JPG", b".jpg")
+		);
+		assert!(
+			! ends_with_ignore_ascii_case(b"/path/to/file.jpeg", b".jpg")
+		);
+	}
 
 	#[test]
 	fn t_file_extension() {
