@@ -615,22 +615,25 @@ impl WitchingInner {
 			}
 			else {
 				let width: usize = self.last_width.saturating_sub(6);
-				let tasks: &[u8] = &self.doing.iter()
-					.flat_map(|x|
-						[
-							// •   •   •   •  \e   [   3   5    m   ↳  ---  ---   •
-							&[32, 32, 32, 32, 27, 91, 51, 53, 109, 226, 134, 179, 32][..],
-							&x[x.fitted_range(width)],
-							b"\x1b[0m\n",
-						].concat()
+				let tasks: Vec<u8> = b"\x1b[35m".iter()
+					.chain(
+						self.doing.iter()
+							.flat_map(|x|
+							//    •   •   •   •   ↳  ---  ---   •
+								[32, 32, 32, 32, 226, 134, 179, 32].iter()
+									.chain(x[x.fitted_range(width)].iter())
+									.chain(b"\n".iter())
+							)
 					)
-					.collect::<Vec<u8>>();
+					.chain(b"\x1b[0m".iter())
+					.copied()
+					.collect();
 
 				replace_buf_range(
 					&mut self.buf,
 					&mut self.toc,
 					PART_DOING,
-					tasks
+					&tasks
 				);
 			}
 		}
