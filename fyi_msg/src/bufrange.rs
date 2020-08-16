@@ -16,7 +16,6 @@ wrapper. We'll hop on that once Rust's generics support improves.
 */
 
 use std::{
-	cmp::Ordering,
 	ops::Range,
 	ptr,
 };
@@ -136,6 +135,7 @@ pub fn replace_buf_range(
 	}
 }
 
+#[allow(clippy::comparison_chain)] // We only need two arms.
 /// Resize Buffer Range.
 ///
 /// This will resize a `BufRange` within a `Vec<u8>` to the specified length
@@ -151,21 +151,19 @@ pub fn resize_buf_range(
 	idx: usize,
 	len: usize
 ) {
-	match len.cmp(&toc[idx].len()) {
-		// Expand it.
-		Ordering::Greater => {
-			let adj: usize = len - toc[idx].len();
-			vec_resize_at(src, toc[idx].end, adj);
-			BufRange::grow_set_at(toc, idx, adj);
-		},
-		// Shrink it.
-		Ordering::Less => {
-			let adj: usize = toc[idx].len() - len;
-			if toc[idx].end == src.len() { src.truncate(toc[idx].end - adj); }
-			else { src.drain(toc[idx].end - adj..toc[idx].end); }
-			BufRange::shrink_set_at(toc, idx, adj);
-		},
-		Ordering::Equal => {},
+	let old_len: usize = toc[idx].len();
+	// Shrink it.
+	if old_len > len {
+		let adj: usize = old_len - len;
+		if toc[idx].end == src.len() { src.truncate(toc[idx].end - adj); }
+		else { src.drain(toc[idx].end - adj..toc[idx].end); }
+		BufRange::shrink_set_at(toc, idx, adj);
+	}
+	// Grow it.
+	else if len > old_len {
+		let adj: usize = len - old_len;
+		vec_resize_at(src, toc[idx].end, adj);
+		BufRange::grow_set_at(toc, idx, adj);
 	}
 }
 
