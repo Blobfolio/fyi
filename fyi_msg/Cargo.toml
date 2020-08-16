@@ -14,6 +14,10 @@ ustr = "0.7.*"
 criterion = "*"
 
 [[bench]]
+name = "fm_bufrange"
+harness = false
+
+[[bench]]
 name = "fm_msg"
 harness = false
 
