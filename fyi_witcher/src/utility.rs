@@ -60,10 +60,6 @@ where P: AsRef<Path> {
 }
 
 #[must_use]
-/// Available Threads.
-pub fn num_threads() -> usize { 1.max(num_cpus::get()) }
-
-#[must_use]
 /// Chunked Seconds
 ///
 /// This method converts seconds into hours, minutes, and seconds, returning
