@@ -569,6 +569,7 @@ impl WitchingInner {
 			self.flags &= ! TICK_BAR;
 			let (w_done, w_doing, w_undone) = self.tick_bar_widths();
 
+			// Update the done part.
 			if self.toc[PART_BAR_DONE].len() != w_done {
 				replace_buf_range(
 					&mut self.buf,
@@ -578,23 +579,19 @@ impl WitchingInner {
 				);
 			}
 
-			if self.toc[PART_BAR_DOING].len() != w_doing {
-				replace_buf_range(
-					&mut self.buf,
-					&mut self.toc,
-					PART_BAR_DOING,
-					&DASH[0..w_doing],
+			// Doing and undone use the same character, so we can loop it.
+			[PART_BAR_DOING, PART_BAR_UNDONE].iter()
+				.zip([w_doing, w_undone].iter())
+				.for_each(|(a, b)|
+					if self.toc[*a].len() != *b {
+						replace_buf_range(
+							&mut self.buf,
+							&mut self.toc,
+							*a,
+							&DASH[0..*b],
+						);
+					}
 				);
-			}
-
-			if self.toc[PART_BAR_UNDONE].len() != w_undone {
-				replace_buf_range(
-					&mut self.buf,
-					&mut self.toc,
-					PART_BAR_UNDONE,
-					&DASH[0..w_undone],
-				);
-			}
 		}
 	}
 
