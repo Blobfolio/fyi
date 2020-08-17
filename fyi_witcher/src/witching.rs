@@ -51,6 +51,7 @@ use std::{
 		self,
 		Write,
 	},
+	iter::FromIterator,
 	ops::Deref,
 	path::PathBuf,
 	sync::{
@@ -957,25 +958,17 @@ impl Witching {
 		t_handle.join().unwrap();
 	}
 
-	/// Summary Stub.
-	///
-	/// Almost all of the summaries start the same way. This is that way.
-	fn summary_stub(&self) -> Vec<u8> {
-		[
-			&*NiceInt::from(u64::from(self.total())),
-			b" ",
-			self.label(),
-			b" in ",
-			&*NiceElapsed::from(self.elapsed()),
-		].concat()
-	}
-
 	/// Summarize.
 	fn summarize(&self) {
-		Msg::from([
-			&self.summary_stub()[..],
-			b".\n",
-		].concat())
+		Msg::from_iter(
+			NiceInt::from(u64::from(self.total())).iter()
+				.chain(b" ".iter())
+				.chain(self.label().iter())
+				.chain(b" in ".iter())
+				.chain(NiceElapsed::from(self.elapsed()).iter())
+				.chain(b".\n".iter())
+				.copied()
+		)
 			.with_prefix(MsgKind::Done)
 			.eprint();
 	}
@@ -988,17 +981,24 @@ impl Witching {
 
 		// No savings. Boo.
 		if 0 == after || before <= after {
-			Msg::from([
-				&self.summary_stub()[..],
-				b", but nothing doing.\n",
-			].concat())
+			Msg::from_iter(
+				NiceInt::from(u64::from(self.total())).iter()
+					.chain(b" ".iter())
+					.chain(self.label().iter())
+					.chain(b" in ".iter())
+					.chain(NiceElapsed::from(self.elapsed()).iter())
+					.chain(b", but nothing doing.\n".iter())
+					.copied()
+			)
 				.with_prefix(MsgKind::Crunched)
 				.eprint();
 		}
 		else {
 			MsgKind::Crunched.into_msg(format!(
-				"{}, saving {} bytes ({:3.*}%).\n",
-				unsafe { std::str::from_utf8_unchecked(&self.summary_stub()[..]) },
+				"{} {} in {}, saving {} bytes ({:3.*}%).\n",
+				NiceInt::from(u64::from(self.total())).as_str(),
+				unsafe { std::str::from_utf8_unchecked(self.label()) },
+				NiceElapsed::from(self.elapsed()).as_str(),
 				NiceInt::from(before - after).as_str(),
 				2,
 				(1.0 - (after as f64 / before as f64)) * 100.0
@@ -1010,11 +1010,12 @@ impl Witching {
 	///
 	/// This summary prints when the set is empty.
 	fn summarize_empty(&self) {
-		Msg::from([
-			&b"No "[..],
-			&self.many,
-			b" were found.\n",
-		].concat())
+		Msg::from_iter(
+			b"No ".iter()
+				.chain(self.many.iter())
+				.chain(b" were found.\n".iter())
+				.copied()
+		)
 			.with_prefix(MsgKind::Warning)
 			.eprint();
 	}

@@ -54,6 +54,7 @@ use std::{
 		self,
 		Write,
 	},
+	iter::FromIterator,
 	ops::Deref,
 };
 
@@ -104,6 +105,12 @@ impl Deref for PrefixBuffer {
 }
 
 impl Eq for PrefixBuffer {}
+
+impl FromIterator<u8> for PrefixBuffer {
+	fn from_iter<I: IntoIterator<Item=u8>>(iter: I) -> Self {
+		Self::from(iter.into_iter().collect::<Vec<u8>>())
+	}
+}
 
 impl From<Vec<u8>> for PrefixBuffer {
 	fn from(src: Vec<u8>) -> Self {
@@ -236,11 +243,12 @@ impl MsgKind {
 		let prefix = prefix.as_ref().trim();
 		if prefix.is_empty() { Self::None }
 		else {
-			Self::Other(PrefixBuffer::from([
-				utility::ansi_code_bold(color),
-				prefix.as_bytes(),
-				b":\x1b[0m ",
-			].concat()))
+			Self::Other(PrefixBuffer::from_iter(
+				utility::ansi_code_bold(color).iter()
+					.chain(prefix.as_bytes().iter())
+					.chain(b":\x1b[0m ".iter())
+					.copied()
+			))
 		}
 	}
 
@@ -368,6 +376,12 @@ impl From<Vec<u8>> for Msg {
 			buf: src,
 			..Self::default()
 		}
+	}
+}
+
+impl FromIterator<u8> for Msg {
+	fn from_iter<I: IntoIterator<Item=u8>>(iter: I) -> Self {
+		Self::from(iter.into_iter().collect::<Vec<u8>>())
 	}
 }
 
