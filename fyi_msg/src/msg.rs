@@ -562,16 +562,6 @@ impl Msg {
 	pub fn eprintln(&self) {
 		locked_eprint(&self.buf, true);
 	}
-
-	/// Simulated Print.
-	pub fn sink(&self) {
-		locked_sink(&self.buf, false);
-	}
-
-	/// Simulated Print w/ Line.
-	pub fn sinkln(&self) {
-		locked_sink(&self.buf, true);
-	}
 }
 
 
@@ -593,18 +583,6 @@ fn locked_print(buf: &[u8], line: bool) {
 fn locked_eprint(buf: &[u8], line: bool) {
 	let writer = std::io::stderr();
 	let mut handle = writer.lock();
-	handle.write_all(buf).unwrap();
-
-	if line {
-		handle.write_all(&[10]).unwrap();
-	}
-
-	handle.flush().unwrap();
-}
-
-/// Locked Print: `Sink`.
-fn locked_sink(buf: &[u8], line: bool) {
-	let mut handle = io::sink();
 	handle.write_all(buf).unwrap();
 
 	if line {
