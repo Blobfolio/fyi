@@ -33,7 +33,11 @@ use fyi_menu::{
 	FLAG_ALL,
 	parse_env_args,
 };
-use fyi_msg::MsgKind;
+use fyi_msg::{
+	MsgKind,
+	FLAG_INDENT,
+	FLAG_TIMESTAMP,
+};
 use std::{
 	io::{
 		self,
@@ -44,12 +48,10 @@ use std::{
 
 
 
-/// -i | --indent
-const FLAG_INDENT: u8    = 0b0001;
+/// -i | --indent        = 0b0001
+/// -t | --timestamp     = 0b0010
 /// --stderr
-const FLAG_STDERR: u8    = 0b0010;
-/// -t | --timestamp
-const FLAG_TIMESTAMP: u8 = 0b0100;
+const FLAG_STDERR: u8    = 0b0100;
 
 
 
@@ -192,8 +194,7 @@ fn _msg(com: &str, args: &[String]) {
 
 	// Let's build the message!
 	let msg = kind.into_msg(&args[idx])
-		.with_indent((0 != flags & FLAG_INDENT) as u8)
-		.with_timestamp(0 != flags & FLAG_TIMESTAMP);
+		.with_flags(flags);
 
 	// It's a prompt!
 	if MsgKind::Confirm == kind {
