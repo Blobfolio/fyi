@@ -18,7 +18,7 @@ use std::{
 fn main() {
 	// Search for gzipped MAN pages.
 	Witcher::default()
-		.with_regex(r"(:?)\.gz$")
+		.with_ext1(b".gz")
 		.with_path("/usr/share/man")
 		.into_witching()
 		.with_title(MsgKind::new("Witcher Demo", 199).into_msg("Gzipped MAN Pages"))
