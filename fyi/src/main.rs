@@ -52,7 +52,7 @@ fn main() {
 	// Parse CLI arguments.
 	let mut args = Argue::new()
 		.with_any()
-		.with_version(versioner)
+		.with_version(b"FYI", env!("CARGO_PKG_VERSION").as_bytes())
 		.with_help(helper);
 
 	// Where we going?
