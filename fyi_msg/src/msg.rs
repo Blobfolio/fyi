@@ -54,6 +54,7 @@ use std::{
 		self,
 		Write,
 	},
+	iter::FromIterator,
 	ops::Deref,
 };
 
@@ -67,6 +68,17 @@ const PART_INDENT: usize = 0;
 const PART_TIMESTAMP: usize = 1;
 const PART_PREFIX: usize = 2;
 const PART_MSG: usize = 3;
+
+/// Configuration Flags.
+///
+/// These flags are an alternative way to configure indentation and
+/// timestamping.
+
+/// Indentation.
+pub const FLAG_INDENT: u8 =    0b0001;
+
+/// Timestamp.
+pub const FLAG_TIMESTAMP: u8 = 0b0010;
 
 
 
@@ -104,6 +116,12 @@ impl Deref for PrefixBuffer {
 }
 
 impl Eq for PrefixBuffer {}
+
+impl FromIterator<u8> for PrefixBuffer {
+	fn from_iter<I: IntoIterator<Item=u8>>(iter: I) -> Self {
+		Self::from(iter.into_iter().collect::<Vec<u8>>())
+	}
+}
 
 impl From<Vec<u8>> for PrefixBuffer {
 	fn from(src: Vec<u8>) -> Self {
@@ -236,11 +254,12 @@ impl MsgKind {
 		let prefix = prefix.as_ref().trim();
 		if prefix.is_empty() { Self::None }
 		else {
-			Self::Other(PrefixBuffer::from([
-				utility::ansi_code_bold(color),
-				prefix.as_bytes(),
-				b":\x1b[0m ",
-			].concat()))
+			Self::Other(PrefixBuffer::from_iter(
+				utility::ansi_code_bold(color).iter()
+					.chain(prefix.as_bytes().iter())
+					.chain(b":\x1b[0m ".iter())
+					.copied()
+			))
 		}
 	}
 
@@ -259,7 +278,7 @@ impl MsgKind {
 			Self::Success => b"\x1b[92;1mSuccess:\x1b[0m ",
 			Self::Task => b"\x1b[1;38;5;199mTask:\x1b[0m ",
 			Self::Warning => b"\x1b[93;1mWarning:\x1b[0m ",
-			Self::Other(x) => x.as_bytes(),
+			Self::Other(x) => x,
 		}
 	}
 
@@ -272,7 +291,7 @@ impl MsgKind {
 	/// Into `Msg`.
 	pub fn into_msg<S> (self, msg: S) -> Msg
 	where S: AsRef<str> {
-		Msg::new(msg).with_prefix(self)
+		Msg::from(msg.as_ref()).with_prefix(self)
 	}
 
 	#[must_use]
@@ -304,12 +323,6 @@ impl MsgKind {
 /// This is it! The whole point of the crate! See the library documentation for
 /// more information.
 pub struct Msg {
-	/// Indent this many levels.
-	indent: u8,
-	/// Include a timestamp?
-	timestamp: bool,
-	/// The prefix to use, if any.
-	prefix: MsgKind,
 	/// The compiled buffer!
 	buf: Vec<u8>,
 	/// A Table of Contents.
@@ -323,9 +336,6 @@ impl AsRef<str> for Msg {
 impl Default for Msg {
 	fn default() -> Self {
 		Self {
-			indent: 0,
-			timestamp: false,
-			prefix: MsgKind::None,
 			buf: Vec::new(),
 			toc: [
 				BufRange::default(),
@@ -348,19 +358,12 @@ impl fmt::Display for Msg {
 	}
 }
 
+impl From<&str> for Msg {
+	fn from(src: &str) -> Self { Self::from(src.as_bytes().to_vec()) }
+}
+
 impl From<&[u8]> for Msg {
-	fn from(src: &[u8]) -> Self {
-		Self {
-			toc: [
-				BufRange::default(),
-				BufRange::default(),
-				BufRange::default(),
-				BufRange::new(0, src.len()),
-			],
-			buf: src.to_vec(),
-			..Self::default()
-		}
-	}
+	fn from(src: &[u8]) -> Self { Self::from(src.to_vec()) }
 }
 
 impl From<Vec<u8>> for Msg {
@@ -373,8 +376,13 @@ impl From<Vec<u8>> for Msg {
 				BufRange::new(0, src.len()),
 			],
 			buf: src,
-			..Self::default()
 		}
+	}
+}
+
+impl FromIterator<u8> for Msg {
+	fn from_iter<I: IntoIterator<Item=u8>>(iter: I) -> Self {
+		Self::from(iter.into_iter().collect::<Vec<u8>>())
 	}
 }
 
@@ -409,8 +417,19 @@ impl Msg {
 	/// but might have its uses, particularly when combined with the build
 	/// pattern methods.
 	pub fn new<S> (msg: S) -> Self
-	where S: AsRef<str> {
-		Self::from(msg.as_ref().as_bytes())
+	where S: AsRef<str> { Self::from(msg.as_ref()) }
+
+	#[must_use]
+	/// With Flags.
+	///
+	/// Flags can be used to set or unset indentation and timestamping.
+	pub fn with_flags(mut self, flags: u8) -> Self {
+		self.set_indent(
+			if 0 == flags & FLAG_INDENT { 0 }
+			else { 1 }
+		);
+		self.set_timestamp(0 != flags & FLAG_TIMESTAMP);
+		self
 	}
 
 	#[must_use]
@@ -420,15 +439,7 @@ impl Msg {
 	/// level is equivalent to four spaces, e.g. `1 == "    "`,
 	/// `2 == "        "`, etc.
 	pub fn with_indent(mut self, indent: u8) -> Self {
-		if indent != self.indent {
-			self.indent = indent;
-			replace_buf_range(
-				&mut self.buf,
-				&mut self.toc,
-				PART_INDENT,
-				utility::whitespace(self.indent as usize * 4),
-			);
-		}
+		self.set_indent(indent);
 		self
 	}
 
@@ -436,15 +447,7 @@ impl Msg {
 	#[must_use]
 	/// With Prefix.
 	pub fn with_prefix(mut self, prefix: MsgKind) -> Self {
-		if prefix != self.prefix {
-			self.prefix = prefix;
-			replace_buf_range(
-				&mut self.buf,
-				&mut self.toc,
-				PART_PREFIX,
-				prefix.as_bytes(),
-			);
-		}
+		self.set_prefix(prefix);
 		self
 	}
 
@@ -454,8 +457,53 @@ impl Msg {
 	/// Messages are not timestamped by default, but can be if `true` is passed
 	/// to this method.
 	pub fn with_timestamp(mut self, on: bool) -> Self {
-		if on != self.timestamp {
-			self.timestamp = on;
+		self.set_timestamp(on);
+		self
+	}
+
+
+
+	// ------------------------------------------------------------------------
+	// Setters
+	// ------------------------------------------------------------------------
+
+	/// Set Indent.
+	pub fn set_indent(&mut self, indent: u8) {
+		let indent: usize = indent as usize * 4;
+		if indent != self.toc[PART_INDENT].len() {
+			replace_buf_range(
+				&mut self.buf,
+				&mut self.toc,
+				PART_INDENT,
+				utility::whitespace(indent),
+			);
+		}
+	}
+
+	/// Set Message.
+	pub fn set_msg<S> (&mut self, msg: S)
+	where S: AsRef<str> {
+		replace_buf_range(
+			&mut self.buf,
+			&mut self.toc,
+			PART_MSG,
+			msg.as_ref().as_bytes(),
+		);
+	}
+
+	/// Set Prefix.
+	pub fn set_prefix(&mut self, prefix: MsgKind) {
+		replace_buf_range(
+			&mut self.buf,
+			&mut self.toc,
+			PART_PREFIX,
+			prefix.as_bytes(),
+		);
+	}
+
+	/// Set Timestamp.
+	pub fn set_timestamp(&mut self, on: bool) {
+		if on == self.toc[PART_TIMESTAMP].is_empty() {
 			if on { self.write_timestamp(); }
 			else {
 				resize_buf_range(
@@ -466,9 +514,13 @@ impl Msg {
 				);
 			}
 		}
-
-		self
 	}
+
+
+
+	// ------------------------------------------------------------------------
+	// Conversion
+	// ------------------------------------------------------------------------
 
 	#[must_use]
 	/// As Bytes.
@@ -480,46 +532,16 @@ impl Msg {
 		unsafe { std::str::from_utf8_unchecked(&self.buf) }
 	}
 
-	/// Timestamp bit.
-	fn write_timestamp(&mut self) {
-		use chrono::{
-			Datelike,
-			Local,
-			Timelike,
-		};
+	#[allow(clippy::missing_const_for_fn)] // Doesn't work!
+	#[must_use]
+	/// Into Vec.
+	pub fn into_vec(self) -> Vec<u8> { self.buf }
 
-		// Make sure we have something in place.
-		if self.toc[PART_TIMESTAMP].is_empty() {
-			replace_buf_range(
-				&mut self.buf,
-				&mut self.toc,
-				PART_TIMESTAMP,
-				b"\x1b[2m[\x1b[0;34m2000-00-00 00:00:00\x1b[39;2m]\x1b[0m ",
-			);
-		}
 
-		// Chrono's formatter is slow as shit. It is faster for us to call
-		// each of their time part methods individually, convert those
-		// integers to bytes, and copy them into our static buffer.
-		let now = Local::now();
-		let ptr = self.buf.as_mut_ptr();
-		unsafe {
-			[
-				(now.year() as u32).saturating_sub(2000),
-				now.month(),
-				now.day(),
-				now.hour(),
-				now.minute(),
-				now.second(),
-			].iter()
-				.fold(
-					self.toc[PART_TIMESTAMP].start() + 14,
-					|dst_off, x| {
-					ptr.add(dst_off).copy_from_nonoverlapping(utility::time_format_dd(*x).as_ptr(), 2);
-					dst_off + 3
-				});
-		}
-	}
+
+	// ------------------------------------------------------------------------
+	// Output
+	// ------------------------------------------------------------------------
 
 	#[must_use]
 	/// Prompt.
@@ -572,14 +594,51 @@ impl Msg {
 		locked_eprint(&self.buf, true);
 	}
 
-	/// Simulated Print.
-	pub fn sink(&self) {
-		locked_sink(&self.buf, false);
-	}
 
-	/// Simulated Print w/ Line.
-	pub fn sinkln(&self) {
-		locked_sink(&self.buf, true);
+
+	// ------------------------------------------------------------------------
+	// Internal
+	// ------------------------------------------------------------------------
+
+	/// Timestamp bit.
+	fn write_timestamp(&mut self) {
+		use chrono::{
+			Datelike,
+			Local,
+			Timelike,
+		};
+
+		// Make sure we have something in place.
+		if self.toc[PART_TIMESTAMP].is_empty() {
+			replace_buf_range(
+				&mut self.buf,
+				&mut self.toc,
+				PART_TIMESTAMP,
+				b"\x1b[2m[\x1b[0;34m2000-00-00 00:00:00\x1b[39;2m]\x1b[0m ",
+			);
+		}
+
+		// Chrono's formatter is slow as shit. It is faster for us to call
+		// each of their time part methods individually, convert those
+		// integers to bytes, and copy them into our static buffer.
+		let now = Local::now();
+		let ptr = self.buf.as_mut_ptr();
+		unsafe {
+			[
+				(now.year() as u32).saturating_sub(2000),
+				now.month(),
+				now.day(),
+				now.hour(),
+				now.minute(),
+				now.second(),
+			].iter()
+				.fold(
+					self.toc[PART_TIMESTAMP].start() + 14,
+					|dst_off, x| {
+					ptr.add(dst_off).copy_from_nonoverlapping(utility::time_format_dd(*x).as_ptr(), 2);
+					dst_off + 3
+				});
+		}
 	}
 }
 
@@ -602,18 +661,6 @@ fn locked_print(buf: &[u8], line: bool) {
 fn locked_eprint(buf: &[u8], line: bool) {
 	let writer = std::io::stderr();
 	let mut handle = writer.lock();
-	handle.write_all(buf).unwrap();
-
-	if line {
-		handle.write_all(&[10]).unwrap();
-	}
-
-	handle.flush().unwrap();
-}
-
-/// Locked Print: `Sink`.
-fn locked_sink(buf: &[u8], line: bool) {
-	let mut handle = io::sink();
 	handle.write_all(buf).unwrap();
 
 	if line {

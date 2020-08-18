@@ -16,7 +16,6 @@ wrapper. We'll hop on that once Rust's generics support improves.
 */
 
 use std::{
-	cmp::Ordering,
 	ops::Range,
 	ptr,
 };
@@ -98,7 +97,10 @@ impl BufRange {
 		set[idx].end += adj;
 		set.iter_mut()
 			.skip(idx + 1)
-			.for_each(|x| x.increment(adj));
+			.for_each(|x| {
+				x.start += adj;
+				x.end += adj;
+			});
 	}
 
 	/// Grow Set At.
@@ -106,23 +108,10 @@ impl BufRange {
 		set[idx].end -= adj;
 		set.iter_mut()
 			.skip(idx + 1)
-			.for_each(|x| x.decrement(adj));
-	}
-
-	/// Decrement.
-	///
-	/// Decrease both `start` and `end` by `adj`.
-	fn decrement(&mut self, adj: usize) {
-		self.start -= adj;
-		self.end -= adj;
-	}
-
-	/// Increment.
-	///
-	/// Increase both `start` and `end` by `adj`.
-	fn increment(&mut self, adj: usize) {
-		self.start += adj;
-		self.end += adj;
+			.for_each(|x| {
+				x.start -= adj;
+				x.end -= adj;
+			});
 	}
 }
 
@@ -146,6 +135,7 @@ pub fn replace_buf_range(
 	}
 }
 
+#[allow(clippy::comparison_chain)] // We only need two arms.
 /// Resize Buffer Range.
 ///
 /// This will resize a `BufRange` within a `Vec<u8>` to the specified length
@@ -161,49 +151,48 @@ pub fn resize_buf_range(
 	idx: usize,
 	len: usize
 ) {
-	match len.cmp(&toc[idx].len()) {
-		// Expand it.
-		Ordering::Greater => {
-			let adj: usize = len - toc[idx].len();
-			vec_resize_at(src, toc[idx].end, adj);
-			BufRange::grow_set_at(toc, idx, adj);
-		},
-		// Shrink it.
-		Ordering::Less => {
-			let adj: usize = toc[idx].len() - len;
-			if idx == src.len() { src.truncate(idx - adj); }
-			else { src.drain(toc[idx].end - adj..toc[idx].end); }
-			BufRange::shrink_set_at(toc, idx, adj);
-		},
-		Ordering::Equal => {},
+	let old_len: usize = toc[idx].len();
+	// Shrink it.
+	if old_len > len {
+		let adj: usize = old_len - len;
+		if toc[idx].end == src.len() { src.truncate(toc[idx].end - adj); }
+		else { src.drain(toc[idx].end - adj..toc[idx].end); }
+		BufRange::shrink_set_at(toc, idx, adj);
+	}
+	// Grow it.
+	else if len > old_len {
+		let adj: usize = len - old_len;
+		vec_resize_at(src, toc[idx].end, adj);
+		BufRange::grow_set_at(toc, idx, adj);
 	}
 }
 
 /// Grow `Vec<u8>` From Middle.
 ///
-/// This is like `resize()` combined with `range_replace()`, except all it does
-/// is efficiently expand the vector length from the middle out. No particular
-/// data is written to the created space; it might contain values from the
-/// previous occupants (now copied right), or zeroes.
-///
-/// If `idx` is out of range, this acts just like `resize()`, with new bytes
-/// added to the end.
-///
-/// The main idea is after calling this, new data should be written to the
-/// slice.
+/// This works like `Vec::resize()`, except it supports expansion from the
+/// middle, like `Vec::insert()`. The new entries are always `0`.
 pub fn vec_resize_at(src: &mut Vec<u8>, idx: usize, adj: usize) {
 	let old_len: usize = src.len();
-	src.resize(old_len + adj, 0);
-
-	// Copy everything from the split point to the right.
-	if idx < old_len {
-		let ptr = src.as_mut_ptr();
+	if idx >= old_len {
+		src.resize(old_len + adj, 0);
+	}
+	else {
+		src.reserve(adj);
 		unsafe {
-			ptr::copy(
-				ptr.add(idx),
-				ptr.add(idx + adj),
-				old_len - idx,
-			)
+			{
+				let ptr = src.as_mut_ptr().add(idx);
+				let after: usize = old_len - idx;
+
+				// Shift the data over.
+				ptr::copy(ptr, ptr.add(adj), after);
+
+				// If we're adding more than we just copied, we'll need to
+				// initialize those values.
+				if adj > after {
+					ptr::write_bytes(ptr.add(after), 0, adj - after);
+				}
+			}
+			src.set_len(old_len + adj);
 		}
 	}
 }
@@ -284,6 +273,14 @@ mod tests {
 		assert_eq!(
 			test,
 			vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0],
+		);
+
+		// Test possible uninit space.
+		test = vec![1, 2, 3, 4];
+		vec_resize_at(&mut test, 2, 10);
+		assert_eq!(
+			test,
+			vec![1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 3, 4],
 		);
 	}
 }

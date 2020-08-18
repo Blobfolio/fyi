@@ -1,6 +1,6 @@
 [package]
 name = "fyi_witcher"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "FYI is a dead-simple status message printer for CLI use applications."
@@ -8,19 +8,37 @@ publish = false
 
 [dependencies]
 ahash = "0.4.*"
+crossbeam-channel = "0.4.*"
 itoa = "0.4.*"
 num-format = "0.4.*"
+num-integer = "0.1.*"
 rayon = "1.3.*"
 regex = "1.3.*"
+term_size = "0.3.*"
+unicode-width = "0.1.*"
+
+[dependencies.bytecount]
+version = "0.6.*"
+default-features = false
+features = [ "runtime-dispatch-simd" ]
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"
 
-[dependencies.fyi_progress]
-path = "../fyi_progress"
-
 [dev-dependencies]
 criterion = "*"
+
+[[bench]]
+name = "fw_nice_int"
+harness = false
+
+[[bench]]
+name = "fw_nice_elapsed"
+harness = false
+
+[[bench]]
+name = "fw_utility"
+harness = false
 
 [[bench]]
 name = "fw_witcher"

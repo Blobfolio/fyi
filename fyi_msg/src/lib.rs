@@ -34,6 +34,8 @@ pub mod utility;
 pub use msg::{
 	Msg,
 	MsgKind,
+	FLAG_INDENT,
+	FLAG_TIMESTAMP,
 };
 pub use bufrange::{
 	BufRange,

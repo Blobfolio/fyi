@@ -1,5 +1,5 @@
 /*!
-# Benchmark: `fyi_progress::nice_elapsed`
+# Benchmark: `fyi_witcher::nice_elapsed`
 */
 
 use criterion::{
@@ -8,12 +8,12 @@ use criterion::{
 	criterion_group,
 	criterion_main,
 };
-use fyi_progress::NiceElapsed;
+use fyi_witcher::NiceElapsed;
 
 
 
 fn from(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_progress::NiceElapsed");
+	let mut group = c.benchmark_group("fyi_witcher::NiceElapsed");
 
 	for secs in [1, 50, 100, 2121, 37732, 428390].iter() {
 		group.bench_with_input(

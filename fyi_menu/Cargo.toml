@@ -1,10 +1,13 @@
 [package]
 name = "fyi_menu"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "FYI is a dead-simple status message printer for CLI use applications."
 publish = false
+
+[dependencies]
+ahash = "0.4.*"
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"
@@ -13,5 +16,5 @@ path = "../fyi_msg"
 criterion = "*"
 
 [[bench]]
-name = "fm_arglist"
+name = "fm_lib"
 harness = false

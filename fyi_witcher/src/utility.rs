@@ -2,25 +2,18 @@
 # FYI Witcher: Utility Methods
 */
 
-use std::{
-	path::{
-		Path,
-		PathBuf,
-	},
-};
+use std::path::Path;
 
 
 
 #[must_use]
-/// Total File(s) Size.
+/// Ends With Ignore ASCII Case
 ///
-/// Add up the size of all files in a set. Calculations are run in parallel so
-/// should be fairly fast depending on the file system.
-pub fn du(paths: &[PathBuf]) -> u64 {
-	use rayon::prelude::*;
-	paths.par_iter()
-		.map(|x| x.metadata().map_or(0, |m| m.len()))
-		.sum()
+/// This combines `ends_with()` and `eq_ignore_ascii_case()`, but skips an
+/// operation by assuming the needle `end` is already in lower case.
+pub fn ends_with_ignore_ascii_case(src: &[u8], end: &[u8]) -> bool {
+	let (m, n) = (src.len(), end.len());
+	m >= n && src.iter().skip(m - n).zip(end).all(|(a, b)| a == b || a.to_ascii_lowercase() == *b)
 }
 
 /// Ergonomical File Extension.
@@ -76,11 +69,64 @@ where P: AsRef<Path> {
 	false
 }
 
+#[must_use]
+/// Chunked Seconds
+///
+/// This method converts seconds into hours, minutes, and seconds, returning
+/// a fixed-length array with each value in order, e.g. `[h, m, s]`.
+///
+/// As with the rest of the methods in this module, days and beyond are not
+/// considered. Large values are simply truncated to `86399`, i.e. one second
+/// shy of a full day.
+pub fn secs_chunks(num: u32) -> [u32; 3] {
+	let mut out: [u32; 3] = [0, 0, u32::min(86399, num)];
+
+	// Hours.
+	if out[2] >= 3600 {
+		out[0] = num_integer::div_floor(out[2], 3600);
+		out[2] -= out[0] * 3600;
+	}
+
+	// Minutes.
+	if out[2] >= 60 {
+		out[1] = num_integer::div_floor(out[2], 60);
+		out[2] -= out[1] * 60;
+	}
+
+	out
+}
+
+#[must_use]
+/// Term Width
+///
+/// This is a simple wrapper around `term_size::dimensions()` to provide
+/// the current terminal column width. We don't have any use for height,
+/// so that property is ignored.
+///
+/// Note: The actual width returned is `1` less than the true value. This helps
+/// account for inconsistent handling of trailing whitespace, etc.
+pub fn term_width() -> usize {
+	term_size::dimensions().map_or(0, |(w, _)| w.saturating_sub(1))
+}
+
 
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn t_ends_with_ignore_ascii_case() {
+		assert!(
+			ends_with_ignore_ascii_case(b"/path/to/file.jpg", b".jpg")
+		);
+		assert!(
+			ends_with_ignore_ascii_case(b"/path/to/file.JPG", b".jpg")
+		);
+		assert!(
+			! ends_with_ignore_ascii_case(b"/path/to/file.jpeg", b".jpg")
+		);
+	}
 
 	#[test]
 	fn t_file_extension() {
@@ -138,5 +184,13 @@ mod tests {
 			path.as_ref(),
 			expected
 		);
+	}
+
+	#[test]
+	fn t_secs_chunks() {
+		assert_eq!(secs_chunks(1), [0, 0, 1]);
+		assert_eq!(secs_chunks(30), [0, 0, 30]);
+		assert_eq!(secs_chunks(90), [0, 1, 30]);
+		assert_eq!(secs_chunks(3600), [1, 0, 0]);
 	}
 }

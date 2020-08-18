@@ -1,7 +1,7 @@
 /*!
-# FYI Progress: Traits
+# FYI Witcher: Traits: Fitted Range
 
-A few useful traits.
+This helps deal with the distinction between "length" and "width".
 */
 
 use std::ops::Range;

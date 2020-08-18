@@ -1,5 +1,5 @@
 /*!
-# FYI Progress: "Nice" Integer
+# FYI Witcher: "Nice" Integer
 
 This is a quick way to convert an integer — any unsigned value under a trillion
 — into a formatted byte string.

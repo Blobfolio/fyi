@@ -1,75 +1,65 @@
 /*!
 # FYI Witcher: Witcher
 
-`Witcher` is a very simple recursive file searching library that returns all
-file paths within the tree(s), nice and canonicalized. Duplicates are weeded
-out, symlinks are resolved and followed, hidden files are picked up like any
-other file.
+This is a very simple recursive file finder. Directories are read in parallel.
+Files are canonicalized and deduped. Symlinks are followed. Hidden files and
+directories are read like any other.
 
-Short and sweet.
+The struct uses a builder pattern.
 
-While `Witcher` is light on options — there aren't any! — it can be seeded with
-multiple starting paths using the `Witcher::with_path()` builder pattern. This,
-combined with the general stripped-to-basics codebase, make this a more
-performant option than using crates such as `jwalk` or `walkdir` in many cases.
+## Filtering
+
+Results can be filtered prior to being yielded with the use of either
+`with_filter()` — specifying a custom callback method — or `with_regex()` — to
+match against a pattern.
+
+It is important to define the filter *before* adding any paths, because if
+those paths are files, they'll need to be filtered. Right? Right.
+
+Filter callbacks should accept an `&PathBuf` and return `true` to keep it,
+`false` to discard it.
 
 ## Examples
 
-`Witcher` implements `Iterator`, so you can simply initiate it and loop/map/
-filter your way to a better tomorrow:
-
 ```no_run
 use fyi_witcher::Witcher;
-use std::path::PathBuf;
 
-let paths: Vec<PathBuf> = Witcher.from(PathBuf::from(.))
-    .filter(|x| x.as_str().unwrap_or_default().ends_with('.jpg'))
-    .collect();
+// Return all files under "/usr/share/man".
+let res: Vec<PathBuf> = Witcher::default()
+    .with_path("/usr/share/man")
+    .build();
+
+// Return only Gzipped files.
+let res: Vec<PathBuf> = Witcher::default()
+    .with_regex(r"(?i).+\.gz$")
+    .with_path("/usr/share/man")
+    .build();
+
+// If you're just matching one pattern, it can be faster to not use Regex:
+let res: Vec<PathBuf> = Witcher::default()
+    .with_filter(|p: &PathBuf| {
+        let bytes: &[u8] = unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) };
+        bytes.len() > 3 && bytes[bytes.len()-3..].eq_ignore_ascii_case(b".gz")
+    })
+    .with_path("/usr/share/man")
+    .build();
 ```
-
-Two collection convenience methods exist to short-circuit the `Iterator`
-process if you don't need it:
-
-```no_run
-// Just make it a Vec of PathBufs.
-let paths: Vec<PathBuf> = Witcher.from(PathBuf::from(.)).to_vec();
-
-// Filter (file) paths by regular expression, returning the matches as a Vec.
-let paths: Vec<PathBuf> = Witcher.from(PathBuf::from(.))
-    .filter_and_collect("(?i).+\.jpg$");
 */
-
-
 
 use ahash::{
 	AHasher,
 	AHashSet
 };
-use crate::utility::du;
-use fyi_msg::{
-	Msg,
-	MsgKind,
+use crate::{
+	utility,
+	Witching,
 };
-use fyi_progress::{
-	NiceElapsed,
-	NiceInt,
-	Progress,
-	utility::inflect,
-};
+use rayon::prelude::*;
 use std::{
 	borrow::Borrow,
 	ffi::OsStr,
-	fs::{
-		self,
-		File,
-	},
+	fs,
 	hash::Hasher,
-	io::{
-		self,
-		BufRead,
-		BufReader,
-		Lines,
-	},
 	path::{
 		Path,
 		PathBuf,
@@ -78,225 +68,195 @@ use std::{
 
 
 
-/// Helper: Generate "impl From" for Iterator<AsRef<Path>> types.
-macro_rules! from_many {
-	($type:ty) => {
-		impl From<$type> for Witcher {
-			fn from(src: $type) -> Self {
-				src.iter()
-					.fold(Self::default(), Self::with_path)
-			}
-		}
-	};
-}
-
-
-
-#[derive(Debug, Clone)]
+#[allow(missing_debug_implementations)]
 /// Witcher.
 ///
-/// This is the it, folks! See the library documentation for more information.
+/// This is the main file finder struct. See the module reference for more
+/// details.
 pub struct Witcher {
-	/// Paths waiting return or traversal.
-	stack: Vec<PathBuf>,
-	/// Unique path hashes found.
-	hash: AHashSet<u64>,
+	/// Directories to scan.
+	dirs: Vec<PathBuf>,
+	/// Files found.
+	files: Vec<PathBuf>,
+	/// Unique path hashes (to prevent duplicate scans, results).
+	seen: AHashSet<u64>,
+	/// Filter callback.
+	cb: Box<dyn Fn(&PathBuf) -> bool + 'static>,
 }
 
 impl Default for Witcher {
 	fn default() -> Self {
 		Self {
-			stack: Vec::with_capacity(64),
-			hash: AHashSet::with_capacity(2048),
-		}
-	}
-}
-
-impl From<&str> for Witcher {
-	fn from(src: &str) -> Self {
-		Self::default().with_path(src)
-	}
-}
-
-impl From<&Path> for Witcher {
-	fn from(src: &Path) -> Self {
-		Self::default().with_path(src)
-	}
-}
-
-impl From<PathBuf> for Witcher {
-	fn from(src: PathBuf) -> Self {
-		Self::default().with_path(src)
-	}
-}
-
-from_many!(&[&str]);
-from_many!(&[String]);
-from_many!(&[&Path]);
-from_many!(&[PathBuf]);
-
-from_many!(Vec<&str>);
-from_many!(Vec<String>);
-from_many!(Vec<&Path>);
-from_many!(Vec<PathBuf>);
-
-impl From<Lines<BufReader<File>>> for Witcher {
-	fn from(src: Lines<BufReader<File>>) -> Self {
-		src.fold(
-			Self::default(),
-			|acc, line| match line.unwrap_or_default().trim() {
-				"" => acc,
-				l => acc.with_path(l),
-			}
-		)
-	}
-}
-
-impl Iterator for Witcher {
-	type Item = PathBuf;
-
-	fn next(&mut self) -> Option<Self::Item> {
-		match self.stack.pop() {
-			Some(path) =>
-				// Recurse directories.
-				if path.is_dir() {
-					self.push_dir(path);
-					self.next()
-				}
-				// Return files.
-				else { Some(path) },
-			None => None,
+			dirs: Vec::new(),
+			files: Vec::with_capacity(2048),
+			seen: AHashSet::with_capacity(2048),
+			cb: Box::new(|_: &PathBuf| true),
 		}
 	}
 }
 
 impl Witcher {
-	/// From File List.
+	/// With Callback.
 	///
-	/// Seed the `Witcher` from values stored in a text file, one path per
-	/// line.
+	/// Define a custom filter callback to determine whether or not a given
+	/// file path should be yielded.
+	pub fn with_filter<F>(mut self, cb: F) -> Self
+	where F: Fn(&PathBuf) -> bool + 'static {
+		self.cb = Box::new(cb);
+		self
+	}
+
+	#[must_use]
+	#[allow(trivial_casts)] // Triviality is required!
+	/// With Extension Filter.
 	///
-	/// Note: relative paths parsed in this manner probably won't resolve
-	/// correctly; it is recommended only absolute paths be used.
-	pub fn read_paths_from_file<P> (path: P) -> Self
+	/// This method — and `with_ext2()`, `with_ext3()` — can be faster for
+	/// matching simple file extensions than `with_regex()`.
+	///
+	/// Note: The extension should include the period and be in lower case.
+	pub fn with_ext1(mut self, ext: &'static [u8]) -> Self {
+		self.cb = Box::new(move |p: &PathBuf|
+			utility::ends_with_ignore_ascii_case(
+				unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) },
+				ext
+			)
+		);
+		self
+	}
+
+	#[must_use]
+	#[allow(trivial_casts)] // Triviality is required!
+	/// With Extensions (2) Filter.
+	///
+	/// Note: The extension should include the period and be in lower case.
+	pub fn with_ext2(mut self, ext1: &'static [u8], ext2: &'static [u8]) -> Self {
+		self.cb = Box::new(move |p: &PathBuf| {
+			let bytes: &[u8] = unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) };
+			utility::ends_with_ignore_ascii_case(bytes, ext1) ||
+			utility::ends_with_ignore_ascii_case(bytes, ext2)
+		});
+		self
+	}
+
+	#[must_use]
+	#[allow(trivial_casts)] // Triviality is required!
+	/// With Extensions (3) Filter.
+	///
+	/// Note: The extension should include the period and be in lower case.
+	pub fn with_ext3(
+		mut self,
+		ext1: &'static [u8],
+		ext2: &'static [u8],
+		ext3: &'static [u8]
+	) -> Self {
+		self.cb = Box::new(move |p: &PathBuf| {
+			let bytes: &[u8] = unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) };
+			utility::ends_with_ignore_ascii_case(bytes, ext1) ||
+			utility::ends_with_ignore_ascii_case(bytes, ext2) ||
+			utility::ends_with_ignore_ascii_case(bytes, ext3)
+		});
+		self
+	}
+
+	#[allow(trivial_casts)] // Triviality is required!
+	/// With a Regex Callback.
+	///
+	/// This is a convenience method for filtering files by regular expression.
+	pub fn with_regex<R>(mut self, reg: R) -> Self
+	where R: Borrow<str> {
+		use regex::bytes::Regex;
+		let pattern: Regex = Regex::new(reg.borrow()).expect("Invalid Regex.");
+		self.cb = Box::new(move|p: &PathBuf| pattern.is_match(
+			unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) }
+		));
+		self
+	}
+
+	/// With Paths.
+	///
+	/// Append files and/or directories to the finder. File paths will be
+	/// checked against the filter callback (if any) and added straight to the
+	/// results if they pass. Directories will be queued for later scanning.
+	pub fn with_paths<P>(self, paths: &[P]) -> Self
 	where P: AsRef<Path> {
-		if let Ok(file) = File::open(path.as_ref()) {
-			Self::from(io::BufReader::new(file).lines())
-		}
-		else { Self::default() }
+		paths.iter().fold(self, Self::with_path)
 	}
 
 	/// With Path.
 	///
-	/// Add a path to the current Witcher queue.
-	pub fn with_path<P> (mut self, path: P) -> Self
+	/// Add a path to the finder. If the path is a file, it will be checked
+	/// against the filter callback (if any) before being added to the results.
+	/// If it is a directory, it will be queued for later scanning.
+	pub fn with_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
-		if let Ok(path) = fs::canonicalize(path) { self.push(path); }
+		if let Ok(path) = fs::canonicalize(path.as_ref()) {
+			if self.seen.insert(hash_path_buf(&path)) {
+				if path.is_dir() {
+					self.dirs.push(path);
+				}
+				else if (self.cb)(&path) {
+					self.files.push(path);
+				}
+			}
+		}
 		self
 	}
 
-	#[allow(trivial_casts)] // Doesn't work without it.
-	/// Filter and Collect
+	#[must_use]
+	/// Build!
 	///
-	/// Find everything, filter according to the provided regex pattern, and
-	/// return the results as a straight Vec.
-	pub fn filter_and_collect<R> (&mut self, pattern: R) -> Vec<PathBuf>
-	where R: Borrow<str> {
-		use regex::bytes::Regex;
-
-		let pattern: Regex = Regex::new(pattern.borrow()).expect("Invalid Regex.");
-		self.filter(|p| pattern.is_match(unsafe {
-			&*(p.as_os_str() as *const OsStr as *const [u8])
-		}))
-			.collect::<Vec<PathBuf>>()
+	/// Once everything is set up, call this method to consume the queue and
+	/// collect the files into a `Vec<PathBuf>`.
+	pub fn build(mut self) -> Vec<PathBuf> {
+		self.digest();
+		self.files
 	}
 
-	#[allow(clippy::wrong_self_convention)] // I mean it is what it is.
-	/// To Vec
+	#[must_use]
+	/// Build (into Progress)!
 	///
-	/// Find everything and return the results as a straight Vec.
-	pub fn to_vec(&mut self) -> Vec<PathBuf> {
-		self.collect()
-	}
+	/// This is identical to `build()`, except a ready-to-go `Progress` struct
+	/// is returned instead.
+	pub fn into_witching(self) -> Witching { Witching::from(self.build()) }
 
-	/// Read Dir.
+	/// Digest.
 	///
-	/// Read the immediate paths under a directory and push any unique results
-	/// back to the stack.
-	fn push_dir(&mut self, path: PathBuf) {
-		if let Ok(paths) = fs::read_dir(path) {
-			paths.filter_map(|p| p.ok().and_then(|p| fs::canonicalize(p.path()).ok()))
-				.for_each(|p| self.push(p));
+	/// This method drains and scans all queued directories, compiling a list
+	/// of files as it goes.
+	///
+	/// If additional directories are discovered during a run, the process is
+	/// repeated. Once all directories have been scanned, it's done!
+	fn digest(&mut self) {
+		while ! self.dirs.is_empty() {
+			// Read each directory.
+			let (tx, rx) = crossbeam_channel::unbounded();
+			self.dirs.par_iter()
+				.filter_map(|p| fs::read_dir(p).ok())
+				.for_each(|paths| {
+					paths.filter_map(|p| p.ok().and_then(|p| fs::canonicalize(p.path()).ok()))
+						.for_each(|p| tx.send(p).unwrap());
+				});
+
+			// Clear the queue.
+			self.dirs.truncate(0);
+			drop(tx);
+
+			// Collect the paths found.
+			rx.iter().for_each(|p| {
+				if self.seen.insert(hash_path_buf(&p)) {
+					if p.is_dir() {
+						self.dirs.push(p);
+					}
+					else if (self.cb)(&p) {
+						self.files.push(p);
+					}
+				}
+			});
 		}
 	}
-
-	/// Push if Previously Unseen.
-	///
-	/// Push a (canonical) path to the stack unless it has already been seen.
-	fn push(&mut self, path: PathBuf) {
-		if self.hash.insert(hash_path_buf(&path)) {
-			self.stack.push(path);
-		}
-	}
 }
 
-#[allow(clippy::pedantic)] // It gets eaten!
-/// Parallel Loop w/ Progress.
-///
-/// This is an add-on for `Progress` that tallies the before and after sizes,
-/// useful for applications that modify the files being iterated.
-///
-/// See the documentation for `fyi_progress::Progress` for more details.
-pub fn progress_crunch<F> (paths: Progress<PathBuf>, cb: F)
-where F: Fn(&PathBuf) + Send + Sync + Copy {
-	// Abort if missing paths.
-	if paths.is_empty() {
-		MsgKind::Warning.into_msg("No matching files were found.\n")
-			.eprint();
 
-		return;
-	}
-
-	// Add up the space used before the run.
-	let before: u64 = du(&*paths);
-
-	paths.run(cb);
-
-	crunched_in(
-		paths.total().into(),
-		paths.elapsed(),
-		before,
-		du(&*paths)
-	);
-}
-
-/// Crunched In Msg
-///
-/// This is an alternative progress summary that includes the number of bytes
-/// saved. It is called after `progress_crunch()`.
-fn crunched_in(total: u64, time: u32, before: u64, after: u64) {
-	// No savings or weird values.
-	if 0 == after || before <= after {
-		Msg::from([
-			&inflect(total, "file in ", "files in "),
-			&*NiceElapsed::from(time),
-			b", but nothing doing.\n",
-		].concat())
-			.with_prefix(MsgKind::Crunched)
-			.eprint();
-	}
-	// Something happened!
-	else {
-		MsgKind::Crunched.into_msg(format!(
-			"{} in {}, saving {} bytes ({:3.*}%).\n",
-			unsafe { std::str::from_utf8_unchecked(&inflect(total, "file", "files")) },
-			NiceElapsed::from(time).as_str(),
-			NiceInt::from(before - after).as_str(),
-			2,
-			(1.0 - (after as f64 / before as f64)) * 100.0
-		)).eprint();
-	}
-}
 
 #[must_use]
 #[allow(trivial_casts)] // Doesn't work without it.
@@ -306,6 +266,9 @@ fn crunched_in(total: u64, time: u32, before: u64, after: u64) {
 /// the `AHash` algorithm. It is faster than the default `Hash` implementation
 /// because it works against the full byte string, rather than crunching each
 /// path component individually.
+///
+/// Speed aside, the main reason for this is it allows us to track uniqueness
+/// as simple, `Copy`able `u64`s instead of full-blown `PathBuf`s.
 fn hash_path_buf(path: &PathBuf) -> u64 {
 	let mut hasher = AHasher::default();
 	hasher.write(unsafe { &*(path.as_os_str() as *const OsStr as *const [u8]) });
@@ -327,30 +290,35 @@ mod tests {
 		let abs_perr = abs_dir.with_file_name("foo.bar");
 
 		// Do a non-search search.
-		let mut w1 = Witcher::from(PathBuf::from("tests/")).to_vec();
+		let mut w1 = Witcher::default()
+			.with_path(PathBuf::from("tests/"))
+			.build();
 		assert!(! w1.is_empty());
 		assert_eq!(w1.len(), 2);
 		assert!(w1.contains(&abs_p1));
 		assert!(w1.contains(&abs_p2));
 		assert!(! w1.contains(&abs_perr));
-		assert_eq!(du(&w1), 162_u64);
 
 		// Look only for .txt files.
-		w1 = Witcher::from(vec![PathBuf::from("tests/")]).filter_and_collect(r"(?i)\.txt$");
+		w1 = Witcher::default()
+			.with_regex(r"(?i)\.txt$")
+			.with_paths(&[PathBuf::from("tests/")])
+			.build();
 		assert!(! w1.is_empty());
 		assert_eq!(w1.len(), 1);
 		assert!(w1.contains(&abs_p1));
 		assert!(! w1.contains(&abs_p2));
 		assert!(! w1.contains(&abs_perr));
-		assert_eq!(du(&w1), 26_u64);
 
 		// Look for something that doesn't exist.
-		w1 = Witcher::from(PathBuf::from("tests/")).filter_and_collect(r"(?i)\.exe$");
+		w1 = Witcher::default()
+			.with_regex(r"(?i)\.exe$")
+			.with_path(PathBuf::from("tests/"))
+			.build();
 		assert!(w1.is_empty());
 		assert_eq!(w1.len(), 0);
 		assert!(! w1.contains(&abs_p1));
 		assert!(! w1.contains(&abs_p2));
 		assert!(! w1.contains(&abs_perr));
-		assert_eq!(du(&w1), 0_u64);
 	}
 }
