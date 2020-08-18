@@ -362,6 +362,10 @@ impl From<&str> for Msg {
 	fn from(src: &str) -> Self { Self::from(src.as_bytes().to_vec()) }
 }
 
+impl From<String> for Msg {
+	fn from(src: String) -> Self { Self::from(src.into_bytes()) }
+}
+
 impl From<&[u8]> for Msg {
 	fn from(src: &[u8]) -> Self { Self::from(src.to_vec()) }
 }
