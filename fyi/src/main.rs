@@ -33,16 +33,10 @@ use fyi_menu::{
 	Argue,
 };
 use fyi_msg::{
+	Msg,
 	MsgKind,
 	FLAG_INDENT,
 	FLAG_TIMESTAMP,
-};
-use std::{
-	io::{
-		self,
-		Write,
-	},
-	process,
 };
 
 
@@ -79,19 +73,23 @@ fn main() {
 ///
 /// Print one or more blank lines to `Stdout` or `Stderr`.
 fn blank(args: &mut Argue) {
+	use std::iter::FromIterator;
+
 	// How many lines should we print?
-	let count: usize = 1.max(
-		args.option2("-c", "--count")
-			.map_or(1, |c| c.parse::<usize>().unwrap_or(1))
-	);
+	let msg = Msg::from_iter([10_u8].repeat(
+		1_usize.max(
+			args.option2("-c", "--count")
+				.map_or(1, |c| c.parse::<usize>().unwrap_or(1))
+		)
+	));
 
 	// Print it to `Stderr`.
 	if args.switch("--stderr") {
-		io::stderr().write_all(&[10].repeat(count)).unwrap();
+		msg.eprint();
 	}
 	// Print it to `Stdout`.
 	else {
-		io::stdout().write_all(&[10].repeat(count)).unwrap();
+		msg.print();
 	}
 }
 
