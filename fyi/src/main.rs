@@ -47,7 +47,8 @@ fn main() {
 	let mut args = Argue::new()
 		.with_any()
 		.with_version(b"FYI", env!("CARGO_PKG_VERSION").as_bytes())
-		.with_help(helper);
+		.with_help(helper)
+		.with_subcommand();
 
 	// Where we going?
 	match args.peek() {

@@ -126,6 +126,9 @@ pub struct Argue {
 	/// either option keys or values. Beginning with `self.last + 1` are all
 	/// the unnamed trailing arguments.
 	last: usize,
+	/// Subcommand? This modifies the arg boundary in cases where no keys are
+	/// present.
+	last_offset: bool,
 }
 
 impl Deref for Argue {
@@ -314,6 +317,18 @@ impl Argue {
 	}
 
 	#[must_use]
+	/// With Subcommand.
+	///
+	/// In cases where no keys are present, the arg boundary defaults to the
+	/// first entry. This method can be used to change the minimum to `1`. It
+	/// has no effect if keys are present, since they'll set the boundary for
+	/// us.
+	pub fn with_subcommand(mut self) -> Self {
+		self.last_offset = true;
+		self
+	}
+
+	#[must_use]
 	/// Print Version.
 	///
 	/// Similar to `with_help()`, this method can be chained to `new()` to
@@ -458,7 +473,7 @@ impl Argue {
 	///
 	/// Return the index arguments are expected to begin at.
 	fn arg_idx(&self) -> usize {
-		if self.keys.is_empty() { 0 }
+		if self.keys.is_empty() && ! self.last_offset { 0 }
 		else { self.last + 1 }
 	}
 
