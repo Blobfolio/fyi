@@ -30,8 +30,7 @@ messages.
 
 use fyi_menu::{
 	die,
-	FLAG_ALL,
-	parse_env_args,
+	Argue,
 };
 use fyi_msg::{
 	MsgKind,
@@ -48,60 +47,46 @@ use std::{
 
 
 
-/// -i | --indent        = 0b0001
-/// -t | --timestamp     = 0b0010
-/// --stderr
-const FLAG_STDERR: u8    = 0b0100;
-
-
-
+/// Main.
 fn main() {
-	let mut args = parse_env_args(FLAG_ALL);
+	// Parse CLI arguments.
+	let mut args = Argue::new()
+		.with_any()
+		.with_version("FYI")
+		.with_help(helper);
 
-	// There are a number of different modes here, some of which require extra
-	// work, some of which immediately short-circuit. Best to match the first
-	// value early to see what's what.
-	match args.remove(0).as_str() {
-		"-h" | "--help" | "help" => _help(include_bytes!("../help/help.txt")),
-		"-V" | "--version" => _version(),
-		"blank" => _blank(&args),
-		x => _msg(x, &args),
+	// Where we going?
+	match args.peek() {
+		Some("blank") => blank(&mut args),
+		Some("print") => {
+			let kind: MsgKind = {
+				let color = args.option2("-c", "--prefix-color")
+					.map_or(199_u8, |x| x.parse::<u8>().unwrap_or(199));
+				let prefix = args.option2("-p", "--prefix").unwrap_or_default();
+				MsgKind::new(prefix, color)
+			};
+			message(kind, &mut args);
+		},
+		Some(x) if MsgKind::from(x) != MsgKind::None => message(MsgKind::from(x), &mut args),
+		_ => {
+			die(b"Missing subcommand.");
+			unreachable!();
+		},
 	}
 }
 
 /// Shoot Blanks.
 ///
-/// This prints one or more blank lines to `Stdout` or `Stderr`. That's it!
-fn _blank(args: &[String]) {
-	// The command defaults.
-	let mut count: usize = 1;
-	let mut err: bool = false;
-
-	// Run through the args to see what's what.
-	let mut idx: usize = 0;
-	let len: usize = args.len();
-	while idx < len {
-		match args[idx].as_str() {
-			"--stderr" => {
-				err = true;
-				idx += 1;
-			},
-			"-c" | "--count" =>
-				if idx + 1 < len {
-					count = 100.min(1.max(args[idx + 1].parse::<usize>().unwrap_or(1)));
-					idx += 2;
-				}
-				else { idx += 1; },
-			"-h" | "--help" => {
-				_help(include_bytes!("../help/blank.txt"));
-				return;
-			},
-			_ => { break; },
-		}
-	}
+/// Print one or more blank lines to `Stdout` or `Stderr`.
+fn blank(args: &mut Argue) {
+	// How many lines should we print?
+	let count: usize = 1.max(
+		args.option2("-c", "--count")
+			.map_or(1, |c| c.parse::<usize>().unwrap_or(1))
+	);
 
 	// Print it to `Stderr`.
-	if err {
+	if args.switch("--stderr") {
 		io::stderr().write_all(&[10].repeat(count)).unwrap();
 	}
 	// Print it to `Stdout`.
@@ -110,91 +95,43 @@ fn _blank(args: &[String]) {
 	}
 }
 
-/// Process Message.
+/// Help Page.
 ///
-/// Most of the subcommands work pretty much the same way. Enough that we can
-/// group their handling under one parent method, anyway.
-fn _msg(com: &str, args: &[String]) {
-	// Set up the default options.
-	let mut exit: i32 = 0;
+/// Print the appropriate help screen given the call details. Most of the sub-
+/// commands work the same way, but a few have their own distinct messages.
+fn helper(cmd: Option<&str>) {
+	match cmd {
+		Some("blank") => _help(include_bytes!("../help/blank.txt")),
+		Some("print") => _help(include_bytes!("../help/print.txt")),
+		Some("confirm") | Some("prompt") => _help(include_bytes!("../help/confirm.txt")),
+		Some(x) if MsgKind::from(x) != MsgKind::None => {
+			_help(format!(
+				include_str!("../help/generic.txt"),
+				x,
+				MsgKind::from(x).into_msg("Hello World").as_str(),
+				x.to_lowercase(),
+			).as_bytes())
+		},
+		_ => _help(include_bytes!("../help/help.txt")),
+	}
+}
+
+/// Print Message!
+///
+/// Almost all roads lead to this method, which crunches the CLI args and
+/// prints an appropriately formatted message.
+fn message(kind: MsgKind, args: &mut Argue) {
+	// Exit code.
+	let exit: i32 = args.option2("-e", "--exit")
+		.map_or(0, |x| x.parse::<i32>().unwrap_or(0));
+
+	// Basic flags.
 	let mut flags: u8 = 0;
-	let mut color: u8 = 199;
-	let mut prefix: &str = "";
-	let mut kind: MsgKind = MsgKind::from(com);
-	let custom: bool = com == "print";
-
-	// Parse the arguments to see what we've got.
-	let mut idx: usize = 0;
-	let len: usize = args.len();
-	while idx < len {
-		match args[idx].as_str() {
-			"-i" | "--indent" => {
-				flags |= FLAG_INDENT;
-				idx += 1;
-			},
-			"--stderr" => {
-				flags |= FLAG_STDERR;
-				idx += 1;
-			},
-			"-t" | "--timestamp" => {
-				flags |= FLAG_TIMESTAMP;
-				idx += 1;
-			},
-			"-e" | "--exit" =>
-				if idx + 1 < len {
-					exit = args[idx + 1].parse::<i32>().unwrap_or(0);
-					idx += 2;
-				}
-				else { idx += 1; },
-			"-h" | "--help" => {
-				if custom {
-					_help(
-						include_bytes!("../help/print.txt")
-					);
-				}
-				else if MsgKind::Confirm == kind {
-					_help(include_bytes!("../help/confirm.txt"));
-				}
-				else {
-					 _help(format!(
-						include_str!("../help/generic.txt"),
-						com,
-						kind.into_msg("Hello World").as_str(),
-						com.to_lowercase(),
-					).as_bytes());
-				}
-
-				return;
-			},
-			"-c" | "--prefix-color" if custom =>
-				if idx + 1 < len {
-					color = args[idx + 1].parse::<u8>().unwrap_or(199);
-					idx += 2;
-				}
-				else { idx += 1; },
-			"-p" | "--prefix" if custom =>
-				if idx + 1 < len {
-					prefix = args[idx + 1].as_str();
-					idx += 2;
-				}
-				else { idx += 1; },
-			_ => { break; },
-		}
-	}
-
-	// Are we missing a message?
-	if idx + 1 != len {
-		die(b"Missing message.");
-	}
-
-	// If we're custom and have a prefix, we need to update the kind.
-	if custom && ! prefix.is_empty() {
-		kind = MsgKind::new(prefix, color);
-	}
+	if args.switch2("-i", "--indent") { flags |= FLAG_INDENT; }
+	if args.switch2("-t", "--timestamp") { flags |= FLAG_TIMESTAMP; }
 
 	// Let's build the message!
-	let msg = kind.into_msg(&args[idx])
-		.with_flags(flags);
+	let msg = kind.into_msg(args.take_arg()).with_flags(flags);
 
 	// It's a prompt!
 	if MsgKind::Confirm == kind {
@@ -204,14 +141,10 @@ fn _msg(com: &str, args: &[String]) {
 
 		return;
 	}
-	// Print to `Stdout`.
-	else if 0 == flags & FLAG_STDERR {
-		msg.println();
-	}
 	// Print to `Stderr`.
-	else {
-		msg.eprintln();
-	}
+	else if args.switch("--stderr") { msg.eprintln(); }
+	// Print to `Stdout`.
+	else { msg.println(); }
 
 	// Special exit?
 	if 0 != exit {
@@ -222,6 +155,9 @@ fn _msg(com: &str, args: &[String]) {
 #[cfg(not(feature = "man"))]
 #[cold]
 /// Print Help.
+///
+/// This actually prints the help screen. This version of the method is used in
+/// the compiled binary.
 fn _help(txt: &[u8]) {
 	io::stdout().write_fmt(format_args!(
 		r#"
@@ -261,26 +197,19 @@ fn _help(txt: &[u8]) {
 #[cold]
 /// Print Help.
 ///
-/// This is a stripped-down version of the help screen made specifically for
-/// `help2man`, which gets run during the Debian package release build task.
+/// This actually prints the help screen. This version of the method is used
+/// during build to give `help2man` something to work with.
 fn _help(txt: &[u8]) {
-	io::stdout().write_all(&[
-		b"FYI ",
-		env!("CARGO_PKG_VERSION").as_bytes(),
-		b"\n",
-		env!("CARGO_PKG_DESCRIPTION").as_bytes(),
-		b"\n\n",
-		txt,
-		b"\n",
-	].concat()).unwrap();
-}
+	let writer = std::io::stdout();
+	let mut handle = writer.lock();
 
-#[cold]
-/// Print version and exit.
-fn _version() {
-	io::stdout().write_all(&[
-		b"FYI ",
-		env!("CARGO_PKG_VERSION").as_bytes(),
-		b"\n"
-	].concat()).unwrap();
+	handle.write_all(b"FYI ").unwrap();
+	handle.write_all(env!("CARGO_PKG_VERSION").as_bytes()).unwrap();
+	handle.write_all(b"\n").unwrap();
+	handle.write_all(env!("CARGO_PKG_DESCRIPTION").as_bytes()).unwrap();
+	handle.write_all(b"\n\n").unwrap();
+	handle.write_all(txt).unwrap();
+	handle.write_all(b"\n").unwrap();
+
+	handle.flush().unwrap();
 }
