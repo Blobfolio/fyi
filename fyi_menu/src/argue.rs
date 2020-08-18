@@ -432,7 +432,7 @@ impl Argue {
 	///
 	/// If there are no arguments, an empty slice is returned.
 	pub fn args(&self) -> &[String] {
-		let idx = self.last + 1;
+		let idx = self.arg_idx();
 		if idx < self.args.len() {
 			&self.args[idx..]
 		}
@@ -448,7 +448,7 @@ impl Argue {
 	/// This method is intended for use in cases where exactly one argument is
 	/// expected and required. All other cases should just call `args()`.
 	pub fn take_arg(&mut self) -> String {
-		let idx = self.last + 1;
+		let idx = self.arg_idx();
 		if idx >= self.args.len() {
 			die(b"Missing required argument.");
 			unreachable!();
@@ -462,6 +462,14 @@ impl Argue {
 	// ------------------------------------------------------------------------
 	// Internal
 	// ------------------------------------------------------------------------
+
+	/// Arg Index.
+	///
+	/// Return the index arguments are expected to begin at.
+	fn arg_idx(&self) -> usize {
+		if self.keys.is_empty() { 0 }
+		else { self.last + 1 }
+	}
 
 	/// Insert Key.
 	///
