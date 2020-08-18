@@ -182,34 +182,6 @@ impl Witcher {
 		paths.iter().fold(self, Self::with_path)
 	}
 
-	/// With Paths From File.
-	///
-	/// This method reads paths from a text file — one path per line — and adds
-	/// them to the finder.
-	///
-	/// Paths added in this method should be absolute as relativity might not
-	/// work correctly coming from a text file.
-	pub fn with_paths_from_file<P>(self, path: P) -> Self
-	where P: AsRef<Path> {
-		use std::{
-			fs::File,
-			io::{
-				BufRead,
-				BufReader,
-			},
-		};
-
-		if let Ok(file) = File::open(path.as_ref()) {
-			BufReader::new(file).lines()
-				.filter_map(|line| match line.unwrap_or_default().trim() {
-					"" => None,
-					x => Some(PathBuf::from(x)),
-				})
-				.fold(self, Self::with_path)
-		}
-		else { self }
-	}
-
 	/// With Path.
 	///
 	/// Add a path to the finder. If the path is a file, it will be checked
@@ -228,18 +200,6 @@ impl Witcher {
 			}
 		}
 		self
-	}
-
-	/// With Path(s) Helper
-	///
-	/// This is a convenience method that triggers either `with_paths()` or
-	/// `with_paths_from_file()`, depending on whether or not `list` is set.
-	pub fn with<P>(self, paths: &[P], list: bool) -> Self
-	where P: AsRef<Path> {
-		if list && ! paths.is_empty() {
-			self.with_paths_from_file(&paths[0])
-		}
-		else { self.with_paths(paths) }
 	}
 
 	#[must_use]
