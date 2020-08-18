@@ -56,7 +56,6 @@ use std::{
 	cmp::Ordering,
 	env,
 	hash::Hasher,
-	io::Write,
 	iter::FromIterator,
 	ops::Deref,
 	process::exit,
@@ -318,21 +317,14 @@ impl Argue {
 	/// Print Version.
 	///
 	/// Similar to `with_help()`, this method can be chained to `new()` to
-	/// automatically print the app name and version, exiting with a status
-	/// code of `0` if `[-V, --version]` flags are present.
+	/// run a callback and exiting with a status code of `0` if
+	/// if `[-V, --version]` flags are present.
 	///
 	/// If no version flags are found, `self` is transparently passed through.
-	pub fn with_version(self, name: &str) -> Self {
+	pub fn with_version<F>(self, cb: F) -> Self
+	where F: Fn() {
 		if self.keys.contains_key(&hash_arg_key("-V")) || self.keys.contains_key(&hash_arg_key("--version")) {
-			let writer = std::io::stdout();
-			let mut handle = writer.lock();
-
-			handle.write_all(name.as_bytes()).unwrap();
-			handle.write_all(b" ").unwrap();
-			handle.write_all(env!("CARGO_PKG_VERSION").as_bytes()).unwrap();
-			handle.write_all(b"\n").unwrap();
-
-			handle.flush().unwrap();
+			cb();
 			exit(0);
 		}
 

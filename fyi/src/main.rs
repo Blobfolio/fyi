@@ -52,7 +52,7 @@ fn main() {
 	// Parse CLI arguments.
 	let mut args = Argue::new()
 		.with_any()
-		.with_version("FYI")
+		.with_version(versioner)
 		.with_help(helper);
 
 	// Where we going?
@@ -152,6 +152,18 @@ fn message(kind: MsgKind, args: &mut Argue) {
 	}
 }
 
+/// Print Version.
+fn versioner() {
+	let writer = std::io::stdout();
+	let mut handle = writer.lock();
+
+	handle.write_all(b"FYI ").unwrap();
+	handle.write_all(env!("CARGO_PKG_VERSION").as_bytes()).unwrap();
+	handle.write_all(b"\n").unwrap();
+
+	handle.flush().unwrap();
+}
+
 #[cfg(not(feature = "man"))]
 #[cold]
 /// Print Help.
@@ -200,12 +212,11 @@ fn _help(txt: &[u8]) {
 /// This actually prints the help screen. This version of the method is used
 /// during build to give `help2man` something to work with.
 fn _help(txt: &[u8]) {
+	versioner();
+
 	let writer = std::io::stdout();
 	let mut handle = writer.lock();
 
-	handle.write_all(b"FYI ").unwrap();
-	handle.write_all(env!("CARGO_PKG_VERSION").as_bytes()).unwrap();
-	handle.write_all(b"\n").unwrap();
 	handle.write_all(env!("CARGO_PKG_DESCRIPTION").as_bytes()).unwrap();
 	handle.write_all(b"\n\n").unwrap();
 	handle.write_all(txt).unwrap();
