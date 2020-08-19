@@ -167,6 +167,7 @@ mod tests {
 
 		assert!(km.insert("Hello", 5));
 		assert!(km.contains("Hello"));
+		assert!(! km.contains("World"));
 		assert_eq!(km.get("Hello"), Some(5));
 
 		assert!(! km.insert("Hello", 5));
@@ -179,6 +180,8 @@ mod tests {
 		assert!(km.insert("Three", 3));
 
 		assert!(km.contains2("two", "Two"));
+		assert!(! km.contains2("two", "three"));
 		assert_eq!(km.get2("two", "Two"), Some(2));
+		assert_eq!(km.get2("two", "three"), None);
 	}
 }
