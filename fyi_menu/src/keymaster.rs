@@ -12,9 +12,12 @@ a power of two.
 */
 
 use ahash::AHasher;
-use std::hash::{
-	Hash,
-	Hasher,
+use std::{
+	hash::{
+		Hash,
+		Hasher,
+	},
+	ops::Deref,
 };
 
 
@@ -36,6 +39,11 @@ const MAX_KEYS: usize = 16;
 struct KeyEntry {
 	pub hash: u64,
 	pub idx: usize,
+}
+
+impl Deref for KeyEntry {
+	type Target = u64;
+	fn deref(&self) -> &Self::Target { &self.hash }
 }
 
 impl Hash for KeyEntry {
