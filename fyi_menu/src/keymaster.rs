@@ -95,7 +95,7 @@ impl KeyMaster {
 	/// is returned and `Argue` will error out.
 	pub fn insert(&mut self, key: &str, idx: usize) -> bool {
 		let key = KeyEntry::new(key, idx);
-		if self.len < MAX_KEYS && ! self.keys[0..self.len].iter().any(|x| x.eq(&key)) {
+		if self.len < MAX_KEYS && self.keys[0..self.len].iter().all(|x| x.ne(&key)) {
 			self.keys[self.len] = key;
 			self.len += 1;
 			true
