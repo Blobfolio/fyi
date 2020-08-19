@@ -11,6 +11,7 @@ ultimately up to the implementing library.
 
 Nobody is in agreement on how CLI arguments should be formatted. To that end,
 the assumptions this library makes are:
+* A maximum of 16 keys are supported.
 * Short options are only ever a single char. Anything after that single char (e.g "Val" in "-kVal") will be considered a value and broken off into its own entry.
 * Long option key/value pairs (e.g. "--key=val") are likewise split into their own entries.
 * Options may only ever appear once.
@@ -43,70 +44,21 @@ let remaining: &[String] = args.args();
 ```
 */
 
-use ahash::{
-	AHasher,
-	AHashMap,
+use crate::{
+	KeyKind,
+	KeyMaster,
+	utility,
 };
-use crate::utility;
 use fyi_msg::{
 	Msg,
 	MsgKind,
 };
 use std::{
-	cmp::Ordering,
 	env,
-	hash::Hasher,
 	iter::FromIterator,
 	ops::Deref,
 	process::exit,
 };
-
-
-
-#[derive(Debug, Clone, Copy, Hash, PartialEq)]
-/// The Kind of Key.
-///
-/// This is only used during argument parsing. It is made public for the sake
-/// of benchmarking.
-pub enum KeyKind {
-	/// Not a key.
-	None,
-	/// A short one.
-	Short,
-	/// A short one with a potential value chunk.
-	ShortV,
-	/// A long one.
-	Long,
-	/// A long one with a value chunk. The `usize` indicates the position of
-	/// the `=` character.
-	LongV(usize),
-}
-
-impl Default for KeyKind {
-	fn default() -> Self { Self::None }
-}
-
-impl From<&[u8]> for KeyKind {
-	fn from(txt: &[u8]) -> Self {
-		match txt.len().cmp(&2) {
-			// This could be a short option.
-			Ordering::Equal if txt[0] == b'-' && utility::byte_is_letter(txt[1]) => Self::Short,
-			// This could be anything!
-			Ordering::Greater if txt[0] == b'-' =>
-				if txt[1] == b'-' && utility::byte_is_letter(txt[2]) {
-					txt.iter().position(|b| *b == b'=')
-						.map_or(Self::Long, Self::LongV)
-				}
-				else if utility::byte_is_letter(txt[1]) {
-					Self::ShortV
-				}
-				else {
-					Self::None
-				}
-			_ => Self::None,
-		}
-	}
-}
 
 
 
@@ -119,7 +71,7 @@ pub struct Argue {
 	/// Parsed arguments.
 	args: Vec<String>,
 	/// Keys found mapped to their index in `self.args`.
-	keys: AHashMap<u64, usize>,
+	keys: KeyMaster,
 	/// The last known key/value index.
 	///
 	/// Put another way, all entries in `self.args` between `0..=self.last` are
@@ -266,7 +218,7 @@ impl Argue {
 				exit(0);
 			}
 			// Check the flags.
-			else if self.keys.contains_key(&hash_arg_key("-h")) || self.keys.contains_key(&hash_arg_key("--help")) {
+			else if self.keys.contains2("-h", "--help") {
 				cb(
 					if x.as_bytes()[0] == b'-' { None }
 					else { Some(x) }
@@ -323,7 +275,7 @@ impl Argue {
 	/// first entry. This method can be used to change the minimum to `1`. It
 	/// has no effect if keys are present, since they'll set the boundary for
 	/// us.
-	pub fn with_subcommand(mut self) -> Self {
+	pub const fn with_subcommand(mut self) -> Self {
 		self.last_offset = true;
 		self
 	}
@@ -337,7 +289,7 @@ impl Argue {
 	///
 	/// If no version flags are found, `self` is transparently passed through.
 	pub fn with_version(self, name: &[u8], version: &[u8]) -> Self {
-		if self.keys.contains_key(&hash_arg_key("-V")) || self.keys.contains_key(&hash_arg_key("--version")) {
+		if self.keys.contains2("-V", "--version") {
 			Msg::from([name, b" v", version].concat()).println();
 			exit(0);
 		}
@@ -376,7 +328,7 @@ impl Argue {
 	///
 	/// Returns `true` if the switch is present, `false` if not.
 	pub fn switch(&self, key: &str) -> bool {
-		self.keys.contains_key(&hash_arg_key(key))
+		self.keys.contains(key)
 	}
 
 	#[must_use]
@@ -385,7 +337,7 @@ impl Argue {
 	/// This is just like `switch()`, except it checks for both a short and
 	/// long key, returning `true` if either were present.
 	pub fn switch2(&self, short: &str, long: &str) -> bool {
-		self.switch(short) || self.switch(long)
+		self.keys.contains2(short, long)
 	}
 
 	/// Option.
@@ -398,8 +350,8 @@ impl Argue {
 	/// knows during parsing where the last keys are, but doesn't know which of
 	/// those keys have values until `option()` or `option2()` are called.)
 	pub fn option(&mut self, key: &str) -> Option<&str> {
-		if let Some(idx) = self.keys.get(&hash_arg_key(key)) {
-			let idx = *idx + 1;
+		if let Some(mut idx) = self.keys.get(key) {
+			idx += 1;
 			if idx < self.args.len() {
 				// We might need to update the arg boundary since this is +1.
 				self.update_last(idx);
@@ -415,8 +367,8 @@ impl Argue {
 	/// This is just like `option()`, except it checks for both a short and
 	/// long key, returning the first match found.
 	pub fn option2(&mut self, short: &str, long: &str) -> Option<&str> {
-		if let Some(idx) = self.keys.get(&hash_arg_key(short)).or_else(|| self.keys.get(&hash_arg_key(long))) {
-			let idx: usize = *idx + 1;
+		if let Some(mut idx) = self.keys.get2(short, long) {
+			idx += 1;
 			if idx < self.args.len() {
 				// We might need to update the arg boundary since this is +1.
 				self.update_last(idx);
@@ -482,8 +434,7 @@ impl Argue {
 	/// This is used during argument parsing to record key positions as they're
 	/// found.
 	fn insert_key(&mut self, idx: usize) {
-		let hash = hash_arg_key(&self.args[idx]);
-		if self.keys.insert(hash, idx).is_some() {
+		if ! self.keys.insert(&self.args[idx], idx) {
 			die(format!("Duplicate key: {}.", &self.args[idx]).as_bytes());
 		}
 		self.update_last(idx);
@@ -508,16 +459,6 @@ pub fn die(msg: &[u8]) {
 		.with_prefix(MsgKind::Error)
 		.eprintln();
 	exit(1);
-}
-
-/// Hash Arg Key
-///
-/// To avoid the overhead of storing an owned string, we're simply keying the
-/// hash. This method makes that hash.
-fn hash_arg_key(key: &str) -> u64 {
-	let mut hasher = AHasher::default();
-	hasher.write(key.as_bytes());
-	hasher.finish()
 }
 
 

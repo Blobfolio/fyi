@@ -38,11 +38,14 @@ See the flag documentation below for handling options.
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::unknown_clippy_lints)]
 
-pub mod utility;
 mod argue;
+mod keykind;
+mod keymaster;
+pub mod utility;
 
+pub use keykind::KeyKind;
+pub use keymaster::KeyMaster;
 pub use argue::{
 	Argue,
 	die,
-	KeyKind,
 };
