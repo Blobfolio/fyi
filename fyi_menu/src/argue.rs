@@ -45,14 +45,12 @@ let remaining: &[String] = args.args();
 */
 
 use crate::{
+	die,
 	KeyKind,
 	KeyMaster,
 	utility,
 };
-use fyi_msg::{
-	Msg,
-	MsgKind,
-};
+use fyi_msg::Msg;
 use std::{
 	env,
 	iter::FromIterator,
@@ -451,16 +449,6 @@ impl Argue {
 			self.last = idx;
 		}
 	}
-}
-
-
-
-/// Print an Error and Exit.
-pub fn die(msg: &[u8]) {
-	Msg::from(msg)
-		.with_prefix(MsgKind::Error)
-		.eprintln();
-	exit(1);
 }
 
 

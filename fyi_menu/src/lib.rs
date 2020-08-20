@@ -43,9 +43,20 @@ mod keykind;
 mod keymaster;
 pub mod utility;
 
+use fyi_msg::{
+	Msg,
+	MsgKind,
+};
 pub use keykind::KeyKind;
 pub use keymaster::KeyMaster;
-pub use argue::{
-	Argue,
-	die,
-};
+pub use argue::Argue;
+
+
+
+/// Print an Error and Exit.
+pub fn die(msg: &[u8]) {
+	Msg::from(msg)
+		.with_prefix(MsgKind::Error)
+		.eprintln();
+	std::process::exit(1);
+}
