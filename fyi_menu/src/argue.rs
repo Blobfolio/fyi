@@ -52,8 +52,12 @@ use crate::{
 };
 use fyi_msg::Msg;
 use std::{
+	borrow::BorrowMut,
 	env,
-	iter::FromIterator,
+	iter::{
+		FromIterator,
+		once,
+	},
 	ops::Deref,
 	process::exit,
 };
@@ -88,75 +92,79 @@ impl Deref for Argue {
 
 impl FromIterator<String> for Argue {
 	fn from_iter<I: IntoIterator<Item=String>>(src: I) -> Self {
-		// Go ahead and collect the raw args, trimming any leading empties.
-		let mut out = Self {
-			args: src.into_iter()
-				.skip_while(|x|
-					x.is_empty() ||
-					x.as_bytes().iter().all(u8::is_ascii_whitespace)
-				)
-				.collect(),
-			..Self::default()
-		};
+		// Narrow down the iterator a bit.
+		let mut src = src.into_iter()
+			.skip_while(|x|
+				x.is_empty() ||
+				x.as_bytes().iter().all(u8::is_ascii_whitespace)
+			);
 
-		let mut len: usize = out.args.len();
-		let mut idx: usize = 0;
+		// Go ahead and collect the raw args if/until we hit an "--".
+		let mut out = Self::default();
+		out.args.extend(src.borrow_mut().take_while(|x| x.ne("--")));
 
-		while idx < len {
-			// Handle separators.
-			if out.args[idx] == "--" {
-				// There isn't anything after?.
-				if idx + 1 == len {
-					out.args.remove(idx);
-				}
-				else {
-					out.args[idx] = out.args.drain(idx+1..len)
-						.map(utility::esc_arg)
-						.collect::<Vec<String>>()
-						.join(" ");
-				}
+		// Handle the keys.
+		{
+			// Find the keys
+			let mut len: usize = out.args.len();
+			let mut idx: usize = 0;
 
-				// We've reached the end!
-				break;
-			}
-
-			match KeyKind::from(out.args[idx].as_bytes()) {
-				KeyKind::ShortV => {
-					// Split the value off the key and insert it into the next
-					// index.
-					let tmp = out.args[idx].split_off(2);
-					out.args.insert(idx + 1, tmp);
-
-					out.insert_key(idx);
-					out.last = idx + 1;
-					idx += 2;
-					len += 1;
-				},
-				KeyKind::LongV(x) => {
-					// Split the value off the key and insert it into the next
-					// index, and drop the "=" off the key.
-					if x + 1 < out.args[idx].len() {
-						let tmp = out.args[idx].split_off(x+1);
+			while idx < len {
+				match KeyKind::from(out.args[idx].as_bytes()) {
+					// Everything else can go straight on through!
+					KeyKind::None => { idx += 1; },
+					KeyKind::Short | KeyKind::Long => {
+						if ! out.keys.insert(&out.args[idx], idx) {
+							die(b"Duplicate key.");
+						}
+						out.last = idx;
+						idx += 1;
+					},
+					KeyKind::ShortV => {
+						// Split the value off the key and insert it into the
+						// next index.
+						let tmp = out.args[idx].split_off(2);
 						out.args.insert(idx + 1, tmp);
-					}
-					else {
-						out.args.insert(idx + 1, String::new());
-					}
-					out.args[idx].truncate(x);
 
-					out.insert_key(idx);
-					out.last = idx + 1;
-					idx += 2;
-					len += 1;
-				},
-				KeyKind::Short | KeyKind::Long => {
-					out.insert_key(idx);
-					out.last = idx;
-					idx += 1;
+						if ! out.keys.insert(&out.args[idx], idx) {
+							die(b"Duplicate key.");
+						}
+						out.last = idx + 1;
+						idx += 2;
+						len += 1;
+					},
+					KeyKind::LongV(x) => {
+						// Split the value off the key and insert it into the
+						// next index, and drop the "=" off the key.
+						if x + 1 < out.args[idx].len() {
+							let tmp = out.args[idx].split_off(x+1);
+							out.args.insert(idx + 1, tmp);
+						}
+						else {
+							out.args.insert(idx + 1, String::new());
+						}
+						out.args[idx].truncate(x);
+
+						if ! out.keys.insert(&out.args[idx], idx) {
+							die(b"Duplicate key.");
+						}
+						out.last = idx + 1;
+						idx += 2;
+						len += 1;
+					},
 				}
-				// Everything else can go straight on through!
-				_ => { idx += 1; }
 			}
+		}
+
+		// Handle the separator bits, if any.
+		if let Some(x) = src.next() {
+			out.args.push(
+				once(x)
+					.chain(src)
+					.map(utility::esc_arg)
+					.collect::<Vec<String>>()
+					.join(" ")
+			);
 		}
 
 		out
@@ -428,16 +436,6 @@ impl Argue {
 	fn arg_idx(&self) -> usize {
 		if self.keys.is_empty() && ! self.last_offset { 0 }
 		else { self.last + 1 }
-	}
-
-	/// Insert Key.
-	///
-	/// This is used during argument parsing to record key positions as they're
-	/// found.
-	fn insert_key(&mut self, idx: usize) {
-		if ! self.keys.insert(&self.args[idx], idx) {
-			die(format!("Duplicate key: {}.", &self.args[idx]).as_bytes());
-		}
 	}
 
 	/// Update Last Read.
