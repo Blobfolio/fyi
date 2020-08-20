@@ -51,6 +51,7 @@ pub fn esc_arg(mut s: String) -> String {
 				v.insert(idx, b'\\');
 				idx += 2;
 				len += 1;
+				needs_quote = true;
 			}
 			// Something else?
 			else {
