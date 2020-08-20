@@ -12,6 +12,7 @@ a power of two.
 */
 
 use ahash::AHasher;
+use crate::die;
 use std::{
 	hash::{
 		Hash,
@@ -102,8 +103,12 @@ impl KeyMaster {
 	/// If the key is not already stored, it will be added, otherwise `false`
 	/// is returned and `Argue` will error out.
 	pub fn insert(&mut self, key: &str, idx: usize) -> bool {
+		if self.len >= MAX_KEYS {
+			die(b"Too many options.");
+		}
+
 		let key = KeyEntry::new(key, idx);
-		if self.len < MAX_KEYS && self.keys[0..self.len].iter().all(|x| x.ne(&key)) {
+		if self.keys[0..self.len].iter().all(|x| x.ne(&key)) {
 			self.keys[self.len] = key;
 			self.len += 1;
 			true
