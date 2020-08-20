@@ -38,11 +38,13 @@ impl Default for KeyKind {
 
 impl From<&[u8]> for KeyKind {
 	fn from(txt: &[u8]) -> Self {
+		if txt.is_empty() || txt[0] != b'-' { return Self::None; }
+
 		match txt.len().cmp(&2) {
 			// This could be a short option.
-			Ordering::Equal if txt[0] == b'-' && utility::byte_is_letter(txt[1]) => Self::Short,
+			Ordering::Equal if utility::byte_is_letter(txt[1]) => Self::Short,
 			// This could be anything!
-			Ordering::Greater if txt[0] == b'-' =>
+			Ordering::Greater =>
 				if txt[1] == b'-' && utility::byte_is_letter(txt[2]) {
 					memchr::memchr(b'=', txt)
 						.map_or(Self::Long, Self::LongV)
