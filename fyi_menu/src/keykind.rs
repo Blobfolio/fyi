@@ -44,7 +44,7 @@ impl From<&[u8]> for KeyKind {
 			// This could be anything!
 			Ordering::Greater if txt[0] == b'-' =>
 				if txt[1] == b'-' && utility::byte_is_letter(txt[2]) {
-					txt.iter().position(|b| *b == b'=')
+					memchr::memchr(b'=', txt)
 						.map_or(Self::Long, Self::LongV)
 				}
 				else if utility::byte_is_letter(txt[1]) {
