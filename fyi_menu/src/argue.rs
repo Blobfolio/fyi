@@ -122,35 +122,38 @@ impl FromIterator<String> for Argue {
 				break;
 			}
 
-			let bytes: &[u8] = out.args[idx].as_bytes();
-			match KeyKind::from(bytes) {
+			match KeyKind::from(out.args[idx].as_bytes()) {
 				KeyKind::ShortV => {
-					out.args.insert(idx + 1, String::from(&out.args[idx][2..]));
-					out.args[idx].truncate(2);
+					// Split the value off the key and insert it into the next
+					// index.
+					let tmp = out.args[idx].split_off(2);
+					out.args.insert(idx + 1, tmp);
 
 					out.insert_key(idx);
+					out.last = idx + 1;
 					idx += 2;
 					len += 1;
 				},
 				KeyKind::LongV(x) => {
-					// Insert the value.
-					if x + 1 < bytes.len() {
-						out.args.insert(idx + 1, String::from(&out.args[idx][x+1..]));
+					// Split the value off the key and insert it into the next
+					// index, and drop the "=" off the key.
+					if x + 1 < out.args[idx].len() {
+						let tmp = out.args[idx].split_off(x+1);
+						out.args.insert(idx + 1, tmp);
 					}
-					// Otherwise insert an empty value.
 					else {
 						out.args.insert(idx + 1, String::new());
 					}
-
-					// Shorten the key.
 					out.args[idx].truncate(x);
 
 					out.insert_key(idx);
+					out.last = idx + 1;
 					idx += 2;
 					len += 1;
 				},
 				KeyKind::Short | KeyKind::Long => {
 					out.insert_key(idx);
+					out.last = idx;
 					idx += 1;
 				}
 				// Everything else can go straight on through!
@@ -437,7 +440,6 @@ impl Argue {
 		if ! self.keys.insert(&self.args[idx], idx) {
 			die(format!("Duplicate key: {}.", &self.args[idx]).as_bytes());
 		}
-		self.update_last(idx);
 	}
 
 	/// Update Last Read.
@@ -473,6 +475,7 @@ mod tests {
 			String::from(""),
 			String::from("hey"),
 			String::from("-kVal"),
+			String::from("--empty="),
 			String::from("--key=Val"),
 			String::from("--"),
 			String::from("stuff"),
@@ -486,6 +489,8 @@ mod tests {
 				String::from("hey"),
 				String::from("-k"),
 				String::from("Val"),
+				String::from("--empty"),
+				String::new(),
 				String::from("--key"),
 				String::from("Val"),
 				String::from("stuff 'and things'"),
