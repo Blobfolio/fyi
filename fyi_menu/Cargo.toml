@@ -8,6 +8,7 @@ publish = false
 
 [dependencies]
 ahash = "0.4.*"
+smallvec = "1.4.*"
 memchr = "2.3.*"
 
 [dependencies.fyi_msg]
