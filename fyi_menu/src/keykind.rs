@@ -8,9 +8,6 @@ It is only really used by `Argue` during construction, but might find other
 uses.
 */
 
-use crate::utility;
-use std::cmp::Ordering;
-
 
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq)]
@@ -38,24 +35,19 @@ impl Default for KeyKind {
 
 impl From<&[u8]> for KeyKind {
 	fn from(txt: &[u8]) -> Self {
-		if txt.is_empty() || txt[0] != b'-' { return Self::None; }
+		let len: usize = txt.len();
+		let dashes: usize = txt.iter().take_while(|x| **x == b'-').count();
 
-		match txt.len().cmp(&2) {
-			// This could be a short option.
-			Ordering::Equal if utility::byte_is_letter(txt[1]) => Self::Short,
-			// This could be anything!
-			Ordering::Greater =>
-				if txt[1] == b'-' && utility::byte_is_letter(txt[2]) {
-					memchr::memchr(b'=', txt)
-						.map_or(Self::Long, Self::LongV)
-				}
-				else if utility::byte_is_letter(txt[1]) {
-					Self::ShortV
-				}
-				else {
-					Self::None
-				}
-			_ => Self::None,
+		if 0 < dashes && dashes < len && matches!(txt[dashes], b'A'..=b'Z' | b'a'..=b'z') {
+			if dashes == 1 {
+				if len == 2 { return Self::Short; }
+				else { return Self::ShortV; }
+			}
+			else if dashes == 2 {
+				return memchr::memchr(b'=', txt).map_or(Self::Long, Self::LongV);
+			}
 		}
+
+		Self::None
 	}
 }
