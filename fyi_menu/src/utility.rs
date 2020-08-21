@@ -4,17 +4,6 @@
 
 
 
-#[must_use]
-/// Is Byte a Letter?
-///
-/// Keys need an [a-z] or [A-Z] letter following the dash.
-pub fn byte_is_letter(byte: u8) -> bool {
-	match byte {
-		b'A'..=b'Z' | b'a'..=b'z' => true,
-		_ => false,
-	}
-}
-
 #[allow(clippy::match_on_vec_items)] // We already checked the index exists.
 #[allow(clippy::suspicious_else_formatting)] // What does lines have to do with it?
 #[must_use]
@@ -158,20 +147,6 @@ pub fn vec_trim_start(data: &mut Vec<String>) {
 #[cfg(test)]
 mod tests {
 	use super::*;
-
-	#[test]
-	fn t_byte_is_letter() {
-		assert_eq!(true, byte_is_letter(b'a'));
-		assert_eq!(true, byte_is_letter(b'B'));
-		assert_eq!(true, byte_is_letter(b'c'));
-		assert_eq!(true, byte_is_letter(b'D'));
-
-		assert_eq!(false, byte_is_letter(b'!'));
-		assert_eq!(false, byte_is_letter(b' '));
-		assert_eq!(false, byte_is_letter(b'@'));
-		assert_eq!(false, byte_is_letter(b'2'));
-		assert_eq!(false, byte_is_letter(b'.'));
-	}
 
 	#[test]
 	fn t_esc_arg() {
