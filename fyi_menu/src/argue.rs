@@ -140,7 +140,7 @@ impl FromIterator<String> for Argue {
 						// Split the value off the key and insert it into the
 						// next index, and drop the "=" off the key.
 						if x + 1 < out.args[idx].len() {
-							let tmp = out.args[idx].split_off(x+1);
+							let tmp = out.args[idx].split_off(x + 1);
 							out.args.insert(idx + 1, tmp);
 						}
 						else {
