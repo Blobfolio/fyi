@@ -91,18 +91,19 @@ impl Deref for Argue {
 	fn deref(&self) -> &Self::Target { &self.args }
 }
 
-impl FromIterator<String> for Argue {
-	fn from_iter<I: IntoIterator<Item=String>>(src: I) -> Self {
-		// Narrow down the iterator a bit.
-		let mut src = src.into_iter()
-			.skip_while(|x|
-				x.is_empty() ||
-				x.as_bytes().iter().all(u8::is_ascii_whitespace)
-			);
-
+impl<I> From<I> for Argue
+where I: Iterator<Item=String> {
+	fn from(mut src: I) -> Self
+	where I: Iterator<Item=String> {
 		// Go ahead and collect the raw args if/until we hit an "--".
 		let mut out = Self {
-			args: src.borrow_mut().take_while(|x| x.ne("--")).collect(),
+			args: src.borrow_mut()
+				.skip_while(|x|
+					x.is_empty() ||
+					x.as_bytes().iter().all(u8::is_ascii_whitespace)
+				)
+				.take_while(|x| x.ne("--"))
+				.collect(),
 			..Self::default()
 		};
 
@@ -174,6 +175,12 @@ impl FromIterator<String> for Argue {
 	}
 }
 
+impl FromIterator<String> for Argue {
+	fn from_iter<I: IntoIterator<Item=String>>(src: I) -> Self {
+		Self::from(src.into_iter())
+	}
+}
+
 impl Argue {
 	// ------------------------------------------------------------------------
 	// Builder
@@ -189,7 +196,7 @@ impl Argue {
 	/// `Argue::from_iter()` method (provided via the `iter::FromIterator`
 	/// trait).
 	pub fn new() -> Self {
-		Self::from_iter(env::args().skip(1))
+		Self::from(env::args().skip(1))
 	}
 
 	#[must_use]
