@@ -35,8 +35,8 @@ impl Default for KeyKind {
 
 impl From<&[u8]> for KeyKind {
 	fn from(txt: &[u8]) -> Self {
-		let len: usize = txt.len();
 		let dashes: usize = txt.iter().take_while(|x| **x == b'-').count();
+		let len: usize = txt.len();
 
 		if 0 < dashes && dashes < len && matches!(txt[dashes], b'A'..=b'Z' | b'a'..=b'z') {
 			if dashes == 1 {
