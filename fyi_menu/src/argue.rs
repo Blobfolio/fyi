@@ -102,9 +102,7 @@ impl FromIterator<String> for Argue {
 
 		// Go ahead and collect the raw args if/until we hit an "--".
 		let mut out = Self {
-			args: SmallVec::<[String; 16]>::from_iter(
-				src.borrow_mut().take_while(|x| x.ne("--"))
-			),
+			args: src.borrow_mut().take_while(|x| x.ne("--")).collect(),
 			..Self::default()
 		};
 
