@@ -51,7 +51,6 @@ use crate::{
 	utility,
 };
 use fyi_msg::Msg;
-use smallvec::SmallVec;
 use std::{
 	borrow::BorrowMut,
 	env,
@@ -72,7 +71,7 @@ use std::{
 /// for more information.
 pub struct Argue {
 	/// Parsed arguments.
-	args: SmallVec<[String; 16]>,
+	args: Vec<String>,
 	/// Keys found mapped to their index in `self.args`.
 	keys: KeyMaster,
 	/// The last known key/value index.
@@ -325,7 +324,7 @@ impl Argue {
 	///
 	/// Unless `take_arg()` was called previously, the vector should represent
 	/// all of the original arguments (albeit reformatted).
-	pub fn take(self) -> Vec<String> { self.args.into_vec() }
+	pub fn take(self) -> Vec<String> { self.args }
 
 
 
