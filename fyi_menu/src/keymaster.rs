@@ -92,7 +92,7 @@ pub struct KeyMaster {
 impl KeyMaster {
 	#[must_use]
 	/// Is Empty.
-	pub const fn is_empty(&self) -> bool { self.len() == 0 }
+	pub const fn is_empty(&self) -> bool { self.len == 0 }
 
 	#[must_use]
 	/// Length.
