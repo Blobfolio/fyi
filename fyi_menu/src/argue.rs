@@ -52,19 +52,15 @@ use crate::{
 };
 use fyi_msg::Msg;
 use std::{
-	borrow::BorrowMut,
 	env,
-	iter::{
-		FromIterator,
-		once,
-	},
+	iter::FromIterator,
 	ops::Deref,
 	process::exit,
 };
 
 
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 /// Argue.
 ///
 /// This is the main point of the library! See the module level documentation
@@ -85,6 +81,17 @@ pub struct Argue {
 	last_offset: bool,
 }
 
+impl Default for Argue {
+	fn default() -> Self {
+		Self {
+			args: Vec::with_capacity(16),
+			keys: KeyMaster::default(),
+			last: 0,
+			last_offset: false,
+		}
+	}
+}
+
 impl Deref for Argue {
 	type Target = [String];
 	fn deref(&self) -> &Self::Target { &self.args }
@@ -92,85 +99,13 @@ impl Deref for Argue {
 
 impl<I> From<I> for Argue
 where I: Iterator<Item=String> {
-	fn from(mut src: I) -> Self
+	fn from(src: I) -> Self
 	where I: Iterator<Item=String> {
-		// Go ahead and collect the raw args if/until we hit an "--".
-		let mut out = Self {
-			args: src.borrow_mut()
-				.skip_while(|x|
-					x.is_empty() ||
-					x.as_bytes().iter().all(u8::is_ascii_whitespace)
-				)
-				.take_while(|x| x.ne("--"))
-				.collect(),
-			..Self::default()
-		};
-
-		// Handle the keys.
-		{
-			// Find the keys
-			let mut len: usize = out.args.len();
-			let mut idx: usize = 0;
-
-			while idx < len {
-				match KeyKind::from(out.args[idx].as_bytes()) {
-					// Everything else can go straight on through!
-					KeyKind::None => { idx += 1; },
-					KeyKind::Short | KeyKind::Long => {
-						if ! out.keys.insert(&out.args[idx], idx) {
-							die(b"Duplicate key.");
-						}
-						out.last = idx;
-						idx += 1;
-					},
-					KeyKind::ShortV => {
-						// Split the value off the key and insert it into the
-						// next index.
-						let tmp = out.args[idx].split_off(2);
-						out.args.insert(idx + 1, tmp);
-
-						if ! out.keys.insert(&out.args[idx], idx) {
-							die(b"Duplicate key.");
-						}
-						out.last = idx + 1;
-						idx += 2;
-						len += 1;
-					},
-					KeyKind::LongV(x) => {
-						// Split the value off the key and insert it into the
-						// next index, and drop the "=" off the key.
-						if x + 1 < out.args[idx].len() {
-							let tmp = out.args[idx].split_off(x + 1);
-							out.args.insert(idx + 1, tmp);
-						}
-						else {
-							out.args.insert(idx + 1, String::new());
-						}
-						out.args[idx].truncate(x);
-
-						if ! out.keys.insert(&out.args[idx], idx) {
-							die(b"Duplicate key.");
-						}
-						out.last = idx + 1;
-						idx += 2;
-						len += 1;
-					},
-				}
-			}
-		}
-
-		// Handle the separator bits, if any.
-		if let Some(x) = src.next() {
-			out.args.push(
-				once(x)
-					.chain(src)
-					.map(utility::esc_arg)
-					.collect::<Vec<String>>()
-					.join(" ")
-			);
-		}
-
-		out
+		src.skip_while(|x|
+				x.is_empty() ||
+				x.as_bytes().iter().all(u8::is_ascii_whitespace)
+			)
+			.fold(Self::default(), Self::fold_entry)
 	}
 }
 
@@ -196,6 +131,51 @@ impl Argue {
 	/// trait).
 	pub fn new() -> Self {
 		Self::from(env::args().skip(1))
+	}
+
+	/// With Entry.
+	///
+	/// This is used to fold iterator entries into the collection. It is
+	/// slightly more efficient to blindly collect and handle keys with a
+	/// secondary loop, but this approach is significantly cleaner.
+	fn fold_entry(mut self, mut e: String) -> Self {
+		match KeyKind::from(e.as_bytes()) {
+			// Passthru.
+			KeyKind::None => { self.args.push(e); },
+			// Record the keys and passthru.
+			KeyKind::Short | KeyKind::Long => {
+				let idx: usize = self.args.len();
+				if ! self.keys.insert(&e, idx) { die(b"Duplicate key."); }
+				self.args.push(e);
+				self.last = idx;
+			},
+			// Split a short key/value pair.
+			KeyKind::ShortV => {
+				let idx: usize = self.args.len();
+				let tmp: String = e.split_off(2);
+				if ! self.keys.insert(&e, idx) { die(b"Duplicate key."); }
+				self.args.push(e);
+				self.args.push(tmp);
+				self.last = idx + 1;
+			},
+			// Split a long key/value pair.
+			KeyKind::LongV(x) => {
+				let idx: usize = self.args.len();
+				let tmp: String =
+					if x + 1 < e.len() { e.split_off(x + 1) }
+					else { String::new() };
+
+				// Chop off the "=" sign.
+				e.truncate(x);
+
+				if ! self.keys.insert(&e, idx) { die(b"Duplicate key."); }
+				self.args.push(e);
+				self.args.push(tmp);
+				self.last = idx + 1;
+			},
+		}
+
+		self
 	}
 
 	#[must_use]
@@ -280,6 +260,27 @@ impl Argue {
 						x => Some(String::from(x)),
 					})
 					.for_each(|x| self.args.push(x));
+			}
+		}
+
+		self
+	}
+
+	#[must_use]
+	/// With Separator.
+	///
+	/// If the arguments contain an "--" separator, it is replaced with all of
+	/// the bits after it, requoted as necessary.
+	pub fn with_separator(mut self) -> Self {
+		if let Some(idx) = self.args.iter().position(|x| x == "--") {
+			if idx + 1 < self.args.len() {
+				self.args[idx] = self.args.drain(idx + 1..)
+					.map(utility::esc_arg)
+					.collect::<Vec<String>>()
+					.join(" ");
+			}
+			else {
+				self.args.truncate(idx);
 			}
 		}
 
@@ -427,7 +428,6 @@ impl Argue {
 		let idx = self.arg_idx();
 		if idx >= self.args.len() {
 			die(b"Missing required argument.");
-			unreachable!();
 		}
 
 		self.args.remove(idx)
@@ -477,7 +477,7 @@ mod tests {
 			String::from("and things")
 		];
 
-		let mut args = Argue::from_iter(base.clone());
+		let mut args = Argue::from_iter(base.clone()).with_separator();
 		assert_eq!(
 			*args,
 			[
