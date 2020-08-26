@@ -51,21 +51,23 @@ fn main() {
 		.with_subcommand();
 
 	// Where we going?
-	match args.peek() {
-		Some("blank") => blank(&mut args),
-		Some("print") => {
-			let kind: MsgKind = {
+	match unsafe { args.peek_unchecked() } {
+		"blank" => blank(&mut args),
+		"print" => message(
+			{
 				let color = args.option2("-c", "--prefix-color")
 					.map_or(199_u8, |x| x.parse::<u8>().unwrap_or(199));
 				let prefix = args.option2("-p", "--prefix").unwrap_or_default();
 				MsgKind::new(prefix, color)
-			};
-			message(kind, &mut args);
-		},
-		Some(x) if MsgKind::from(x) != MsgKind::None => message(MsgKind::from(x), &mut args),
-		_ => {
-			die(b"Missing subcommand.");
-			unreachable!();
+			},
+			&mut args
+		),
+		x => match MsgKind::from(x) {
+			MsgKind::None => {
+				die(b"Missing subcommand.");
+				unreachable!();
+			},
+			x => message(x, &mut args),
 		},
 	}
 }
