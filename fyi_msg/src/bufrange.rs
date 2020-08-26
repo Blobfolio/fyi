@@ -68,17 +68,13 @@ impl BufRange {
 	/// Is Empty.
 	///
 	/// Returns true if the range is empty.
-	pub const fn is_empty(&self) -> bool {
-		self.end == self.start
-	}
+	pub const fn is_empty(&self) -> bool { self.start == self.end }
 
 	#[must_use]
 	/// Length.
 	///
 	/// Returns the length of the range.
-	pub const fn len(&self) -> usize {
-		self.end - self.start
-	}
+	pub const fn len(&self) -> usize { self.end - self.start }
 
 	#[must_use]
 	/// Range.
