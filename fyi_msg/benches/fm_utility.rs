@@ -51,30 +51,11 @@ fn time_format_dd(c: &mut Criterion) {
 	group.finish();
 }
 
-fn whitespace(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_msg::utility");
-
-	for spaces in [0, 50, 300].iter() {
-		group.bench_with_input(
-			BenchmarkId::from_parameter(format!("whitespace({})", spaces)),
-			spaces,
-			|b, &spaces| {
-				b.iter(||
-					utility::whitespace(spaces)
-				);
-			}
-		);
-	}
-
-	group.finish();
-}
-
 
 
 criterion_group!(
 	benches,
 	ansi_code_bold,
-	whitespace,
 	time_format_dd,
 );
 criterion_main!(benches);

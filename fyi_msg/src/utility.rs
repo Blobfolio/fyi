@@ -70,18 +70,6 @@ pub fn time_format_dd(num: u32) -> &'static [u8] {
 	&TIME[num..num+2]
 }
 
-#[must_use]
-/// Whitespace Reservoir.
-///
-/// This method borrows whitespace from a static reference, useful for
-/// quickly padding strings, etc.
-///
-/// Let's don't get crazy, though. A maximum of 255 spaces can be returned.
-pub fn whitespace(num: usize) -> &'static [u8] {
-	static WHITES: [u8; 255] = [32; 255];
-	&WHITES[0..255.min(num)]
-}
-
 
 
 #[cfg(test)]
@@ -122,12 +110,5 @@ mod tests {
 			"DD for 60 is incorrect: {:?}",
 			time_format_dd(60)
 		);
-	}
-
-	#[test]
-	fn t_whitespace() {
-		assert_eq!(whitespace(0), b"");
-		assert_eq!(whitespace(5), b"     ");
-		assert_eq!(whitespace(10), b"          ");
 	}
 }

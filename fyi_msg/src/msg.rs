@@ -473,13 +473,15 @@ impl Msg {
 
 	/// Set Indent.
 	pub fn set_indent(&mut self, indent: u8) {
-		let indent: usize = indent as usize * 4;
+		static WHITES: [u8; 16] = [32; 16];
+
+		let indent: usize = 4.min(indent as usize) * 4;
 		if indent != self.toc[PART_INDENT].len() {
 			replace_buf_range(
 				&mut self.buf,
 				&mut self.toc,
 				PART_INDENT,
-				utility::whitespace(indent),
+				&WHITES[0..indent],
 			);
 		}
 	}
