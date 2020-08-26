@@ -343,6 +343,18 @@ impl Argue {
 	}
 
 	#[must_use]
+	/// First Entry.
+	///
+	/// Borrow the first entry.
+	///
+	/// # Safety
+	///
+	/// This assumes a first argument exists. It will panic if not.
+	pub unsafe fn peek_unchecked(&self) -> &str {
+		&self.args[0]
+	}
+
+	#[must_use]
 	/// Switch.
 	///
 	/// Returns `true` if the switch is present, `false` if not.
