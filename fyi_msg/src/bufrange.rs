@@ -90,7 +90,7 @@ impl BufRange {
 
 	#[must_use]
 	/// Get the ending value.
-	pub const fn end(&self) -> usize { self.start }
+	pub const fn end(&self) -> usize { self.end }
 
 	/// Grow Set At.
 	pub fn grow_set_at(set: &mut [Self], idx: usize, adj: usize) {
