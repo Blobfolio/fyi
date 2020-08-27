@@ -296,7 +296,7 @@ impl MsgKind {
 
 	#[must_use]
 	/// Is Empty.
-	pub fn is_empty(&self) -> bool {
+	pub const fn is_empty(&self) -> bool {
 		match self {
 			Self::None => true,
 			Self::Other(x) => x.is_empty(),
@@ -306,11 +306,17 @@ impl MsgKind {
 
 	#[must_use]
 	/// Length.
-	pub fn len(&self) -> usize {
+	pub const fn len(&self) -> usize {
 		match self {
 			Self::None => 0,
+			Self::Confirm => 26,
+			Self::Crunched => 21,
+			Self::Done | Self::Info => 17,
+			Self::Debug | Self::Error => 18,
+			Self::Notice => 19,
+			Self::Success | Self::Warning => 20,
+			Self::Task => 23,
 			Self::Other(x) => x.len(),
-			_ => self.as_bytes().len(),
 		}
 	}
 }
@@ -473,13 +479,15 @@ impl Msg {
 
 	/// Set Indent.
 	pub fn set_indent(&mut self, indent: u8) {
-		let indent: usize = indent as usize * 4;
+		static WHITES: [u8; 16] = [32; 16];
+
+		let indent: usize = 4.min(indent as usize) * 4;
 		if indent != self.toc[PART_INDENT].len() {
 			replace_buf_range(
 				&mut self.buf,
 				&mut self.toc,
 				PART_INDENT,
-				utility::whitespace(indent),
+				&WHITES[0..indent],
 			);
 		}
 	}

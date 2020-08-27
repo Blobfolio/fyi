@@ -38,11 +38,25 @@ See the flag documentation below for handling options.
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::unknown_clippy_lints)]
 
-pub mod utility;
 mod argue;
+mod keykind;
+mod keymaster;
+pub mod utility;
 
-pub use argue::{
-	Argue,
-	die,
-	KeyKind,
+use fyi_msg::{
+	Msg,
+	MsgKind,
 };
+pub use keykind::KeyKind;
+pub use keymaster::KeyMaster;
+pub use argue::Argue;
+
+
+
+/// Print an Error and Exit.
+pub fn die(msg: &[u8]) {
+	Msg::from(msg)
+		.with_prefix(MsgKind::Error)
+		.eprintln();
+	std::process::exit(1);
+}

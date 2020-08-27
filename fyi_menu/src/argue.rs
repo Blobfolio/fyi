@@ -11,6 +11,7 @@ ultimately up to the implementing library.
 
 Nobody is in agreement on how CLI arguments should be formatted. To that end,
 the assumptions this library makes are:
+* A maximum of 16 keys are supported.
 * Short options are only ever a single char. Anything after that single char (e.g "Val" in "-kVal") will be considered a value and broken off into its own entry.
 * Long option key/value pairs (e.g. "--key=val") are likewise split into their own entries.
 * Options may only ever appear once.
@@ -43,19 +44,15 @@ let remaining: &[String] = args.args();
 ```
 */
 
-use ahash::{
-	AHasher,
-	AHashMap,
+use crate::{
+	die,
+	KeyKind,
+	KeyMaster,
+	utility,
 };
-use crate::utility;
-use fyi_msg::{
-	Msg,
-	MsgKind,
-};
+use fyi_msg::Msg;
 use std::{
-	cmp::Ordering,
 	env,
-	hash::Hasher,
 	iter::FromIterator,
 	ops::Deref,
 	process::exit,
@@ -63,54 +60,7 @@ use std::{
 
 
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq)]
-/// The Kind of Key.
-///
-/// This is only used during argument parsing. It is made public for the sake
-/// of benchmarking.
-pub enum KeyKind {
-	/// Not a key.
-	None,
-	/// A short one.
-	Short,
-	/// A short one with a potential value chunk.
-	ShortV,
-	/// A long one.
-	Long,
-	/// A long one with a value chunk. The `usize` indicates the position of
-	/// the `=` character.
-	LongV(usize),
-}
-
-impl Default for KeyKind {
-	fn default() -> Self { Self::None }
-}
-
-impl From<&[u8]> for KeyKind {
-	fn from(txt: &[u8]) -> Self {
-		match txt.len().cmp(&2) {
-			// This could be a short option.
-			Ordering::Equal if txt[0] == b'-' && utility::byte_is_letter(txt[1]) => Self::Short,
-			// This could be anything!
-			Ordering::Greater if txt[0] == b'-' =>
-				if txt[1] == b'-' && utility::byte_is_letter(txt[2]) {
-					txt.iter().position(|b| *b == b'=')
-						.map_or(Self::Long, Self::LongV)
-				}
-				else if utility::byte_is_letter(txt[1]) {
-					Self::ShortV
-				}
-				else {
-					Self::None
-				}
-			_ => Self::None,
-		}
-	}
-}
-
-
-
-#[derive(Debug, Default)]
+#[derive(Debug)]
 /// Argue.
 ///
 /// This is the main point of the library! See the module level documentation
@@ -119,7 +69,7 @@ pub struct Argue {
 	/// Parsed arguments.
 	args: Vec<String>,
 	/// Keys found mapped to their index in `self.args`.
-	keys: AHashMap<u64, usize>,
+	keys: KeyMaster,
 	/// The last known key/value index.
 	///
 	/// Put another way, all entries in `self.args` between `0..=self.last` are
@@ -131,82 +81,37 @@ pub struct Argue {
 	last_offset: bool,
 }
 
+impl Default for Argue {
+	fn default() -> Self {
+		Self {
+			args: Vec::with_capacity(16),
+			keys: KeyMaster::default(),
+			last: 0,
+			last_offset: false,
+		}
+	}
+}
+
 impl Deref for Argue {
 	type Target = [String];
 	fn deref(&self) -> &Self::Target { &self.args }
 }
 
+impl<I> From<I> for Argue
+where I: Iterator<Item=String> {
+	fn from(src: I) -> Self
+	where I: Iterator<Item=String> {
+		src.skip_while(|x|
+				x.is_empty() ||
+				x.as_bytes().iter().all(u8::is_ascii_whitespace)
+			)
+			.fold(Self::default(), Self::fold_entry)
+	}
+}
+
 impl FromIterator<String> for Argue {
 	fn from_iter<I: IntoIterator<Item=String>>(src: I) -> Self {
-		// Go ahead and collect the raw args, trimming any leading empties.
-		let mut out = Self {
-			args: src.into_iter()
-				.skip_while(|x|
-					x.is_empty() ||
-					x.as_bytes().iter().all(u8::is_ascii_whitespace)
-				)
-				.collect(),
-			..Self::default()
-		};
-
-		let mut len: usize = out.args.len();
-		let mut idx: usize = 0;
-
-		while idx < len {
-			// Handle separators.
-			if out.args[idx] == "--" {
-				// There isn't anything after?.
-				if idx + 1 == len {
-					out.args.remove(idx);
-				}
-				else {
-					out.args[idx] = out.args.drain(idx+1..len)
-						.map(utility::esc_arg)
-						.collect::<Vec<String>>()
-						.join(" ");
-				}
-
-				// We've reached the end!
-				break;
-			}
-
-			let bytes: &[u8] = out.args[idx].as_bytes();
-			match KeyKind::from(bytes) {
-				KeyKind::ShortV => {
-					out.args.insert(idx + 1, String::from(&out.args[idx][2..]));
-					out.args[idx].truncate(2);
-
-					out.insert_key(idx);
-					idx += 2;
-					len += 1;
-				},
-				KeyKind::LongV(x) => {
-					// Insert the value.
-					if x + 1 < bytes.len() {
-						out.args.insert(idx + 1, String::from(&out.args[idx][x+1..]));
-					}
-					// Otherwise insert an empty value.
-					else {
-						out.args.insert(idx + 1, String::new());
-					}
-
-					// Shorten the key.
-					out.args[idx].truncate(x);
-
-					out.insert_key(idx);
-					idx += 2;
-					len += 1;
-				},
-				KeyKind::Short | KeyKind::Long => {
-					out.insert_key(idx);
-					idx += 1;
-				}
-				// Everything else can go straight on through!
-				_ => { idx += 1; }
-			}
-		}
-
-		out
+		Self::from(src.into_iter())
 	}
 }
 
@@ -225,7 +130,52 @@ impl Argue {
 	/// `Argue::from_iter()` method (provided via the `iter::FromIterator`
 	/// trait).
 	pub fn new() -> Self {
-		Self::from_iter(env::args().skip(1))
+		Self::from(env::args().skip(1))
+	}
+
+	/// With Entry.
+	///
+	/// This is used to fold iterator entries into the collection. It is
+	/// slightly more efficient to blindly collect and handle keys with a
+	/// secondary loop, but this approach is significantly cleaner.
+	fn fold_entry(mut self, mut e: String) -> Self {
+		match KeyKind::from(e.as_bytes()) {
+			// Passthru.
+			KeyKind::None => { self.args.push(e); },
+			// Record the keys and passthru.
+			KeyKind::Short | KeyKind::Long => {
+				let idx: usize = self.args.len();
+				if ! self.keys.insert(&e, idx) { die(b"Duplicate key."); }
+				self.args.push(e);
+				self.last = idx;
+			},
+			// Split a short key/value pair.
+			KeyKind::ShortV => {
+				let idx: usize = self.args.len();
+				let tmp: String = e.split_off(2);
+				if ! self.keys.insert(&e, idx) { die(b"Duplicate key."); }
+				self.args.push(e);
+				self.args.push(tmp);
+				self.last = idx + 1;
+			},
+			// Split a long key/value pair.
+			KeyKind::LongV(x) => {
+				let idx: usize = self.args.len();
+				let tmp: String =
+					if x + 1 < e.len() { e.split_off(x + 1) }
+					else { String::new() };
+
+				// Chop off the "=" sign.
+				e.truncate(x);
+
+				if ! self.keys.insert(&e, idx) { die(b"Duplicate key."); }
+				self.args.push(e);
+				self.args.push(tmp);
+				self.last = idx + 1;
+			},
+		}
+
+		self
 	}
 
 	#[must_use]
@@ -266,7 +216,7 @@ impl Argue {
 				exit(0);
 			}
 			// Check the flags.
-			else if self.keys.contains_key(&hash_arg_key("-h")) || self.keys.contains_key(&hash_arg_key("--help")) {
+			else if self.keys.contains2("-h", "--help") {
 				cb(
 					if x.as_bytes()[0] == b'-' { None }
 					else { Some(x) }
@@ -317,13 +267,34 @@ impl Argue {
 	}
 
 	#[must_use]
+	/// With Separator.
+	///
+	/// If the arguments contain an "--" separator, it is replaced with all of
+	/// the bits after it, requoted as necessary.
+	pub fn with_separator(mut self) -> Self {
+		if let Some(idx) = self.args.iter().position(|x| x == "--") {
+			if idx + 1 < self.args.len() {
+				self.args[idx] = self.args.drain(idx + 1..)
+					.map(utility::esc_arg)
+					.collect::<Vec<String>>()
+					.join(" ");
+			}
+			else {
+				self.args.truncate(idx);
+			}
+		}
+
+		self
+	}
+
+	#[must_use]
 	/// With Subcommand.
 	///
 	/// In cases where no keys are present, the arg boundary defaults to the
 	/// first entry. This method can be used to change the minimum to `1`. It
 	/// has no effect if keys are present, since they'll set the boundary for
 	/// us.
-	pub fn with_subcommand(mut self) -> Self {
+	pub const fn with_subcommand(mut self) -> Self {
 		self.last_offset = true;
 		self
 	}
@@ -337,7 +308,7 @@ impl Argue {
 	///
 	/// If no version flags are found, `self` is transparently passed through.
 	pub fn with_version(self, name: &[u8], version: &[u8]) -> Self {
-		if self.keys.contains_key(&hash_arg_key("-V")) || self.keys.contains_key(&hash_arg_key("--version")) {
+		if self.keys.contains2("-V", "--version") {
 			Msg::from([name, b" v", version].concat()).println();
 			exit(0);
 		}
@@ -372,11 +343,23 @@ impl Argue {
 	}
 
 	#[must_use]
+	/// First Entry.
+	///
+	/// Borrow the first entry.
+	///
+	/// # Safety
+	///
+	/// This assumes a first argument exists. It will panic if not.
+	pub unsafe fn peek_unchecked(&self) -> &str {
+		&self.args[0]
+	}
+
+	#[must_use]
 	/// Switch.
 	///
 	/// Returns `true` if the switch is present, `false` if not.
 	pub fn switch(&self, key: &str) -> bool {
-		self.keys.contains_key(&hash_arg_key(key))
+		self.keys.contains(key)
 	}
 
 	#[must_use]
@@ -385,7 +368,7 @@ impl Argue {
 	/// This is just like `switch()`, except it checks for both a short and
 	/// long key, returning `true` if either were present.
 	pub fn switch2(&self, short: &str, long: &str) -> bool {
-		self.switch(short) || self.switch(long)
+		self.keys.contains2(short, long)
 	}
 
 	/// Option.
@@ -398,8 +381,8 @@ impl Argue {
 	/// knows during parsing where the last keys are, but doesn't know which of
 	/// those keys have values until `option()` or `option2()` are called.)
 	pub fn option(&mut self, key: &str) -> Option<&str> {
-		if let Some(idx) = self.keys.get(&hash_arg_key(key)) {
-			let idx = *idx + 1;
+		if let Some(mut idx) = self.keys.get(key) {
+			idx += 1;
 			if idx < self.args.len() {
 				// We might need to update the arg boundary since this is +1.
 				self.update_last(idx);
@@ -415,8 +398,8 @@ impl Argue {
 	/// This is just like `option()`, except it checks for both a short and
 	/// long key, returning the first match found.
 	pub fn option2(&mut self, short: &str, long: &str) -> Option<&str> {
-		if let Some(idx) = self.keys.get(&hash_arg_key(short)).or_else(|| self.keys.get(&hash_arg_key(long))) {
-			let idx: usize = *idx + 1;
+		if let Some(mut idx) = self.keys.get2(short, long) {
+			idx += 1;
 			if idx < self.args.len() {
 				// We might need to update the arg boundary since this is +1.
 				self.update_last(idx);
@@ -457,7 +440,6 @@ impl Argue {
 		let idx = self.arg_idx();
 		if idx >= self.args.len() {
 			die(b"Missing required argument.");
-			unreachable!();
 		}
 
 		self.args.remove(idx)
@@ -472,21 +454,9 @@ impl Argue {
 	/// Arg Index.
 	///
 	/// Return the index arguments are expected to begin at.
-	fn arg_idx(&self) -> usize {
+	const fn arg_idx(&self) -> usize {
 		if self.keys.is_empty() && ! self.last_offset { 0 }
 		else { self.last + 1 }
-	}
-
-	/// Insert Key.
-	///
-	/// This is used during argument parsing to record key positions as they're
-	/// found.
-	fn insert_key(&mut self, idx: usize) {
-		let hash = hash_arg_key(&self.args[idx]);
-		if self.keys.insert(hash, idx).is_some() {
-			die(format!("Duplicate key: {}.", &self.args[idx]).as_bytes());
-		}
-		self.update_last(idx);
 	}
 
 	/// Update Last Read.
@@ -502,26 +472,6 @@ impl Argue {
 
 
 
-/// Print an Error and Exit.
-pub fn die(msg: &[u8]) {
-	Msg::from(msg)
-		.with_prefix(MsgKind::Error)
-		.eprintln();
-	exit(1);
-}
-
-/// Hash Arg Key
-///
-/// To avoid the overhead of storing an owned string, we're simply keying the
-/// hash. This method makes that hash.
-fn hash_arg_key(key: &str) -> u64 {
-	let mut hasher = AHasher::default();
-	hasher.write(key.as_bytes());
-	hasher.finish()
-}
-
-
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -532,19 +482,22 @@ mod tests {
 			String::from(""),
 			String::from("hey"),
 			String::from("-kVal"),
+			String::from("--empty="),
 			String::from("--key=Val"),
 			String::from("--"),
 			String::from("stuff"),
 			String::from("and things")
 		];
 
-		let mut args = Argue::from_iter(base.clone());
+		let mut args = Argue::from_iter(base.clone()).with_separator();
 		assert_eq!(
 			*args,
 			[
 				String::from("hey"),
 				String::from("-k"),
 				String::from("Val"),
+				String::from("--empty"),
+				String::new(),
 				String::from("--key"),
 				String::from("Val"),
 				String::from("stuff 'and things'"),
