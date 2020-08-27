@@ -296,7 +296,7 @@ impl MsgKind {
 
 	#[must_use]
 	/// Is Empty.
-	pub fn is_empty(&self) -> bool {
+	pub const fn is_empty(&self) -> bool {
 		match self {
 			Self::None => true,
 			Self::Other(x) => x.is_empty(),
@@ -306,11 +306,17 @@ impl MsgKind {
 
 	#[must_use]
 	/// Length.
-	pub fn len(&self) -> usize {
+	pub const fn len(&self) -> usize {
 		match self {
 			Self::None => 0,
+			Self::Confirm => 26,
+			Self::Crunched => 21,
+			Self::Done | Self::Info => 17,
+			Self::Debug | Self::Error => 18,
+			Self::Notice => 19,
+			Self::Success | Self::Warning => 20,
+			Self::Task => 23,
 			Self::Other(x) => x.len(),
-			_ => self.as_bytes().len(),
 		}
 	}
 }

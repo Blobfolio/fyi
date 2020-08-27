@@ -454,7 +454,7 @@ impl Argue {
 	/// Arg Index.
 	///
 	/// Return the index arguments are expected to begin at.
-	fn arg_idx(&self) -> usize {
+	const fn arg_idx(&self) -> usize {
 		if self.keys.is_empty() && ! self.last_offset { 0 }
 		else { self.last + 1 }
 	}

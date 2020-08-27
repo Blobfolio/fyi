@@ -70,11 +70,11 @@ pub fn esc_arg(mut s: String) -> String {
 /// This will return `true` if the string is empty or only includes ASCII
 /// whitespace. Other characters, including weird Unicode whitespace, result in
 /// a response of `false`.
-pub fn slice_is_whitespace(data: &[u8]) -> bool {
+pub const fn slice_is_whitespace(data: &[u8]) -> bool {
 	let len: usize = data.len();
 	let mut idx: usize = 0;
 	while idx < len {
-		if ! data[idx].is_ascii_whitespace() {
+		if ! matches!(data[idx], b'\t' | b'\n' | b'\x0C' | b'\r' | b' ') {
 			return false;
 		}
 

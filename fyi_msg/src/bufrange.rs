@@ -52,7 +52,7 @@ impl BufRange {
 	/// Note: this method is `const` and therefore cannot explicitly assert,
 	/// however `start` must be less than or equal to `end`. The struct is
 	/// private, so this is more a Note-to-Self than anything.
-	pub fn new(start: usize, end: usize) -> Self {
+	pub const fn new(start: usize, end: usize) -> Self {
 		if start <= end {
 			Self { start, end }
 		}
