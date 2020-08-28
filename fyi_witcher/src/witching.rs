@@ -265,18 +265,18 @@ impl WitchingInner {
 	// ------------------------------------------------------------------------
 
 	/// Doing.
-	pub fn doing(&self) -> u32 { self.doing.len() as u32 }
+	pub(crate) fn doing(&self) -> u32 { self.doing.len() as u32 }
 
 	/// Done.
-	pub const fn done(&self) -> u32 { self.done }
+	pub(crate) const fn done(&self) -> u32 { self.done }
 
 	/// Elapsed (Seconds).
-	pub fn elapsed(&self) -> u32 {
+	pub(crate) fn elapsed(&self) -> u32 {
 		86400.min(self.started.elapsed().as_secs() as u32)
 	}
 
 	/// Percent.
-	pub fn percent(&self) -> f64 {
+	pub(crate) fn percent(&self) -> f64 {
 		if self.total == 0 || self.done == 0 { 0.0 }
 		else if self.done == self.total { 1.0 }
 		else {
@@ -285,10 +285,10 @@ impl WitchingInner {
 	}
 
 	/// Is Running?
-	pub const fn is_running(&self) -> bool { 0 != self.flags & TICKING }
+	pub(crate) const fn is_running(&self) -> bool { 0 != self.flags & TICKING }
 
 	/// Total.
-	pub const fn total(&self) -> u32 { self.total }
+	pub(crate) const fn total(&self) -> u32 { self.total }
 
 
 
@@ -301,7 +301,7 @@ impl WitchingInner {
 	///
 	/// Remove a task from the currently-running list and increment `done` by
 	/// one.
-	pub fn end_task(&mut self, task: &PathBuf) {
+	pub(crate) fn end_task(&mut self, task: &PathBuf) {
 		if self.doing.remove(unsafe { &*(task.as_os_str() as *const OsStr as *const [u8]) }) {
 			self.flags |= TICK_DOING | TICK_BAR;
 			self.increment();
@@ -312,7 +312,7 @@ impl WitchingInner {
 	///
 	/// Increment `done` by one. If this reaches the total, it will
 	/// automatically trigger a stop.
-	pub fn increment(&mut self) {
+	pub(crate) fn increment(&mut self) {
 		let new_done = self.total.min(self.done + 1);
 		if new_done != self.done {
 			if new_done == self.total { self.stop(); }
@@ -326,7 +326,7 @@ impl WitchingInner {
 	/// Set Title.
 	///
 	/// To remove a title, pass an empty string.
-	pub fn set_title<S> (&mut self, title: S)
+	pub(crate) fn set_title<S> (&mut self, title: S)
 	where S: AsRef<str> {
 		let title: &[u8] = title.as_ref().as_bytes();
 		if self.title.ne(&title) {
@@ -343,7 +343,7 @@ impl WitchingInner {
 	/// Start Task.
 	///
 	/// Add a task to the currently-running list.
-	pub fn start_task(&mut self, task: &PathBuf) {
+	pub(crate) fn start_task(&mut self, task: &PathBuf) {
 		let task: Vec<u8> = unsafe { &*(task.as_os_str() as *const OsStr as *const [u8]) }.to_vec();
 		if self.doing.insert(task) {
 			self.flags |= TICK_DOING | TICK_BAR;
@@ -453,7 +453,7 @@ impl WitchingInner {
 	}
 
 	/// Stop.
-	pub fn stop(&mut self) {
+	pub(crate) fn stop(&mut self) {
 		self.flags |= TICK_ALL;
 		self.flags &= ! TICKING;
 		self.done = self.total;
@@ -465,7 +465,7 @@ impl WitchingInner {
 	///
 	/// Ticking takes all of the changed values (since the last tick), updates
 	/// their corresponding parts in the buffer, and prints the result, if any.
-	pub fn tick(&mut self) -> bool {
+	pub(crate) fn tick(&mut self) -> bool {
 		// We aren't running!
 		if ! self.is_running() {
 			return false;

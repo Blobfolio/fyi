@@ -38,8 +38,8 @@ const MAX_KEYS: usize = 16;
 /// we're only looking to compare hashes, but in cases where we need to return
 /// a value on match, the value is right here.
 struct KeyEntry {
-	pub hash: u64,
-	pub idx: usize,
+	pub(crate) hash: u64,
+	pub(crate) idx: usize,
 }
 
 impl Deref for KeyEntry {
@@ -63,7 +63,7 @@ impl PartialEq for KeyEntry {
 
 impl KeyEntry {
 	/// New.
-	pub fn new(key: &str, idx: usize) -> Self {
+	pub(crate) fn new(key: &str, idx: usize) -> Self {
 		Self {
 			hash: Self::hash_key(key),
 			idx
@@ -71,7 +71,7 @@ impl KeyEntry {
 	}
 
 	/// Hash Key.
-	pub fn hash_key(key: &str) -> u64 {
+	pub(crate) fn hash_key(key: &str) -> u64 {
 		let mut hasher = AHasher::default();
 		hasher.write(key.as_bytes());
 		hasher.finish()
