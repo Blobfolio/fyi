@@ -163,19 +163,13 @@ impl PartialOrd for PrefixBuffer {
 
 impl PrefixBuffer {
 	/// As Bytes.
-	pub fn as_bytes(&self) -> &[u8] {
-		&self.buf[0..self.len]
-	}
+	pub fn as_bytes(&self) -> &[u8] { &self.buf[0..self.len] }
 
 	/// Is Empty.
-	pub const fn is_empty(&self) -> bool {
-		0 == self.len
-	}
+	pub const fn is_empty(&self) -> bool { 0 == self.len }
 
 	/// Length.
-	pub const fn len(&self) -> usize {
-		self.len
-	}
+	pub const fn len(&self) -> usize { self.len }
 }
 
 
