@@ -478,7 +478,7 @@ mod tests {
 
 	#[test]
 	fn t_parse_args() {
-		let base: Vec<String> = vec![
+		let mut base: Vec<String> = vec![
 			String::from(""),
 			String::from("hey"),
 			String::from("-kVal"),
@@ -504,9 +504,34 @@ mod tests {
 			]
 		);
 
+		assert_eq!(args.peek(), Some("hey"));
 		assert!(args.switch("-k"));
 		assert!(args.switch("--key"));
 		assert_eq!(args.option("--key"), Some("Val"));
 		assert_eq!(args.args(), &[String::from("stuff 'and things'")]);
+
+		// Let's make sure first-position keys are OK.
+		base[0] = String::from("--prefix");
+		args = Argue::from_iter(base.clone());
+		assert_eq!(
+			*args,
+			[
+				String::from("--prefix"),
+				String::from("hey"),
+				String::from("-k"),
+				String::from("Val"),
+				String::from("--empty"),
+				String::new(),
+				String::from("--key"),
+				String::from("Val"),
+				String::from("--"), // We didn't reglue these this time.
+				String::from("stuff"),
+				String::from("and things")
+			]
+		);
+
+		assert_eq!(args.peek(), Some("--prefix"));
+		assert!(args.switch("--prefix"));
+		assert_eq!(args.option("--prefix"), Some("hey"));
 	}
 }
