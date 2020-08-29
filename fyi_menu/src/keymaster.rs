@@ -7,7 +7,7 @@ we're only ever going to store a limited number of keys, a full-blown variable
 `AHash` hashes — in one fixed-length array, and the corresponding indexes in
 another fixed-length array.
 
-The maximum length is currently `16`. That might change, but will likely remain
+The maximum length is currently `8`. That might change, but will likely remain
 a power of two.
 */
 
@@ -29,7 +29,7 @@ use std::{
 ///
 /// We're using a fixed-length array for storage, so we have to be considerate
 /// of the space being allocated.
-const MAX_KEYS: usize = 16;
+const MAX_KEYS: usize = 8;
 
 
 
