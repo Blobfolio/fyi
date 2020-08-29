@@ -13,7 +13,7 @@ use std::path::Path;
 /// operation by assuming the needle `end` is already in lower case.
 pub fn ends_with_ignore_ascii_case(src: &[u8], end: &[u8]) -> bool {
 	let (m, n) = (src.len(), end.len());
-	m >= n && src.iter().skip(m - n).zip(end).all(|(a, b)| a == b || a.to_ascii_lowercase() == *b)
+	m >= n && src.iter().skip(m - n).zip(end).all(|(a, b)| a.to_ascii_lowercase() == *b)
 }
 
 /// Ergonomical File Extension.
