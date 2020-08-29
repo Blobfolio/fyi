@@ -63,3 +63,12 @@ pub fn die(msg: &[u8]) {
 		.eprintln();
 	std::process::exit(1);
 }
+
+#[must_use]
+/// Hash Key.
+pub fn hash_arg_key(key: &str) -> u64 {
+	use std::hash::Hasher;
+	let mut hasher = ahash::AHasher::default();
+	hasher.write(key.as_bytes());
+	hasher.finish()
+}

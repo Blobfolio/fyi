@@ -11,8 +11,10 @@ The maximum length is currently `16`. That might change, but will likely remain
 a power of two.
 */
 
-use ahash::AHasher;
-use crate::die;
+use crate::{
+	die,
+	hash_arg_key,
+};
 use std::{
 	hash::{
 		Hash,
@@ -65,16 +67,9 @@ impl KeyEntry {
 	/// New.
 	pub(crate) fn new(key: &str, idx: usize) -> Self {
 		Self {
-			hash: Self::hash_key(key),
+			hash: hash_arg_key(key),
 			idx
 		}
-	}
-
-	/// Hash Key.
-	pub(crate) fn hash_key(key: &str) -> u64 {
-		let mut hasher = AHasher::default();
-		hasher.write(key.as_bytes());
-		hasher.finish()
 	}
 }
 
@@ -121,7 +116,7 @@ impl KeyMaster {
 	///
 	/// Returns `true` if the key is stored, or `false` if not.
 	pub fn contains(&self, key: &str) -> bool {
-		let key = KeyEntry::hash_key(key);
+		let key = hash_arg_key(key);
 		self.keys[0..self.len].iter().any(|x| x.hash == key)
 	}
 
@@ -132,8 +127,8 @@ impl KeyMaster {
 	/// checked in a single iteration, `true` being returned if either are
 	/// present.
 	pub fn contains2(&self, short: &str, long: &str) -> bool {
-		let short = KeyEntry::hash_key(short);
-		let long = KeyEntry::hash_key(long);
+		let short = hash_arg_key(short);
+		let long = hash_arg_key(long);
 		self.keys[0..self.len].iter().any(|x| x.hash == short || x.hash == long)
 	}
 
@@ -142,7 +137,7 @@ impl KeyMaster {
 	///
 	/// If a key is present, return its corresponding index; if not, `None`.
 	pub fn get(&self, key: &str) -> Option<usize> {
-		let key = KeyEntry::hash_key(key);
+		let key = hash_arg_key(key);
 		self.keys[0..self.len].iter()
 			.find_map(|x|
 				if x.hash == key { Some(x.idx) }
@@ -156,8 +151,8 @@ impl KeyMaster {
 	/// Same as `get()`, except both a short and long key are checked. The
 	/// first matching index, if any, is returned.
 	pub fn get2(&self, short: &str, long: &str) -> Option<usize> {
-		let short = KeyEntry::hash_key(short);
-		let long = KeyEntry::hash_key(long);
+		let short = hash_arg_key(short);
+		let long = hash_arg_key(long);
 		self.keys[0..self.len].iter()
 			.find_map(|x|
 				if x.hash == short || x.hash == long { Some(x.idx) }
