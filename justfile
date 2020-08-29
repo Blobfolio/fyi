@@ -132,8 +132,9 @@ bench BENCH="" FILTER="":
 	# Cargo.toml: no lto, opt-level 1, debug = true
 
 	# First let's build the Rust bit.
-	RUSTFLAGS="{{ rustflags }}" cargo build \
+	RUSTFLAGS="{{ rustflags }}" cargo -Z package-features build \
 		--bin "{{ pkg_id }}" \
+		--features simd \
 		--release \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
@@ -161,10 +162,10 @@ bench BENCH="" FILTER="":
 	find "{{ pkg_dir1 }}/man" -type f -delete
 
 	# Build a quickie version with the unsexy help so help2man can parse it.
-	RUSTFLAGS="{{ rustflags }}" cargo build \
+	RUSTFLAGS="{{ rustflags }}" cargo -Z package-features build \
 		--bin "{{ pkg_id }}" \
 		--release \
-		--all-features \
+		--features man \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
@@ -284,6 +285,8 @@ version:
 
 # Init dependencies.
 @_init:
+	rustup default nightly
+	rustup component add clippy --toolchain nightly
 	[ ! -f "{{ justfile_directory() }}/Cargo.lock" ] || rm "{{ justfile_directory() }}/Cargo.lock"
 	cargo update
 

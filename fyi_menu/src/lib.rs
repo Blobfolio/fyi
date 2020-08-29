@@ -43,7 +43,8 @@ See the flag documentation below for handling options.
 
 mod argue;
 mod keykind;
-mod keymaster;
+#[cfg(not(feature = "simd"))] mod keymaster;
+#[cfg(feature = "simd")]      mod simd;
 pub mod utility;
 
 use fyi_msg::{
@@ -51,7 +52,8 @@ use fyi_msg::{
 	MsgKind,
 };
 pub use keykind::KeyKind;
-pub use keymaster::KeyMaster;
+#[cfg(not(feature = "simd"))] pub use keymaster::KeyMaster;
+#[cfg(feature = "simd")]      pub use simd::KeyMaster;
 pub use argue::Argue;
 
 
