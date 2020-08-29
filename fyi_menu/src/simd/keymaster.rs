@@ -15,7 +15,10 @@ use crate::{
 	die,
 	utility::hash_arg_key,
 };
-use packed_simd::u64x8;
+use packed_simd::{
+	u32x8,
+	u64x8,
+};
 
 
 
@@ -33,7 +36,7 @@ const MAX_KEYS: usize = 8;
 /// See the module level documentation for more details.
 pub struct KeyMaster {
 	keys: u64x8,
-	values: u64x8,
+	values: u32x8,
 	len: usize,
 }
 
@@ -57,8 +60,10 @@ impl KeyMaster {
 
 		let key = hash_arg_key(key);
 		if self.keys.eq(u64x8::splat(key)).none() {
-			self.keys = self.keys.replace(self.len, key);
-			self.values = self.values.replace(self.len, idx as u64);
+			unsafe {
+				self.keys = self.keys.replace_unchecked(self.len, key);
+				self.values = self.values.replace_unchecked(self.len, idx as u32);
+			}
 			self.len += 1;
 			true
 		}
@@ -90,7 +95,7 @@ impl KeyMaster {
 	pub fn get(&self, key: &str) -> Option<usize> {
 		let res = self.keys.eq(u64x8::splat(hash_arg_key(key)));
 		if res.any() {
-			Some(res.select(self.values, u64x8::splat(0)).max_element() as usize)
+			Some(res.select(self.values, u32x8::splat(0)).max_element() as usize)
 		}
 		else { None }
 	}
