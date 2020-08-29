@@ -21,7 +21,7 @@ fn insert(c: &mut Criterion) {
 		)
 	});
 
-	group.bench_function("default(10).insert(Hello World, 2)", move |b| {
+	group.bench_function("default(7).insert(Hello World, 2)", move |b| {
 		b.iter_with_setup(||
 			{
 				let mut k = KeyMaster::default();
@@ -32,9 +32,6 @@ fn insert(c: &mut Criterion) {
 				k.insert("That", 50);
 				k.insert("Never", 60);
 				k.insert("Ends", 70);
-				k.insert("It", 80);
-				k.insert("Goes", 90);
-				k.insert("On", 100);
 				k
 			},
 			|mut k| k.insert("Hello World", 2)
@@ -47,7 +44,7 @@ fn insert(c: &mut Criterion) {
 fn contains(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_menu::KeyMaster");
 
-	group.bench_function(".contains(0/10)", move |b| {
+	group.bench_function(".contains(0/8)", move |b| {
 		b.iter_with_setup(||
 			{
 				let mut k = KeyMaster::default();
@@ -59,15 +56,13 @@ fn contains(c: &mut Criterion) {
 				k.insert("Never", 60);
 				k.insert("Ends", 70);
 				k.insert("It", 80);
-				k.insert("Goes", 90);
-				k.insert("On", 100);
 				k
 			},
 			|k| k.contains("This")
 		)
 	});
 
-	group.bench_function(".contains(5/10)", move |b| {
+	group.bench_function(".contains(5/8)", move |b| {
 		b.iter_with_setup(||
 			{
 				let mut k = KeyMaster::default();
@@ -79,15 +74,13 @@ fn contains(c: &mut Criterion) {
 				k.insert("Never", 60);
 				k.insert("Ends", 70);
 				k.insert("It", 80);
-				k.insert("Goes", 90);
-				k.insert("On", 100);
 				k
 			},
 			|k| k.contains("That")
 		)
 	});
 
-	group.bench_function(".contains(-/10)", move |b| {
+	group.bench_function(".contains(-/8)", move |b| {
 		b.iter_with_setup(||
 			{
 				let mut k = KeyMaster::default();
@@ -99,8 +92,6 @@ fn contains(c: &mut Criterion) {
 				k.insert("Never", 60);
 				k.insert("Ends", 70);
 				k.insert("It", 80);
-				k.insert("Goes", 90);
-				k.insert("On", 100);
 				k
 			},
 			|k| k.contains("Missing")
