@@ -65,6 +65,15 @@ pub fn esc_arg(mut s: String) -> String {
 }
 
 #[must_use]
+/// Hash Key.
+pub fn hash_arg_key(key: &str) -> u64 {
+	use std::hash::Hasher;
+	let mut hasher = ahash::AHasher::default();
+	hasher.write(key.as_bytes());
+	hasher.finish()
+}
+
+#[must_use]
 /// Is A String Only Whitespace?
 ///
 /// This will return `true` if the string is empty or only includes ASCII

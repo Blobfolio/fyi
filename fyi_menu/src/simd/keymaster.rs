@@ -13,7 +13,7 @@ a power of two.
 
 use crate::{
 	die,
-	hash_arg_key,
+	utility::hash_arg_key,
 };
 use packed_simd::u64x8;
 
