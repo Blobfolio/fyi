@@ -2,6 +2,8 @@
 # FYI Msg: Utility Methods
 */
 
+use std::ptr;
+
 
 
 #[must_use]
@@ -70,6 +72,36 @@ pub fn time_format_dd(num: u32) -> &'static [u8] {
 	&TIME[num..num+2]
 }
 
+/// Grow `Vec<u8>` From Middle.
+///
+/// This works like `Vec::resize()`, except it supports expansion from the
+/// middle, like `Vec::insert()`. The new entries are always `0`.
+pub fn vec_resize_at(src: &mut Vec<u8>, idx: usize, adj: usize) {
+	let old_len: usize = src.len();
+	if idx >= old_len {
+		src.resize(old_len + adj, 0);
+	}
+	else {
+		src.reserve(adj);
+		unsafe {
+			{
+				let ptr = src.as_mut_ptr().add(idx);
+				let after: usize = old_len - idx;
+
+				// Shift the data over.
+				ptr::copy(ptr, ptr.add(adj), after);
+
+				// If we're adding more than we just copied, we'll need to
+				// initialize those values.
+				if adj > after {
+					ptr::write_bytes(ptr.add(after), 0, adj - after);
+				}
+			}
+			src.set_len(old_len + adj);
+		}
+	}
+}
+
 
 
 #[cfg(test)]
@@ -109,6 +141,30 @@ mod tests {
 			time_format_dd(59),
 			"DD for 60 is incorrect: {:?}",
 			time_format_dd(60)
+		);
+	}
+
+	#[test]
+	fn t_vec_resize_at() {
+		let mut test: Vec<u8> = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+		vec_resize_at(&mut test, 4, 5);
+		assert_eq!(
+			test,
+			vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 4, 5, 6, 7, 8, 9],
+		);
+
+		vec_resize_at(&mut test, 15, 5);
+		assert_eq!(
+			test,
+			vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0],
+		);
+
+		// Test possible uninit space.
+		test = vec![1, 2, 3, 4];
+		vec_resize_at(&mut test, 2, 10);
+		assert_eq!(
+			test,
+			vec![1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 3, 4],
 		);
 	}
 }

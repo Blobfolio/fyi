@@ -10,7 +10,7 @@ use criterion::{
 use fyi_msg::{
 	BufRange,
 	replace_buf_range,
-	vec_resize_at,
+	utility::vec_resize_at,
 };
 
 

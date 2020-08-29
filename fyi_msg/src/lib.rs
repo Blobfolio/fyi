@@ -44,5 +44,4 @@ pub use bufrange::{
 	BufRange,
 	replace_buf_range,
 	resize_buf_range,
-	vec_resize_at,
 };
