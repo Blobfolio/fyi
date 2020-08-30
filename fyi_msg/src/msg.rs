@@ -38,9 +38,7 @@ let res: bool = MsgKind::Confirm.into_msg("Are you OK?").prompt();
 */
 
 use crate::{
-	BufRange,
-	replace_buf_range,
-	resize_buf_range,
+	Toc,
 	utility,
 };
 use std::{
@@ -317,7 +315,7 @@ impl MsgKind {
 
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 /// Message.
 ///
 /// This is it! The whole point of the crate! See the library documentation for
@@ -326,25 +324,11 @@ pub struct Msg {
 	/// The compiled buffer!
 	buf: Vec<u8>,
 	/// A Table of Contents.
-	toc: [BufRange; 4],
+	toc: Toc,
 }
 
 impl AsRef<str> for Msg {
 	fn as_ref(&self) -> &str { self.as_str() }
-}
-
-impl Default for Msg {
-	fn default() -> Self {
-		Self {
-			buf: Vec::new(),
-			toc: [
-				BufRange::default(),
-				BufRange::default(),
-				BufRange::default(),
-				BufRange::default(),
-			],
-		}
-	}
 }
 
 impl Deref for Msg {
@@ -372,13 +356,18 @@ impl From<&[u8]> for Msg {
 
 impl From<Vec<u8>> for Msg {
 	fn from(src: Vec<u8>) -> Self {
+		let end: u16 = src.len() as u16;
 		Self {
-			toc: [
-				BufRange::default(),
-				BufRange::default(),
-				BufRange::default(),
-				BufRange::new(0, src.len()),
-			],
+			toc: Toc::new(
+				0_u16, 0_u16,
+				0_u16, 0_u16,
+				0_u16, 0_u16,
+				0_u16, end,
+				// Unused...
+				end, end, end, end, end, end, end, end, end,
+				end, end, end, end, end, end, end, end, end,
+				end, end, end, end, end, end
+			),
 			buf: src,
 		}
 	}
@@ -476,48 +465,28 @@ impl Msg {
 		static WHITES: [u8; 16] = [32; 16];
 
 		let indent: usize = 4.min(indent as usize) * 4;
-		if indent != self.toc[PART_INDENT].len() {
-			replace_buf_range(
-				&mut self.buf,
-				&mut self.toc,
-				PART_INDENT,
-				&WHITES[0..indent],
-			);
+		if indent != self.toc.len(PART_INDENT) {
+			self.toc.replace(&mut self.buf, PART_INDENT, &WHITES[0..indent]);
 		}
 	}
 
 	/// Set Message.
 	pub fn set_msg<S> (&mut self, msg: S)
 	where S: AsRef<str> {
-		replace_buf_range(
-			&mut self.buf,
-			&mut self.toc,
-			PART_MSG,
-			msg.as_ref().as_bytes(),
-		);
+		self.toc.replace(&mut self.buf, PART_MSG, msg.as_ref().as_bytes());
 	}
 
 	/// Set Prefix.
 	pub fn set_prefix(&mut self, prefix: MsgKind) {
-		replace_buf_range(
-			&mut self.buf,
-			&mut self.toc,
-			PART_PREFIX,
-			prefix.as_bytes(),
-		);
+		self.toc.replace(&mut self.buf, PART_PREFIX, prefix.as_bytes());
 	}
 
 	/// Set Timestamp.
 	pub fn set_timestamp(&mut self, on: bool) {
-		if on == self.toc[PART_TIMESTAMP].is_empty() {
+		if on == self.toc.is_empty(PART_TIMESTAMP) {
 			if on { self.write_timestamp(); }
 			else {
-				resize_buf_range(
-					&mut self.buf,
-					&mut self.toc,
-					PART_TIMESTAMP,
-					0,
-				);
+				self.toc.resize(&mut self.buf, PART_TIMESTAMP, 0);
 			}
 		}
 	}
@@ -560,7 +529,7 @@ impl Msg {
 		// end.
 		let mut q = self.clone();
 		q.buf.extend_from_slice(b" \x1b[2m[y/\x1b[4mN\x1b[0;2m]\x1b[0m ");
-		BufRange::grow_set_at(&mut q.toc, PART_MSG, 25);
+		q.toc.increase(PART_MSG, 25);
 
 		// Ask and collect input, looping until a valid response is typed.
 		loop {
@@ -615,10 +584,9 @@ impl Msg {
 		};
 
 		// Make sure we have something in place.
-		if self.toc[PART_TIMESTAMP].is_empty() {
-			replace_buf_range(
+		if self.toc.is_empty(PART_TIMESTAMP) {
+			self.toc.replace(
 				&mut self.buf,
-				&mut self.toc,
 				PART_TIMESTAMP,
 				b"\x1b[2m[\x1b[0;34m2000-00-00 00:00:00\x1b[39;2m]\x1b[0m ",
 			);
@@ -639,7 +607,7 @@ impl Msg {
 				now.second(),
 			].iter()
 				.fold(
-					self.toc[PART_TIMESTAMP].start() + 14,
+					self.toc.start(PART_TIMESTAMP) + 14,
 					|dst_off, x| {
 					ptr.add(dst_off).copy_from_nonoverlapping(utility::time_format_dd(*x).as_ptr(), 2);
 					dst_off + 3

@@ -475,6 +475,7 @@ impl Argue {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use criterion as _;
 
 	#[test]
 	fn t_parse_args() {

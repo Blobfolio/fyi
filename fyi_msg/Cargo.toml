@@ -9,15 +9,19 @@ publish = false
 [dependencies]
 chrono = "0.4.*"
 
+[dependencies.packed_simd]
+version = "0.3.*"
+optional = true
+
 [dev-dependencies]
 criterion = "*"
 
 [[bench]]
-name = "fm_bufrange"
+name = "fm_msg"
 harness = false
 
 [[bench]]
-name = "fm_msg"
+name = "fm_toc"
 harness = false
 
 [[bench]]
@@ -26,3 +30,7 @@ harness = false
 
 [[example]]
 name = "msg"
+
+[features]
+default = []
+simd = [ "packed_simd" ]

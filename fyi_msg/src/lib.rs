@@ -31,7 +31,8 @@
 
 
 mod msg;
-mod bufrange;
+#[cfg(not(feature = "simd"))] mod toc;
+#[cfg(feature = "simd")]      mod simd;
 pub mod utility;
 
 pub use msg::{
@@ -40,8 +41,6 @@ pub use msg::{
 	FLAG_INDENT,
 	FLAG_TIMESTAMP,
 };
-pub use bufrange::{
-	BufRange,
-	replace_buf_range,
-	resize_buf_range,
-};
+
+#[cfg(not(feature = "simd"))] pub use toc::Toc;
+#[cfg(feature = "simd")]      pub use simd::Toc;

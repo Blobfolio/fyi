@@ -32,11 +32,9 @@ use crate::{
 	utility,
 };
 use fyi_msg::{
-	BufRange,
 	Msg,
 	MsgKind,
-	replace_buf_range,
-	resize_buf_range,
+	Toc,
 	utility::time_format_dd,
 };
 use rayon::prelude::*;
@@ -161,7 +159,7 @@ const MIN_DRAW_WIDTH: usize = 40;
 /// Inner Witching.
 struct WitchingInner {
 	buf: Vec<u8>,
-	toc: [BufRange; 9],
+	toc: Toc,
 	elapsed: u32,
 	last_hash: u64,
 	last_lines: usize,
@@ -233,17 +231,20 @@ impl Default for WitchingInner {
 
 			//  Doing would go here.
 			],
-			toc: [
-				BufRange::new(0, 0),   // Title.
-				BufRange::new(11, 19), // Elapsed.
-				BufRange::new(46, 46), // Bar Done.
-				BufRange::new(55, 55), // Bar Doing.
-				BufRange::new(64, 64), // Bar Undone.
-				BufRange::new(84, 85), // Done.
-				BufRange::new(101, 102), // Total.
-				BufRange::new(110, 115), // Percent.
-				BufRange::new(120, 120), // Current Tasks.
-			],
+			toc: Toc::new(
+				0_u16, 0_u16,     // Title.
+				11_u16, 19_u16,   // Elapsed.
+				46_u16, 46_u16,   // Bar Done.
+				55_u16, 55_u16,   // Bar Doing.
+				64_u16, 64_u16,   // Bar Undone.
+				84_u16, 85_u16,   // Done.
+				101_u16, 102_u16, // Total.
+				110_u16, 115_u16, // Percent.
+				120_u16, 120_u16, // Current Tasks.
+				// Unused...
+				120_u16, 120_u16, 120_u16, 120_u16, 120_u16, 120_u16, 120_u16, 120_u16,
+				120_u16, 120_u16, 120_u16, 120_u16, 120_u16, 120_u16,
+			),
 			doing: AHashSet::new(),
 			done: 0,
 			elapsed: 0,
@@ -527,10 +528,10 @@ impl WitchingInner {
 		// 2: the spaces after the bar itself (should there be one);
 		let space: usize = 255_usize.min(self.last_width.saturating_sub(
 			11 +
-			self.toc[PART_ELAPSED].len() +
-			self.toc[PART_DONE].len() +
-			self.toc[PART_TOTAL].len() +
-			self.toc[PART_PERCENT].len()
+			self.toc.len(PART_ELAPSED) +
+			self.toc.len(PART_DONE) +
+			self.toc.len(PART_TOTAL) +
+			self.toc.len(PART_PERCENT)
 		));
 
 		// Insufficient space!
@@ -570,26 +571,16 @@ impl WitchingInner {
 			let (w_done, w_doing, w_undone) = self.tick_bar_widths();
 
 			// Update the done part.
-			if self.toc[PART_BAR_DONE].len() != w_done {
-				replace_buf_range(
-					&mut self.buf,
-					&mut self.toc,
-					PART_BAR_DONE,
-					&BAR[0..w_done],
-				);
+			if self.toc.len(PART_BAR_DONE) != w_done {
+				self.toc.replace(&mut self.buf, PART_BAR_DONE, &BAR[0..w_done]);
 			}
 
 			// Doing and undone use the same character, so we can loop it.
 			[PART_BAR_DOING, PART_BAR_UNDONE].iter()
 				.zip([w_doing, w_undone].iter())
 				.for_each(|(a, b)|
-					if self.toc[*a].len() != *b {
-						replace_buf_range(
-							&mut self.buf,
-							&mut self.toc,
-							*a,
-							&DASH[0..*b],
-						);
+					if self.toc.len(*a) != *b {
+						self.toc.replace(&mut self.buf, *a, &DASH[0..*b]);
 					}
 				);
 		}
@@ -604,12 +595,7 @@ impl WitchingInner {
 		if 0 != self.flags & TICK_DOING {
 			self.flags &= ! TICK_DOING;
 			if self.doing.is_empty() {
-				resize_buf_range(
-					&mut self.buf,
-					&mut self.toc,
-					PART_DOING,
-					0
-				);
+				self.toc.resize(&mut self.buf, PART_DOING, 0);
 			}
 			else {
 				let width: usize = self.last_width.saturating_sub(6);
@@ -627,12 +613,7 @@ impl WitchingInner {
 					.copied()
 					.collect();
 
-				replace_buf_range(
-					&mut self.buf,
-					&mut self.toc,
-					PART_DOING,
-					&tasks
-				);
+				self.toc.replace(&mut self.buf, PART_DOING, &tasks);
 			}
 		}
 	}
@@ -643,12 +624,7 @@ impl WitchingInner {
 	fn tick_set_done(&mut self) {
 		if 0 != self.flags & TICK_DONE {
 			self.flags &= ! TICK_DONE;
-			replace_buf_range(
-				&mut self.buf,
-				&mut self.toc,
-				PART_DONE,
-				&*NiceInt::from(self.done)
-			);
+			self.toc.replace(&mut self.buf, PART_DONE, &*NiceInt::from(self.done));
 		}
 	}
 
@@ -659,12 +635,7 @@ impl WitchingInner {
 		if 0 != self.flags & TICK_PERCENT {
 			self.flags &= ! TICK_PERCENT;
 			let p: String = format!("{:>3.*}%", 2, self.percent() * 100.0);
-			replace_buf_range(
-				&mut self.buf,
-				&mut self.toc,
-				PART_PERCENT,
-				p.as_bytes(),
-			);
+			self.toc.replace(&mut self.buf, PART_PERCENT, p.as_bytes());
 		}
 	}
 
@@ -686,16 +657,11 @@ impl WitchingInner {
 			self.elapsed = secs;
 
 			if secs == 86400 {
-				replace_buf_range(
-					&mut self.buf,
-					&mut self.toc,
-					PART_ELAPSED,
-					b"23:59:59"
-				);
+				self.toc.replace(&mut self.buf, PART_ELAPSED, b"23:59:59");
 			}
 			else {
 				let c = utility::secs_chunks(secs);
-				let rgs: usize = self.toc[PART_ELAPSED].start();
+				let rgs: usize = self.toc.start(PART_ELAPSED);
 				self.buf[rgs..rgs + 2].copy_from_slice(time_format_dd(c[0]));
 				self.buf[rgs + 3..rgs + 5].copy_from_slice(time_format_dd(c[1]));
 				self.buf[rgs + 6..rgs + 8].copy_from_slice(time_format_dd(c[2]));
@@ -713,17 +679,11 @@ impl WitchingInner {
 		if 0 != self.flags & TICK_TITLE {
 			self.flags &= ! TICK_TITLE;
 			if self.title.is_empty() {
-				resize_buf_range(
-					&mut self.buf,
-					&mut self.toc,
-					PART_TITLE,
-					0
-				);
+				self.toc.resize(&mut self.buf, PART_TITLE, 0);
 			}
 			else {
-				replace_buf_range(
+				self.toc.replace(
 					&mut self.buf,
-					&mut self.toc,
 					PART_TITLE,
 					&{
 						let mut m = self.title.clone();
@@ -742,12 +702,7 @@ impl WitchingInner {
 	fn tick_set_total(&mut self) {
 		if 0 != self.flags & TICK_TOTAL {
 			self.flags &= ! TICK_TOTAL;
-			replace_buf_range(
-				&mut self.buf,
-				&mut self.toc,
-				PART_TOTAL,
-				&*NiceInt::from(self.total)
-			);
+			self.toc.replace(&mut self.buf, PART_TOTAL, &*NiceInt::from(self.total));
 		}
 	}
 

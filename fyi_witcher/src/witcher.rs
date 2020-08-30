@@ -280,6 +280,7 @@ fn hash_path_buf(path: &PathBuf) -> u64 {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use criterion as _;
 
 	#[test]
 	fn t_new() {
