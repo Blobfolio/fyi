@@ -7,7 +7,7 @@ use std::ptr;
 
 
 #[must_use]
-/// Return Escape Sequence.
+/// # Return Escape Sequence.
 ///
 /// Convert a `u8` number into its equivalent byte string ANSI sequence.
 ///
@@ -16,7 +16,7 @@ use std::ptr;
 /// complicate the logic or require people to mentally subtract one from the
 /// value they want, #256 is unsupported.
 ///
-/// # Examples
+/// ## Examples
 ///
 /// ```
 /// assert_eq!(fyi_msg::utility::ansi_code_bold(199), b"\x1B[1;38;5;199m");
@@ -50,7 +50,7 @@ pub fn ansi_code_bold(num: u8) -> &'static [u8] {
 }
 
 #[must_use]
-/// Time Number to String.
+/// # Time Number to String.
 ///
 /// This is a simple conversion table for turning `u32` representations of
 /// numbers 0–59 into double-digit strings like "00" and "59". It is faster
@@ -58,7 +58,7 @@ pub fn ansi_code_bold(num: u8) -> &'static [u8] {
 ///
 /// Out of range always comes back as "59".
 ///
-/// # Examples
+/// ## Examples
 ///
 /// ```
 /// assert_eq!(fyi_msg::utility::time_format_dd(3), b"03");
@@ -72,10 +72,27 @@ pub fn time_format_dd(num: u32) -> &'static [u8] {
 	&TIME[num..num+2]
 }
 
-/// Grow `Vec<u8>` From Middle.
+/// # Grow `Vec<u8>` From Middle.
 ///
-/// This works like `Vec::resize()`, except it supports expansion from the
-/// middle, like `Vec::insert()`. The new entries are always `0`.
+/// This works like [`std::vec::Vec::resize`], except it supports expansion from the
+/// middle, like [`std::vec::Vec::insert`]. The expanded indexes will
+/// never be undefined, but may contain copies of data previously occupying
+/// those spots (rather than a bunch of zeroes).
+///
+/// It might seem counter-intuitive to split the resizing and writing
+/// operations, but this approach is generally faster than trying to do both at
+/// once using [`std::vec::Vec::splice`].
+///
+/// ## Examples
+///
+/// ```no_run
+/// let mut test: Vec<u8> = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+/// vec_resize_at(&mut test, 4, 5);
+/// assert_eq!(
+///     test,
+///     vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 4, 5, 6, 7, 8, 9],
+/// );
+/// ```
 pub fn vec_resize_at(src: &mut Vec<u8>, idx: usize, adj: usize) {
 	let old_len: usize = src.len();
 	if idx >= old_len {

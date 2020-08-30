@@ -1,14 +1,7 @@
 /*!
-# FYI: `KeyMaster`
+# FYI Menu: Key Master
 
-This is a simple pseudo-hashmap for storing `Argue` keys and indexes. Because
-we're only ever going to store a limited number of keys, a full-blown variable
-`HashMap` would be overkill. This is able to simply store the keys — as `u64`
-`AHash` hashes — in one fixed-length array, and the corresponding indexes in
-another fixed-length array.
-
-The maximum length is currently `8`. That might change, but will likely remain
-a power of two.
+**Note:** This is not intended for external use and is subject to change.
 */
 
 use crate::{
@@ -34,11 +27,9 @@ const MAX_KEYS: usize = 8;
 
 
 #[derive(Debug, Default, Copy, Clone)]
-/// Key Entry.
-///
-/// This holds a hash of the key and the corresponding index. Most of the time
-/// we're only looking to compare hashes, but in cases where we need to return
-/// a value on match, the value is right here.
+/// A `KeyEntry` is a key/idx pairing, where the key is a `u64` hash of the
+/// original string value, and the index is the `usize` corresponding to the
+/// key's position in the full [`Argue`](crate::Argue) set.
 struct KeyEntry {
 	pub(crate) hash: u64,
 	pub(crate) idx: usize,
@@ -64,7 +55,9 @@ impl PartialEq for KeyEntry {
 }
 
 impl KeyEntry {
-	/// New.
+	/// # New Instance.
+	///
+	/// Generate a new `KeyEntry` for a given string at index `idx`.
 	pub(crate) fn new(key: &str, idx: usize) -> Self {
 		Self {
 			hash: hash_arg_key(key),
@@ -75,10 +68,11 @@ impl KeyEntry {
 
 
 
-#[derive(Debug, Default, Copy, Clone)]
-/// Hash Map.
-///
-/// See the module level documentation for more details.
+#[derive(Debug, Copy, Clone, Default)]
+/// `KeyMaster` is a simple, pseudo-hashmap for storing [`Argue`](crate::Argue) keys and
+/// indexes. Because the maximum number of keys is highly constrained — up to
+/// **8** — and the behaviors have a very narrow scope, this saves some
+/// overhead versus using an actual [`std::collections::HashMap`].
 pub struct KeyMaster {
 	keys: [KeyEntry; MAX_KEYS],
 	len: usize,
@@ -86,17 +80,26 @@ pub struct KeyMaster {
 
 impl KeyMaster {
 	#[must_use]
-	/// Is Empty.
+	/// # Is Empty?
+	///
+	/// This returns `true` if no keys are present.
 	pub const fn is_empty(&self) -> bool { self.len == 0 }
 
 	#[must_use]
-	/// Length.
+	/// # Length.
+	///
+	/// Return the total number of keys.
 	pub const fn len(&self) -> usize { self.len }
 
-	/// Insert.
+	/// # Insert.
 	///
-	/// If the key is not already stored, it will be added, otherwise `false`
-	/// is returned and `Argue` will error out.
+	/// If the key is not already stored, it will be added and `true` will be
+	/// returned, otherwise no action will be taken and `false` will be
+	/// returned.
+	///
+	/// If the maximum number of keys has already been reached, an error
+	/// message will be printed and the program will exit with a status code of
+	/// `1`.
 	pub fn insert(&mut self, key: &str, idx: usize) -> bool {
 		if self.len >= MAX_KEYS {
 			die(b"Too many options.");
@@ -112,7 +115,7 @@ impl KeyMaster {
 	}
 
 	#[must_use]
-	/// Has Key?
+	/// # Has Key?
 	///
 	/// Returns `true` if the key is stored, or `false` if not.
 	pub fn contains(&self, key: &str) -> bool {
@@ -121,11 +124,10 @@ impl KeyMaster {
 	}
 
 	#[must_use]
-	/// Has Key (short/long)?
+	/// # Has Either of Two Keys?
 	///
-	/// This is the same as `contains()`, except both a short and long key are
-	/// checked in a single iteration, `true` being returned if either are
-	/// present.
+	/// This is a convenience method that checks for the existence of two keys
+	/// at once, returning `true` if either are present.
 	pub fn contains2(&self, short: &str, long: &str) -> bool {
 		let short = hash_arg_key(short);
 		let long = hash_arg_key(long);
@@ -133,7 +135,7 @@ impl KeyMaster {
 	}
 
 	#[must_use]
-	/// Get Key's IDX.
+	/// # Get Key's Index.
 	///
 	/// If a key is present, return its corresponding index; if not, `None`.
 	pub fn get(&self, key: &str) -> Option<usize> {
@@ -146,10 +148,10 @@ impl KeyMaster {
 	}
 
 	#[must_use]
-	/// Get Key's IDX (short/long).
+	/// # Get Either of Two Key's Index.
 	///
-	/// Same as `get()`, except both a short and long key are checked. The
-	/// first matching index, if any, is returned.
+	/// This is a convenience method that checks for the existence of two keys
+	/// at once, returning the first index found, if any.
 	pub fn get2(&self, short: &str, long: &str) -> Option<usize> {
 		let short = hash_arg_key(short);
 		let long = hash_arg_key(long);

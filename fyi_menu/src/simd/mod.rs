@@ -1,7 +1,9 @@
 /*!
-# FYI: SIMD
+# FYI Menu: SIMD
 
-Alternative library implementations for SIMD-enabled builds.
+This module provides an alternative SIMD-optimized version of `KeyMaster`. It
+is exposed when building the crate with the `simd` feature. Nightly Rust is
+required.
 */
 
 mod keymaster;

@@ -1,11 +1,5 @@
 /*!
 # FYI Witcher: "Nice" Elapsed
-
-Convert seconds into an oxford-joined byte string like, "3 hours, 2 minutes,
-and 1 second".
-
-Note: days are unsupported, or more specifically, any value over 23:59:59 will
-return ">1 day".
 */
 
 use std::{
@@ -40,7 +34,22 @@ macro_rules! ne_push {
 
 
 #[derive(Clone, Copy)]
-/// Nice Elapsed
+/// This is a very simple struct for efficiently converting a given number of
+/// seconds (`u32`) into a nice, human-readable Oxford-joined byte string, like
+/// `3 hours, 2 minutes, and 1 second`.
+///
+/// Note: days are unsupported, or more specifically, any value over `23:59:59`
+/// (or `86400+` seconds) will return a fixed value of `>1 day`.
+///
+/// ## Examples
+///
+/// ```no_run
+/// use fyi_witcher::NiceElapsed;
+/// assert_eq!(
+///     NiceElapsed::from(61).as_str(),
+///     "1 minute and 1 second"
+/// );
+/// ```
 pub struct NiceElapsed {
 	inner: [u8; 36],
 	len: usize,
@@ -59,10 +68,7 @@ impl Default for NiceElapsed {
 
 impl Deref for NiceElapsed {
 	type Target = [u8];
-
-	fn deref(&self) -> &Self::Target {
-		&self.inner[0..self.len]
-	}
+	fn deref(&self) -> &Self::Target { &self.inner[0..self.len] }
 }
 
 impl fmt::Debug for NiceElapsed {
@@ -129,7 +135,10 @@ impl From<u32> for NiceElapsed {
 
 impl NiceElapsed {
 	#[must_use]
-	/// Minimum Value
+	/// # Minimum Value
+	///
+	/// We can save some processing time by hard-coding the value for `0`,
+	/// which comes out to `0 seconds`.
 	pub const fn min() -> Self {
 		Self {
 			//       0   •    s    e   c    o    n    d    s
@@ -139,7 +148,11 @@ impl NiceElapsed {
 	}
 
 	#[must_use]
-	/// Maximum Value
+	/// # Maximum Value
+	///
+	/// We can save some processing time by hard-coding the maximum value.
+	/// Because `NiceInt` does not support days, this is equivalent to `86400`,
+	/// which comes out to `>1 day`.
 	pub const fn max() -> Self {
 		Self {
 			//       >   1   •    d   a    y
@@ -148,7 +161,9 @@ impl NiceElapsed {
 		}
 	}
 
-	/// From Hours, Minutes, Seconds.
+	/// # From Hours, Minutes, Seconds.
+	///
+	/// Fill the buffer with all three units (hours, minutes, and seconds).
 	fn from_hms(h: u32, m: u32, s: u32) -> Self {
 		let mut out = Self::default();
 
@@ -182,7 +197,9 @@ impl NiceElapsed {
 		out
 	}
 
-	/// From Hours, Minutes.
+	/// # From Hours, Minutes.
+	///
+	/// Fill the buffer with two units, hours and minutes.
 	fn from_hm(h: u32, m: u32) -> Self {
 		let mut out = Self::default();
 
@@ -207,7 +224,9 @@ impl NiceElapsed {
 		out
 	}
 
-	/// From Hours, Seconds.
+	/// # From Hours, Seconds.
+	///
+	/// Fill the buffer with two units, hours and seconds.
 	fn from_hs(h: u32, s: u32) -> Self {
 		let mut out = Self::default();
 
@@ -232,7 +251,9 @@ impl NiceElapsed {
 		out
 	}
 
-	/// From Hours.
+	/// # From Hours.
+	///
+	/// Fill the buffer using only hours.
 	fn from_h(h: u32) -> Self {
 		let mut out = Self::default();
 
@@ -248,7 +269,9 @@ impl NiceElapsed {
 		out
 	}
 
-	/// From Minutes, Seconds.
+	/// # From Minutes, Seconds.
+	///
+	/// Fill the buffer using two units, minutes and seconds.
 	fn from_ms(m: u32, s: u32) -> Self {
 		let mut out = Self::default();
 
@@ -273,7 +296,9 @@ impl NiceElapsed {
 		out
 	}
 
-	/// From Minutes.
+	/// # From Minutes.
+	///
+	/// Fill the buffer using only minutes.
 	fn from_m(m: u32) -> Self {
 		let mut out = Self::default();
 
@@ -289,7 +314,9 @@ impl NiceElapsed {
 		out
 	}
 
-	/// From Seconds.
+	/// # From Seconds.
+	///
+	/// Fill the buffer using only seconds.
 	fn from_s(s: u32) -> Self {
 		let mut out = Self::default();
 
@@ -307,6 +334,8 @@ impl NiceElapsed {
 
 	#[must_use]
 	/// As String.
+	///
+	/// Return the nice value as a string slice.
 	pub fn as_str(&self) -> &str {
 		unsafe { std::str::from_utf8_unchecked(&self.inner[0..self.len]) }
 	}

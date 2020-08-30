@@ -47,5 +47,5 @@ harness = false
 name = "witcher"
 
 [features]
-default = [ "bytecount/runtime-dispatch-simd" ]
+default = []
 simd = [ "bytecount/generic-simd" ]

@@ -1,16 +1,39 @@
 /*!
 # FYI Menu
 
-This crate provides a very simple CLI argument parser. It differs from
-`std::env::args()` primarily in that key/value formatting is normalized,
-splitting joint entries like `-kValue` and `--key=Value`.
+This crate contains an agnostic CLI argument parser called [`Argue`]. Unlike more
+robust libraries like [clap](https://crates.io/crates/clap), [`Argue`] does not
+hold information about expected or required arguments; it merely parses the raw
+[`std::env::args`] output into a consistent state.
 
-Actual processing and interpretation of the arguments is left to the coder.
+Post-processing is an exercise largely left to the implementing library to do
+in its own way, in its own time. [`Argue`] exposes several methods for quickly
+querying the individual pieces of the set, but it can also be dereferenced to a
+slice of strings or consumed into an owned string vector for fully manual
+processing if desired.
 
-This sort of approach can significantly reduce the overhead of simple CLI apps
-compared to using (excellent but heavy) crates like `clap`.
+For simple applications, this agnostic approach can significantly reduce the
+overhead of processing CLI arguments, but because handling is left to the
+implementing library, it might be too tedious or limiting for more complex use
+cases.
 
-See the flag documentation below for handling options.
+
+
+## Stability: Alpha
+
+This project is under heavy development and subject to change. While the code
+in the `master` branch should always be in a "working" state, breaking changes
+and major refactors may be introduced between releases.
+
+(This should probably *not* be used in production-ready applications.)
+
+
+
+## Crate Features
+
+* `simd`: This feature enables various under-the-hood SIMD optimizations —
+courtesy of [`packed_simd`](https://crates.io/crates/packed_simd) — to speed up
+processing under modern CPUs. This feature requires Rust nightly.
 */
 
 #![warn(clippy::filetype_is_file)]
@@ -58,7 +81,17 @@ pub use argue::Argue;
 
 
 
-/// Print an Error and Exit.
+/// # Print an Error and Exit.
+///
+/// This method prints an error message to `Stderr` and terminates the thread
+/// with an exit code of `1`.
+///
+/// This is used instead of traditional panics in many places, given the CLI-
+/// based nature of [`Argue`].
+///
+/// ## Safety
+///
+/// The `msg` must be valid UTF-8 or undefined things may happen.
 pub fn die(msg: &[u8]) {
 	Msg::from(msg)
 		.with_prefix(MsgKind::Error)

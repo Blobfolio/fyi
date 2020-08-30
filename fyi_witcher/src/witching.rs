@@ -1,22 +1,6 @@
 /*!
 # FYI Witcher: `Witching`
-
-`Witching` is a progress bar wrapper built around a collection of paths. Each
-(parallel) iteration of the set results in a tick, providing a nice little
-ASCII animation to follow while data is being processed.
-
-Compared with more general-purpose libraries like `indicatif`, `Witching` is
-incredibly lightweight and efficient, but it also lacks much in the way of
-customizability.
-
-All progress bars include an elapsed time and progress shown as a ratio and
-percent. If the window is large enough, an actual "bar" is displayed as well.
-`Witching`s can optionally include a title and a list of active tasks.
-
-That's it! Short and sweet.
 */
-
-
 
 use ahash::{
 	AHasher,
@@ -156,7 +140,10 @@ const MIN_DRAW_WIDTH: usize = 40;
 
 
 #[derive(Debug)]
-/// Inner Witching.
+/// # Inner Witching.
+///
+/// Most of the stateful data for our [`Witching`] struct lives here so that
+/// it can be wrapped up in an `Arc<Mutex>` and passed between threads.
 struct WitchingInner {
 	buf: Vec<u8>,
 	toc: Toc,
@@ -265,18 +252,26 @@ impl WitchingInner {
 	// Getters
 	// ------------------------------------------------------------------------
 
-	/// Doing.
+	/// # Doing.
+	///
+	/// Return the number of active tasks.
 	pub(crate) fn doing(&self) -> u32 { self.doing.len() as u32 }
 
-	/// Done.
+	/// # Done.
+	///
+	/// Return the number of completed tasks.
 	pub(crate) const fn done(&self) -> u32 { self.done }
 
-	/// Elapsed (Seconds).
+	/// # Elapsed (Seconds).
+	///
+	/// Return the elapsed time in seconds.
 	pub(crate) fn elapsed(&self) -> u32 {
 		86400.min(self.started.elapsed().as_secs() as u32)
 	}
 
-	/// Percent.
+	/// # Percent.
+	///
+	/// Return the percentage of tasks completed, i.e. `done / total`.
 	pub(crate) fn percent(&self) -> f64 {
 		if self.total == 0 || self.done == 0 { 0.0 }
 		else if self.done == self.total { 1.0 }
@@ -285,10 +280,15 @@ impl WitchingInner {
 		}
 	}
 
-	/// Is Running?
+	/// # Is Running?
+	///
+	/// If the amount completed is less than the total amount, this returns
+	/// `true`, otherwise `false`.
 	pub(crate) const fn is_running(&self) -> bool { 0 != self.flags & TICKING }
 
-	/// Total.
+	/// # Total.
+	///
+	/// Return the total number of tasks.
 	pub(crate) const fn total(&self) -> u32 { self.total }
 
 
@@ -298,7 +298,7 @@ impl WitchingInner {
 	// ------------------------------------------------------------------------
 
 	#[allow(trivial_casts)] // We need triviality!
-	/// End Task.
+	/// # End Task.
 	///
 	/// Remove a task from the currently-running list and increment `done` by
 	/// one.
@@ -309,7 +309,7 @@ impl WitchingInner {
 		}
 	}
 
-	/// Increment.
+	/// # Increment (Completed).
 	///
 	/// Increment `done` by one. If this reaches the total, it will
 	/// automatically trigger a stop.
@@ -324,9 +324,10 @@ impl WitchingInner {
 		}
 	}
 
-	/// Set Title.
+	/// # Set Title.
 	///
-	/// To remove a title, pass an empty string.
+	/// This updates the progress bar's title. If an empty string is passed,
+	/// the title will be removed.
 	pub(crate) fn set_title<S> (&mut self, title: S)
 	where S: AsRef<str> {
 		let title: &[u8] = title.as_ref().as_bytes();
@@ -341,7 +342,7 @@ impl WitchingInner {
 	}
 
 	#[allow(trivial_casts)] // We need triviality!
-	/// Start Task.
+	/// # Start Task.
 	///
 	/// Add a task to the currently-running list.
 	pub(crate) fn start_task(&mut self, task: &PathBuf) {
@@ -357,7 +358,7 @@ impl WitchingInner {
 	// Render
 	// ------------------------------------------------------------------------
 
-	/// Preprint.
+	/// # Preprint.
 	///
 	/// This method accepts a completed buffer ready for printing, hashing it
 	/// for comparison with the last job. If unique, the previous output is
@@ -388,9 +389,9 @@ impl WitchingInner {
 		Self::print(&self.buf);
 	}
 
-	/// Print Blank.
+	/// # Print Blank.
 	///
-	/// This simply resets the hash and clears any prior output.
+	/// This simply resets the last-print hash and clears any prior output.
 	fn print_blank(&mut self) {
 		if self.last_hash != 0 {
 			self.last_hash = 0;
@@ -399,7 +400,7 @@ impl WitchingInner {
 		self.print_cls();
 	}
 
-	/// Print!
+	/// # Print!
 	///
 	/// Print some arbitrary data to the write place. Haha.
 	///
@@ -416,7 +417,7 @@ impl WitchingInner {
 		handle.flush().unwrap();
 	}
 
-	/// Erase Output.
+	/// # Erase Output.
 	///
 	/// This method "erases" any prior output so that new output can be written
 	/// in the same place. That's animation, folks!
@@ -453,7 +454,10 @@ impl WitchingInner {
 		}
 	}
 
-	/// Stop.
+	/// # Stop.
+	///
+	/// This method ends all progression, setting `done` to `total` so that
+	/// summaries can be generated.
 	pub(crate) fn stop(&mut self) {
 		self.flags |= TICK_ALL;
 		self.flags &= ! TICKING;
@@ -462,7 +466,7 @@ impl WitchingInner {
 		self.print_blank();
 	}
 
-	/// Tick.
+	/// # Tick.
 	///
 	/// Ticking takes all of the changed values (since the last tick), updates
 	/// their corresponding parts in the buffer, and prints the result, if any.
@@ -511,7 +515,7 @@ impl WitchingInner {
 		true
 	}
 
-	/// Tick Bar Dimensions.
+	/// # Tick Bar Dimensions.
 	///
 	/// This calculates the available widths for each of the three progress
 	/// bars (done, doing, remaining).
@@ -554,7 +558,7 @@ impl WitchingInner {
 		}
 	}
 
-	/// Tick Bar.
+	/// # Tick Bar.
 	///
 	/// This redraws the actual progress *bar* portion of the buffer, which is
 	/// actually three different bars squished together: Done, Doing, and
@@ -586,7 +590,7 @@ impl WitchingInner {
 		}
 	}
 
-	/// Tick Doing.
+	/// # Tick Doing.
 	///
 	/// Update the task list portion of the buffer. This is triggered both by
 	/// changes to the task list as well as resoluation changes (as long values
@@ -618,7 +622,7 @@ impl WitchingInner {
 		}
 	}
 
-	/// Tick Done.
+	/// # Tick Done.
 	///
 	/// This updates the "done" portion of the buffer as needed.
 	fn tick_set_done(&mut self) {
@@ -628,7 +632,7 @@ impl WitchingInner {
 		}
 	}
 
-	/// Tick Percent.
+	/// # Tick Percent.
 	///
 	/// This updates the "percent" portion of the buffer as needed.
 	fn tick_set_percent(&mut self) {
@@ -639,7 +643,7 @@ impl WitchingInner {
 		}
 	}
 
-	/// Tick Elapsed Seconds.
+	/// # Tick Elapsed Seconds.
 	///
 	/// The precision of `Instant` is greater than we need for printing
 	/// purposes; here we're just looking to see if one or more seconds have
@@ -671,7 +675,7 @@ impl WitchingInner {
 		}
 	}
 
-	/// Tick Title.
+	/// # Tick Title.
 	///
 	/// The title needs to be rewritten both on direct change and resolution
 	/// change. Long titles are lazy-cropped as needed.
@@ -696,7 +700,7 @@ impl WitchingInner {
 		}
 	}
 
-	/// Tick Total.
+	/// # Tick Total.
 	///
 	/// This updates the "total" portion of the buffer as needed.
 	fn tick_set_total(&mut self) {
@@ -706,7 +710,7 @@ impl WitchingInner {
 		}
 	}
 
-	/// Tick Width.
+	/// # Tick Width.
 	///
 	/// Check to see if the terminal width has changed since the last run and
 	/// update values — i.e. the relevant tick flags — as necessary.
@@ -722,10 +726,37 @@ impl WitchingInner {
 
 
 #[derive(Debug)]
-/// Witching Bar.
+/// `Witching` is a progress bar wrapper built around a collection of paths.
+/// Each (parallel) iteration of the set results in a tick, providing a nice
+/// little ASCII animation to follow while data is being processed.
 ///
-/// This is it! The whole point of the crate! See the library documentation for
-/// more information.
+/// Compared with more general-purpose libraries like [`indicatif`](https://crates.io/crates/indicatif), `Witching`
+/// is incredibly lightweight and efficient, but it also lacks much in the way
+/// of customizability.
+///
+/// All progress bars include an elapsed time and progress shown as a ratio and
+/// percent. If the window is large enough, an actual "bar" is displayed as well.
+/// `Witching`s can optionally include a title and a list of active tasks.
+///
+/// That's it! Short and sweet.
+///
+/// ## Examples
+///
+/// `Witching` is instantiated using a builder pattern. Simple chain the desired
+/// `with_*()` methods together along with [Witching::run] when you're ready to go!
+///
+/// ```no_run
+/// use fyi_witcher::Witcher;
+/// use fyi_witcher::Witching;
+///
+/// // Find the files you want.
+/// let files = Witcher::default()
+///     .with_path("/my/dir")
+///     .with_ext1(b".jpg")
+///     .into_witching() // Convert it to a Witching instance.
+///     .with_title("My Progress Title") // Set whatever options.
+///     .run(|p| { ... }); // Run your magic!
+/// ```
 pub struct Witching {
 	/// The set to progress through.
 	set: Vec<PathBuf>,
@@ -779,14 +810,53 @@ impl Witching {
 	// ------------------------------------------------------------------------
 
 	#[must_use]
-	/// With Flags.
+	/// # With Flags.
+	///
+	/// Set the desired operational flags.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::{
+	///     Witcher,
+	///     Witching,
+	///     WITCHING_DIFF,
+	///     WITCHING_SUMMARIZE,
+	/// };
+	///
+	/// // Find and run!
+	/// Witcher::default()
+	///     .with_path("/my/dir")
+	///     .with_ext1(b".jpg")
+	///     .into_witching() // Convert it to a Witching instance.
+	///     .with_flags(WITCHING_SUMMARIZE | WITCHING_DIFF)
+	///     .run(|p| { ... }); // Run your magic!
+	/// ```
 	pub fn with_flags(mut self, flags: u8) -> Self {
 		self.set_flags(flags);
 		self
 	}
 
 	#[must_use]
-	/// With Labels.
+	/// # With Labels.
+	///
+	/// The `Witching` summary will report how many "files" were run. Use this
+	/// method to call them "images" or "documents" or whatever else.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witcher;
+	/// use fyi_witcher::Witching;
+	///
+	/// // Find and run!
+	/// Witcher::default()
+	///     .with_path("/my/dir")
+	///     .with_ext1(b".jpg")
+	///     .into_witching() // Convert it to a Witching instance.
+	///     .with_labels("image", "images")
+	///     .run(|p| { ... });
+	/// ```
 	pub fn with_labels<S>(mut self, one: S, many: S) -> Self
 	where S: AsRef<str> {
 		self.set_labels(one, many);
@@ -794,17 +864,61 @@ impl Witching {
 	}
 
 	#[must_use]
-	/// With Title.
+	/// # With Title.
+	///
+	/// Progress bars can optionally start with a title line. This method sets
+	/// that value.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witcher;
+	/// use fyi_witcher::Witching;
+	///
+	/// // Find and run!
+	/// Witcher::default()
+	///     .with_path("/my/dir")
+	///     .with_ext1(b".jpg")
+	///     .into_witching() // Convert it to a Witching instance.
+	///     .with_title("My Title")
+	///     .run(|p| { ... });
+	/// ```
 	pub fn with_title<S> (self, title: S) -> Self
 	where S: AsRef<str> {
 		self.set_title(title);
 		self
 	}
 
-	/// Set Flags.
+	/// # Set Flags.
+	///
+	/// While `Witching` is generally meant to be set up by chaining together
+	/// builder methods, you can use this method to set the flags for an
+	/// object that has been saved to a variable.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witching;
+	///
+	/// let mut witch = Witching::default();
+	/// witch.set_flags(0);
+	/// ```
 	pub fn set_flags(&mut self, flags: u8) { self.flags = flags; }
 
-	/// Set Labels.
+	/// # Set Labels.
+	///
+	/// While `Witching` is generally meant to be set up by chaining together
+	/// builder methods, you can use this method to set the summary labels for
+	/// an object that has been saved to a variable.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witching;
+	///
+	/// let mut witch = Witching::default();
+	/// witch.set_labels("animal", "animals");
+	/// ```
 	pub fn set_labels<S>(&mut self, one: S, many: S)
 	where S: AsRef<str> {
 		self.one.truncate(0);
@@ -816,9 +930,31 @@ impl Witching {
 
 	#[must_use]
 	#[allow(clippy::missing_const_for_fn)] // Evidently it can't!
-	/// Into Vec.
+	/// # Into Vec.
 	///
-	/// Consume and return the path collection.
+	/// Consume and return the path collection. This may be useful in cases
+	/// where you've run through the set, but need to perform non-progress-related
+	/// actions afterwards.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witcher;
+	/// use fyi_witcher::Witching;
+	///
+	/// // Set up the instance.
+	/// let mut witch = Witcher::default()
+	///     .with_path("/my/dir")
+	///     .with_ext1(b".jpg")
+	///     .into_witching() // Convert it to a Witching instance.
+	///     .with_title("My Title");
+	///
+	/// // Run your magic.
+	/// witch.run(|p| { ... });
+	///
+	/// // And get the original vector back.
+	/// let files: Vec<PathBuf> = witch.into_vec();
+	/// ```
 	pub fn into_vec(self) -> Vec<PathBuf> { self.set }
 
 
@@ -828,7 +964,7 @@ impl Witching {
 	// ------------------------------------------------------------------------
 
 	#[must_use]
-	/// Total File(s) Size.
+	/// # Total File(s) Size.
 	///
 	/// Add up the size of all files in a set. Calculations are run in parallel so
 	/// should be fairly fast depending on the file system.
@@ -838,7 +974,7 @@ impl Witching {
 			.sum()
 	}
 
-	/// Label.
+	/// # Label.
 	///
 	/// What label should we be using? One or many?
 	fn label(&self) -> &[u8] {
@@ -846,7 +982,24 @@ impl Witching {
 		else { &self.many }
 	}
 
-	/// Run!
+	/// # Run!
+	///
+	/// This method is used to start the actual progression! This will iterate
+	/// through each path in parallel, sending each to the provided callback.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witcher;
+	/// use fyi_witcher::Witching;
+	///
+	/// // Find and run!
+	/// Witcher::default()
+	///     .with_path("/my/dir")
+	///     .with_ext1(b".jpg")
+	///     .into_witching()   // Convert it to a Witching instance.
+	///     .run(|p| { ... }); // Here's the magic.
+	/// ```
 	pub fn run<F>(&self, cb: F)
 	where F: Fn(&PathBuf) + Copy + Send + Sync + 'static {
 		// Empty set?
@@ -880,7 +1033,9 @@ impl Witching {
 		}
 	}
 
-	/// Run!
+	/// # (Actually) Run!
+	///
+	/// This internal method is used for iterations requiring progress display.
 	fn run_sexy<F>(&self, cb: F)
 	where F: Fn(&PathBuf) + Copy + Send + Sync + 'static {
 		// Track the run independently of `WitchingInner`, just in case a
@@ -910,7 +1065,12 @@ impl Witching {
 		t_handle.join().unwrap();
 	}
 
-	/// Summarize.
+	/// # Summarize.
+	///
+	/// This prints a simple summary after iteration has completed. It is
+	/// enabled using the [`WITCHING_SUMMARIZE`] flag and reads something like:
+	///
+	///     Done: 5 files in 3 seconds.
 	fn summarize(&self) {
 		Msg::from_iter(
 			NiceInt::from(u64::from(self.total())).iter()
@@ -925,9 +1085,17 @@ impl Witching {
 			.eprint();
 	}
 
-	/// Summarize (with savings).
+	/// # Summarize (with savings).
 	///
-	/// This summary compares the before and after bytes.
+	/// This version of the summary compares the before and after bytes and
+	/// notes how much space has been saved. It is intended for operations that
+	/// minify or compress the file paths in the set.
+	///
+	/// This is engaged when both [`WITCHING_SUMMARIZE`] and [`WITCHING_DIFF`] flags
+	/// are set and will return a message like:
+	///
+	///     Crunched: 5 files in 3 seconds, saving 2 bytes (1.00%).
+	///     Crunched: 5 files in 3 seconds, but nothing doing.
 	fn summarize_diff(&self, before: u64) {
 		let after: u64 = self.du();
 
@@ -958,9 +1126,12 @@ impl Witching {
 		}
 	}
 
-	/// Summarize empty.
+	/// # Summarize empty.
 	///
-	/// This summary prints when the set is empty.
+	/// This summary prints when the set is empty and the instance has the
+	/// [`WITCHING_SUMMARIZE`] flag set. It simply reads:
+	///
+	///     No files were found.
 	fn summarize_empty(&self) {
 		Msg::from_iter(
 			b"No ".iter()
@@ -986,7 +1157,7 @@ impl Witching {
 	get_inner!(total, u32);
 	get_inner!(is_running, bool);
 
-	/// Stop.
+	/// # Stop.
 	///
 	/// Wrapper for `WitchingInner::stop()`.
 	fn stop(&self) {
@@ -994,7 +1165,7 @@ impl Witching {
 		ptr.stop();
 	}
 
-	/// Set Title.
+	/// # Set Title.
 	///
 	/// Wrapper for `WitchingInner::set_title()`.
 	pub fn set_title<S> (&self, title: S)
@@ -1004,7 +1175,7 @@ impl Witching {
 	}
 }
 
-/// Tick.
+/// # Tick.
 ///
 /// Wrapper for `WitchingInner::tick()`.
 fn progress_tick(inner: &Arc<Mutex<WitchingInner>>) -> bool {
@@ -1012,7 +1183,7 @@ fn progress_tick(inner: &Arc<Mutex<WitchingInner>>) -> bool {
 	ptr.tick()
 }
 
-/// End Task.
+/// # End Task.
 ///
 /// Wrapper for `WitchingInner::end_task()`.
 fn progress_end(inner: &Arc<Mutex<WitchingInner>>, task: &PathBuf) {
@@ -1020,7 +1191,7 @@ fn progress_end(inner: &Arc<Mutex<WitchingInner>>, task: &PathBuf) {
 	ptr.end_task(task);
 }
 
-/// Start Task.
+/// # Start Task.
 ///
 /// Wrapper for `WitchingInner::start_task()`.
 fn progress_start(inner: &Arc<Mutex<WitchingInner>>, task: &PathBuf) {

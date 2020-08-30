@@ -1,47 +1,5 @@
 /*!
-# FYI: Argue
-
-This is a very minimalistic CLI argument parser. It is significantly smaller
-and faster than `clap`, but only because it is *opinionated*. Haha.
-
-One important benefit (or drawback) to `Argue` is that it does not hold any
-specific knowledge about the supported or expected options. This is great for
-performance and allows for more flexible/dynamic parsing, but means handling is
-ultimately up to the implementing library.
-
-Nobody is in agreement on how CLI arguments should be formatted. To that end,
-the assumptions this library makes are:
-* A maximum of 16 keys are supported.
-* Short options are only ever a single char. Anything after that single char (e.g "Val" in "-kVal") will be considered a value and broken off into its own entry.
-* Long option key/value pairs (e.g. "--key=val") are likewise split into their own entries.
-* Options may only ever appear once.
-* Options with values may only have one value.
-* Options must appear before unnamed arguments.
-* Leading empty entries are trimmed from the set, but trailing ones are preserved.
-* Anything appearing after a separator ("--") is requoted and glued together, replacing the separator entry.
-* Unnamed trailing arguments are assumed to exist after the last detected option, or that option's value (if you e.g. called `option()` to retrieve it).
-
-Some special helpers are provided in the form of builder options. See the
-various `with_*()` methods for more information.
-
-Once seeded, you can either dereference the struct into a slice of `String`s to
-work your manual handling magic, or keep it in object form and use methods like
-`switch()`, `option()`, and `args()` to retrieve values as needed.
-
-## Examples
-
-```no_run
-use fyi_menu::Argue;
-
-let mut args = Argue::new()
-    .with_any() // Require at least one entry or error out.
-    .with_version("App Name") // Print a version screen if version flags are found.
-    .with_help(custom_callback); // Run help callback if help flags are found.
-
-let something: bool = args.switch("-s");
-let value: Option<&str> = args.option("--my-opt");
-let remaining: &[String] = args.args();
-```
+# FYI Menu: Argue
 */
 
 use crate::{
@@ -61,23 +19,96 @@ use std::{
 
 
 #[derive(Debug)]
-/// Argue.
+/// `Argue` is a minimalistic, argnostic CLI argument parser. It does not hold
+/// information about all the expected or required arguments an application
+/// might have; instead it merely parses the raw [`std::env::args`] output into a
+/// consistent state and provides various methods of querying the set
+/// afterwards.
 ///
-/// This is the main point of the library! See the module level documentation
-/// for more information.
+/// ## Assumptions
+///
+/// `Argue` is built for speed and simplicity, and as such, contains a number
+/// of assumptions and limitations that might make it unsuitable for use.
+///
+/// ### Keys
+///
+/// A "key" is an argument entry beginning with one or two dashes `-` and an
+/// ASCII letter. Entries with one dash are "short", and can only consist of
+/// two bytes. Entries with two dashes are "long" and can be however long they
+/// want to be.
+///
+/// If a short key entry is longer than two bytes, everything in range `2..` is
+/// assumed to be a value and is split off into its own entry. For example,
+/// `-kVal` is equivalent to `-k Val`.
+///
+/// If a long key contains an `=`, it is likewise assumed to be a key/value
+/// pair, and will be split into two at that index. For example, `--key=Val` is
+/// equivalent to `--key Val`.
+///
+/// A key without a value is called a "switch". It is `true` if present,
+/// `false` if not.
+///
+/// A key with one value is called an "option". Multi-value options are *not*
+/// supported.
+///
+/// ### Trailing Arguments
+///
+/// All values beginning after the last known switch (or option value) are
+/// considered to be trailing arguments. Any number (including zero) of
+/// trailing arguments can be provided.
+///
+/// ### Restrictions
+///
+/// 1. Keys must be unique. If the same key appears twice, `Argue` will print an error and terminate the thread with a status code of `1`.
+/// 2. A given argument set may only include up to **8** keys. If that number is exceeded, `Argue` will print an error and terminate the thread with a status code of `1`.
+///
+/// ## Examples
+///
+/// `Argue` follows a builder pattern for construction.
+///
+/// ```no_run
+/// use fyi_menu::Argue;
+///
+/// // Parse the env arguments, aborting if the set is empty.
+/// let mut args = Argue::new().with_any();
+///
+/// // Check to see what's there.
+/// let switch: bool = args.switch("-s");
+/// let option: Option<&str> = args.option("--my-opt");
+/// let extras: &[String] = args.args();
+/// ```
+///
+/// If you just want a clean set to iterate over, `Argue` can be dereferenced
+/// to a string slice:
+///
+/// ```no_run
+/// let arg_slice: &[String] = *args;
+/// ```
+///
+/// Or it can be converted into an owned string Vector:
+/// ```no_run
+/// let args: Vec<String> = args.take();
+/// ```
 pub struct Argue {
 	/// Parsed arguments.
 	args: Vec<String>,
-	/// Keys found mapped to their index in `self.args`.
+	/// A pseudo hash-map of key/idx pairs.
 	keys: KeyMaster,
 	/// The last known key/value index.
 	///
-	/// Put another way, all entries in `self.args` between `0..=self.last` are
-	/// either option keys or values. Beginning with `self.last + 1` are all
-	/// the unnamed trailing arguments.
+	/// Because `Argue` is agnostic, it needs to keep track of the position of
+	/// the last known key (or option value) so that it can make an educated
+	/// guess about where the unnamed arguments begin.
+	///
+	/// This is an inclusive value; the first argument (if any) would exist at
+	/// `last + 1`, except in cases where no keys were passed, in which case it
+	/// is assumed the arguments begin at `0`.
 	last: usize,
-	/// Subcommand? This modifies the arg boundary in cases where no keys are
-	/// present.
+	/// Last Offset.
+	///
+	/// For applications expecting a subcommand, this value ensures that if no
+	/// keys were passed, the argument index begins at `1` instead of `0` (as
+	/// the first slot would be the subcommand).
 	last_offset: bool,
 }
 
@@ -102,9 +133,9 @@ where I: Iterator<Item=String> {
 	fn from(src: I) -> Self
 	where I: Iterator<Item=String> {
 		src.skip_while(|x|
-				x.is_empty() ||
-				x.as_bytes().iter().all(u8::is_ascii_whitespace)
-			)
+			x.is_empty() ||
+			x.as_bytes().iter().all(u8::is_ascii_whitespace)
+		)
 			.fold(Self::default(), Self::fold_entry)
 	}
 }
@@ -121,28 +152,38 @@ impl Argue {
 	// ------------------------------------------------------------------------
 
 	#[must_use]
-	/// New.
+	/// # New Instance.
 	///
-	/// Populate arguments from `std::env::args()`. The first (path) part is
-	/// automatically excluded.
+	/// Populate arguments from `std::env::args()`. The first (command path)
+	/// part is automatically excluded.
 	///
 	/// To construct an `Argue` from arbitrary raw values, use the
-	/// `Argue::from_iter()` method (provided via the `iter::FromIterator`
-	/// trait).
+	/// `Argue::from_iter()` method (via the [`std::iter::FromIterator`] trait).
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_menu::Argue;
+	///
+	/// let mut args = Argue::new();
+	/// ```
 	pub fn new() -> Self {
 		Self::from(env::args().skip(1))
 	}
 
-	/// With Entry.
+	/// # With Entry.
 	///
-	/// This is used to fold iterator entries into the collection. It is
-	/// slightly more efficient to blindly collect and handle keys with a
-	/// secondary loop, but this approach is significantly cleaner.
+	/// This is an internal method used to fold entries into a collection from
+	/// an iterator.
+	///
+	/// While it is slightly more efficient to split the collection and parsing
+	/// into two loops, this approach is significantly cleaner and more
+	/// readable.
 	fn fold_entry(mut self, mut e: String) -> Self {
 		match KeyKind::from(e.as_bytes()) {
-			// Passthru.
+			// Passthrough.
 			KeyKind::None => { self.args.push(e); },
-			// Record the keys and passthru.
+			// Record the keys and passthrough.
 			KeyKind::Short | KeyKind::Long => {
 				let idx: usize = self.args.len();
 				if ! self.keys.insert(&e, idx) { die(b"Duplicate key."); }
@@ -179,12 +220,20 @@ impl Argue {
 	}
 
 	#[must_use]
-	/// Assert Non-Empty
+	/// # Assert Non-Empty.
 	///
-	/// Chain this method to `new()` to print an error and exit with status
-	/// code `1` in cases where no CLI arguments were present.
+	/// Chain this method to `new()` to print an error and exit with a status
+	/// code of `1` in cases where no CLI arguments were present.
 	///
 	/// If arguments are found, this just transparently returns `self`.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_menu::Argue;
+	///
+	/// let mut args = Argue::new().with_any();
+	/// ```
 	pub fn with_any(self) -> Self {
 		if self.args.is_empty() {
 			die(b"Missing options, flags, arguments, and/or ketchup.");
@@ -194,19 +243,32 @@ impl Argue {
 	}
 
 	#[must_use]
-	/// Print Help.
+	/// # Help Helper.
 	///
-	/// Chain this method to `new()` to run a user-supplied callback if the
-	/// options `[-h, --help, help]` are present, terminating the run
-	/// afterward with exit code `0`.
+	/// Chain this method to `new()` to run the specified callback if the first
+	/// entry is "help" (a subcommand of sorts) or either "-h" or "--help"
+	/// switches are present. The thread will automatically terminate with an
+	/// exit code of `0` after running the callback.
 	///
-	/// In cases where these flags appear in the middle, and the first entry in
-	/// the set is a "subcommand", that subcommand value is passed to the
-	/// callback. (This allows an app to implement different help screens
-	/// depending on context.) If the first entry is just another key or
-	/// something, `None` is passed to the callback instead.
+	/// Note: the callback can technically do whatever it wants, but usually it
+	/// would be expected to print some output to the screen.
+	///
+	/// In cases where these flags appear in the middle and the first entry in
+	/// the set is not a key (e.g. it is likely a subcommand), that first value
+	/// will be passed to the callback for reference, allowing it to
+	/// potentially adapt the output based on that condition.
 	///
 	/// If no help flags are found, this just transparently returns `self`.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_menu::Argue;
+	///
+	/// let mut args = Argue::new().with_help(|_: Option<&str>| {
+	///     println!("Help-o world!");
+	/// });
+	/// ```
 	pub fn with_help<F>(self, cb: F) -> Self
 	where F: Fn(Option<&str>) {
 		if let Some(x) = self.peek() {
@@ -229,20 +291,29 @@ impl Argue {
 	}
 
 	#[must_use]
-	/// Parse Paths From List.
+	/// # Add Arguments From a Text File.
 	///
-	/// Most of our own apps that use this library are designed to accept any
-	/// number of trailing paths as unnamed arguments, or parse paths out of a
-	/// text file specified by `[-l, --list]`.
+	/// When chained to `new()`, if either "-l" or "--list" options are found,
+	/// the subsequent value (if any) is read as a text file, and each non-
+	/// empty line within is appended to the set as additional arguments,
+	/// exactly as if they were provided directly.
 	///
-	/// To that end, this method can be chained to `new()` to see if there is a
-	/// list flag, and if so, read that file and append each of its lines to
-	/// the result set as unnamed arguments. (This way those arguments and any
-	/// others can just get returned via `args()` later on.)
+	/// No judgments are passed on the contents of the file. If a line has
+	/// length, it is appended.
 	///
-	/// Note: this doesn't pass any judgments on the contents of the file.
+	/// Note: if using this approach to seed a command with file paths, make
+	/// sure those paths are absolute as their relativity will likely be lost
+	/// in translation.
 	///
 	/// This method always transparently returns `self`.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_menu::Argue;
+	///
+	/// let mut args = Argue::new().with_list();
+	/// ```
 	pub fn with_list(mut self) -> Self {
 		if let Some(path) = self.option2("-l", "--list") {
 			use std::{
@@ -267,10 +338,24 @@ impl Argue {
 	}
 
 	#[must_use]
-	/// With Separator.
+	/// # With Separator.
 	///
-	/// If the arguments contain an "--" separator, it is replaced with all of
-	/// the bits after it, requoted as necessary.
+	/// Chain this method to `new()` if you would like any "separator"
+	/// arguments glued back together as a single argument (replacing the "--"
+	/// entry).
+	///
+	/// See the documentation for [`utility::esc_arg`] for a list of all the
+	/// assumptions this method makes. (It may not do what you want.)
+	///
+	/// This method always transparently returns `self`.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_menu::Argue;
+	///
+	/// let mut args = Argue::new().with_separator();
+	/// ```
 	pub fn with_separator(mut self) -> Self {
 		if let Some(idx) = self.args.iter().position(|x| x == "--") {
 			if idx + 1 < self.args.len() {
@@ -288,25 +373,43 @@ impl Argue {
 	}
 
 	#[must_use]
-	/// With Subcommand.
+	/// # With Subcommand.
 	///
-	/// In cases where no keys are present, the arg boundary defaults to the
-	/// first entry. This method can be used to change the minimum to `1`. It
-	/// has no effect if keys are present, since they'll set the boundary for
-	/// us.
+	/// Chain this method to `new()` if your program might be executed with a
+	/// subcommand. In such cases, this helps ensure that the unnamed argument
+	/// boundary is correctly set in cases where no keys were passed.
+	///
+	/// This method always transparently returns `self`.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_menu::Argue;
+	///
+	/// let mut args = Argue::new().with_subcommand();
+	/// ```
 	pub const fn with_subcommand(mut self) -> Self {
 		self.last_offset = true;
 		self
 	}
 
 	#[must_use]
-	/// Print Version.
+	/// # Print Name/Version.
 	///
 	/// Similar to `with_help()`, this method can be chained to `new()` to
 	/// print the program name and version, then exit with a status code of
-	/// `0` if any `[-V, --version]` flags are present.
+	/// `0`, if either "-V" or "--version" flags are present.
 	///
 	/// If no version flags are found, `self` is transparently passed through.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_menu::Argue;
+	///
+	/// let mut args = Argue::new()
+	///     .with_version(b"My App", b"1.5");
+	/// ```
 	pub fn with_version(self, name: &[u8], version: &[u8]) -> Self {
 		if self.keys.contains2("-V", "--version") {
 			Msg::from([name, b" v", version].concat()).println();
@@ -318,13 +421,24 @@ impl Argue {
 
 	#[allow(clippy::missing_const_for_fn)] // Doesn't work!
 	#[must_use]
-	/// Take.
+	/// # Into Owned Vec.
 	///
-	/// Drop the struct and return the parsed results as an owned
-	/// `Vec<String>`.
+	/// Use this method to consume the struct and return the parsed arguments
+	/// as a `Vec<String>`.
 	///
 	/// Unless `take_arg()` was called previously, the vector should represent
 	/// all of the original arguments (albeit reformatted).
+	///
+	/// If you merely want something to iterate over, you can alternatively
+	/// dereference the struct to a string slice.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_menu::Argue;
+	///
+	/// let args: Vec<String> = Argue::new().take();
+	/// ```
 	pub fn take(self) -> Vec<String> { self.args }
 
 
@@ -334,52 +448,103 @@ impl Argue {
 	// ------------------------------------------------------------------------
 
 	#[must_use]
-	/// First Entry.
+	/// # First Entry.
 	///
 	/// Borrow the first entry, if any.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_menu::Argue;
+	///
+	/// let mut args = Argue::new();
+	///
+	/// if let Some("happy") = args.peek() { ... }
+	/// ```
 	pub fn peek(&self) -> Option<&str> {
 		if self.args.is_empty() { None }
 		else { Some(&self.args[0]) }
 	}
 
 	#[must_use]
-	/// First Entry.
+	/// # First Entry.
 	///
-	/// Borrow the first entry.
+	/// Borrow the first entry without first checking for its existence.
 	///
-	/// # Safety
+	/// ## Safety
 	///
-	/// This assumes a first argument exists. It will panic if not.
+	/// This assumes a first argument exists; it will panic if the set is
+	/// empty.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_menu::Argue;
+	///
+	/// let mut args = Argue::new().with_any();
+	///
+	/// // This is actually safe because with_any() would have errored out if
+	/// // nothing were present.
+	/// let first: &str = unsafe { args.peek_unchecked() };
+	/// ```
 	pub unsafe fn peek_unchecked(&self) -> &str {
 		&self.args[0]
 	}
 
 	#[must_use]
-	/// Switch.
+	/// # Switch.
 	///
 	/// Returns `true` if the switch is present, `false` if not.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_menu::Argue;
+	///
+	/// let mut args = Argue::new();
+	/// let switch: bool = args.switch("--my-switch");
+	/// ```
 	pub fn switch(&self, key: &str) -> bool {
 		self.keys.contains(key)
 	}
 
 	#[must_use]
-	/// Switch (short/long).
+	/// # Switch x2.
 	///
-	/// This is just like `switch()`, except it checks for both a short and
-	/// long key, returning `true` if either were present.
+	/// This is a convenience method that checks for the existence of two
+	/// switches at once, returning `true` if either are present.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_menu::Argue;
+	///
+	/// let mut args = Argue::new();
+	/// let switch: bool = args.switch2("-s", "--my-switch");
+	/// ```
 	pub fn switch2(&self, short: &str, long: &str) -> bool {
 		self.keys.contains2(short, long)
 	}
 
-	/// Option.
+	/// # Option.
 	///
-	/// Return the value corresponding to `key`, if present. Multi-value
+	/// Return the value corresponding to `key`, if present. "Value" in this
+	/// case means the entry immediately following the key. Multi-value
 	/// options are not supported.
 	///
 	/// Note: this method requires mutable access to `self` because it can
-	/// potentially nudge the option/argument boundary +1 to the right. (Argue
-	/// knows during parsing where the last keys are, but doesn't know which of
-	/// those keys have values until `option()` or `option2()` are called.)
+	/// potentially nudge the option/argument boundary +1 to the right. Because
+	/// of this, you should be sure to query any expected options before
+	/// calling `args()`.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_menu::Argue;
+	///
+	/// let mut args = Argue::new();
+	/// let opt: Option<&str> = args.option("--my-opt");
+	/// ```
 	pub fn option(&mut self, key: &str) -> Option<&str> {
 		if let Some(mut idx) = self.keys.get(key) {
 			idx += 1;
@@ -393,10 +558,19 @@ impl Argue {
 		None
 	}
 
-	/// Option (short/long).
+	/// # Option x2.
 	///
-	/// This is just like `option()`, except it checks for both a short and
-	/// long key, returning the first match found.
+	/// This is a convenience method that checks for the existence of two
+	/// options at once, returning the first found value, if any.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_menu::Argue;
+	///
+	/// let mut args = Argue::new();
+	/// let opt: Option<&str> = args.option2("-o", "--my-opt");
+	/// ```
 	pub fn option2(&mut self, short: &str, long: &str) -> Option<&str> {
 		if let Some(mut idx) = self.keys.get2(short, long) {
 			idx += 1;
@@ -411,15 +585,25 @@ impl Argue {
 	}
 
 	#[must_use]
-	/// (Remaining) Arguments.
+	/// # Trailing Arguments.
 	///
 	/// This returns a slice from the end of the result set assumed to
-	/// represent unnamed arguments. The boundary for the split defaults to
-	/// after the last position of a key, but might change +1 if that last key
-	/// is later found (via a call to `option()` or `option2()`) to contain a
-	/// value.
+	/// represent unnamed arguments. The boundary for the split is determined
+	/// by the position of the last known key (or key value).
+	///
+	/// It is important to query any expected options prior to calling this
+	/// method, as the existence of those options might shift the boundary.
 	///
 	/// If there are no arguments, an empty slice is returned.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_menu::Argue;
+	///
+	/// let mut args = Argue::new();
+	/// let extras: &[String] = args.args();
+	/// ```
 	pub fn args(&self) -> &[String] {
 		let idx = self.arg_idx();
 		if idx < self.args.len() {
@@ -429,13 +613,23 @@ impl Argue {
 	}
 
 	#[must_use]
-	/// Take Arg.
+	/// # Take Next Trailing Argument.
 	///
-	/// Return the first available argument — draining it from the collection —
-	/// or print an error message and exit.
+	/// Return an owned copy of the first available argument — removing it from
+	/// the collection — or print an error message and exit.
 	///
 	/// This method is intended for use in cases where exactly one argument is
-	/// expected and required. All other cases should just call `args()`.
+	/// expected and required. All other cases should probably just call
+	/// `args()`.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_menu::Argue;
+	///
+	/// let mut args = Argue::new();
+	/// let opt: String = args.take_arg();
+	/// ```
 	pub fn take_arg(&mut self) -> String {
 		let idx = self.arg_idx();
 		if idx >= self.args.len() {
@@ -451,18 +645,22 @@ impl Argue {
 	// Internal
 	// ------------------------------------------------------------------------
 
-	/// Arg Index.
+	/// # Arg Index.
 	///
-	/// Return the index arguments are expected to begin at.
+	/// This is an internal method that returns the index at which the first
+	/// unnamed argument may be found.
+	///
+	/// Note: the index may be out of range, but won't be used in that case.
 	const fn arg_idx(&self) -> usize {
 		if self.keys.is_empty() && ! self.last_offset { 0 }
 		else { self.last + 1 }
 	}
 
-	/// Update Last Read.
+	/// # Update Last Read.
 	///
-	/// The boundary between options/values and trailing arguments is noted
-	/// by the last known key (or its value).
+	/// Set the position of the last known key (or key value) to `idx`. If
+	/// `idx` is less than the previous value for some reason, no action is
+	/// taken.
 	fn update_last(&mut self, idx: usize) {
 		if idx > self.last {
 			self.last = idx;

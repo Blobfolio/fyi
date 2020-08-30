@@ -1,31 +1,34 @@
 /*!
-# FYI: `KeyKind`
+# FYI Menu: Key Kind
 
-This is a very simple CLI argument "key" parser, meant to identify things like
-"-s" or "--long", etc.
-
-It is only really used by `Argue` during construction, but might find other
-uses.
+**Note:** This is not intended for external use and is subject to change.
 */
 
 
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq)]
-/// The Kind of Key.
+/// The `KeyKind` enum is used to differentiate between the types of CLI argument
+/// keys [`Argue`](crate::Argue) might encounter during parsing (and `None` in the case of a
+/// non-key-looking entry).
 ///
-/// This is only used during argument parsing. It is made public for the sake
-/// of benchmarking.
+/// In keeping with the general ethos of this crate, speed is the name of the game,
+/// which is achieved primarily through simplicity:
+/// * If an entry begins with a single `-`, it is assumed to be a short key.
+/// * If a short key consists of more than two characters, `2..` is assumed to be a value.
+/// * If an entry begins with two `--`, it is assumed to be a long key.
+/// * If a long key contains an `=`, everything after that is assumed to be a value.
 pub enum KeyKind {
 	/// Not a key.
 	None,
-	/// A short one.
+	/// A short key.
 	Short,
-	/// A short one with a potential value chunk.
+	/// A short key with a value.
 	ShortV,
-	/// A long one.
+	/// A long key.
 	Long,
-	/// A long one with a value chunk. The `usize` indicates the position of
-	/// the `=` character.
+	/// A long key with a value chunk. The `usize` indicates the position of
+	/// the `=` character, with everything before being the key, and everything
+	/// after being the value.
 	LongV(usize),
 }
 

@@ -1,5 +1,32 @@
 /*!
-# FYI Witcher: Table of Contents
+# FYI Witcher
+
+This crate provides two main components, both of them file-related:
+
+* [`Witcher`] is a simple, minimally configurable file system traversal library.
+* [`Witching`] is a lightweight, automatic progress bar wrapper that can be used while iterating through/operating on a set of paths.
+
+Out of necessity, this crate also contains a few random odds and ends that
+might be independently useful, namely:
+
+* [`NiceElapsed`] converts a given number of seconds into a human-readable, Oxford-joined list of units, like "1 hour, 2 minutes, and 3 seconds", suitable for summaries and the like.
+* [`NiceInt`] is a fast, (US) formatting-aware integer stringifier. (It turns numbers into byte strings for e.g. printing.)
+
+
+
+## Stability: Alpha
+
+This project is under heavy development and subject to change. While the code
+in the `master` branch should always be in a "working" state, breaking changes
+and major refactors may be introduced between releases.
+
+(This should probably *not* be used in production-ready applications.)
+
+
+
+## Crate Features
+
+* `simd`: This feature enables [bytecount's](https://crates.io/crates/bytecount) "generic-simd" feature, which pulls in [`packed_simd`](https://crates.io/crates/packed_simd) for minor performance gains. It is only worth enabling this feature if you are already using `packed_simd` elsewhere, otherwise the dependency overhead and nightly-only build requirement is more than it is worth.
 */
 
 #![warn(clippy::filetype_is_file)]
@@ -37,7 +64,6 @@ mod witching;
 pub mod traits;
 pub mod utility;
 
-/// The Witcher!
 pub use nice_elapsed::NiceElapsed;
 pub use nice_int::NiceInt;
 pub use witcher::Witcher;

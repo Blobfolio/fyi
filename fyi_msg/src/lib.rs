@@ -1,5 +1,27 @@
 /*!
-# FYI Msg: Table of Contents
+# FYI Msg
+
+This crate contains the objects providing the heart of the FYI command line
+application, namely [Msg], a simple struct for status-like messages that can be
+easily printed to `Stdout` or `Stderr`.
+
+
+
+## Stability: Alpha
+
+This project is under heavy development and subject to change. While the code
+in the `master` branch should always be in a "working" state, breaking changes
+and major refactors may be introduced between releases.
+
+(This should probably *not* be used in production-ready applications.)
+
+
+
+## Crate Features
+
+* `simd`: This feature enables various under-the-hood SIMD optimizations —
+courtesy of [`packed_simd`](https://crates.io/crates/packed_simd) — to speed up
+processing under modern CPUs. This feature requires Rust nightly.
 */
 
 #![warn(clippy::filetype_is_file)]

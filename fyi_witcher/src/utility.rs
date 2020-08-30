@@ -1,5 +1,5 @@
 /*!
-# FYI Witcher: Utility Methods
+# FYI Witcher: Utility Methods.
 */
 
 use std::path::Path;
@@ -7,20 +7,40 @@ use std::path::Path;
 
 
 #[must_use]
-/// Ends With Ignore ASCII Case
+/// # Ends With Ignore ASCII Case.
 ///
 /// This combines `ends_with()` and `eq_ignore_ascii_case()`, but skips an
 /// operation by assuming the needle `end` is already in lower case.
+///
+/// ## Examples
+///
+/// ```no_run
+/// assert!(
+///     fyi_witcher::utility::ends_with_ignore_ascii_case(
+///         b"/home/usr/Images/picture.JPG",
+///         b".jpg"
+///     )
+/// );
+/// ```
 pub fn ends_with_ignore_ascii_case(src: &[u8], end: &[u8]) -> bool {
 	let (m, n) = (src.len(), end.len());
 	m >= n && src.iter().skip(m - n).zip(end).all(|(a, b)| a.to_ascii_lowercase() == *b)
 }
 
-/// Ergonomical File Extension.
+/// # Ergonomical File Extension.
 ///
 /// This one-liner returns the file extension as a lower-cased `String` for
 /// easier comparisons. If the path is not a file or has no extension, an empty
 /// string is returned instead.
+///
+/// ## Examples
+///
+/// ```no_run
+/// assert_eq!(
+///     fyi_witcher::utility::file_extension("../file.JPEG"),
+///     String::from(".jpeg")
+/// );
+/// ```
 pub fn file_extension<P> (path: P) -> String
 where P: AsRef<Path> {
 	let path = path.as_ref();
@@ -35,10 +55,16 @@ where P: AsRef<Path> {
 	}
 }
 
-/// Ergonomical File Size.
+/// # Ergonomical File Size.
 ///
 /// This method always returns a `u64`, either the file's size or `0` if the
 /// path is invalid.
+///
+/// ## Examples
+///
+/// ```no_run
+/// let size: u64 = fyi_witcher::utility::file_size("../file.jpeg");
+/// ```
 pub fn file_size<P> (path: P) -> u64
 where P: AsRef<Path> {
 	path.as_ref()
@@ -51,10 +77,14 @@ where P: AsRef<Path> {
 		)
 }
 
-/// Is File Executable?
+/// # Is File Executable?
 ///
 /// This method attempts to determine whether or not a file has executable
 /// permissions (generally). If the path is not a file, `false` is returned.
+///
+/// ```no_run
+/// if fyi_witcher::utility::is_executable("./my-script.sh") { ... }
+/// ```
 pub fn is_executable<P> (path: P) -> bool
 where P: AsRef<Path> {
 	use std::os::unix::fs::PermissionsExt;
@@ -70,14 +100,23 @@ where P: AsRef<Path> {
 }
 
 #[must_use]
-/// Chunked Seconds
+/// # Chunked Seconds.
 ///
 /// This method converts seconds into hours, minutes, and seconds, returning
 /// a fixed-length array with each value in order, e.g. `[h, m, s]`.
 ///
-/// As with the rest of the methods in this module, days and beyond are not
+/// As with the rest of the methods in this crate, days and beyond are not
 /// considered. Large values are simply truncated to `86399`, i.e. one second
 /// shy of a full day.
+///
+/// ## Examples
+///
+/// ```no_run
+/// use fyi_witcher::utility::secs_chunks;
+///
+/// assert_eq!(secs_chunks(1), [0, 0, 1]);
+/// assert_eq!(secs_chunks(90), [0, 1, 30]);
+/// ```
 pub fn secs_chunks(num: u32) -> [u32; 3] {
 	let mut out: [u32; 3] = [0, 0, u32::min(86399, num)];
 
@@ -97,14 +136,14 @@ pub fn secs_chunks(num: u32) -> [u32; 3] {
 }
 
 #[must_use]
-/// Term Width
+/// # Term Width.
 ///
 /// This is a simple wrapper around `term_size::dimensions()` to provide
 /// the current terminal column width. We don't have any use for height,
 /// so that property is ignored.
 ///
-/// Note: The actual width returned is `1` less than the true value. This helps
-/// account for inconsistent handling of trailing whitespace, etc.
+/// Note: The width returned will be `1` less than the actual value to mitigate
+/// any whitespace weirdness that might be lurking at the edge.
 pub fn term_width() -> usize {
 	term_size::dimensions().map_or(0, |(w, _)| w.saturating_sub(1))
 }

@@ -1,14 +1,5 @@
 /*!
 # FYI Witcher: "Nice" Integer
-
-This is a quick way to convert an integer — any unsigned value under a trillion
-— into a formatted byte string.
-
-That's it!
-
-For values under `1000`, the `itoa` crate is used; for values requiring
-punctuation, `num_format` is used instead. Both are faster than relying on
-`to_string()` or the like.
 */
 
 use std::{
@@ -19,7 +10,25 @@ use std::{
 
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq)]
-/// Nice Integer
+/// `NiceInt` provides a quick way to convert an integer — any unsigned value
+/// under a trillion — into a formatted byte string for e.g. printing.
+///
+/// That's it!
+///
+/// For values under `1000`, the [`itoa`](https://crates.io/crates/itoa) crate is used;
+/// for values requiring punctuation — i.e. US thousands separators — [`num_format`](https://crates.io/crates/num_format)
+/// is used instead.
+///
+/// Both are much faster than relying on `to_string()` or the like.
+///
+/// ## Examples
+///
+/// ```no_run
+/// use fyi_witcher::NiceInt;
+/// assert_eq!(
+///     NiceInt::from(33231).as_str(),
+///     "33,231"
+/// );
 pub struct NiceInt {
 	inner: [u8; 15],
 	len: usize,
@@ -94,14 +103,20 @@ impl From<usize> for NiceInt {
 
 
 impl NiceInt {
-	/// From Small
+	/// # From Small
+	///
+	/// For numbers less than `1000`, we can skip the overhead of figuring out
+	/// punctuation and just leverage `itoa`.
 	fn from_small(num: u64) -> Self {
 		let mut out = Self::default();
 		out.len = itoa::write(&mut out.inner[..], num).unwrap_or_default();
 		out
 	}
 
-	/// From Big
+	/// # From Big
+	///
+	/// For numbers greater or equal to `1000`, commas come into play,
+	/// requiring the use of the relatively heavier `num_format` crate.
 	fn from_big(num: u64) -> Self {
 		use num_format::WriteFormatted;
 		let mut out = Self::default();
@@ -110,7 +125,9 @@ impl NiceInt {
 	}
 
 	#[must_use]
-	/// As Str.
+	/// # As Str.
+	///
+	/// Return the value as a string slice.
 	pub fn as_str(&self) -> &str {
 		unsafe { std::str::from_utf8_unchecked(&*self) }
 	}

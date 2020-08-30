@@ -1,10 +1,7 @@
 /*!
 # FYI Msg: Table of Contents
 
-`Toc` stores arbitrary index ranges (`start..end`), providing a means of
-logically partitioning the byte streams used by `Msg` and `Witching`.
-
-It is not intended for use outside the FYI libraries.
+**Note:** This is not intended for external use and is subject to change.
 */
 
 use crate::utility;
@@ -13,13 +10,33 @@ use std::ops::Range;
 
 
 #[derive(Debug, Copy, Clone, Default)]
-/// Table of Contents.
+/// `Toc` stores arbitrary index ranges (`start..end`), providing a means of
+/// logically partitioning the byte streams used by [Msg](crate::Msg) and `Witching`.
+///
+/// A total of **16** partitions are supported. They must be in relative order
+/// with each other, but do not have to be contiguous.
+///
+/// It is worth noting that `Toc` is agnostic in regards to how many partitions
+/// are actually in use by the implementing library. To prevent overflows from
+/// subtraction operations, it is important to pad any unused entries using the
+/// highest index from the active parts, like `0, 1, 2, 3, 3, 3, 3, 3...`.
 pub struct Toc([u16; 32]);
 
 impl Toc {
 	#[allow(clippy::too_many_arguments)]
 	#[must_use]
-	/// New.
+	/// # New Instance.
+	///
+	/// Create a new `Toc` instance defining each partition as a pair of `start..end`
+	/// values. As mentioned in the struct's docs, if fewer than 16 partitions
+	/// are actually used, the remaining values should be set to the maximum
+	/// used index to avoid subtraction overflows.
+	///
+	/// # Safety
+	///
+	/// The ordering of partition indexes is not verified (as that would be
+	/// tedious). If an implementing library submits data out of order,
+	/// undefined things could happen!
 	pub const fn new(
 		a0: u16,
 		a1: u16,
@@ -63,46 +80,104 @@ impl Toc {
 	}
 
 	#[must_use]
-	/// Part Start.
+	/// # Part Start.
+	///
+	/// Get the (inclusive) starting index of the part number `idx`.
+	///
+	/// # Panic
+	///
+	/// This method might panic if `idx` is out of range.
 	pub const fn start(&self, idx: usize) -> usize {
 		self.0[idx * 2] as usize
 	}
 
 	#[must_use]
-	/// Part End.
+	/// # Part End.
+	///
+	/// Get the (exclusive) terminating index of the part number `idx`.
+	///
+	/// # Panic
+	///
+	/// This method might panic if `idx` is out of range.
 	pub const fn end(&self, idx: usize) -> usize {
 		self.0[idx * 2 + 1] as usize
 	}
 
 	#[must_use]
-	/// Part Length.
+	/// # Part Length.
+	///
+	/// Return the total length of a given part, equivalent to `end - start`.
+	///
+	/// # Panic
+	///
+	/// This method might panic if `idx` is out of range.
 	pub const fn len(&self, idx: usize) -> usize {
 		self.0[idx * 2 + 1] as usize - self.0[idx * 2] as usize
 	}
 
 	#[must_use]
-	/// Part Is Empty.
+	/// # Part Is Empty?
+	///
+	/// This returns `true` if the part has no length, or `false` if it does.
+	///
+	/// # Panic
+	///
+	/// This method might panic if `idx` is out of range.
 	pub const fn is_empty(&self, idx: usize) -> bool {
 		self.0[idx * 2] == self.0[idx * 2 + 1]
 	}
 
 	#[must_use]
-	/// Part Range.
+	/// # Part Range.
+	///
+	/// Convert a given part into a `Range<usize>` with inclusive start and
+	/// exclusive end boundaries.
+	///
+	/// This is typically used to slice a partition from its corresponding
+	/// buffer.
+	///
+	/// # Panic
+	///
+	/// This method might panic if `idx` is out of range.
 	pub const fn range(&self, idx: usize) -> Range<usize> {
 		self.0[idx * 2] as usize .. self.0[idx * 2 + 1] as usize
 	}
 
-	/// Decrease Part.
+	/// # Decrease Part Length.
+	///
+	/// This decreases the length of a part by `adj`, and shifts any subsequent
+	/// part boundaries that many places to the left.
+	///
+	/// ## Panic
+	///
+	/// This method will panic if the adjustment is greater than the length of
+	/// the part, and might panic if the `idx` is out of range.
 	pub fn decrease(&mut self, idx: usize, adj: u16) {
 		self.0.iter_mut().skip(idx * 2 + 1).for_each(|x| *x -= adj);
 	}
 
-	/// Increase Part.
+	/// # Increase Part Length.
+	///
+	/// This increases the length of a part by `adj`, and shifts any subsequent
+	/// part boundaries that many places to the right.
+	///
+	/// # Panic
+	///
+	/// This method might panic if `idx` is out of range.
 	pub fn increase(&mut self, idx: usize, adj: u16) {
 		self.0.iter_mut().skip(idx * 2 + 1).for_each(|x| *x += adj);
 	}
 
-	/// Replace Vec Range.
+	/// # Replace Vec Range.
+	///
+	/// This method performs an in-place replacement to the section of a buffer
+	/// corresponding to the partition. If the replacement value is of a
+	/// different length than the original, the partitions will be realigned
+	/// accordingly.
+	///
+	/// # Panic
+	///
+	/// This method might panic if `idx` is out of range.
 	pub fn replace(&mut self, src: &mut Vec<u8>, idx: usize, buf: &[u8]) {
 		self.resize(src, idx, buf.len());
 		if ! buf.is_empty() {
@@ -111,7 +186,21 @@ impl Toc {
 	}
 
 	#[allow(clippy::comparison_chain)] // We only need two arms.
-	/// Resize Vec Range.
+	/// # Resize Vec Range.
+	///
+	/// This method performs an in-place resize to the section of a buffer
+	/// corresponding to the partition, realigning the partitions as needed.
+	///
+	/// In cases where resizing requires the buffer be enlarged, the additional
+	/// bytes are inserted as economically as possible, but no specific
+	/// guarantees are made about their values. They might be zeroes, or they
+	/// might be copies of data previously occupying that slot. Regardless, new
+	/// data can safely be written into that range afterwards as it will be the
+	/// correct size.
+	///
+	/// # Panic
+	///
+	/// This method might panic if `idx` is out of range.
 	pub fn resize(&mut self, src: &mut Vec<u8>, idx: usize, len: usize) {
 		let old_len: usize = self.len(idx);
 
