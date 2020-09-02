@@ -628,7 +628,7 @@ impl WitchingInner {
 	fn tick_set_done(&mut self) {
 		if 0 != self.flags & TICK_DONE {
 			self.flags &= ! TICK_DONE;
-			self.toc.replace(&mut self.buf, PART_DONE, &*NiceInt::from(self.done));
+			self.toc.replace(&mut self.buf, PART_DONE, NiceInt::from(self.done).as_bytes());
 		}
 	}
 
@@ -706,7 +706,7 @@ impl WitchingInner {
 	fn tick_set_total(&mut self) {
 		if 0 != self.flags & TICK_TOTAL {
 			self.flags &= ! TICK_TOTAL;
-			self.toc.replace(&mut self.buf, PART_TOTAL, &*NiceInt::from(self.total));
+			self.toc.replace(&mut self.buf, PART_TOTAL, NiceInt::from(self.total).as_bytes());
 		}
 	}
 
@@ -743,7 +743,7 @@ impl WitchingInner {
 /// ## Examples
 ///
 /// `Witching` is instantiated using a builder pattern. Simple chain the desired
-/// `with_*()` methods together along with [Witching::run] when you're ready to go!
+/// `with_*()` methods together along with [`Witching::run`] when you're ready to go!
 ///
 /// ```no_run
 /// use fyi_witcher::Witcher;

@@ -68,7 +68,7 @@ impl Default for NiceElapsed {
 
 impl Deref for NiceElapsed {
 	type Target = [u8];
-	fn deref(&self) -> &Self::Target { &self.inner[0..self.len] }
+	fn deref(&self) -> &Self::Target { self.as_bytes() }
 }
 
 impl fmt::Debug for NiceElapsed {
@@ -82,7 +82,7 @@ impl fmt::Debug for NiceElapsed {
 
 impl fmt::Display for NiceElapsed {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str(unsafe { std::str::from_utf8_unchecked(&*self) })
+		f.write_str(self.as_str())
 	}
 }
 
@@ -333,7 +333,13 @@ impl NiceElapsed {
 	}
 
 	#[must_use]
-	/// As String.
+	/// # As Bytes.
+	///
+	/// Return the nice value as a byte string.
+	pub fn as_bytes(&self) -> &[u8] { &self.inner[0..self.len] }
+
+	#[must_use]
+	/// # As Str.
 	///
 	/// Return the nice value as a string slice.
 	pub fn as_str(&self) -> &str {
