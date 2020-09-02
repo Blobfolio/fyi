@@ -734,32 +734,24 @@ impl Msg {
 	/// # Print.
 	///
 	/// Print the message to `Stdout`, equivalent to the `print!` macro.
-	pub fn print(&self) {
-		locked_print(&self.buf, false);
-	}
+	pub fn print(&self) { locked_print(&self.buf, false); }
 
 	/// # Print w/ Line.
 	///
 	/// Print the message with a trailing line break to `Stdout`, equivalent to
 	/// the `println!` macro.
-	pub fn println(&self) {
-		locked_print(&self.buf, true);
-	}
+	pub fn println(&self) { locked_print(&self.buf, true); }
 
 	/// # Print Error.
 	///
 	/// Print the message to `Stderr`, equivalent to the `eprint!` macro.
-	pub fn eprint(&self) {
-		locked_eprint(&self.buf, false);
-	}
+	pub fn eprint(&self) { locked_eprint(&self.buf, false); }
 
 	/// # Print Error w/ Line.
 	///
 	/// Print the message with a trailing line break to `Stderr`, equivalent to
 	/// the `eprintln!` macro.
-	pub fn eprintln(&self) {
-		locked_eprint(&self.buf, true);
-	}
+	pub fn eprintln(&self) { locked_eprint(&self.buf, true); }
 
 
 
