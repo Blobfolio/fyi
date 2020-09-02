@@ -625,7 +625,14 @@ impl Msg {
 	/// ```
 	pub fn set_timestamp(&mut self, on: bool) {
 		if on == self.toc.is_empty(PART_TIMESTAMP) {
-			if on { self.write_timestamp(); }
+			if on {
+				self.toc.replace(
+					&mut self.buf,
+					PART_TIMESTAMP,
+					b"\x1b[2m[\x1b[0;34m2000-00-00 00:00:00\x1b[39;2m]\x1b[0m ",
+				);
+				self.write_timestamp();
+			}
 			else {
 				self.toc.resize(&mut self.buf, PART_TIMESTAMP, 0);
 			}
@@ -768,13 +775,6 @@ impl Msg {
 			Local,
 			Timelike,
 		};
-
-		// Make sure we have something in place.
-		self.toc.replace(
-			&mut self.buf,
-			PART_TIMESTAMP,
-			b"\x1b[2m[\x1b[0;34m2000-00-00 00:00:00\x1b[39;2m]\x1b[0m ",
-		);
 
 		// Chrono's formatter is slow as shit. It is faster for us to call
 		// each of their time part methods individually, convert those
