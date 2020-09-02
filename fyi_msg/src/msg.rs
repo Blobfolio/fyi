@@ -86,26 +86,6 @@ impl Deref for PrefixBuffer {
 
 impl Eq for PrefixBuffer {}
 
-impl FromIterator<u8> for PrefixBuffer {
-	fn from_iter<I: IntoIterator<Item=u8>>(iter: I) -> Self {
-		Self::from(iter.into_iter().collect::<Vec<u8>>())
-	}
-}
-
-impl From<Vec<u8>> for PrefixBuffer {
-	fn from(src: Vec<u8>) -> Self {
-		match src.len() {
-			1..=64 => {
-				let mut out = Self::default();
-				out.len = src.len();
-				out.buf[0..out.len].copy_from_slice(&src);
-				out
-			},
-			_ => Self::default(),
-		}
-	}
-}
-
 impl Hash for PrefixBuffer {
 	fn hash<H: Hasher>(&self, state: &mut H) {
 		self.as_bytes().hash(state);
@@ -131,6 +111,30 @@ impl PartialOrd for PrefixBuffer {
 }
 
 impl PrefixBuffer {
+	/// # New Instance.
+	///
+	/// This creates a new `PrefixBuffer` instance. Because this is a fixed-
+	/// buffer struct, the prefix label itself cannot exceed 45 bytes.
+	///
+	/// Note: the prefix should be valid UTF-8 or weird things might happen
+	/// down the road.
+	pub fn new(prefix: &[u8], color: u8) -> Self {
+		if prefix.len() <= 45 {
+			let mut out = Self::default();
+			out.len = [
+				utility::ansi_code_bold(color),
+				prefix,
+				b":\x1b[0m ",
+			].iter()
+				.fold(0, |len, b| {
+					out.buf[len..len + b.len()].copy_from_slice(b);
+					len + b.len()
+				});
+			out
+		}
+		else { Self::default() }
+	}
+
 	/// # As Bytes.
 	///
 	/// Return the value as a slice of bytes.
@@ -227,15 +231,9 @@ impl MsgKind {
 	/// ```
 	pub fn new<S> (prefix: S, color: u8) -> Self
 	where S: AsRef<str> {
-		let prefix = prefix.as_ref().trim();
-		if prefix.is_empty() { Self::None }
-		else {
-			Self::Other(PrefixBuffer::from_iter(
-				utility::ansi_code_bold(color).iter()
-					.chain(prefix.as_bytes().iter())
-					.chain(b":\x1b[0m ".iter())
-					.copied()
-			))
+		match prefix.as_ref().trim() {
+			"" => Self::None,
+			p => Self::Other(PrefixBuffer::new(p.as_bytes(), color)),
 		}
 	}
 
