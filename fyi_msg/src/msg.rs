@@ -565,7 +565,7 @@ impl Msg {
 	/// msg.set_indent(2); // "        Hello World."
 	/// ```
 	pub fn set_indent(&mut self, indent: u8) {
-		let indent: u8 = 4.min(indent) * 4;
+		let indent: u8 = 4.min(indent);
 		if indent != self.toc.len(PART_INDENT) as u8 {
 			self.toc.replace(
 				&mut self.buf,
