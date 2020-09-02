@@ -565,11 +565,20 @@ impl Msg {
 	/// msg.set_indent(2); // "        Hello World."
 	/// ```
 	pub fn set_indent(&mut self, indent: u8) {
-		static WHITES: [u8; 16] = [32; 16];
-
-		let indent: usize = 4.min(indent as usize) * 4;
-		if indent != self.toc.len(PART_INDENT) {
-			self.toc.replace(&mut self.buf, PART_INDENT, &WHITES[0..indent]);
+		let indent: u8 = 4.min(indent) * 4;
+		if indent != self.toc.len(PART_INDENT) as u8 {
+			self.toc.replace(
+				&mut self.buf,
+				PART_INDENT,
+				match indent {
+					0 => b"",
+					1 => b"    ",
+					2 => b"        ",
+					3 => b"            ",
+					4 => b"                ",
+					_ => unreachable!(),
+				}
+			);
 		}
 	}
 
