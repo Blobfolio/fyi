@@ -10,6 +10,86 @@ use unicode_width::UnicodeWidthChar;
 
 
 
+#[cfg(not(feature = "simd"))]
+#[must_use]
+/// # Count Line Breaks.
+///
+/// This simply adds up the occurrences of `\n` within a byte string.
+pub fn count_nl(src: &[u8]) -> usize {
+	src.iter().filter(|v| **v == b'\n').count()
+}
+
+#[cfg(feature = "simd")]
+#[must_use]
+/// # Count Line Breaks.
+///
+/// This simply adds up the occurrences of `\n` within a byte string.
+pub fn count_nl(src: &[u8]) -> usize {
+	let len: usize = src.len();
+	let mut offset: usize = 0;
+	let mut total: usize = 0;
+
+	// For long strings, we can break it up into 64-bit chunks for quick mass
+	// searching.
+	if len - offset >= 64 {
+		use packed_simd::u8x64;
+		let mut tmp = u8x64::splat(0);
+		while len - offset >= 64 {
+			tmp += u8x64::from_slice_unaligned(&src[offset..offset+64])
+				.eq(u8x64::splat(b'\n'))
+				.select(u8x64::splat(1), u8x64::splat(0));
+			offset += 64;
+		}
+		total += tmp.wrapping_sum() as usize;
+	}
+
+	// If there is remaining data, we can do the same thing in the largest
+	// smaller chunk sizes. Because these follow powers of two, none of them
+	// will be able to trigger more than once.
+	if len - offset >= 32 {
+		use packed_simd::u8x32;
+		total += u8x32::from_slice_unaligned(&src[offset..offset+32])
+			.eq(u8x32::splat(b'\n'))
+			.select(u8x32::splat(1), u8x32::splat(0))
+			.wrapping_sum() as usize;
+		offset += 32;
+	}
+
+	if len - offset >= 16 {
+		use packed_simd::u8x16;
+		total += u8x16::from_slice_unaligned(&src[offset..offset+16])
+			.eq(u8x16::splat(b'\n'))
+			.select(u8x16::splat(1), u8x16::splat(0))
+			.wrapping_sum() as usize;
+		offset += 16;
+	}
+
+	if len - offset >= 8 {
+		use packed_simd::u8x8;
+		total += u8x8::from_slice_unaligned(&src[offset..offset+8])
+			.eq(u8x8::splat(b'\n'))
+			.select(u8x8::splat(1), u8x8::splat(0))
+			.wrapping_sum() as usize;
+		offset += 8;
+	}
+
+	if len - offset >= 4 {
+		use packed_simd::u8x4;
+		total += u8x4::from_slice_unaligned(&src[offset..offset+4])
+			.eq(u8x4::splat(b'\n'))
+			.select(u8x4::splat(1), u8x4::splat(0))
+			.wrapping_sum() as usize;
+		offset += 4;
+	}
+
+	while offset < len {
+		if src[offset] == b'\n' { total += 1; }
+		offset += 1;
+	}
+
+	total
+}
+
 #[must_use]
 /// # Ends With Ignore ASCII Case.
 ///
@@ -164,6 +244,19 @@ pub fn term_width() -> usize {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn t_count_nl() {
+		assert_eq!(
+			count_nl(b"This has no line breaks."),
+			0
+		);
+
+		assert_eq!(
+			count_nl(b"This\nhas\ntwo line breaks."),
+			2
+		);
+	}
 
 	#[test]
 	fn t_ends_with_ignore_ascii_case() {

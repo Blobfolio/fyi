@@ -381,7 +381,7 @@ impl WitchingInner {
 		self.print_cls();
 
 		// Update the line count and print!
-		self.last_lines = bytecount::count(&self.buf, b'\n');
+		self.last_lines = utility::count_nl(&self.buf);
 		Self::print(&self.buf);
 	}
 
