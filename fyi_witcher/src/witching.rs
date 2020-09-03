@@ -9,10 +9,6 @@ use ahash::{
 use crate::{
 	NiceElapsed,
 	NiceInt,
-	traits::{
-		FittedRange,
-		FittedRangeMut,
-	},
 	utility,
 };
 use fyi_msg::{
@@ -609,7 +605,7 @@ impl WitchingInner {
 							.flat_map(|x|
 							//    •   •   •   •   ↳  ---  ---   •
 								[32, 32, 32, 32, 226, 134, 179, 32].iter()
-									.chain(x[x.fitted_range(width)].iter())
+									.chain(x[utility::fitted_range(x, width)].iter())
 									.chain(b"\n".iter())
 							)
 					)
@@ -691,7 +687,10 @@ impl WitchingInner {
 					PART_TITLE,
 					&{
 						let mut m = self.title.clone();
-						m.fit_to_range(self.last_width - 1);
+						let rg = utility::fitted_range(&m, self.last_width - 1);
+						if rg.end > m.len() {
+							m.truncate(rg.end);
+						}
 						m.push(b'\n');
 						m
 					}

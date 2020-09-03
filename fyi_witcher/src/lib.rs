@@ -61,7 +61,6 @@ mod nice_elapsed;
 mod nice_int;
 mod witcher;
 mod witching;
-pub mod traits;
 pub mod utility;
 
 pub use nice_elapsed::NiceElapsed;
