@@ -10,6 +10,11 @@ use crate::{
 	utility,
 	Witching,
 };
+#[cfg(feature = "simd")]
+use packed_simd::{
+	m8x8,
+	u8x8,
+};
 use rayon::prelude::*;
 use std::{
 	borrow::Borrow,
@@ -110,6 +115,7 @@ impl Witcher {
 		self
 	}
 
+	#[cfg(not(feature = "simd"))]
 	#[must_use]
 	#[allow(trivial_casts)] // Triviality is required!
 	/// # With Extension Filter.
@@ -140,6 +146,7 @@ impl Witcher {
 		self
 	}
 
+	#[cfg(not(feature = "simd"))]
 	#[must_use]
 	#[allow(trivial_casts)] // Triviality is required!
 	/// # With Extensions (2) Filter.
@@ -165,6 +172,7 @@ impl Witcher {
 		self
 	}
 
+	#[cfg(not(feature = "simd"))]
 	#[must_use]
 	#[allow(trivial_casts)] // Triviality is required!
 	/// # With Extensions (3) Filter.
@@ -193,6 +201,163 @@ impl Witcher {
 			utility::ends_with_ignore_ascii_case(bytes, ext2) ||
 			utility::ends_with_ignore_ascii_case(bytes, ext3)
 		});
+		self
+	}
+
+	#[cfg(feature = "simd")]
+	#[must_use]
+	#[allow(trivial_casts)] // Triviality is required!
+	/// # With Extension Filter.
+	///
+	/// This method — and [`with_ext2()`](Witcher::with_ext2), [`with_ext3()`](Witcher::with_ext3) — can be faster for
+	/// matching simple file extensions than [`with_regex()`](Witcher::with_regex),
+	/// particularly if regular expressions are not used anywhere else.
+	///
+	/// Note: The extension should include the leading period and be in lower case.
+	///
+	/// ## Panics
+	///
+	/// This method will panic if the extension is less than 2 bytes.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witcher;
+	///
+	/// let files = Witcher::default()
+	///     .with_path("/my/dir")
+	///     .with_ext1(b".jpg")
+	///     .build();
+	/// ```
+	pub fn with_ext1(mut self, ext: &'static [u8]) -> Self {
+		let len = ext.len();
+		self.cb =
+			if len <= 8 {
+				let (ext, _) = with_ext_needle(ext);
+				Box::new(move |p: &PathBuf|
+					with_ext_haystack(
+						unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) },
+						len
+					) == ext
+				)
+			}
+			else {
+				Box::new(move |p: &PathBuf| {
+					utility::ends_with_ignore_ascii_case(
+						unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) },
+						ext
+					)
+				})
+			};
+
+		self
+	}
+
+	#[cfg(feature = "simd")]
+	#[must_use]
+	#[allow(trivial_casts)] // Triviality is required!
+	/// # With Extensions (2) Filter.
+	///
+	/// Note: The extension should include the leading period and be in lower case.
+	///
+	/// ## Panics
+	///
+	/// This method will panic if any extension is less than 2 bytes.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witcher;
+	///
+	/// let files = Witcher::default()
+	///     .with_path("/my/dir")
+	///     .with_ext2(b".jpg", b".jpeg")
+	///     .build();
+	/// ```
+	pub fn with_ext2(mut self, ext1: &'static [u8], ext2: &'static [u8]) -> Self {
+		let len = usize::max(ext1.len(), ext2.len());
+		self.cb =
+			if len <= 8 {
+				let splat = u8x8::splat(0);
+				let (ext1, m_ext1) = with_ext_needle(ext1);
+				let (ext2, m_ext2) = with_ext_needle(ext2);
+
+				Box::new(move |p: &PathBuf| {
+					let src = with_ext_haystack(
+						unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) },
+						len
+					);
+
+					m_ext1.select(src, splat) == ext1 ||
+					m_ext2.select(src, splat) == ext2
+				})
+			}
+			else {
+				Box::new(move |p: &PathBuf| {
+					let bytes: &[u8] = unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) };
+					utility::ends_with_ignore_ascii_case(bytes, ext1) ||
+					utility::ends_with_ignore_ascii_case(bytes, ext2)
+				})
+			};
+
+		self
+	}
+
+	#[cfg(feature = "simd")]
+	#[must_use]
+	#[allow(trivial_casts)] // Triviality is required!
+	/// # With Extensions (3) Filter.
+	///
+	/// Note: The extension should include the leading period and be in lower case.
+	///
+	/// ## Panics
+	///
+	/// This method will panic if any extension is less than 2 bytes.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witcher;
+	///
+	/// let files = Witcher::default()
+	///     .with_path("/my/dir")
+	///     .with_ext3(b".jpg", b".jpeg", b".png")
+	///     .build();
+	/// ```
+	pub fn with_ext3(
+		mut self,
+		ext1: &'static [u8],
+		ext2: &'static [u8],
+		ext3: &'static [u8]
+	) -> Self {
+		let len = usize::max(ext1.len(), ext2.len()).max(ext3.len());
+		self.cb =
+			if len <= 8 {
+				let splat = u8x8::splat(0);
+				let (ext1, m_ext1) = with_ext_needle(ext1);
+				let (ext2, m_ext2) = with_ext_needle(ext2);
+				let (ext3, m_ext3) = with_ext_needle(ext3);
+
+				Box::new(move |p: &PathBuf| {
+					let src = with_ext_haystack(
+						unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) },
+						len
+					);
+
+					m_ext1.select(src, splat) == ext1 ||
+					m_ext2.select(src, splat) == ext2 ||
+					m_ext3.select(src, splat) == ext3
+				})
+			}
+			else {
+				Box::new(move |p: &PathBuf| {
+					let bytes: &[u8] = unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) };
+					utility::ends_with_ignore_ascii_case(bytes, ext1) ||
+					utility::ends_with_ignore_ascii_case(bytes, ext2) ||
+					utility::ends_with_ignore_ascii_case(bytes, ext3)
+				})
+			};
+
 		self
 	}
 
@@ -370,6 +535,63 @@ fn hash_path_buf(path: &PathBuf) -> u64 {
 	hasher.finish()
 }
 
+#[cfg(feature = "simd")]
+/// # SIMD needle
+///
+/// This converts an extension into a SIMD-optimized search pattern for use
+/// with the `with_ext*()` builder functions.
+///
+/// The result is zero-padded from the left in cases where the extension is
+/// shorter than 8 bytes (which should be most cases!).
+///
+/// ## Panics
+///
+/// This method will panic if the extension is less than 2 bytes or greater
+/// than 8 bytes.
+fn with_ext_needle(ext: &[u8]) -> (u8x8, m8x8) {
+	let needle = match ext.len() {
+		4 => u8x8::new(0, 0, 0, 0, ext[0], ext[1], ext[2], ext[3]),
+		5 => u8x8::new(0, 0, 0, ext[0], ext[1], ext[2], ext[3], ext[4]),
+		2 => u8x8::new(0, 0, 0, 0, 0, 0, ext[0], ext[1]),
+		3 => u8x8::new(0, 0, 0, 0, 0, ext[0], ext[1], ext[2]),
+		6 => u8x8::new(0, 0, ext[0], ext[1], ext[2], ext[3], ext[4], ext[5]),
+		7 => u8x8::new(0, ext[0], ext[1], ext[2], ext[3], ext[4], ext[5], ext[6]),
+		8 => u8x8::new(ext[0], ext[1], ext[2], ext[3], ext[4], ext[5], ext[6], ext[7]),
+		_ => panic!("Invalid extension."),
+	};
+
+	(needle, needle.ne(u8x8::splat(0)))
+}
+
+#[cfg(feature = "simd")]
+/// # SIMD Haystack
+///
+/// This method converts a path into a SIMD-optimized haystack to match
+/// against a needle, converting the bytes to lower case as needed.
+///
+/// The result is zero-padded from the left in cases where the path is
+/// shorter than 8, otherwise the last eight bytes of the path are used.
+///
+/// Note: any value shorter than
+fn with_ext_haystack(ext: &[u8], max: usize) -> u8x8 {
+	let len = ext.len();
+	if len > max {
+		return with_ext_haystack(&ext[len-max..], max);
+	}
+
+	match len {
+		4 => u8x8::new(0, 0, 0, 0, ext[0].to_ascii_lowercase(), ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase()),
+		5 => u8x8::new(0, 0, 0, ext[0].to_ascii_lowercase(), ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase()),
+		2 => u8x8::new(0, 0, 0, 0, 0, 0, ext[0].to_ascii_lowercase(), ext[1].to_ascii_lowercase()),
+		3 => u8x8::new(0, 0, 0, 0, 0, ext[0].to_ascii_lowercase(), ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase()),
+		6 => u8x8::new(0, 0, ext[0].to_ascii_lowercase(), ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase(), ext[5].to_ascii_lowercase()),
+		7 => u8x8::new(0, ext[0].to_ascii_lowercase(), ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase(), ext[5].to_ascii_lowercase(), ext[6].to_ascii_lowercase()),
+		8 => u8x8::new(ext[0].to_ascii_lowercase(), ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase(), ext[5].to_ascii_lowercase(), ext[6].to_ascii_lowercase(), ext[7].to_ascii_lowercase()),
+		0 | 1 => u8x8::splat(0),
+		_ => unreachable!()
+	}
+}
+
 
 
 #[cfg(test)]
@@ -390,7 +612,7 @@ mod tests {
 			.with_path(PathBuf::from("tests/"))
 			.build();
 		assert!(! w1.is_empty());
-		assert_eq!(w1.len(), 2);
+		assert_eq!(w1.len(), 3);
 		assert!(w1.contains(&abs_p1));
 		assert!(w1.contains(&abs_p2));
 		assert!(! w1.contains(&abs_perr));
@@ -416,5 +638,29 @@ mod tests {
 		assert!(! w1.contains(&abs_p1));
 		assert!(! w1.contains(&abs_p2));
 		assert!(! w1.contains(&abs_perr));
+
+		// One Extension.
+		w1 = Witcher::default()
+			.with_path(PathBuf::from("tests/"))
+			.with_ext1(b".txt")
+			.build();
+		assert!(! w1.is_empty());
+		assert_eq!(w1.len(), 1);
+
+		// Two Extensions.
+		w1 = Witcher::default()
+			.with_path(PathBuf::from("tests/"))
+			.with_ext2(b".txt", b".sh")
+			.build();
+		assert!(! w1.is_empty());
+		assert_eq!(w1.len(), 2);
+
+		// Three Extensions.
+		w1 = Witcher::default()
+			.with_path(PathBuf::from("tests/"))
+			.with_ext3(b".txt", b".sh", b".jpeg")
+			.build();
+		assert!(! w1.is_empty());
+		assert_eq!(w1.len(), 3);
 	}
 }

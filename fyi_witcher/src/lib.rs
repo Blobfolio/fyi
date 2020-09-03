@@ -26,7 +26,7 @@ and major refactors may be introduced between releases.
 
 ## Crate Features
 
-* `simd`: This feature enables [bytecount's](https://crates.io/crates/bytecount) "generic-simd" feature, which pulls in [`packed_simd`](https://crates.io/crates/packed_simd) for minor performance gains. It is only worth enabling this feature if you are already using `packed_simd` elsewhere, otherwise the dependency overhead and nightly-only build requirement is more than it is worth.
+* `simd`: This feature enables some SIMD optimizations courtesy of [`packed_simd`](https://crates.io/crates/packed_simd) for minor performance gains. This requires Rust nightly.
 */
 
 #![warn(clippy::filetype_is_file)]
