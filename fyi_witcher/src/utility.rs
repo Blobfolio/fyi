@@ -29,8 +29,8 @@ pub fn count_nl(src: &[u8]) -> usize {
 	let mut offset: usize = 0;
 	let mut total: usize = 0;
 
-	// For long strings, we can break it up into 64-bit chunks for quick mass
-	// searching.
+	// Break indefinitely long strings into chunks of 64 characters, counting
+	// newlines as we go.
 	if len - offset >= 64 {
 		use packed_simd::u8x64;
 		let mut tmp = u8x64::splat(0);
@@ -43,9 +43,9 @@ pub fn count_nl(src: &[u8]) -> usize {
 		total += tmp.wrapping_sum() as usize;
 	}
 
-	// If there is remaining data, we can do the same thing in the largest
-	// smaller chunk sizes. Because these follow powers of two, none of them
-	// will be able to trigger more than once.
+	// We can use the same trick for progressively smaller power-of-two-sized
+	// chunks, but none of these will hit more than once, so their totals can
+	// be added directly without looping.
 	if len - offset >= 32 {
 		use packed_simd::u8x32;
 		total += u8x32::from_slice_unaligned(&src[offset..offset+32])
@@ -73,15 +73,8 @@ pub fn count_nl(src: &[u8]) -> usize {
 		offset += 8;
 	}
 
-	if len - offset >= 4 {
-		use packed_simd::u8x4;
-		total += u8x4::from_slice_unaligned(&src[offset..offset+4])
-			.eq(u8x4::splat(b'\n'))
-			.select(u8x4::splat(1), u8x4::splat(0))
-			.wrapping_sum() as usize;
-		offset += 4;
-	}
-
+	// The last few bytes have to be checked manually, but that's fine. The
+	// remainder can't be much.
 	while offset < len {
 		if src[offset] == b'\n' { total += 1; }
 		offset += 1;
@@ -247,15 +240,9 @@ mod tests {
 
 	#[test]
 	fn t_count_nl() {
-		assert_eq!(
-			count_nl(b"This has no line breaks."),
-			0
-		);
-
-		assert_eq!(
-			count_nl(b"This\nhas\ntwo line breaks."),
-			2
-		);
+		assert_eq!(count_nl(b"This has no line breaks."), 0);
+		assert_eq!(count_nl(b"This\nhas\ntwo line breaks."), 2);
+		assert_eq!(count_nl(&[10_u8; 63]), 63);
 	}
 
 	#[test]
