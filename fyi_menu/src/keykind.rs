@@ -37,17 +37,47 @@ impl Default for KeyKind {
 }
 
 impl From<&[u8]> for KeyKind {
+	#[cfg(not(feature = "simd"))]
 	fn from(txt: &[u8]) -> Self {
-		let dashes: usize = txt.iter().take_while(|x| **x == b'-').count();
 		let len: usize = txt.len();
+		if len >= 2 {
+			let dashes: usize = txt.iter().take_while(|x| **x == b'-').count();
 
-		if 0 < dashes && dashes < len && matches!(txt[dashes], b'A'..=b'Z' | b'a'..=b'z') {
-			if dashes == 1 {
-				if len == 2 { return Self::Short; }
-				else { return Self::ShortV; }
+			if 0 < dashes && dashes < len && matches!(txt[dashes], b'A'..=b'Z' | b'a'..=b'z') {
+				if dashes == 1 {
+					if len == 2 { return Self::Short; }
+					else { return Self::ShortV; }
+				}
+				else if dashes == 2 {
+					return memchr::memchr(b'=', txt).map_or(Self::Long, Self::LongV);
+				}
 			}
-			else if dashes == 2 {
-				return memchr::memchr(b'=', txt).map_or(Self::Long, Self::LongV);
+		}
+
+		Self::None
+	}
+
+	#[cfg(feature = "simd")]
+	fn from(txt: &[u8]) -> Self {
+		let len: usize = txt.len();
+		if len >= 2 {
+			let dashes: usize = unsafe {
+				use packed_simd::u8x2;
+				let res = u8x2::from_slice_unaligned_unchecked(&txt[0..2])
+					.eq(u8x2::splat(b'-'));
+				if res.all() { 2 }
+				else if res.extract_unchecked(0) { 1 }
+				else { 0 }
+			};
+
+			if 0 < dashes && dashes < len && matches!(txt[dashes], b'A'..=b'Z' | b'a'..=b'z') {
+				if dashes == 1 {
+					if len == 2 { return Self::Short; }
+					else { return Self::ShortV; }
+				}
+				else if dashes == 2 {
+					return memchr::memchr(b'=', txt).map_or(Self::Long, Self::LongV);
+				}
 			}
 		}
 
