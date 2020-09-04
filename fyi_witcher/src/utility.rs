@@ -75,12 +75,21 @@ pub fn count_nl(src: &[u8]) -> usize {
 			offset += 8;
 		}
 
-		// The last few bytes have to be checked manually, but that's fine. The
-		// remainder can't be much.
-		while offset < len {
-			if src[offset] == b'\n' { total += 1; }
-			offset += 1;
+		if len - offset >= 4 {
+			use packed_simd::u8x4;
+			total += u8x4::from_slice_unaligned_unchecked(&src[offset..offset+4])
+				.eq(u8x4::splat(b'\n'))
+				.select(u8x4::splat(1), u8x4::splat(0))
+				.wrapping_sum() as usize;
+			offset += 4;
 		}
+	}
+
+	// The last few bytes have to be checked manually, but that's fine. The
+	// remainder can't be much.
+	while offset < len {
+		if src[offset] == b'\n' { total += 1; }
+		offset += 1;
 	}
 
 	total
