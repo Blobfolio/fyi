@@ -29,55 +29,58 @@ pub fn count_nl(src: &[u8]) -> usize {
 	let mut offset: usize = 0;
 	let mut total: usize = 0;
 
-	// Break indefinitely long strings into chunks of 64 characters, counting
-	// newlines as we go.
-	if len - offset >= 64 {
-		use packed_simd::u8x64;
-		let mut tmp = u8x64::splat(0);
-		while len - offset >= 64 {
-			tmp += u8x64::from_slice_unaligned(&src[offset..offset+64])
-				.eq(u8x64::splat(b'\n'))
-				.select(u8x64::splat(1), u8x64::splat(0));
-			offset += 64;
+	// We're checking lengths all along the way, so this isn't really unsafe.
+	unsafe {
+		// Break indefinitely long strings into chunks of 64 characters, counting
+		// newlines as we go.
+		if len - offset >= 64 {
+			use packed_simd::u8x64;
+			let mut tmp = u8x64::splat(0);
+			while len - offset >= 64 {
+				tmp += u8x64::from_slice_unaligned_unchecked(&src[offset..offset+64])
+					.eq(u8x64::splat(b'\n'))
+					.select(u8x64::splat(1), u8x64::splat(0));
+				offset += 64;
+			}
+			total += tmp.wrapping_sum() as usize;
 		}
-		total += tmp.wrapping_sum() as usize;
-	}
 
-	// We can use the same trick for progressively smaller power-of-two-sized
-	// chunks, but none of these will hit more than once, so their totals can
-	// be added directly without looping.
-	if len - offset >= 32 {
-		use packed_simd::u8x32;
-		total += u8x32::from_slice_unaligned(&src[offset..offset+32])
-			.eq(u8x32::splat(b'\n'))
-			.select(u8x32::splat(1), u8x32::splat(0))
-			.wrapping_sum() as usize;
-		offset += 32;
-	}
+		// We can use the same trick for progressively smaller power-of-two-sized
+		// chunks, but none of these will hit more than once, so their totals can
+		// be added directly without looping.
+		if len - offset >= 32 {
+			use packed_simd::u8x32;
+			total += u8x32::from_slice_unaligned_unchecked(&src[offset..offset+32])
+				.eq(u8x32::splat(b'\n'))
+				.select(u8x32::splat(1), u8x32::splat(0))
+				.wrapping_sum() as usize;
+			offset += 32;
+		}
 
-	if len - offset >= 16 {
-		use packed_simd::u8x16;
-		total += u8x16::from_slice_unaligned(&src[offset..offset+16])
-			.eq(u8x16::splat(b'\n'))
-			.select(u8x16::splat(1), u8x16::splat(0))
-			.wrapping_sum() as usize;
-		offset += 16;
-	}
+		if len - offset >= 16 {
+			use packed_simd::u8x16;
+			total += u8x16::from_slice_unaligned_unchecked(&src[offset..offset+16])
+				.eq(u8x16::splat(b'\n'))
+				.select(u8x16::splat(1), u8x16::splat(0))
+				.wrapping_sum() as usize;
+			offset += 16;
+		}
 
-	if len - offset >= 8 {
-		use packed_simd::u8x8;
-		total += u8x8::from_slice_unaligned(&src[offset..offset+8])
-			.eq(u8x8::splat(b'\n'))
-			.select(u8x8::splat(1), u8x8::splat(0))
-			.wrapping_sum() as usize;
-		offset += 8;
-	}
+		if len - offset >= 8 {
+			use packed_simd::u8x8;
+			total += u8x8::from_slice_unaligned_unchecked(&src[offset..offset+8])
+				.eq(u8x8::splat(b'\n'))
+				.select(u8x8::splat(1), u8x8::splat(0))
+				.wrapping_sum() as usize;
+			offset += 8;
+		}
 
-	// The last few bytes have to be checked manually, but that's fine. The
-	// remainder can't be much.
-	while offset < len {
-		if src[offset] == b'\n' { total += 1; }
-		offset += 1;
+		// The last few bytes have to be checked manually, but that's fine. The
+		// remainder can't be much.
+		while offset < len {
+			if src[offset] == b'\n' { total += 1; }
+			offset += 1;
+		}
 	}
 
 	total
