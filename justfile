@@ -238,9 +238,22 @@ bench BENCH="" FILTER="":
 # Unit tests!
 @test:
 	clear
+
+	fyi notice "Testing All Features"
+
 	RUST_TEST_THREADS=1 cargo test \
 		--tests \
 		--all-features \
+		--release \
+		--workspace \
+		--target x86_64-unknown-linux-gnu \
+		--target-dir "{{ cargo_dir }}" -- \
+			--format terse \
+
+	fyi notice "Testing Default"
+
+	RUST_TEST_THREADS=1 cargo test \
+		--tests \
 		--release \
 		--workspace \
 		--target x86_64-unknown-linux-gnu \
