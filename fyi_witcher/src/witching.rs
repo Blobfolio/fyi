@@ -422,8 +422,7 @@ impl WitchingInner {
 			match self.last_lines.cmp(&10) {
 				Ordering::Equal => { Self::print(&CLS10[..]); },
 				Ordering::Less => {
-					let end: usize = 10 + 14 * self.last_lines;
-					Self::print(&CLS10[0..end]);
+					Self::print(&CLS10[0..10 + 14 * self.last_lines]);
 				},
 				// To clear more lines, print our pre-calculated buffer (which
 				// covers the first 10), and duplicate the line-up chunk (n-10)
@@ -563,19 +562,16 @@ impl WitchingInner {
 			self.flags &= ! TICK_BAR;
 			let (w_done, w_doing, w_undone) = self.tick_bar_widths();
 
-			// Update the done part.
+			// Update the parts!.
 			if self.toc.len(PART_BAR_DONE) != w_done {
 				self.toc.replace(&mut self.buf, PART_BAR_DONE, &BAR[0..w_done]);
 			}
-
-			// Doing and undone use the same character, so we can loop it.
-			[PART_BAR_DOING, PART_BAR_UNDONE].iter()
-				.zip([w_doing, w_undone].iter())
-				.for_each(|(a, b)|
-					if self.toc.len(*a) != *b {
-						self.toc.replace(&mut self.buf, *a, &DASH[0..*b]);
-					}
-				);
+			if self.toc.len(PART_BAR_DOING) != w_doing {
+				self.toc.replace(&mut self.buf, PART_BAR_DOING, &DASH[0..w_doing]);
+			}
+			if self.toc.len(PART_BAR_UNDONE) != w_undone {
+				self.toc.replace(&mut self.buf, PART_BAR_UNDONE, &DASH[0..w_undone]);
+			}
 		}
 	}
 
