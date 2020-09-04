@@ -399,16 +399,9 @@ impl WitchingInner {
 	/// # Print!
 	///
 	/// Print some arbitrary data to the write place. Haha.
-	///
-	/// `Stderr` is used as the output device in production, but if the
-	/// `bench_sink` feature is enabled, output will be sent to `io::sink()`
-	/// instead. As the feature name suggests, this is only really useful for
-	/// measuring timings.
 	fn print(buf: &[u8]) {
-		#[cfg(not(feature = "bench_sink"))] let writer = io::stderr();
-		#[cfg(not(feature = "bench_sink"))] let mut handle = writer.lock();
-		#[cfg(feature = "bench_sink")] let mut handle = io::sink();
-
+		let writer = io::stderr();
+		let mut handle = writer.lock();
 		handle.write_all(buf).unwrap();
 		handle.flush().unwrap();
 	}
