@@ -49,7 +49,7 @@ impl From<&[u8]> for KeyKind {
 					else { return Self::ShortV; }
 				}
 				else if dashes == 2 {
-					return memchr::memchr(b'=', txt).map_or(Self::Long, Self::LongV);
+					return find_eq(txt);
 				}
 			}
 		}
@@ -76,11 +76,105 @@ impl From<&[u8]> for KeyKind {
 					else { return Self::ShortV; }
 				}
 				else if dashes == 2 {
-					return memchr::memchr(b'=', txt).map_or(Self::Long, Self::LongV);
+					return find_eq(txt);
 				}
 			}
 		}
 
 		Self::None
+	}
+}
+
+#[cfg(not(feature = "simd"))]
+/// # Find First `=`
+///
+/// This is used solely for deciding between [`KeyKind::Long`] and
+/// [`KeyKind::LongV`] variants. It will always be one of the two.
+fn find_eq(txt: &[u8]) -> KeyKind {
+	txt.iter()
+		.position(|x| *x == b'=')
+		.map_or(KeyKind::Long, KeyKind::LongV)
+}
+
+#[cfg(feature = "simd")]
+/// # Find First `=`
+///
+/// This is used solely for deciding between [`KeyKind::Long`] and
+/// [`KeyKind::LongV`] variants. It will always be one of the two.
+///
+/// This method leverages SIMD to search for that pesky `=` sign in chunks of
+/// up to 8 bytes at a time.
+fn find_eq(txt: &[u8]) -> KeyKind {
+	let len: usize = txt.len();
+	let mut offset: usize = 3;
+
+	// We're checking lengths all along the way so this isn't really unsafe.
+	unsafe {
+		// For long strings, we can check 8 bytes at a time, returning the first
+		// match, if any.
+		while len - offset >= 8 {
+			use packed_simd::u8x8;
+			let res = u8x8::from_slice_unaligned_unchecked(&txt[offset..offset+8])
+				.eq(u8x8::splat(b'='));
+			if res.any() {
+				return KeyKind::LongV(
+					res.select(
+						u8x8::new(0, 1, 2, 3, 4, 5, 6, 7),
+						u8x8::splat(9)
+					).min_element() as usize + offset
+				);
+			}
+
+			offset += 8;
+		}
+
+		// We can use the same trick again if the remainder is at least four
+		// bytes.
+		if len - offset >= 4 {
+			use packed_simd::u8x4;
+
+			let res = u8x4::from_slice_unaligned_unchecked(&txt[offset..offset+4])
+				.eq(u8x4::splat(b'='));
+			if res.any() {
+				return KeyKind::LongV(
+					res.select(
+						u8x4::new(0, 1, 2, 3),
+						u8x4::splat(9)
+					).min_element() as usize + offset
+				);
+			}
+
+			offset += 4;
+		}
+	}
+
+	// And a sad manual check for the remainder.
+	while offset < len {
+		if txt[offset] == b'=' { return KeyKind::LongV(offset); }
+		offset += 1;
+	}
+
+	KeyKind::Long
+}
+
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn t_from() {
+		assert_eq!(KeyKind::from(&b"Your Mom"[..]), KeyKind::None);
+		assert_eq!(KeyKind::from(&b"--"[..]), KeyKind::None);
+		assert_eq!(KeyKind::from(&b"-"[..]), KeyKind::None);
+		assert_eq!(KeyKind::from(&b"-0"[..]), KeyKind::None);
+		assert_eq!(KeyKind::from(&b"-y"[..]), KeyKind::Short);
+		assert_eq!(KeyKind::from(&b"-yp"[..]), KeyKind::ShortV);
+		assert_eq!(KeyKind::from(&b"--0"[..]), KeyKind::None);
+		assert_eq!(KeyKind::from(&b"--yes"[..]), KeyKind::Long);
+		assert_eq!(KeyKind::from(&b"--y-p"[..]), KeyKind::Long);
+		assert_eq!(KeyKind::from(&b"--yes=no"[..]), KeyKind::LongV(5));
+		assert_eq!(KeyKind::from(&b"--yes="[..]), KeyKind::LongV(5));
 	}
 }

@@ -18,6 +18,7 @@ fn keykind_from(c: &mut Criterion) {
 	for kv in [
 		&b"Hello World"[..],
 		&b"--key"[..],
+		&b"--long-key=Value"[..],
 		&b"-k"[..],
 		&b"-kValue"[..],
 	].iter() {
