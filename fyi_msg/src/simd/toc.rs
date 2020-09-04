@@ -116,7 +116,10 @@ impl Toc {
 	///
 	/// This method might panic if `idx` is out of range.
 	pub fn len(&self, idx: usize) -> usize {
-		self.0.extract(idx * 2 + 1) as usize - self.0.extract(idx * 2) as usize
+		assert!(idx < 16);
+		unsafe {
+			self.0.extract_unchecked(idx * 2 + 1) as usize - self.0.extract_unchecked(idx * 2) as usize
+		}
 	}
 
 	#[must_use]
@@ -128,7 +131,10 @@ impl Toc {
 	///
 	/// This method might panic if `idx` is out of range.
 	pub fn is_empty(&self, idx: usize) -> bool {
-		self.0.extract(idx * 2) == self.0.extract(idx * 2 + 1)
+		assert!(idx < 16);
+		unsafe {
+			self.0.extract_unchecked(idx * 2) == self.0.extract_unchecked(idx * 2 + 1)
+		}
 	}
 
 	#[must_use]
@@ -144,7 +150,10 @@ impl Toc {
 	///
 	/// This method might panic if `idx` is out of range.
 	pub fn range(&self, idx: usize) -> Range<usize> {
-		self.0.extract(idx * 2) as usize .. self.0.extract(idx * 2 + 1) as usize
+		assert!(idx < 16);
+		unsafe {
+			self.0.extract_unchecked(idx * 2) as usize .. self.0.extract_unchecked(idx * 2 + 1) as usize
+		}
 	}
 
 	/// # Decrease Part Length.
@@ -183,8 +192,9 @@ impl Toc {
 	///
 	/// This method might panic if `idx` is out of range.
 	pub fn replace(&mut self, src: &mut Vec<u8>, idx: usize, buf: &[u8]) {
-		self.resize(src, idx, buf.len());
-		if ! buf.is_empty() {
+		let len: usize = buf.len();
+		self.resize(src, idx, len);
+		if 0 != len {
 			src[self.range(idx)].copy_from_slice(buf);
 		}
 	}
@@ -215,8 +225,7 @@ impl Toc {
 
 			// End-of-buffer shortcut.
 			if end == src.len() {
-				let last: u16 = end as u16 - adj as u16;
-				src.truncate(last as usize);
+				src.truncate(end - adj);
 			}
 			// Middle incision.
 			else {
