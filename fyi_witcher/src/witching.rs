@@ -752,10 +752,12 @@ pub struct Witching {
 	inner: Arc<Mutex<WitchingInner>>,
 	/// Flags.
 	flags: u8,
-	/// Singular summary label.
-	one: Vec<u8>,
-	/// Plural summary label.
-	many: Vec<u8>,
+	/// Summary labels.
+	///
+	/// The first byte stores the boundary between the singular and plural
+	/// labels, such that `label[1..label[0]]` is singular, and `label[label[0]..]`
+	/// is plural.
+	label: Vec<u8>,
 }
 
 impl Default for Witching {
@@ -764,8 +766,8 @@ impl Default for Witching {
 			set: Vec::new(),
 			inner: Arc::new(Mutex::new(WitchingInner::default())),
 			flags: 0,
-			one: vec![102, 105, 108, 101],
-			many: vec![102, 105, 108, 101, 115],
+			// "file" and "files" respectively.
+			label: vec![4, 102, 105, 108, 101, 102, 105, 108, 101, 115],
 		}
 	}
 }
@@ -900,6 +902,11 @@ impl Witching {
 	/// builder methods, you can use this method to set the summary labels for
 	/// an object that has been saved to a variable.
 	///
+	/// ## Panics
+	///
+	/// Panics if either label is empty, or if their combined length is greater
+	/// than `255`.
+	///
 	/// ## Examples
 	///
 	/// ```no_run
@@ -910,11 +917,33 @@ impl Witching {
 	/// ```
 	pub fn set_labels<S>(&mut self, one: S, many: S)
 	where S: AsRef<str> {
-		self.one.truncate(0);
-		self.one.extend_from_slice(one.as_ref().as_bytes());
+		let one = one.as_ref().as_bytes();
+		let many = many.as_ref().as_bytes();
 
-		self.many.truncate(0);
-		self.many.extend_from_slice(many.as_ref().as_bytes());
+		assert!(! one.is_empty() && ! many.is_empty() && one.len() + many.len() <= 255);
+
+		unsafe { self.set_labels_unchecked(one, many); }
+	}
+
+	/// # Set Labels (Unchecked).
+	///
+	/// This works just like [`Witching::set_labels`], except it accepts bytes
+	/// directly.
+	///
+	/// ## Safety
+	///
+	/// Both labels must have a length, and their combined length must not
+	/// exceed `255`.
+	pub unsafe fn set_labels_unchecked(&mut self, one: &[u8], many: &[u8]) {
+		// Make sure we start with one spot for the boundary.
+		self.label.truncate(0);
+		self.label.push(one.len() as u8 + 1);
+
+		// Add the singular.
+		self.label.extend_from_slice(one);
+
+		// And add the plural.
+		self.label.extend_from_slice(many);
 	}
 
 	#[must_use]
@@ -967,8 +996,8 @@ impl Witching {
 	///
 	/// What label should we be using? One or many?
 	fn label(&self) -> &[u8] {
-		if self.set.len() == 1 { &self.one }
-		else { &self.many }
+		if self.set.len() == 1 { &self.label[1..self.label[0] as usize] }
+		else { &self.label[self.label[0] as usize..] }
 	}
 
 	/// # Run!
@@ -1125,7 +1154,7 @@ impl Witching {
 	fn summarize_empty(&self) {
 		Msg::from_iter(
 			b"No ".iter()
-				.chain(self.many.iter())
+				.chain(self.label().iter())
 				.chain(b" were found.\n".iter())
 				.copied()
 		)
