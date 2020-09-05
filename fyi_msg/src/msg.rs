@@ -31,6 +31,7 @@ const PART_INDENT: usize = 0;
 const PART_TIMESTAMP: usize = 1;
 const PART_PREFIX: usize = 2;
 const PART_MSG: usize = 3;
+const PART_SUFFIX: usize = 4;
 
 // Configuration Flags.
 //
@@ -398,14 +399,15 @@ impl From<Vec<u8>> for Msg {
 		let end: u16 = src.len() as u16;
 		Self {
 			toc: Toc::new(
-				0_u16, 0_u16,
-				0_u16, 0_u16,
-				0_u16, 0_u16,
-				0_u16, end,
+				0_u16, 0_u16, // Indentation.
+				0_u16, 0_u16, // Timestamp.
+				0_u16, 0_u16, // Prefix.
+				0_u16, end,   // Message.
+				end, end,     // Suffix.
 				// Unused...
 				end, end, end, end, end, end, end, end, end,
 				end, end, end, end, end, end, end, end, end,
-				end, end, end, end, end, end
+				end, end, end, end
 			),
 			buf: src,
 		}
@@ -523,6 +525,24 @@ impl Msg {
 		self
 	}
 
+	/// # With Suffix.
+	///
+	/// This appends a bit after the message. Like a prefix, but at the end.
+	///
+	/// ## Example
+	///
+	/// ```no_run
+	/// use fyi_msg::Msg;
+	/// use fyi_msg::MsgKind;
+	/// let msg = Msg::new("Hello world.")
+	///     .with_suffix("(It worked!)", 199);
+	/// ```
+	pub fn with_suffix<S>(mut self, suffix: S, color: u8) -> Self
+	where S: AsRef<str> {
+		self.set_suffix(suffix, color);
+		self
+	}
+
 	#[must_use]
 	/// # With Timestamp.
 	///
@@ -547,6 +567,18 @@ impl Msg {
 	// ------------------------------------------------------------------------
 	// Setters
 	// ------------------------------------------------------------------------
+
+	/// # Extend Message.
+	///
+	/// This appends bits to the message body, similar to [`std::vec::Vec::extend_from_slice`].
+	pub fn extend_msg(&mut self, src: &[u8]) {
+		let len: usize = src.len();
+		if len != 0 {
+			let from: usize = self.toc.end(PART_MSG);
+			self.toc.resize(&mut self.buf, PART_MSG, self.toc.len(PART_MSG) + len);
+			self.buf[from..self.toc.end(PART_MSG)].copy_from_slice(src);
+		}
+	}
 
 	/// # Set Indent.
 	///
@@ -608,6 +640,52 @@ impl Msg {
 	/// ```
 	pub fn set_prefix(&mut self, prefix: MsgKind) {
 		self.toc.replace(&mut self.buf, PART_PREFIX, prefix.as_bytes());
+	}
+
+	/// # Set Suffix.
+	///
+	/// Set or reset the message suffix.
+	///
+	/// ## Example
+	///
+	/// ```no_run
+	/// use fyi_msg::Msg;
+	/// use fyi_msg::MsgKind;
+	///
+	/// let mut msg = Msg::new("Hello world.");
+	/// msg.set_suffix("(It worked!)", 199);
+	/// ```
+	pub fn set_suffix<S>(&mut self, suffix: S, color: u8)
+	where S: AsRef<str> {
+		let suffix: &[u8] = suffix.as_ref().as_bytes();
+		if suffix.is_empty() {
+			self.toc.resize(&mut self.buf, PART_SUFFIX, 0);
+		}
+		else {
+			self.toc.replace(
+				&mut self.buf,
+				PART_SUFFIX,
+				&[
+					b" ",
+					utility::ansi_code_bold(color),
+					suffix,
+					b"\x1b[0m",
+				].concat()
+			);
+		}
+	}
+
+	/// # Set Suffix (Unchecked)
+	///
+	/// This method sets the suffix exactly as specified. It should have a
+	/// leading space, and should probably reset ANSI formatting at the end.
+	///
+	/// ## Safety
+	///
+	/// This method is "unsafe" insofar as the data is accepted without any
+	/// checks or manipulation.
+	pub unsafe fn set_suffix_unchecked(&mut self, suffix: &[u8]) {
+		self.toc.replace(&mut self.buf, PART_SUFFIX, suffix);
 	}
 
 	/// # Set Timestamp.
@@ -715,8 +793,7 @@ impl Msg {
 		// Clone the message and append a little [y/N] instructional bit to the
 		// end.
 		let mut q = self.clone();
-		q.buf.extend_from_slice(b" \x1b[2m[y/\x1b[4mN\x1b[0;2m]\x1b[0m ");
-		q.toc.increase(PART_MSG, 25);
+		unsafe { q.set_suffix_unchecked(b" \x1b[2m[y/\x1b[4mN\x1b[0;2m]\x1b[0m "); }
 
 		// Ask and collect input, looping until a valid response is typed.
 		loop {
@@ -840,4 +917,39 @@ fn read_prompt() -> io::Result<String> {
 	let mut result = String::new();
 	io::stdin().read_line(&mut result)?;
 	Ok(result.trim().to_lowercase())
+}
+
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn t_msg() {
+		let mut msg = Msg::from("My dear aunt sally.");
+		assert_eq!(&*msg, b"My dear aunt sally.");
+
+		msg.set_prefix(MsgKind::Error);
+		assert!(msg.starts_with(MsgKind::Error.as_bytes()));
+		assert!(msg.ends_with(b"My dear aunt sally."));
+
+		msg.set_indent(1);
+		assert!(msg.starts_with(b"    "));
+		msg.set_indent(3);
+		assert!(msg.starts_with(b"            "));
+		msg.set_indent(0);
+		assert!(msg.starts_with(MsgKind::Error.as_bytes()));
+
+		msg.set_suffix("Heyo", 199);
+		assert!(msg.ends_with(b" \x1b[1;38;5;199mHeyo\x1b[0m"), "{:?}", msg.as_str());
+		msg.set_suffix("", 0);
+		assert!(msg.ends_with(b"My dear aunt sally."));
+
+		msg.set_msg("My dear aunt");
+		assert!(msg.ends_with(b"My dear aunt"));
+
+		msg.extend_msg(b" sally.");
+		assert!(msg.ends_with(b"My dear aunt sally."));
+	}
 }

@@ -752,8 +752,9 @@ pub struct Witching {
 	inner: Arc<Mutex<WitchingInner>>,
 	/// Flags.
 	flags: u8,
-	/// Summary labels.
+	/// Singular summary label.
 	one: Vec<u8>,
+	/// Plural summary label.
 	many: Vec<u8>,
 }
 
@@ -1053,6 +1054,23 @@ impl Witching {
 		t_handle.join().unwrap();
 	}
 
+	/// # Summary.
+	///
+	/// This is the base summary, no prefix.
+	///
+	///     X files in M minutes and S seconds.
+	fn summary(&self) -> Msg {
+		Msg::from_iter(
+			NiceInt::from(u64::from(self.total())).iter()
+				.chain(b" ".iter())
+				.chain(self.label().iter())
+				.chain(b" in ".iter())
+				.chain(NiceElapsed::from(self.elapsed()).iter())
+				.chain(b".".iter())
+				.copied()
+		)
+	}
+
 	/// # Summarize.
 	///
 	/// This prints a simple summary after iteration has completed. It is
@@ -1060,17 +1078,9 @@ impl Witching {
 	///
 	///     Done: 5 files in 3 seconds.
 	fn summarize(&self) {
-		Msg::from_iter(
-			NiceInt::from(u64::from(self.total())).iter()
-				.chain(b" ".iter())
-				.chain(self.label().iter())
-				.chain(b" in ".iter())
-				.chain(NiceElapsed::from(self.elapsed()).iter())
-				.chain(b".\n".iter())
-				.copied()
-		)
+		self.summary()
 			.with_prefix(MsgKind::Done)
-			.eprint();
+			.eprintln();
 	}
 
 	/// # Summarize (with savings).
@@ -1082,36 +1092,28 @@ impl Witching {
 	/// This is engaged when both [`WITCHING_SUMMARIZE`] and [`WITCHING_DIFF`] flags
 	/// are set and will return a message like:
 	///
-	///     Crunched: 5 files in 3 seconds, saving 2 bytes (1.00%).
-	///     Crunched: 5 files in 3 seconds, but nothing doing.
+	///     Crunched: 5 files in 3 seconds, saving 2 bytes. (1.00%)
+	///     Crunched: 5 files in 3 seconds. (No savings.)
 	fn summarize_diff(&self, before: u64) {
 		let after: u64 = self.du();
+		let mut msg = self.summary().with_prefix(MsgKind::Crunched);
 
-		// No savings. Boo.
 		if 0 == after || before <= after {
-			Msg::from_iter(
-				NiceInt::from(u64::from(self.total())).iter()
-					.chain(b" ".iter())
-					.chain(self.label().iter())
-					.chain(b" in ".iter())
-					.chain(NiceElapsed::from(self.elapsed()).iter())
-					.chain(b", but nothing doing.\n".iter())
-					.copied()
-			)
-				.with_prefix(MsgKind::Crunched)
-				.eprint();
+			unsafe { msg.set_suffix_unchecked(b" \x1b[2m(No savings.)\x1b[0m"); }
 		}
 		else {
-			MsgKind::Crunched.into_msg(format!(
-				"{} {} in {}, saving {} bytes ({:3.*}%).\n",
-				NiceInt::from(u64::from(self.total())).as_str(),
-				unsafe { std::str::from_utf8_unchecked(self.label()) },
-				NiceElapsed::from(self.elapsed()).as_str(),
-				NiceInt::from(before - after).as_str(),
-				2,
-				(1.0 - (after as f64 / before as f64)) * 100.0
-			)).eprint();
+			unsafe {
+				msg.set_suffix_unchecked(
+					format!(
+						" \x1b[2m({:3.*}%)\x1b[0m",
+						2,
+						(1.0 - (after as f64 / before as f64)) * 100.0
+					).as_bytes()
+				);
+			}
 		}
+
+		msg.eprintln();
 	}
 
 	/// # Summarize empty.
