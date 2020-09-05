@@ -267,29 +267,31 @@ doc DEFAULT_FEATURES="":
 
 
 # Unit tests!
-@test:
+test DEFAULT_FEATURES="":
+	#!/usr/bin/env bash
+
 	clear
 
-	fyi notice "Testing All Features"
+	if [ -z "{{ DEFAULT_FEATURES }}" ]; then
+		RUST_TEST_THREADS=1 cargo -Z package-features test \
+			--tests \
+			--features simd \
+			--release \
+			--workspace \
+			--target x86_64-unknown-linux-gnu \
+			--target-dir "{{ cargo_dir }}" -- \
+				--format terse
+	else
+		RUST_TEST_THREADS=1 cargo test \
+			--tests \
+			--release \
+			--workspace \
+			--target x86_64-unknown-linux-gnu \
+			--target-dir "{{ cargo_dir }}" -- \
+				--format terse
+	fi
 
-	RUST_TEST_THREADS=1 cargo test \
-		--tests \
-		--all-features \
-		--release \
-		--workspace \
-		--target x86_64-unknown-linux-gnu \
-		--target-dir "{{ cargo_dir }}" -- \
-			--format terse \
-
-	fyi notice "Testing Default"
-
-	RUST_TEST_THREADS=1 cargo test \
-		--tests \
-		--release \
-		--workspace \
-		--target x86_64-unknown-linux-gnu \
-		--target-dir "{{ cargo_dir }}" -- \
-			--format terse \
+	exit 0
 
 
 # Get/Set version.
