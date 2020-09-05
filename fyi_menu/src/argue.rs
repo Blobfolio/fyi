@@ -186,7 +186,7 @@ impl Argue {
 			// Record the keys and passthrough.
 			KeyKind::Short | KeyKind::Long => {
 				let idx: usize = self.args.len();
-				if ! self.keys.insert(&e, idx) { die(b"Duplicate key."); }
+				self.keys.insert_unique(&e, idx);
 				self.args.push(e);
 				self.last = idx;
 			},
@@ -194,7 +194,7 @@ impl Argue {
 			KeyKind::ShortV => {
 				let idx: usize = self.args.len();
 				let tmp: String = e.split_off(2);
-				if ! self.keys.insert(&e, idx) { die(b"Duplicate key."); }
+				self.keys.insert_unique(&e, idx);
 				self.args.push(e);
 				self.args.push(tmp);
 				self.last = idx + 1;
@@ -209,7 +209,7 @@ impl Argue {
 				// Chop off the "=" sign.
 				e.truncate(x);
 
-				if ! self.keys.insert(&e, idx) { die(b"Duplicate key."); }
+				self.keys.insert_unique(&e, idx);
 				self.args.push(e);
 				self.args.push(tmp);
 				self.last = idx + 1;

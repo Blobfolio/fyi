@@ -76,6 +76,27 @@ impl KeyMaster {
 		else { false }
 	}
 
+	/// # Insert (Unique).
+	///
+	/// This is just like '[`keymaster::insert`] except that if a duplicate key
+	/// is submitted, it will print an error and exit with status code 1.
+	pub fn insert_unique(&mut self, key: &str, idx: usize) {
+		if self.len >= MAX_KEYS {
+			die(b"Too many options.");
+		}
+
+		let key = hash_arg_key(key);
+		if self.keys.eq(u64x8::splat(key)).any() {
+			die(b"Duplicate key.");
+		}
+
+		unsafe {
+			self.keys = self.keys.replace_unchecked(self.len, key);
+			self.values = self.values.replace_unchecked(self.len, idx as u16);
+		}
+		self.len += 1;
+	}
+
 	#[must_use]
 	/// # Has Key?
 	///
