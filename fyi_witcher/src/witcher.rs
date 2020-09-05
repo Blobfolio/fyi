@@ -6,15 +6,21 @@ use ahash::{
 	AHasher,
 	AHashSet
 };
+
+#[cfg(not(feature = "simd"))]
 use crate::{
 	utility,
 	Witching,
 };
+#[cfg(feature = "simd")] use crate::Witching;
+
 #[cfg(feature = "simd")]
 use packed_simd::{
+	FromCast,
 	m8x8,
 	u8x8,
 };
+
 use rayon::prelude::*;
 use std::{
 	borrow::Borrow,
@@ -229,26 +235,20 @@ impl Witcher {
 	///     .with_ext1(b".jpg")
 	///     .build();
 	/// ```
-	pub fn with_ext1(mut self, ext: &'static [u8]) -> Self {
-		let len = ext.len();
-		self.cb =
-			if len <= 8 {
-				let (ext, _) = with_ext_needle(ext);
-				Box::new(move |p: &PathBuf|
-					with_ext_haystack(
-						unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) },
-						len
-					) == ext
-				)
-			}
-			else {
-				Box::new(move |p: &PathBuf| {
-					utility::ends_with_ignore_ascii_case(
-						unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) },
-						ext
-					)
-				})
-			};
+	pub fn with_ext1(mut self, ext1: &[u8]) -> Self {
+		self.cb = {
+			let splat = u8x8::splat(0);
+			let ext1 = with_ext_key(ext1);
+			let mask1 = m8x8::from_cast(ext1);
+			Box::new(move |p: &PathBuf|
+				mask1.select(
+					with_ext_key(
+						unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) }
+					),
+					splat
+				) == ext1
+			)
+		};
 
 		self
 	}
@@ -274,31 +274,23 @@ impl Witcher {
 	///     .with_ext2(b".jpg", b".jpeg")
 	///     .build();
 	/// ```
-	pub fn with_ext2(mut self, ext1: &'static [u8], ext2: &'static [u8]) -> Self {
-		let len = usize::max(ext1.len(), ext2.len());
-		self.cb =
-			if len <= 8 {
-				let splat = u8x8::splat(0);
-				let (ext1, m_ext1) = with_ext_needle(ext1);
-				let (ext2, m_ext2) = with_ext_needle(ext2);
+	pub fn with_ext2(mut self, ext1: &[u8], ext2: &[u8]) -> Self {
+		self.cb = {
+			let splat = u8x8::splat(0);
+			let ext1 = with_ext_key(ext1);
+			let ext2 = with_ext_key(ext2);
+			let mask1 = m8x8::from_cast(ext1);
+			let mask2 = m8x8::from_cast(ext2);
 
-				Box::new(move |p: &PathBuf| {
-					let src = with_ext_haystack(
-						unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) },
-						len
-					);
+			Box::new(move |p: &PathBuf| {
+				let src = with_ext_key(
+					unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) }
+				);
 
-					m_ext1.select(src, splat) == ext1 ||
-					m_ext2.select(src, splat) == ext2
-				})
-			}
-			else {
-				Box::new(move |p: &PathBuf| {
-					let bytes: &[u8] = unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) };
-					utility::ends_with_ignore_ascii_case(bytes, ext1) ||
-					utility::ends_with_ignore_ascii_case(bytes, ext2)
-				})
-			};
+				mask1.select(src, splat) == ext1 ||
+				mask2.select(src, splat) == ext2
+			})
+		};
 
 		self
 	}
@@ -330,33 +322,25 @@ impl Witcher {
 		ext2: &'static [u8],
 		ext3: &'static [u8]
 	) -> Self {
-		let len = usize::max(ext1.len(), ext2.len()).max(ext3.len());
-		self.cb =
-			if len <= 8 {
-				let splat = u8x8::splat(0);
-				let (ext1, m_ext1) = with_ext_needle(ext1);
-				let (ext2, m_ext2) = with_ext_needle(ext2);
-				let (ext3, m_ext3) = with_ext_needle(ext3);
+		self.cb = {
+			let splat = u8x8::splat(0);
+			let ext1 = with_ext_key(ext1);
+			let ext2 = with_ext_key(ext2);
+			let ext3 = with_ext_key(ext3);
+			let mask1 = m8x8::from_cast(ext1);
+			let mask2 = m8x8::from_cast(ext2);
+			let mask3 = m8x8::from_cast(ext3);
 
-				Box::new(move |p: &PathBuf| {
-					let src = with_ext_haystack(
-						unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) },
-						len
-					);
+			Box::new(move |p: &PathBuf| {
+				let src = with_ext_key(
+					unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) }
+				);
 
-					m_ext1.select(src, splat) == ext1 ||
-					m_ext2.select(src, splat) == ext2 ||
-					m_ext3.select(src, splat) == ext3
-				})
-			}
-			else {
-				Box::new(move |p: &PathBuf| {
-					let bytes: &[u8] = unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) };
-					utility::ends_with_ignore_ascii_case(bytes, ext1) ||
-					utility::ends_with_ignore_ascii_case(bytes, ext2) ||
-					utility::ends_with_ignore_ascii_case(bytes, ext3)
-				})
-			};
+				mask1.select(src, splat) == ext1 ||
+				mask2.select(src, splat) == ext2 ||
+				mask3.select(src, splat) == ext3
+			})
+		};
 
 		self
 	}
@@ -536,34 +520,6 @@ fn hash_path_buf(path: &PathBuf) -> u64 {
 }
 
 #[cfg(feature = "simd")]
-/// # SIMD needle
-///
-/// This converts an extension into a SIMD-optimized search pattern for use
-/// with the `with_ext*()` builder functions.
-///
-/// The result is zero-padded from the left in cases where the extension is
-/// shorter than 8 bytes (which should be most cases!).
-///
-/// ## Panics
-///
-/// This method will panic if the extension is less than 2 bytes or greater
-/// than 8 bytes.
-fn with_ext_needle(ext: &[u8]) -> (u8x8, m8x8) {
-	let needle = match ext.len() {
-		4 => u8x8::new(0, 0, 0, 0, ext[0], ext[1], ext[2], ext[3]),
-		5 => u8x8::new(0, 0, 0, ext[0], ext[1], ext[2], ext[3], ext[4]),
-		2 => u8x8::new(0, 0, 0, 0, 0, 0, ext[0], ext[1]),
-		3 => u8x8::new(0, 0, 0, 0, 0, ext[0], ext[1], ext[2]),
-		6 => u8x8::new(0, 0, ext[0], ext[1], ext[2], ext[3], ext[4], ext[5]),
-		7 => u8x8::new(0, ext[0], ext[1], ext[2], ext[3], ext[4], ext[5], ext[6]),
-		8 => u8x8::new(ext[0], ext[1], ext[2], ext[3], ext[4], ext[5], ext[6], ext[7]),
-		_ => panic!("Invalid extension."),
-	};
-
-	(needle, needle.ne(u8x8::splat(0)))
-}
-
-#[cfg(feature = "simd")]
 /// # SIMD Haystack
 ///
 /// This method converts a path into a SIMD-optimized haystack to match
@@ -573,23 +529,20 @@ fn with_ext_needle(ext: &[u8]) -> (u8x8, m8x8) {
 /// shorter than 8, otherwise the last eight bytes of the path are used.
 ///
 /// Note: any value shorter than
-fn with_ext_haystack(ext: &[u8], max: usize) -> u8x8 {
-	let len = ext.len();
-	if len > max {
-		return with_ext_haystack(&ext[len-max..], max);
-	}
-
-	match len {
-		4 => u8x8::new(0, 0, 0, 0, ext[0].to_ascii_lowercase(), ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase()),
-		5 => u8x8::new(0, 0, 0, ext[0].to_ascii_lowercase(), ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase()),
-		2 => u8x8::new(0, 0, 0, 0, 0, 0, ext[0].to_ascii_lowercase(), ext[1].to_ascii_lowercase()),
-		3 => u8x8::new(0, 0, 0, 0, 0, ext[0].to_ascii_lowercase(), ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase()),
-		6 => u8x8::new(0, 0, ext[0].to_ascii_lowercase(), ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase(), ext[5].to_ascii_lowercase()),
-		7 => u8x8::new(0, ext[0].to_ascii_lowercase(), ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase(), ext[5].to_ascii_lowercase(), ext[6].to_ascii_lowercase()),
-		8 => u8x8::new(ext[0].to_ascii_lowercase(), ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase(), ext[5].to_ascii_lowercase(), ext[6].to_ascii_lowercase(), ext[7].to_ascii_lowercase()),
+fn with_ext_key(ext: &[u8]) -> u8x8 {
+	let ext = match ext.len() {
 		0 | 1 => u8x8::splat(0),
-		_ => unreachable!()
-	}
+		2 => u8x8::new(0, 0, 0, 0, 0, 0, ext[0], ext[1]),
+		3 => u8x8::new(0, 0, 0, 0, 0, ext[0], ext[1], ext[2]),
+		4 => u8x8::new(0, 0, 0, 0, ext[0], ext[1], ext[2], ext[3]),
+		5 => u8x8::new(0, 0, 0, ext[0], ext[1], ext[2], ext[3], ext[4]),
+		6 => u8x8::new(0, 0, ext[0], ext[1], ext[2], ext[3], ext[4], ext[5]),
+		7 => u8x8::new(0, ext[0], ext[1], ext[2], ext[3], ext[4], ext[5], ext[6]),
+		len => unsafe { u8x8::from_slice_unaligned_unchecked(&ext[len - 8..]) },
+	};
+
+	// Lower-case the result by adding "32" to any bytes in `65..=90`.
+	(ext.lt(u8x8::splat(91)) & ext.gt(u8x8::splat(64))).select(ext + u8x8::splat(32), ext)
 }
 
 
