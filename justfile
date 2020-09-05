@@ -215,6 +215,37 @@ bench BENCH="" FILTER="":
 		--target-dir "{{ cargo_dir }}"
 
 
+# Build Docs.
+doc DEFAULT_FEATURES="":
+	#!/usr/bin/env bash
+
+	if [ -z "{{ DEFAULT_FEATURES }}" ]; then
+		cargo -Z package-features doc \
+			--features simd \
+			--workspace \
+			--release \
+			--no-deps \
+			--document-private-items \
+			--target x86_64-unknown-linux-gnu \
+			--target-dir "{{ cargo_dir }}"
+	else
+		cargo doc \
+			--workspace \
+			--release \
+			--no-deps \
+			--document-private-items \
+			--target x86_64-unknown-linux-gnu \
+			--target-dir "{{ cargo_dir }}"
+	fi
+
+	[ ! -d "{{ justfile_directory() }}/doc" ] || rm -rf "{{ justfile_directory() }}/doc"
+	mv "{{ cargo_dir }}/x86_64-unknown-linux-gnu/doc" "{{ justfile_directory() }}"
+
+	just _fix-chown "{{ justfile_directory() }}/doc"
+
+	exit 0
+
+
 # Build and Run Example.
 @ex DEMO:
 	clear
