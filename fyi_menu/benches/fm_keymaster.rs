@@ -101,11 +101,54 @@ fn contains(c: &mut Criterion) {
 	group.finish();
 }
 
+fn get(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_menu::KeyMaster");
+
+	group.bench_function(".get(5/8)", move |b| {
+		b.iter_with_setup(||
+			{
+				let mut k = KeyMaster::default();
+				k.insert("This", 10);
+				k.insert("Is", 20);
+				k.insert("The", 30);
+				k.insert("Song", 40);
+				k.insert("That", 50);
+				k.insert("Never", 60);
+				k.insert("Ends", 70);
+				k.insert("It", 80);
+				k
+			},
+			|k| k.get("That")
+		)
+	});
+
+	group.bench_function(".get2(0/5/8)", move |b| {
+		b.iter_with_setup(||
+			{
+				let mut k = KeyMaster::default();
+				k.insert("This", 10);
+				k.insert("Is", 20);
+				k.insert("The", 30);
+				k.insert("Song", 40);
+				k.insert("That", 50);
+				k.insert("Never", 60);
+				k.insert("Ends", 70);
+				k.insert("It", 80);
+				k
+			},
+			|k| k.get2("Pink", "That")
+		)
+	});
+
+	group.finish();
+}
+
 
 
 criterion_group!(
 	benches,
 	insert,
 	contains,
+	get,
 );
 criterion_main!(benches);
