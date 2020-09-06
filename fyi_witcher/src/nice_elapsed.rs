@@ -13,43 +13,28 @@ use std::{
 macro_rules! elapsed_from {
 	($type:ty) => {
 		impl From<$type> for NiceElapsed {
+			#[allow(clippy::integer_division)]
 			fn from(num: $type) -> Self {
 				// Nothing!
 				if 0 == num { Self::min() }
 				// Just seconds.
-				else if num < 60 { Self::from_s(num) }
+				else if num < 60 {
+					unsafe { Self::from_hms(0, 0, num as u8) }
+				}
 				// Minutes and maybe seconds.
 				else if num < 3600 {
-					// Break up the parts.
-					let m: $type = num_integer::div_floor(num, 60);
-					let s: $type = num - m * 60;
-
-					// Minutes and seconds.
-					if s > 0 { Self::from_ms(m, s) }
-					// Just minutes.
-					else { Self::from_m(m) }
+					unsafe { Self::from_hms(0, (num / 60) as u8, (num % 60) as u8) }
 				}
 				// Hours, and maybe minutes and/or seconds.
 				else if num < 86400 {
 					// Break up the parts.
-					let h: $type = num_integer::div_floor(num, 3600);
-					let mut s: $type = num - h * 3600;
-					let mut m: $type = 0;
+					let h: u8 = (num / 3600) as u8;
+					let s: $type = num % 3600;
 					if s >= 60 {
-						m = num_integer::div_floor(s, 60);
-						s -= m * 60;
+						unsafe { Self::from_hms(h, (s / 60) as u8, (s % 60) as u8) }
 					}
-
-					// Figure out which pieces need adding.
-					match (m == 0, s == 0) {
-						// All three parts.
-						(false, false) => Self::from_hms(h, m, s),
-						// Hours and Minutes.
-						(false, true) => Self::from_hm(h, m),
-						// Hours and Seconds.
-						(true, false) => Self::from_hs(h, s),
-						// Only hours.
-						(true, true) => Self::from_h(h),
+					else {
+						unsafe { Self::from_hms(h, 0, s as u8) }
 					}
 				}
 				// We're into days, which we don't do.
@@ -145,178 +130,106 @@ impl NiceElapsed {
 		}
 	}
 
-	/// # Write Number.
-	///
-	/// This writes any old number to the buffer.
-	fn write_int<N> (&mut self, num: N)
-	where N: itoa::Integer {
-		self.len += itoa::write(&mut self.inner[self.len..], num).unwrap();
-	}
-
-	/// # Write Bytes.
-	///
-	/// This writes a byte string to the buffer (e.g. a unit).
-	fn write_bytes(&mut self, buf: &[u8]) {
-		let end: usize = self.len + buf.len();
-		self.inner[self.len..end].copy_from_slice(buf);
-		self.len = end;
-	}
-
-	/// # Write Hour And.
-	///
-	/// This writes "x hour(s) and", which comes up in a few combinations.
-	fn write_hour_and<N>(&mut self, h: N)
-	where N: itoa::Integer + num_traits::One + PartialEq {
-		if h.is_one() {
-			self.write_bytes(b"1 hour and ");
-		}
-		else {
-			self.write_int(h);
-			self.write_bytes(b" hours and ");
-		}
-	}
-
-	/// # Write Minutes.
-	///
-	/// This writes "x minute(s)", which comes up in a few combinations.
-	fn write_minutes<N>(&mut self, m: N)
-	where N: itoa::Integer + num_traits::One + PartialEq {
-		if m.is_one() {
-			self.write_bytes(b"1 minute");
-		}
-		else {
-			self.write_int(m);
-			self.write_bytes(b" minutes");
-		}
-	}
-
-	/// # Write Seconds.
-	///
-	/// This writes "x second(s)", which comes up in a few combinations.
-	fn write_seconds<N>(&mut self, s: N)
-	where N: itoa::Integer + num_traits::One + PartialEq {
-		if s.is_one() {
-			self.write_bytes(b"1 second");
-		}
-		else {
-			self.write_int(s);
-			self.write_bytes(b" seconds");
-		}
-	}
-
 	/// # From Hours, Minutes, Seconds.
 	///
-	/// Fill the buffer with all three units (hours, minutes, and seconds).
-	fn from_hms<N> (h: N, m: N, s: N) -> Self
-	where N: itoa::Integer + num_traits::One + PartialEq {
-		let mut out = Self::default();
+	/// Fill the buffer with the appropriate output given all the different bits.
+	///
+	/// ## Safety
+	///
+	/// All numbers must be — but should be — less than 99 or undefined things
+	/// may happen.
+	unsafe fn from_hms(h: u8, m: u8, s: u8) -> Self {
+		use std::mem;
+		use std::ptr;
+
+		let mut buf = [mem::MaybeUninit::<u8>::uninit(); 36];
+		let dst = buf.as_mut_ptr() as *mut u8;
+		let count: u8 = h.ne(&0) as u8 + m.ne(&0) as u8 + s.ne(&0) as u8;
+		let mut len: usize = 0;
 
 		// Hours.
-		if h.is_one() {
-			out.write_bytes(b"1 hour, ");
-		}
-		else {
-			out.write_int(h);
-			out.write_bytes(b" hours, ");
+		if h > 0 {
+			len += Self::write_int(dst, h);
+			if h == 1 {
+				ptr::copy_nonoverlapping(b" hour".as_ptr(), dst.add(len), 5);
+				len += 5;
+			}
+			else {
+				ptr::copy_nonoverlapping(b" hours".as_ptr(), dst.add(len), 6);
+				len += 6;
+			}
+
+			if 2 == count {
+				ptr::copy_nonoverlapping(b" and ".as_ptr(), dst.add(len), 5);
+				len += 5;
+			}
+			else if 3 == count {
+				ptr::copy_nonoverlapping(b", ".as_ptr(), dst.add(len), 2);
+				len += 2;
+			}
 		}
 
 		// Minutes.
-		if m.is_one() {
-			out.write_bytes(b"1 minute, and ");
-		}
-		else {
-			out.write_int(m);
-			out.write_bytes(b" minutes, and ");
+		if m > 0 {
+			len += Self::write_int(dst.add(len), m);
+			if m == 1 {
+				ptr::copy_nonoverlapping(b" minute".as_ptr(), dst.add(len), 7);
+				len += 7;
+			}
+			else {
+				ptr::copy_nonoverlapping(b" minutes".as_ptr(), dst.add(len), 8);
+				len += 8;
+			}
+
+			if 3 == count {
+				ptr::copy_nonoverlapping(b", and ".as_ptr(), dst.add(len), 6);
+				len += 6;
+			}
+			else if 2 == count && h == 0 {
+				ptr::copy_nonoverlapping(b" and ".as_ptr(), dst.add(len), 5);
+				len += 5;
+			}
 		}
 
 		// Seconds.
-		out.write_seconds(s);
+		if s > 0 {
+			len += Self::write_int(dst.add(len), s);
+			if s == 1 {
+				ptr::copy_nonoverlapping(b" second".as_ptr(), dst.add(len), 7);
+				len += 7;
+			}
+			else {
+				ptr::copy_nonoverlapping(b" seconds".as_ptr(), dst.add(len), 8);
+				len += 8;
+			}
+		}
 
-		out
+		// Put it all together!
+		Self {
+			inner: mem::transmute::<_, [u8; 36]>(buf),
+			len
+		}
 	}
 
-	/// # From Hours, Minutes.
+	#[allow(clippy::integer_division)]
+	/// # Write Number.
 	///
-	/// Fill the buffer with two units, hours and minutes.
-	fn from_hm<N>(h: N, m: N) -> Self
-	where N: itoa::Integer + num_traits::One + PartialEq {
-		let mut out = Self::default();
-
-		out.write_hour_and(h);
-		out.write_minutes(m);
-
-		out
-	}
-
-	/// # From Hours, Seconds.
+	/// This pushes the ASCII equivalent of a one- or two-digit number to the
+	/// buffer.
 	///
-	/// Fill the buffer with two units, hours and seconds.
-	fn from_hs<N>(h: N, s: N) -> Self
-	where N: itoa::Integer + num_traits::One + PartialEq {
-		let mut out = Self::default();
-
-		out.write_hour_and(h);
-		out.write_seconds(s);
-
-		out
-	}
-
-	/// # From Hours.
+	/// ## Safety
 	///
-	/// Fill the buffer using only hours.
-	fn from_h<N>(h: N) -> Self
-	where N: itoa::Integer + num_traits::One + PartialEq {
-		let mut out = Self::default();
-
-		if h.is_one() {
-			out.write_bytes(b"1 hour");
+	/// Undefined things may happen if the number is greater than 99!
+	unsafe fn write_int(buf: *mut u8, num: u8) -> usize {
+		if num < 10 {
+			buf.write(num + 48);
+			1
 		}
 		else {
-			out.write_int(h);
-			out.write_bytes(b" hours");
+			buf.write(num / 10 + 48);
+			buf.add(1).write(num % 10 + 48);
+			2
 		}
-
-		out
-	}
-
-	/// # From Minutes, Seconds.
-	///
-	/// Fill the buffer using two units, minutes and seconds.
-	fn from_ms<N>(m: N, s: N) -> Self
-	where N: itoa::Integer + num_traits::One + PartialEq {
-		let mut out = Self::default();
-
-		if m.is_one() {
-			out.write_bytes(b"1 minute and ");
-		}
-		else {
-			out.write_int(m);
-			out.write_bytes(b" minutes and ");
-		}
-
-		out.write_seconds(s);
-
-		out
-	}
-
-	/// # From Minutes.
-	///
-	/// Fill the buffer using only minutes.
-	fn from_m<N>(m: N) -> Self
-	where N: itoa::Integer + num_traits::One + PartialEq {
-		let mut out = Self::default();
-		out.write_minutes(m);
-		out
-	}
-
-	/// # From Seconds.
-	///
-	/// Fill the buffer using only seconds.
-	fn from_s<N>(s: N) -> Self
-	where N: itoa::Integer + num_traits::One + PartialEq {
-		let mut out = Self::default();
-		out.write_seconds(s);
-		out
 	}
 
 	#[must_use]
