@@ -112,28 +112,39 @@ impl PartialOrd for PrefixBuffer {
 }
 
 impl PrefixBuffer {
-	/// # New Instance.
+	/// # New Instance (Unchecked).
 	///
-	/// This creates a new `PrefixBuffer` instance. Because this is a fixed-
-	/// buffer struct, the prefix label itself cannot exceed 45 bytes.
+	/// Create a new instance using the given prefix and color.
 	///
-	/// Note: the prefix should be valid UTF-8 or weird things might happen
-	/// down the road.
-	pub fn new(prefix: &[u8], color: u8) -> Self {
-		if prefix.len() <= 45 {
-			let mut out = Self::default();
-			out.len = [
-				utility::ansi_code_bold(color),
-				prefix,
-				b":\x1b[0m ",
-			].iter()
-				.fold(0, |len, b| {
-					out.buf[len..len + b.len()].copy_from_slice(b);
-					len + b.len()
-				});
-			out
+	/// ## Safety
+	///
+	/// The prefix must be valid UTF-8 and cannot exceed 45 bytes in length.
+	pub unsafe fn new_unchecked(prefix: &[u8], color: u8) -> Self {
+		use std::mem;
+		use std::ptr;
+
+		let mut buf = [mem::MaybeUninit::<u8>::uninit(); 64];
+		let dst = buf.as_mut_ptr() as *mut u8;
+
+		// Write the color.
+		let mut len: usize = {
+			let color: &[u8] = utility::ansi_code_bold(color);
+			ptr::copy_nonoverlapping(color.as_ptr(), dst, color.len());
+			color.len()
+		};
+
+		// Write the prefix.
+		ptr::copy_nonoverlapping(prefix.as_ptr(), dst.add(len), prefix.len());
+		len += prefix.len();
+
+		// Write the closer.
+		ptr::copy_nonoverlapping(b":\x1b[0m ".as_ptr(), dst.add(len), 6);
+
+		// Align and return!
+		Self {
+			buf: mem::transmute::<_, [u8; 64]>(buf),
+			len: len + 6,
 		}
-		else { Self::default() }
 	}
 
 	/// # As Bytes.
@@ -232,9 +243,13 @@ impl MsgKind {
 	/// ```
 	pub fn new<S> (prefix: S, color: u8) -> Self
 	where S: AsRef<str> {
-		match prefix.as_ref().trim() {
-			"" => Self::None,
-			p => Self::Other(PrefixBuffer::new(p.as_bytes(), color)),
+		let prefix: &[u8] = prefix.as_ref().trim().as_bytes();
+
+		if prefix.is_empty() || prefix.len() > 45 { Self::None }
+		else {
+			unsafe {
+				Self::Other(PrefixBuffer::new_unchecked(prefix, color))
+			}
 		}
 	}
 
