@@ -1127,11 +1127,11 @@ impl Witching {
 		let after: u64 = self.du();
 		let mut msg = self.summary().with_prefix(MsgKind::Crunched);
 
-		if 0 == after || before <= after {
-			unsafe { msg.set_suffix_unchecked(b" \x1b[2m(No savings.)\x1b[0m"); }
-		}
-		else {
-			unsafe {
+		unsafe {
+			if 0 == after || before <= after {
+				msg.set_suffix_unchecked(b" \x1b[2m(No savings.)\x1b[0m");
+			}
+			else {
 				msg.set_suffix_unchecked(
 					format!(
 						" \x1b[2m({:3.*}%)\x1b[0m",

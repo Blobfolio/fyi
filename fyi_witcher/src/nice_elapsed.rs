@@ -55,8 +55,6 @@ pub struct NiceElapsed {
 	len: usize,
 }
 
-
-
 impl Default for NiceElapsed {
 	fn default() -> Self {
 		Self {

@@ -870,9 +870,10 @@ impl Msg {
 				.fold(
 					self.toc.start(PART_TIMESTAMP) + 14,
 					|dst_off, x| {
-					ptr.add(dst_off).copy_from_nonoverlapping(utility::time_format_dd(*x).as_ptr(), 2);
-					dst_off + 3
-				});
+						ptr.add(dst_off).copy_from_nonoverlapping(utility::time_format_dd(*x).as_ptr(), 2);
+						dst_off + 3
+					}
+				);
 		}
 	}
 }
