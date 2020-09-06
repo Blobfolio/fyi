@@ -34,8 +34,6 @@ pub struct NiceInt {
 	len: usize,
 }
 
-
-
 impl Deref for NiceInt {
 	type Target = [u8];
 	fn deref(&self) -> &Self::Target { self.as_bytes() }
@@ -58,42 +56,42 @@ impl fmt::Display for NiceInt {
 
 impl From<u8> for NiceInt {
 	fn from(num: u8) -> Self {
-		Self::from_small(u64::from(num))
+		Self::from_small(num)
 	}
 }
 
 impl From<u16> for NiceInt {
 	fn from(num: u16) -> Self {
-		if num < 1000 { Self::from_small(u64::from(num)) }
-		else { Self::from_big(u64::from(num)) }
+		if num < 1000 { Self::from_small(num) }
+		else { Self::from_big(&num) }
 	}
 }
 
 impl From<u32> for NiceInt {
 	fn from(num: u32) -> Self {
-		if num < 1000 { Self::from_small(u64::from(num)) }
-		else { Self::from_big(u64::from(num)) }
+		if num < 1000 { Self::from_small(num) }
+		else { Self::from_big(&num) }
 	}
 }
 
 impl From<u64> for NiceInt {
 	fn from(num: u64) -> Self {
 		if num < 1000 { Self::from_small(num) }
-		else { Self::from_big(999_999_999_999.min(num)) }
+		else { Self::from_big(&999_999_999_999.min(num)) }
 	}
 }
 
 impl From<u128> for NiceInt {
 	fn from(num: u128) -> Self {
-		if num < 1000 { Self::from_small(num as u64) }
-		else { Self::from_big(999_999_999_999.min(num as u64)) }
+		if num < 1000 { Self::from_small(num) }
+		else { Self::from_big(&999_999_999_999.min(num)) }
 	}
 }
 
 impl From<usize> for NiceInt {
 	fn from(num: usize) -> Self {
-		if num < 1000 { Self::from_small(num as u64) }
-		else { Self::from_big(999_999_999_999.min(num as u64)) }
+		if num < 1000 { Self::from_small(num) }
+		else { Self::from_big(&999_999_999_999.min(num)) }
 	}
 }
 
@@ -104,7 +102,8 @@ impl NiceInt {
 	///
 	/// For numbers less than `1000`, we can skip the overhead of figuring out
 	/// punctuation and just leverage `itoa`.
-	fn from_small(num: u64) -> Self {
+	fn from_small<N>(num: N) -> Self
+	where N: itoa::Integer {
 		let mut out = Self::default();
 		out.len = itoa::write(&mut out.inner[..], num).unwrap_or_default();
 		out
@@ -114,10 +113,11 @@ impl NiceInt {
 	///
 	/// For numbers greater or equal to `1000`, commas come into play,
 	/// requiring the use of the relatively heavier `num_format` crate.
-	fn from_big(num: u64) -> Self {
+	fn from_big<N>(num: &N) -> Self
+	where N: num_format::ToFormattedString {
 		use num_format::WriteFormatted;
 		let mut out = Self::default();
-		out.len = (&mut out.inner[..]).write_formatted(&num, &num_format::Locale::en).unwrap_or_default();
+		out.len = (&mut out.inner[..]).write_formatted(num, &num_format::Locale::en).unwrap_or_default();
 		out
 	}
 

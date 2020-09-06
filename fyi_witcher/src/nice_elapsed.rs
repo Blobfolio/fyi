@@ -9,24 +9,52 @@ use std::{
 
 
 
-/// Helper: Append a number and label to the buffer.
-macro_rules! ne_push {
-	($lhs:ident, $num:expr, $one:expr, $many:expr) => {
-		// Singular shortcut.
-		if 1 == $num {
-			let end: usize = $lhs.len + $one.len();
-			$lhs.inner[$lhs.len..end].copy_from_slice($one);
-			$lhs.len = end;
-		}
-		// The rest!
-		else {
-			// Write the number.
-			$lhs.len += itoa::write(&mut $lhs.inner[$lhs.len..], $num).unwrap();
+/// # Helper: Generate Impl
+macro_rules! elapsed_from {
+	($type:ty) => {
+		impl From<$type> for NiceElapsed {
+			fn from(num: $type) -> Self {
+				// Nothing!
+				if 0 == num { Self::min() }
+				// Just seconds.
+				else if num < 60 { Self::from_s(num) }
+				// Minutes and maybe seconds.
+				else if num < 3600 {
+					// Break up the parts.
+					let m: $type = num_integer::div_floor(num, 60);
+					let s: $type = num - m * 60;
 
-			// Write the label.
-			let end: usize = $lhs.len + $many.len();
-			$lhs.inner[$lhs.len..end].copy_from_slice($many);
-			$lhs.len = end;
+					// Minutes and seconds.
+					if s > 0 { Self::from_ms(m, s) }
+					// Just minutes.
+					else { Self::from_m(m) }
+				}
+				// Hours, and maybe minutes and/or seconds.
+				else if num < 86400 {
+					// Break up the parts.
+					let h: $type = num_integer::div_floor(num, 3600);
+					let mut s: $type = num - h * 3600;
+					let mut m: $type = 0;
+					if s >= 60 {
+						m = num_integer::div_floor(s, 60);
+						s -= m * 60;
+					}
+
+					// Figure out which pieces need adding.
+					match (m == 0, s == 0) {
+						// All three parts.
+						(false, false) => Self::from_hms(h, m, s),
+						// Hours and Minutes.
+						(false, true) => Self::from_hm(h, m),
+						// Hours and Seconds.
+						(true, false) => Self::from_hs(h, s),
+						// Only hours.
+						(true, true) => Self::from_h(h),
+					}
+				}
+				// We're into days, which we don't do.
+				else { Self::max() }
+			}
 		}
 	};
 }
@@ -84,52 +112,10 @@ impl fmt::Display for NiceElapsed {
 	}
 }
 
-impl From<u32> for NiceElapsed {
-	fn from(num: u32) -> Self {
-		// Nothing!
-		if 0 == num { Self::min() }
-		// Just seconds.
-		else if num < 60 { Self::from_s(num) }
-		// Minutes and maybe seconds.
-		else if num < 3600 {
-			// Break up the parts.
-			let m: u32 = num_integer::div_floor(num, 60);
-			let s: u32 = num - m * 60;
-
-			// Minutes and seconds.
-			if s > 0 { Self::from_ms(m, s) }
-			// Just minutes.
-			else { Self::from_m(m) }
-		}
-		// Hours, and maybe minutes and/or seconds.
-		else if num < 86400 {
-			// Break up the parts.
-			let h: u32 = num_integer::div_floor(num, 3600);
-			let mut s: u32 = num - h * 3600;
-			let mut m: u32 = 0;
-			if s >= 60 {
-				m = num_integer::div_floor(s, 60);
-				s -= m * 60;
-			}
-
-			// Figure out which pieces need adding.
-			match (m == 0, s == 0) {
-				// All three parts.
-				(false, false) => Self::from_hms(h, m, s),
-				// Hours and Minutes.
-				(false, true) => Self::from_hm(h, m),
-				// Hours and Seconds.
-				(true, false) => Self::from_hs(h, s),
-				// Only hours.
-				(true, true) => Self::from_h(h),
-			}
-		}
-		// We're into days, which we don't do.
-		else { Self::max() }
-	}
-}
-
-
+elapsed_from!(usize);
+elapsed_from!(u32);
+elapsed_from!(u64);
+elapsed_from!(u128);
 
 impl NiceElapsed {
 	#[must_use]
@@ -159,38 +145,92 @@ impl NiceElapsed {
 		}
 	}
 
+	/// # Write Number.
+	///
+	/// This writes any old number to the buffer.
+	fn write_int<N> (&mut self, num: N)
+	where N: itoa::Integer {
+		self.len += itoa::write(&mut self.inner[self.len..], num).unwrap();
+	}
+
+	/// # Write Bytes.
+	///
+	/// This writes a byte string to the buffer (e.g. a unit).
+	fn write_bytes(&mut self, buf: &[u8]) {
+		let end: usize = self.len + buf.len();
+		self.inner[self.len..end].copy_from_slice(buf);
+		self.len = end;
+	}
+
+	/// # Write Hour And.
+	///
+	/// This writes "x hour(s) and", which comes up in a few combinations.
+	fn write_hour_and<N>(&mut self, h: N)
+	where N: itoa::Integer + num_traits::One + PartialEq {
+		if h.is_one() {
+			self.write_bytes(b"1 hour and ");
+		}
+		else {
+			self.write_int(h);
+			self.write_bytes(b" hours and ");
+		}
+	}
+
+	/// # Write Minutes.
+	///
+	/// This writes "x minute(s)", which comes up in a few combinations.
+	fn write_minutes<N>(&mut self, m: N)
+	where N: itoa::Integer + num_traits::One + PartialEq {
+		if m.is_one() {
+			self.write_bytes(b"1 minute");
+		}
+		else {
+			self.write_int(m);
+			self.write_bytes(b" minutes");
+		}
+	}
+
+	/// # Write Seconds.
+	///
+	/// This writes "x second(s)", which comes up in a few combinations.
+	fn write_seconds<N>(&mut self, s: N)
+	where N: itoa::Integer + num_traits::One + PartialEq {
+		if s.is_one() {
+			self.write_bytes(b"1 second");
+		}
+		else {
+			self.write_int(s);
+			self.write_bytes(b" seconds");
+		}
+	}
+
 	/// # From Hours, Minutes, Seconds.
 	///
 	/// Fill the buffer with all three units (hours, minutes, and seconds).
-	fn from_hms(h: u32, m: u32, s: u32) -> Self {
+	fn from_hms<N> (h: N, m: N, s: N) -> Self
+	where N: itoa::Integer + num_traits::One + PartialEq {
 		let mut out = Self::default();
 
-		// Write hours.
-		ne_push!(
-			out, h,
-			// 1   •    h    o    u    r   ,   •
-			&[49, 32, 104, 111, 117, 114, 44, 32],
-			// •    h    o    u    r    s   ,   •
-			&[32, 104, 111, 117, 114, 115, 44, 32]
-		);
+		// Hours.
+		if h.is_one() {
+			out.write_bytes(b"1 hour, ");
+		}
+		else {
+			out.write_int(h);
+			out.write_bytes(b" hours, ");
+		}
 
-		// Write minutes.
-		ne_push!(
-			out, m,
-			// 1   •    m    i    n    u    t    e   ,   •   a    n    d   •
-			&[49, 32, 109, 105, 110, 117, 116, 101, 44, 32, 97, 110, 100, 32],
-			// •    m    i    n    u    t    e    s   ,   •   a    n    d   •
-			&[32, 109, 105, 110, 117, 116, 101, 115, 44, 32, 97, 110, 100, 32]
-		);
+		// Minutes.
+		if m.is_one() {
+			out.write_bytes(b"1 minute, and ");
+		}
+		else {
+			out.write_int(m);
+			out.write_bytes(b" minutes, and ");
+		}
 
-		// Write seconds.
-		ne_push!(
-			out, s,
-			// 1   •    s    e   c    o    n    d
-			&[49, 32, 115, 101, 99, 111, 110, 100],
-			// •    s    e   c    o    n    d    s
-			&[32, 115, 101, 99, 111, 110, 100, 115]
-		);
+		// Seconds.
+		out.write_seconds(s);
 
 		out
 	}
@@ -198,26 +238,12 @@ impl NiceElapsed {
 	/// # From Hours, Minutes.
 	///
 	/// Fill the buffer with two units, hours and minutes.
-	fn from_hm(h: u32, m: u32) -> Self {
+	fn from_hm<N>(h: N, m: N) -> Self
+	where N: itoa::Integer + num_traits::One + PartialEq {
 		let mut out = Self::default();
 
-		// Write hours.
-		ne_push!(
-			out, h,
-			// 1   •    h    o    u    r   •   a    n    d   •
-			&[49, 32, 104, 111, 117, 114, 32, 97, 110, 100, 32],
-			// •    h    o    u    r    s   •   a    n    d   •
-			&[32, 104, 111, 117, 114, 115, 32, 97, 110, 100, 32]
-		);
-
-		// Write minutes.
-		ne_push!(
-			out, m,
-			// 1   •    m    i    n    u    t    e
-			&[49, 32, 109, 105, 110, 117, 116, 101],
-			// •    m    i    n    u    t    e    s
-			&[32, 109, 105, 110, 117, 116, 101, 115]
-		);
+		out.write_hour_and(h);
+		out.write_minutes(m);
 
 		out
 	}
@@ -225,26 +251,12 @@ impl NiceElapsed {
 	/// # From Hours, Seconds.
 	///
 	/// Fill the buffer with two units, hours and seconds.
-	fn from_hs(h: u32, s: u32) -> Self {
+	fn from_hs<N>(h: N, s: N) -> Self
+	where N: itoa::Integer + num_traits::One + PartialEq {
 		let mut out = Self::default();
 
-		// Write hours.
-		ne_push!(
-			out, h,
-			// 1   •    h    o    u    r   •   a    n    d   •
-			&[49, 32, 104, 111, 117, 114, 32, 97, 110, 100, 32],
-			// •    h    o    u    r    s   •   a    n    d   •
-			&[32, 104, 111, 117, 114, 115, 32, 97, 110, 100, 32]
-		);
-
-		// Write seconds.
-		ne_push!(
-			out, s,
-			// 1   •    s    e   c    o    n    d
-			&[49, 32, 115, 101, 99, 111, 110, 100],
-			// •    s    e   c    o    n    d    s
-			&[32, 115, 101, 99, 111, 110, 100, 115]
-		);
+		out.write_hour_and(h);
+		out.write_seconds(s);
 
 		out
 	}
@@ -252,17 +264,17 @@ impl NiceElapsed {
 	/// # From Hours.
 	///
 	/// Fill the buffer using only hours.
-	fn from_h(h: u32) -> Self {
+	fn from_h<N>(h: N) -> Self
+	where N: itoa::Integer + num_traits::One + PartialEq {
 		let mut out = Self::default();
 
-		// Write hours.
-		ne_push!(
-			out, h,
-			// 1   •    h    o    u    r
-			&[49, 32, 104, 111, 117, 114],
-			// •    h    o    u    r    s
-			&[32, 104, 111, 117, 114, 115]
-		);
+		if h.is_one() {
+			out.write_bytes(b"1 hour");
+		}
+		else {
+			out.write_int(h);
+			out.write_bytes(b" hours");
+		}
 
 		out
 	}
@@ -270,26 +282,19 @@ impl NiceElapsed {
 	/// # From Minutes, Seconds.
 	///
 	/// Fill the buffer using two units, minutes and seconds.
-	fn from_ms(m: u32, s: u32) -> Self {
+	fn from_ms<N>(m: N, s: N) -> Self
+	where N: itoa::Integer + num_traits::One + PartialEq {
 		let mut out = Self::default();
 
-		// Write minutes.
-		ne_push!(
-			out, m,
-			// 1   •    m    i    n    u    t    e   •   a    n    d   •
-			&[49, 32, 109, 105, 110, 117, 116, 101, 32, 97, 110, 100, 32],
-			// •    m    i    n    u    t    e    s   •   a    n    d   •
-			&[32, 109, 105, 110, 117, 116, 101, 115, 32, 97, 110, 100, 32]
-		);
+		if m.is_one() {
+			out.write_bytes(b"1 minute and ");
+		}
+		else {
+			out.write_int(m);
+			out.write_bytes(b" minutes and ");
+		}
 
-		// Write seconds.
-		ne_push!(
-			out, s,
-			// 1   •    s    e   c    o    n    d
-			&[49, 32, 115, 101, 99, 111, 110, 100],
-			// •    s    e   c    o    n    d    s
-			&[32, 115, 101, 99, 111, 110, 100, 115]
-		);
+		out.write_seconds(s);
 
 		out
 	}
@@ -297,36 +302,20 @@ impl NiceElapsed {
 	/// # From Minutes.
 	///
 	/// Fill the buffer using only minutes.
-	fn from_m(m: u32) -> Self {
+	fn from_m<N>(m: N) -> Self
+	where N: itoa::Integer + num_traits::One + PartialEq {
 		let mut out = Self::default();
-
-		// Write minutes.
-		ne_push!(
-			out, m,
-			// 1   •    m    i    n    u    t    e
-			&[49, 32, 109, 105, 110, 117, 116, 101],
-			// •    m    i    n    u    t    e    s
-			&[32, 109, 105, 110, 117, 116, 101, 115]
-		);
-
+		out.write_minutes(m);
 		out
 	}
 
 	/// # From Seconds.
 	///
 	/// Fill the buffer using only seconds.
-	fn from_s(s: u32) -> Self {
+	fn from_s<N>(s: N) -> Self
+	where N: itoa::Integer + num_traits::One + PartialEq {
 		let mut out = Self::default();
-
-		// Write seconds.
-		ne_push!(
-			out, s,
-			// 1   •    s    e   c    o    n    d
-			&[49, 32, 115, 101, 99, 111, 110, 100],
-			// •    s    e   c    o    n    d    s
-			&[32, 115, 101, 99, 111, 110, 100, 115]
-		);
-
+		out.write_seconds(s);
 		out
 	}
 
