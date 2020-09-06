@@ -237,6 +237,7 @@ impl Argue {
 	pub fn with_any(self) -> Self {
 		if self.args.is_empty() {
 			die(b"Missing options, flags, arguments, and/or ketchup.");
+			unreachable!();
 		}
 
 		self
@@ -634,6 +635,7 @@ impl Argue {
 		let idx = self.arg_idx();
 		if idx >= self.args.len() {
 			die(b"Missing required argument.");
+			unreachable!();
 		}
 
 		self.args.remove(idx)

@@ -62,6 +62,7 @@ impl KeyMaster {
 	pub fn insert(&mut self, key: &str, idx: usize) -> bool {
 		if self.len >= MAX_KEYS {
 			die(b"Too many options.");
+			unreachable!();
 		}
 
 		let key = hash_arg_key(key);
@@ -83,11 +84,13 @@ impl KeyMaster {
 	pub fn insert_unique(&mut self, key: &str, idx: usize) {
 		if self.len >= MAX_KEYS {
 			die(b"Too many options.");
+			unreachable!();
 		}
 
 		let key = hash_arg_key(key);
 		if self.keys.eq(u64x8::splat(key)).any() {
 			die(b"Duplicate key.");
+			unreachable!();
 		}
 
 		unsafe {

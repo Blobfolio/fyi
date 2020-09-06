@@ -103,6 +103,7 @@ impl KeyMaster {
 	pub fn insert(&mut self, key: &str, idx: usize) -> bool {
 		if self.len >= MAX_KEYS {
 			die(b"Too many options.");
+			unreachable!();
 		}
 
 		let key = KeyEntry::new(key, idx);
@@ -121,11 +122,13 @@ impl KeyMaster {
 	pub fn insert_unique(&mut self, key: &str, idx: usize) {
 		if self.len >= MAX_KEYS {
 			die(b"Too many options.");
+			unreachable!();
 		}
 
 		let key = KeyEntry::new(key, idx);
 		if self.keys[0..self.len].iter().any(|x| x.eq(&key)) {
 			die(b"Duplicate key.");
+			unreachable!();
 		}
 
 		self.keys[self.len] = key;
