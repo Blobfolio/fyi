@@ -542,7 +542,7 @@ fn with_ext_key(ext: &[u8]) -> u8x8 {
 	};
 
 	// Lower-case the result by adding "32" to any bytes in `65..=90`.
-	(ext.lt(u8x8::splat(91)) & ext.gt(u8x8::splat(64))).select(ext + u8x8::splat(32), ext)
+	(ext.le(u8x8::splat(90)) & ext.ge(u8x8::splat(65))).select(ext + u8x8::splat(32), ext)
 }
 
 
