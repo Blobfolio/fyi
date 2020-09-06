@@ -195,6 +195,7 @@ where P: AsRef<Path> {
 	false
 }
 
+#[allow(clippy::integer_division)]
 #[must_use]
 /// # Chunked Seconds.
 ///
@@ -214,18 +215,21 @@ where P: AsRef<Path> {
 /// assert_eq!(secs_chunks(90), [0, 1, 30]);
 /// ```
 pub fn secs_chunks(num: u32) -> [u32; 3] {
-	let mut out: [u32; 3] = [0, 0, u32::min(86399, num)];
+	let mut out: [u32; 3] = [0, 0, 86399.min(num)];
 
-	// Hours.
-	if out[2] >= 3600 {
-		out[0] = num_integer::div_floor(out[2], 3600);
-		out[2] -= out[0] * 3600;
-	}
+	unsafe {
+		let ptr = out.as_mut_ptr();
+		// Hours.
+		if ptr.add(2).read() >= 3600 {
+			ptr.write(ptr.add(2).read() / 3600);
+			*ptr.add(2) %= 3600;
+		}
 
-	// Minutes.
-	if out[2] >= 60 {
-		out[1] = num_integer::div_floor(out[2], 60);
-		out[2] -= out[1] * 60;
+		// Minutes.
+		if ptr.add(2).read() >= 60 {
+			ptr.add(1).write(ptr.add(2).read() / 60);
+			*ptr.add(2) %= 60;
+		}
 	}
 
 	out
