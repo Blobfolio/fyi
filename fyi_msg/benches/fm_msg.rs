@@ -56,11 +56,22 @@ fn with_timestamp(c: &mut Criterion) {
 	});
 }
 
+fn msgkind(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_msg::MsgKind");
+
+	group.bench_function("new(Hello Dolly, 199)", move |b| {
+		b.iter(||
+			MsgKind::new("Hello Dolly", 199)
+		)
+	});
+}
+
 
 
 criterion_group!(
 	benches,
 	new,
 	with_timestamp,
+	msgkind,
 );
 criterion_main!(benches);
