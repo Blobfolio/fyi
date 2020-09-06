@@ -29,7 +29,6 @@ use std::{
 		self,
 		Write,
 	},
-	iter::FromIterator,
 	ops::Deref,
 	path::PathBuf,
 	sync::{
@@ -428,12 +427,10 @@ impl WitchingInner {
 				// covers the first 10), and duplicate the line-up chunk (n-10)
 				// times to cover the rest.
 				Ordering::Greater => {
-					Self::print(
-						&CLS10.iter()
-							.chain(&CLS10[14..28].repeat(self.last_lines - 10))
-							.copied()
-							.collect::<Vec<u8>>()
-					);
+					Self::print(&[
+						&CLS10[..],
+						&CLS10[14..28].repeat(self.last_lines - 10),
+					].concat());
 				},
 			}
 
@@ -1089,15 +1086,14 @@ impl Witching {
 	///
 	///     X files in M minutes and S seconds.
 	fn summary(&self) -> Msg {
-		Msg::from_iter(
-			NiceInt::from(u64::from(self.total())).iter()
-				.chain(b" ".iter())
-				.chain(self.label().iter())
-				.chain(b" in ".iter())
-				.chain(NiceElapsed::from(self.elapsed()).iter())
-				.chain(b".".iter())
-				.copied()
-		)
+		Msg::from([
+			NiceInt::from(u64::from(self.total())).as_bytes(),
+			b" ",
+			self.label(),
+			b" in ",
+			NiceElapsed::from(self.elapsed()).as_bytes(),
+			b".",
+		].concat())
 	}
 
 	/// # Summarize.
@@ -1152,12 +1148,11 @@ impl Witching {
 	///
 	///     No files were found.
 	fn summarize_empty(&self) {
-		Msg::from_iter(
-			b"No ".iter()
-				.chain(self.label().iter())
-				.chain(b" were found.\n".iter())
-				.copied()
-		)
+		Msg::from([
+			b"No ",
+			self.label(),
+			b" were found.",
+		].concat())
 			.with_prefix(MsgKind::Warning)
 			.eprint();
 	}
