@@ -37,4 +37,4 @@ harness = false
 
 [features]
 default = []
-simd = [ "packed_simd" ]
+simd = [ "packed_simd", "ahash/specialize" ]
