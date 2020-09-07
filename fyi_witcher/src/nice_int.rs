@@ -13,95 +13,57 @@ use std::{
 
 
 
-/// # Helper: generate `impl From<X> for NiceInt`
 macro_rules! niceint_from {
 	($type:ty) => {
 		impl From<$type> for NiceInt {
 			#[allow(clippy::integer_division)]
 			fn from(mut num: $type) -> Self {
-				if num > 999 { Self::from_big(&num) }
-				else {
-					unsafe {
-						let mut buf = [MaybeUninit::<u8>::uninit(); 15];
-						let dst = buf.as_mut_ptr() as *mut u8;
+				if num > 999_999_999_999 { num = 999_999_999_999; }
 
-						let len: usize =
-							if num > 99 {
-								dst.write((num / 100) as u8 + 48);
-								num %= 100;
-								if num > 9 {
-									dst.add(1).write((num / 10) as u8 + 48);
-									dst.add(2).write((num % 10) as u8 + 48);
-								}
-								else {
-									dst.add(1).write(48_u8);
-									dst.add(2).write(num as u8 + 48);
-								}
+				unsafe {
+					let mut buf = [MaybeUninit::<u8>::uninit(); 15];
+					let dst = buf.as_mut_ptr() as *mut u8;
 
-								3
+					let len: usize = [
+						100_000_000_000,
+						 10_000_000_000,
+						  1_000_000_000,
+						    100_000_000,
+						     10_000_000,
+						      1_000_000,
+						        100_000,
+						         10_000,
+						          1_000,
+						            100,
+						             10,
+					].iter().copied().fold(0, |len, x|
+						if num >= x {
+							dst.add(len).write((num / x) as u8 + 48);
+							num %= x;
+
+							if x == 1_000_000_000 || x == 1_000_000 || x == 1_000 {
+								dst.add(len + 1).write(b',');
+								len + 2
 							}
-							else if num > 9 {
-								dst.write((num / 10) as u8 + 48);
-								dst.add(1).write((num % 10) as u8 + 48);
-								2
-							}
-							else {
-								dst.write(num as u8 + 48);
-								1
-							};
-
-						Self {
-							inner: mem::transmute::<_, [u8; 15]>(buf),
-							len
+							else { len + 1 }
 						}
-					}
-				}
-			}
-		}
-	};
-}
+						else if len == 0 { len }
+						else {
+							dst.add(len).write(48_u8);
 
-/// # Helper: generate `impl From<X> for NiceInt` (where X might overflow)
-macro_rules! niceint_from_huge {
-	($type:ty) => {
-		impl From<$type> for NiceInt {
-			#[allow(clippy::integer_division)]
-			fn from(mut num: $type) -> Self {
-				if num > 999 { Self::from_big(&999_999_999_999.min(num)) }
-				else {
-					unsafe {
-						let mut buf = [MaybeUninit::<u8>::uninit(); 15];
-						let dst = buf.as_mut_ptr() as *mut u8;
-
-						let len: usize =
-							if num > 99 {
-								dst.write((num / 100) as u8 + 48);
-								num %= 100;
-								if num > 9 {
-									dst.add(1).write((num / 10) as u8 + 48);
-									dst.add(2).write((num % 10) as u8 + 48);
-								}
-								else {
-									dst.add(1).write(48_u8);
-									dst.add(2).write(num as u8 + 48);
-								}
-
-								3
+							if x == 1_000_000_000 || x == 1_000_000 || x == 1_000 {
+								dst.add(len + 1).write(b',');
+								len + 2
 							}
-							else if num > 9 {
-								dst.write((num / 10) as u8 + 48);
-								dst.add(1).write((num % 10) as u8 + 48);
-								2
-							}
-							else {
-								dst.write(num as u8 + 48);
-								1
-							};
-
-						Self {
-							inner: mem::transmute::<_, [u8; 15]>(buf),
-							len
+							else { len + 1 }
 						}
+					);
+
+					dst.add(len).write(num as u8 + 48);
+
+					Self {
+						inner: mem::transmute::<_, [u8; 15]>(buf),
+						len: len + 1
 					}
 				}
 			}
@@ -196,24 +158,105 @@ impl From<u8> for NiceInt {
 	}
 }
 
-niceint_from!(u16);
-niceint_from!(u32);
-niceint_from_huge!(u64);
-niceint_from_huge!(usize);
+impl From<u16> for NiceInt {
+	#[allow(clippy::integer_division)]
+	fn from(mut num: u16) -> Self {
+		unsafe {
+			let mut buf = [MaybeUninit::<u8>::uninit(); 15];
+			let dst = buf.as_mut_ptr() as *mut u8;
+
+			let len: usize = [
+				10_000_u16,
+				 1_000_u16,
+				   100_u16,
+				   	10_u16,
+			].iter().copied().fold(0, |len, x|
+				if num >= x {
+					dst.add(len).write((num / x) as u8 + 48);
+					num %= x;
+
+					if x == 1_000 {
+						dst.add(len + 1).write(b',');
+						len + 2
+					}
+					else { len + 1 }
+				}
+				else if len == 0 { len }
+				else {
+					dst.add(len).write(48_u8);
+
+					if x == 1_000 {
+						dst.add(len + 1).write(b',');
+						len + 2
+					}
+					else { len + 1 }
+				}
+			);
+
+			dst.add(len).write(num as u8 + 48);
+
+			Self {
+				inner: mem::transmute::<_, [u8; 15]>(buf),
+				len: len + 1
+			}
+		}
+	}
+}
+
+impl From<u32> for NiceInt {
+	#[allow(clippy::integer_division)]
+	fn from(mut num: u32) -> Self {
+		unsafe {
+			let mut buf = [MaybeUninit::<u8>::uninit(); 15];
+			let dst = buf.as_mut_ptr() as *mut u8;
+
+			let len: usize = [
+				1_000_000_000_u32,
+				  100_000_000_u32,
+				   10_000_000_u32,
+				    1_000_000_u32,
+				      100_000_u32,
+				       10_000_u32,
+				        1_000_u32,
+				          100_u32,
+				           10_u32,
+			].iter().copied().fold(0, |len, x|
+				if num >= x {
+					dst.add(len).write((num / x) as u8 + 48);
+					num %= x;
+
+					if x == 1_000_000 || x == 1_000 {
+						dst.add(len + 1).write(b',');
+						len + 2
+					}
+					else { len + 1 }
+				}
+				else if len == 0 { len }
+				else {
+					dst.add(len).write(48_u8);
+
+					if x == 1_000_000 || x == 1_000 {
+						dst.add(len + 1).write(b',');
+						len + 2
+					}
+					else { len + 1 }
+				}
+			);
+
+			dst.add(len).write(num as u8 + 48);
+
+			Self {
+				inner: mem::transmute::<_, [u8; 15]>(buf),
+				len: len + 1
+			}
+		}
+	}
+}
+
+niceint_from!(u64);
+niceint_from!(usize);
 
 impl NiceInt {
-	/// # From Big
-	///
-	/// For numbers greater or equal to `1000`, commas come into play,
-	/// requiring the use of the relatively heavier `num_format` crate.
-	fn from_big<N>(num: &N) -> Self
-	where N: num_format::ToFormattedString {
-		use num_format::WriteFormatted;
-		let mut out = Self::default();
-		out.len = (&mut out.inner[..]).write_formatted(num, &num_format::Locale::en).unwrap_or_default();
-		out
-	}
-
 	#[must_use]
 	/// # As Bytes.
 	///
@@ -237,10 +280,14 @@ fn t_nice_int() {
 
 	for i in [
 		1_u64,
+		5_u64,
+		9_u64,
 		10_u64,
+		98_u64,
 		99_u64,
 		100_u64,
 		101_u64,
+		678_u64,
 		999_u64,
 		1000_u64,
 		1001_u64,
@@ -269,6 +316,6 @@ fn t_nice_int() {
 		100000000000_u64,
 		100000000001_u64,
 	].iter() {
-		assert_eq!(&*NiceInt::from(*i), i.to_formatted_string(&Locale::en).as_bytes());
+		assert_eq!(&*NiceInt::from(*i), i.to_formatted_string(&Locale::en).as_bytes(), "{:?}", *i);
 	}
 }
