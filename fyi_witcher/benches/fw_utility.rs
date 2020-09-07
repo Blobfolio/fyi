@@ -91,16 +91,16 @@ fn fitted_range(c: &mut Criterion) {
 fn secs_chunks(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::utility");
 
-	for secs in [10, 113, 10502].iter() {
+	for secs in [10_u64, 113_u64, 10502_u64].iter() {
 		group.bench_with_input(
 			BenchmarkId::from_parameter(format!(
-				"secs_chunks({})",
+				"hms_u64({})",
 				secs,
 			)),
 			secs,
 			|b, &secs| {
 				b.iter(||
-					utility::secs_chunks(secs)
+					utility::hms_u64(secs)
 				);
 			}
 		);

@@ -3,8 +3,8 @@
 */
 
 use std::{
-	path::Path,
 	ops::Range,
+	path::Path,
 };
 use unicode_width::UnicodeWidthChar;
 
@@ -197,42 +197,27 @@ where P: AsRef<Path> {
 
 #[allow(clippy::integer_division)]
 #[must_use]
-/// # Chunked Seconds.
+/// # Time Chunks.
 ///
-/// This method converts seconds into hours, minutes, and seconds, returning
-/// a fixed-length array with each value in order, e.g. `[h, m, s]`.
-///
-/// As with the rest of the methods in this crate, days and beyond are not
-/// considered. Large values are simply truncated to `86399`, i.e. one second
-/// shy of a full day.
-///
-/// ## Examples
-///
-/// ```no_run
-/// use fyi_witcher::utility::secs_chunks;
-///
-/// assert_eq!(secs_chunks(1), [0, 0, 1]);
-/// assert_eq!(secs_chunks(90), [0, 1, 30]);
-/// ```
-pub fn secs_chunks(num: u32) -> [u32; 3] {
-	let mut out: [u32; 3] = [0, 0, 86399.min(num)];
-
-	unsafe {
-		let ptr = out.as_mut_ptr();
-		// Hours.
-		if ptr.add(2).read() >= 3600 {
-			ptr.write(ptr.add(2).read() / 3600);
-			*ptr.add(2) %= 3600;
+/// This method splits seconds into hours, minutes, and seconds. Days are not
+/// supported; the maximum return value is `(23, 59, 59)`.
+pub const fn hms_u64(mut num: u64) -> [u8; 3] {
+	if num < 60 { [0, 0, num as u8] }
+	else if num < 86399 {
+		let mut buf = [0_u8; 3];
+		if num >= 3600 {
+			buf[0] = (num / 3600) as u8;
+			num %= 3600;
 		}
-
-		// Minutes.
-		if ptr.add(2).read() >= 60 {
-			ptr.add(1).write(ptr.add(2).read() / 60);
-			*ptr.add(2) %= 60;
+		if num >= 60 {
+			buf[1] = (num / 60) as u8;
+			buf[2] = (num % 60) as u8;
 		}
+		else if num > 0 { buf[2] = num as u8; }
+
+		buf
 	}
-
-	out
+	else { [23, 59, 59] }
 }
 
 #[must_use]
@@ -302,10 +287,10 @@ mod tests {
 	}
 
 	#[test]
-	fn t_secs_chunks() {
-		assert_eq!(secs_chunks(1), [0, 0, 1]);
-		assert_eq!(secs_chunks(30), [0, 0, 30]);
-		assert_eq!(secs_chunks(90), [0, 1, 30]);
-		assert_eq!(secs_chunks(3600), [1, 0, 0]);
+	fn t_hms_u64() {
+		assert_eq!(hms_u64(1), [0_u8, 0_u8, 1_u8]);
+		assert_eq!(hms_u64(30), [0_u8, 0_u8, 30_u8]);
+		assert_eq!(hms_u64(90), [0_u8, 1_u8, 30_u8]);
+		assert_eq!(hms_u64(3600), [1_u8, 0_u8, 0_u8]);
 	}
 }
