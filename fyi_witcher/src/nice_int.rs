@@ -4,8 +4,110 @@
 
 use std::{
 	fmt,
+	mem::{
+		self,
+		MaybeUninit,
+	},
 	ops::Deref,
 };
+
+
+
+/// # Helper: generate `impl From<X> for NiceInt`
+macro_rules! niceint_from {
+	($type:ty) => {
+		impl From<$type> for NiceInt {
+			#[allow(clippy::integer_division)]
+			fn from(mut num: $type) -> Self {
+				if num > 999 { Self::from_big(&num) }
+				else {
+					unsafe {
+						let mut buf = [MaybeUninit::<u8>::uninit(); 15];
+						let dst = buf.as_mut_ptr() as *mut u8;
+
+						let len: usize =
+							if num > 99 {
+								dst.write((num / 100) as u8 + 48);
+								num %= 100;
+								if num > 9 {
+									dst.add(1).write((num / 10) as u8 + 48);
+									dst.add(2).write((num % 10) as u8 + 48);
+								}
+								else {
+									dst.add(1).write(48_u8);
+									dst.add(2).write(num as u8 + 48);
+								}
+
+								3
+							}
+							else if num > 9 {
+								dst.write((num / 10) as u8 + 48);
+								dst.add(1).write((num % 10) as u8 + 48);
+								2
+							}
+							else {
+								dst.write(num as u8 + 48);
+								1
+							};
+
+						Self {
+							inner: mem::transmute::<_, [u8; 15]>(buf),
+							len
+						}
+					}
+				}
+			}
+		}
+	};
+}
+
+/// # Helper: generate `impl From<X> for NiceInt` (where X might overflow)
+macro_rules! niceint_from_huge {
+	($type:ty) => {
+		impl From<$type> for NiceInt {
+			#[allow(clippy::integer_division)]
+			fn from(mut num: $type) -> Self {
+				if num > 999 { Self::from_big(&999_999_999_999.min(num)) }
+				else {
+					unsafe {
+						let mut buf = [MaybeUninit::<u8>::uninit(); 15];
+						let dst = buf.as_mut_ptr() as *mut u8;
+
+						let len: usize =
+							if num > 99 {
+								dst.write((num / 100) as u8 + 48);
+								num %= 100;
+								if num > 9 {
+									dst.add(1).write((num / 10) as u8 + 48);
+									dst.add(2).write((num % 10) as u8 + 48);
+								}
+								else {
+									dst.add(1).write(48_u8);
+									dst.add(2).write(num as u8 + 48);
+								}
+
+								3
+							}
+							else if num > 9 {
+								dst.write((num / 10) as u8 + 48);
+								dst.add(1).write((num % 10) as u8 + 48);
+								2
+							}
+							else {
+								dst.write(num as u8 + 48);
+								1
+							};
+
+						Self {
+							inner: mem::transmute::<_, [u8; 15]>(buf),
+							len
+						}
+					}
+				}
+			}
+		}
+	};
+}
 
 
 
@@ -55,60 +157,51 @@ impl fmt::Display for NiceInt {
 }
 
 impl From<u8> for NiceInt {
-	fn from(num: u8) -> Self {
-		Self::from_small(num)
+	#[allow(clippy::integer_division)]
+	fn from(mut num: u8) -> Self {
+		unsafe {
+			let mut buf = [MaybeUninit::<u8>::uninit(); 15];
+			let dst = buf.as_mut_ptr() as *mut u8;
+
+			let len: usize =
+				if num > 99 {
+					dst.write(num / 100 + 48);
+					num %= 100;
+					if num > 9 {
+						dst.add(1).write(num / 10 + 48);
+						dst.add(2).write(num % 10 + 48);
+					}
+					else {
+						dst.add(1).write(48_u8);
+						dst.add(2).write(num + 48);
+					}
+
+					3
+				}
+				else if num > 9 {
+					dst.write(num / 10 + 48);
+					dst.add(1).write(num % 10 + 48);
+					2
+				}
+				else {
+					dst.write(num + 48);
+					1
+				};
+
+			Self {
+				inner: mem::transmute::<_, [u8; 15]>(buf),
+				len
+			}
+		}
 	}
 }
 
-impl From<u16> for NiceInt {
-	fn from(num: u16) -> Self {
-		if num < 1000 { Self::from_small(num) }
-		else { Self::from_big(&num) }
-	}
-}
-
-impl From<u32> for NiceInt {
-	fn from(num: u32) -> Self {
-		if num < 1000 { Self::from_small(num) }
-		else { Self::from_big(&num) }
-	}
-}
-
-impl From<u64> for NiceInt {
-	fn from(num: u64) -> Self {
-		if num < 1000 { Self::from_small(num) }
-		else { Self::from_big(&999_999_999_999.min(num)) }
-	}
-}
-
-impl From<u128> for NiceInt {
-	fn from(num: u128) -> Self {
-		if num < 1000 { Self::from_small(num) }
-		else { Self::from_big(&999_999_999_999.min(num)) }
-	}
-}
-
-impl From<usize> for NiceInt {
-	fn from(num: usize) -> Self {
-		if num < 1000 { Self::from_small(num) }
-		else { Self::from_big(&999_999_999_999.min(num)) }
-	}
-}
-
-
+niceint_from!(u16);
+niceint_from!(u32);
+niceint_from_huge!(u64);
+niceint_from_huge!(usize);
 
 impl NiceInt {
-	/// # From Small
-	///
-	/// For numbers less than `1000`, we can skip the overhead of figuring out
-	/// punctuation and just leverage `itoa`.
-	fn from_small<N>(num: N) -> Self
-	where N: itoa::Integer {
-		let mut out = Self::default();
-		out.len = itoa::write(&mut out.inner[..], num).unwrap_or_default();
-		out
-	}
-
 	/// # From Big
 	///
 	/// For numbers greater or equal to `1000`, commas come into play,
