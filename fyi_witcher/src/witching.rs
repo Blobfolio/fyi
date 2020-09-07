@@ -641,16 +641,19 @@ impl WitchingInner {
 		if secs == self.elapsed { false }
 		else {
 			self.elapsed = secs;
-
-			if secs == 86400 {
-				self.toc.replace(&mut self.buf, PART_ELAPSED, b"23:59:59");
-			}
-			else {
-				let c = utility::secs_chunks(secs as u32);
-				let rgs: usize = self.toc.start(PART_ELAPSED);
-				self.buf[rgs..rgs + 2].copy_from_slice(time_format_dd(c[0]));
-				self.buf[rgs + 3..rgs + 5].copy_from_slice(time_format_dd(c[1]));
-				self.buf[rgs + 6..rgs + 8].copy_from_slice(time_format_dd(c[2]));
+			let ptr = self.buf.as_mut_ptr();
+			unsafe {
+				utility::hms_u64(secs).iter()
+					.fold(
+						self.toc.start(PART_ELAPSED),
+						|len, x| {
+							ptr.add(len).copy_from_nonoverlapping(
+								time_format_dd(usize::from(*x)).as_ptr(),
+								2
+							);
+							len + 3
+						}
+					);
 			}
 
 			true
