@@ -4,7 +4,12 @@
 
 use std::{
 	fmt,
+	mem::{
+		self,
+		MaybeUninit,
+	},
 	ops::Deref,
+	ptr,
 };
 
 
@@ -30,11 +35,11 @@ macro_rules! elapsed_from {
 					// Break up the parts.
 					let h: u8 = (num / 3600) as u8;
 					let s: $type = num % 3600;
-					if s >= 60 {
-						unsafe { Self::from_hms(h, (s / 60) as u8, (s % 60) as u8) }
+					if s < 60 {
+						unsafe { Self::from_hms(h, 0, s as u8) }
 					}
 					else {
-						unsafe { Self::from_hms(h, 0, s as u8) }
+						unsafe { Self::from_hms(h, (s / 60) as u8, (s % 60) as u8) }
 					}
 				}
 				// We're into days, which we don't do.
@@ -139,10 +144,7 @@ impl NiceElapsed {
 	/// All numbers must be — but should be — less than 99 or undefined things
 	/// may happen.
 	unsafe fn from_hms(h: u8, m: u8, s: u8) -> Self {
-		use std::mem;
-		use std::ptr;
-
-		let mut buf = [mem::MaybeUninit::<u8>::uninit(); 36];
+		let mut buf = [MaybeUninit::<u8>::uninit(); 36];
 		let dst = buf.as_mut_ptr() as *mut u8;
 		let count: u8 = h.ne(&0) as u8 + m.ne(&0) as u8 + s.ne(&0) as u8;
 		let mut len: usize = 0;
