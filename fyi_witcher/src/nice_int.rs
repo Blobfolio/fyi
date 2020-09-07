@@ -13,66 +13,6 @@ use std::{
 
 
 
-macro_rules! niceint_from {
-	($type:ty) => {
-		impl From<$type> for NiceInt {
-			#[allow(clippy::integer_division)]
-			fn from(mut num: $type) -> Self {
-				if num > 999_999_999_999 { num = 999_999_999_999; }
-
-				unsafe {
-					let mut buf = [MaybeUninit::<u8>::uninit(); 15];
-					let dst = buf.as_mut_ptr() as *mut u8;
-
-					let len: usize = [
-						100_000_000_000,
-						 10_000_000_000,
-						  1_000_000_000,
-						    100_000_000,
-						     10_000_000,
-						      1_000_000,
-						        100_000,
-						         10_000,
-						          1_000,
-						            100,
-						             10,
-					].iter().copied().fold(0, |len, x|
-						if num >= x {
-							dst.add(len).write((num / x) as u8 + 48);
-							num %= x;
-
-							if x == 1_000_000_000 || x == 1_000_000 || x == 1_000 {
-								dst.add(len + 1).write(b',');
-								len + 2
-							}
-							else { len + 1 }
-						}
-						else if len == 0 { len }
-						else {
-							dst.add(len).write(48_u8);
-
-							if x == 1_000_000_000 || x == 1_000_000 || x == 1_000 {
-								dst.add(len + 1).write(b',');
-								len + 2
-							}
-							else { len + 1 }
-						}
-					);
-
-					dst.add(len).write(num as u8 + 48);
-
-					Self {
-						inner: mem::transmute::<_, [u8; 15]>(buf),
-						len: len + 1
-					}
-				}
-			}
-		}
-	};
-}
-
-
-
 #[derive(Debug, Clone, Copy, Hash, PartialEq)]
 /// `NiceInt` provides a quick way to convert an integer — any unsigned value
 /// under a trillion — into a formatted byte string for e.g. printing.
@@ -120,16 +60,27 @@ impl fmt::Display for NiceInt {
 
 impl From<u8> for NiceInt {
 	#[allow(clippy::integer_division)]
+	/// # From `u8`
+	///
+	/// `u8`s are small enough we can just brute-force the answer with a small
+	/// conditional.
 	fn from(mut num: u8) -> Self {
 		unsafe {
 			let mut buf = [MaybeUninit::<u8>::uninit(); 15];
 			let dst = buf.as_mut_ptr() as *mut u8;
 
 			let len: usize =
-				if num > 99 {
-					dst.write(num / 100 + 48);
-					num %= 100;
-					if num > 9 {
+				if num >= 100 {
+					if num >= 200 {
+						dst.write(50_u8);
+						num -= 200;
+					}
+					else {
+						dst.write(49_u8);
+						num -= 100;
+					}
+
+					if num >= 10 {
 						dst.add(1).write(num / 10 + 48);
 						dst.add(2).write(num % 10 + 48);
 					}
@@ -140,7 +91,7 @@ impl From<u8> for NiceInt {
 
 					3
 				}
-				else if num > 9 {
+				else if num >= 10 {
 					dst.write(num / 10 + 48);
 					dst.add(1).write(num % 10 + 48);
 					2
@@ -159,102 +110,34 @@ impl From<u8> for NiceInt {
 }
 
 impl From<u16> for NiceInt {
-	#[allow(clippy::integer_division)]
-	fn from(mut num: u16) -> Self {
-		unsafe {
-			let mut buf = [MaybeUninit::<u8>::uninit(); 15];
-			let dst = buf.as_mut_ptr() as *mut u8;
-
-			let len: usize = [
-				10_000_u16,
-				 1_000_u16,
-				   100_u16,
-				   	10_u16,
-			].iter().copied().fold(0, |len, x|
-				if num >= x {
-					dst.add(len).write((num / x) as u8 + 48);
-					num %= x;
-
-					if x == 1_000 {
-						dst.add(len + 1).write(b',');
-						len + 2
-					}
-					else { len + 1 }
-				}
-				else if len == 0 { len }
-				else {
-					dst.add(len).write(48_u8);
-
-					if x == 1_000 {
-						dst.add(len + 1).write(b',');
-						len + 2
-					}
-					else { len + 1 }
-				}
-			);
-
-			dst.add(len).write(num as u8 + 48);
-
-			Self {
-				inner: mem::transmute::<_, [u8; 15]>(buf),
-				len: len + 1
-			}
-		}
+	fn from(num: u16) -> Self {
+		unsafe { from_int(num) }
 	}
 }
 
 impl From<u32> for NiceInt {
-	#[allow(clippy::integer_division)]
-	fn from(mut num: u32) -> Self {
-		unsafe {
-			let mut buf = [MaybeUninit::<u8>::uninit(); 15];
-			let dst = buf.as_mut_ptr() as *mut u8;
-
-			let len: usize = [
-				1_000_000_000_u32,
-				  100_000_000_u32,
-				   10_000_000_u32,
-				    1_000_000_u32,
-				      100_000_u32,
-				       10_000_u32,
-				        1_000_u32,
-				          100_u32,
-				           10_u32,
-			].iter().copied().fold(0, |len, x|
-				if num >= x {
-					dst.add(len).write((num / x) as u8 + 48);
-					num %= x;
-
-					if x == 1_000_000 || x == 1_000 {
-						dst.add(len + 1).write(b',');
-						len + 2
-					}
-					else { len + 1 }
-				}
-				else if len == 0 { len }
-				else {
-					dst.add(len).write(48_u8);
-
-					if x == 1_000_000 || x == 1_000 {
-						dst.add(len + 1).write(b',');
-						len + 2
-					}
-					else { len + 1 }
-				}
-			);
-
-			dst.add(len).write(num as u8 + 48);
-
-			Self {
-				inner: mem::transmute::<_, [u8; 15]>(buf),
-				len: len + 1
-			}
-		}
+	fn from(num: u32) -> Self {
+		unsafe { from_int(num) }
 	}
 }
 
-niceint_from!(u64);
-niceint_from!(usize);
+impl From<u64> for NiceInt {
+	fn from(num: u64) -> Self {
+		unsafe { from_int(999_999_999_999.min(num)) }
+	}
+}
+
+impl From<usize> for NiceInt {
+	fn from(num: usize) -> Self {
+		unsafe { from_int(999_999_999_999.min(num)) }
+	}
+}
+
+impl From<u128> for NiceInt {
+	fn from(num: u128) -> Self {
+		unsafe { from_int(999_999_999_999.min(num)) }
+	}
+}
 
 impl NiceInt {
 	#[must_use]
@@ -270,6 +153,76 @@ impl NiceInt {
 	pub fn as_str(&self) -> &str {
 		unsafe { std::str::from_utf8_unchecked(self.as_bytes()) }
 	}
+}
+
+/// # From Num.
+///
+/// Everything other than `u8` works the same way.
+///
+/// ## Safety
+///
+/// This is only used privately so all starting conditions are sane and safe.
+unsafe fn from_int<N>(num: N) -> NiceInt
+where N: itoap::Integer {
+	let mut buf = [MaybeUninit::<u8>::uninit(); 15];
+	let dst = buf.as_mut_ptr() as *mut u8;
+
+	// Write the number.
+	let mut len: usize = itoap::write_to_ptr(dst, num);
+	// Add the commas.
+	len += insert_commas(dst, len);
+
+	NiceInt {
+		inner: mem::transmute::<_, [u8; 15]>(buf),
+		len
+	}
+}
+
+/// # Insert Commas.
+///
+/// This inserts comma separators into an ASCII-fied number byte string,
+/// turning values like "1000" into "1,000".
+///
+/// Because our `NiceInt` behaviors are capped at `999,999,999,999`, we can
+/// handle this semi-manually.
+///
+/// The number of extra bytes allocated for commas, if any, are returned.
+///
+/// ## Safety
+///
+/// This is only used privately so all starting conditions are sane and safe.
+unsafe fn insert_commas(src: *mut u8, len: usize) -> usize {
+	use std::ptr;
+
+	// We need 3 commas.
+	if len > 9 {
+		ptr::copy(src.add(len - 9), src.add(len - 8), 9);
+		src.add(len - 9).write(b',');
+
+		ptr::copy(src.add(len - 5), src.add(len - 4), 6);
+		src.add(len - 5).write(b',');
+
+		ptr::copy(src.add(len - 1), src.add(len), 3);
+		src.add(len - 1).write(b',');
+
+		3
+	}
+	else if len > 6 {
+		ptr::copy(src.add(len - 6), src.add(len - 5), 6);
+		src.add(len - 6).write(b',');
+
+		ptr::copy(src.add(len - 2), src.add(len - 1), 3);
+		src.add(len - 2).write(b',');
+
+		2
+	}
+	else if len > 3 {
+		ptr::copy(src.add(len - 3), src.add(len - 2), 3);
+		src.add(len - 3).write(b',');
+
+		1
+	}
+	else { 0 }
 }
 
 
