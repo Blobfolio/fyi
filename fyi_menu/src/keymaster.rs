@@ -117,7 +117,7 @@ impl KeyMaster {
 
 	/// # Insert (Unique).
 	///
-	/// This is just like '[`keymaster::insert`] except that if a duplicate key
+	/// This is just like '[`KeyMaster::insert`] except that if a duplicate key
 	/// is submitted, it will print an error and exit with status code 1.
 	pub fn insert_unique(&mut self, key: &str, idx: usize) {
 		if self.len >= MAX_KEYS {
