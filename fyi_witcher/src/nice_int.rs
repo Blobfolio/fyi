@@ -15,15 +15,10 @@ use std::{
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq)]
 /// `NiceInt` provides a quick way to convert an integer — any unsigned value
-/// under a trillion — into a formatted byte string for e.g. printing.
+/// under a trillion — into a formatted byte string for e.g. printing. Commas
+/// are added for every thousand.
 ///
 /// That's it!
-///
-/// For values under `1000`, the [`itoa`](https://crates.io/crates/itoa) crate is used;
-/// for values requiring punctuation — i.e. US thousands separators — [`num_format`](https://crates.io/crates/num_format)
-/// is used instead.
-///
-/// Both are much faster than relying on `to_string()` or the like.
 ///
 /// ## Examples
 ///
@@ -60,10 +55,6 @@ impl fmt::Display for NiceInt {
 
 impl From<u8> for NiceInt {
 	#[allow(clippy::integer_division)]
-	/// # From `u8`
-	///
-	/// `u8`s are small enough we can just brute-force the answer with a small
-	/// conditional.
 	fn from(mut num: u8) -> Self {
 		unsafe {
 			let mut buf = [MaybeUninit::<u8>::uninit(); 15];
@@ -111,31 +102,115 @@ impl From<u8> for NiceInt {
 
 impl From<u16> for NiceInt {
 	fn from(num: u16) -> Self {
-		unsafe { from_int(num) }
+		if num <= 255 { Self::from(num as u8) }
+		else {
+			unsafe {
+				let mut buf = [MaybeUninit::<u8>::uninit(); 15];
+
+				let len = write_16_from(
+					num,
+					if num >= 10_000 { 10_000_u16 }
+						else if num >= 1_000 { 1_000_u16 }
+						else { 100_u16 },
+					buf.as_mut_ptr() as *mut u8,
+					0
+				);
+
+				Self {
+					inner: mem::transmute::<_, [u8; 15]>(buf),
+					len
+				}
+			}
+		}
 	}
 }
 
 impl From<u32> for NiceInt {
 	fn from(num: u32) -> Self {
-		unsafe { from_int(num) }
+		if num <= 255 { Self::from(num as u8) }
+		else if num <= 65_535 { Self::from(num as u16) }
+		else {
+			unsafe {
+				let mut buf = [MaybeUninit::<u8>::uninit(); 15];
+
+				let len = write_32_from(
+					num,
+					if num >= 1_000_000_000 { 1_000_000_000_u32 }
+						else if num >= 100_000_000 { 100_000_000_u32 }
+						else if num >= 10_000_000 { 10_000_000_u32 }
+						else if num >= 1_000_000 { 1_000_000_u32 }
+						else if num >= 100_000 { 100_000_u32 }
+						else { 10_000_u32 },
+					buf.as_mut_ptr() as *mut u8,
+					0
+				);
+
+				Self {
+					inner: mem::transmute::<_, [u8; 15]>(buf),
+					len
+				}
+			}
+		}
 	}
 }
 
 impl From<u64> for NiceInt {
 	fn from(num: u64) -> Self {
-		unsafe { from_int(999_999_999_999.min(num)) }
+		if num <= 255 { Self::from(num as u8) }
+		else if num <= 65_535 { Self::from(num as u16) }
+		else if num <= 4_294_967_295 { Self::from(num as u32) }
+		else {
+			unsafe {
+				let mut buf = [MaybeUninit::<u8>::uninit(); 15];
+
+				let len = write_64_from(
+					999_999_999_999.min(num),
+					if num >= 100_000_000_000 { 100_000_000_000_u64 }
+						else if num >= 10_000_000_000 { 10_000_000_000_u64 }
+						else { 1_000_000_000_u64 },
+					buf.as_mut_ptr() as *mut u8,
+					0
+				);
+
+				Self {
+					inner: mem::transmute::<_, [u8; 15]>(buf),
+					len
+				}
+			}
+		}
 	}
 }
 
 impl From<usize> for NiceInt {
 	fn from(num: usize) -> Self {
-		unsafe { from_int(999_999_999_999.min(num)) }
+		if num <= 255 { Self::from(num as u8) }
+		else if num <= 65_535 { Self::from(num as u16) }
+		else if num <= 4_294_967_295 { Self::from(num as u32) }
+		else {
+			unsafe {
+				let mut buf = [MaybeUninit::<u8>::uninit(); 15];
+
+				let len = write_64_from(
+					999_999_999_999.min(num) as u64,
+					if num >= 100_000_000_000 { 100_000_000_000_u64 }
+						else if num >= 10_000_000_000 { 10_000_000_000_u64 }
+						else { 1_000_000_000_u64 },
+					buf.as_mut_ptr() as *mut u8,
+					0
+				);
+
+				Self {
+					inner: mem::transmute::<_, [u8; 15]>(buf),
+					len
+				}
+			}
+		}
 	}
 }
 
 impl From<u128> for NiceInt {
 	fn from(num: u128) -> Self {
-		unsafe { from_int(999_999_999_999.min(num)) }
+		Self::from(999_999_999_999.min(num) as u64)
 	}
 }
 
@@ -155,74 +230,181 @@ impl NiceInt {
 	}
 }
 
-/// # From Num.
+#[allow(clippy::integer_division)]
+/// # Write `u64` Portions.
 ///
-/// Everything other than `u8` works the same way.
+/// This writes the leading decimals of a "big number" to the buffer, then
+/// recasts the value as a `u32` to continue from the middle.
 ///
-/// ## Safety
-///
-/// This is only used privately so all starting conditions are sane and safe.
-unsafe fn from_int<N>(num: N) -> NiceInt
-where N: itoap::Integer {
-	let mut buf = [MaybeUninit::<u8>::uninit(); 15];
-	let dst = buf.as_mut_ptr() as *mut u8;
+/// The explicit `if x == y` conditions are rather unsightly but execute much
+/// faster than loops with `/=` operations on the divisors. Ah the benefits of
+/// capping infinity…
+unsafe fn write_64_from(mut src: u64, mut from: u64, buf: *mut u8, mut len: usize) -> usize {
+	if from == 100_000_000_000 {
+		if src >= 100_000_000_000 {
+			buf.add(len).write((src / 100_000_000_000) as u8 + 48);
+			src %= 100_000_000_000;
+		}
+		else { buf.add(len).write(48_u8); }
 
-	// Write the number.
-	let mut len: usize = itoap::write_to_ptr(dst, num);
-	// Add the commas.
-	len += insert_commas(dst, len);
-
-	NiceInt {
-		inner: mem::transmute::<_, [u8; 15]>(buf),
-		len
+		len += 1;
+		from = 10_000_000_000;
 	}
+
+	if from == 10_000_000_000 {
+		if src >= 10_000_000_000 {
+			buf.add(len).write((src / 10_000_000_000) as u8 + 48);
+			src %= 10_000_000_000;
+		}
+		else { buf.add(len).write(48_u8); }
+
+		len += 1;
+		from = 1_000_000_000;
+	}
+
+	// We only need to crunch this as a u64 if the source is too big to be
+	// represented as a u32.
+	if from == 1_000_000_000 && src > 4_294_967_295 {
+		buf.add(len).write((src / 1_000_000_000) as u8 + 48);
+		src %= 1_000_000_000;
+
+		buf.add(len + 1).write(b',');
+		len += 2;
+		from = 100_000_000;
+	}
+
+	write_32_from(src as u32, from as u32, buf, len)
 }
 
-/// # Insert Commas.
+#[allow(clippy::integer_division)]
+/// # Write `u32` Portions.
 ///
-/// This inserts comma separators into an ASCII-fied number byte string,
-/// turning values like "1000" into "1,000".
-///
-/// Because our `NiceInt` behaviors are capped at `999,999,999,999`, we can
-/// handle this semi-manually.
-///
-/// The number of extra bytes allocated for commas, if any, are returned.
-///
-/// ## Safety
-///
-/// This is only used privately so all starting conditions are sane and safe.
-unsafe fn insert_commas(src: *mut u8, len: usize) -> usize {
-	use std::ptr;
+/// This writes the leading decimals of a "mid-sized number" to the buffer,
+/// then recasts the value as a `u16` to finish it off.
+unsafe fn write_32_from(mut src: u32, mut from: u32, buf: *mut u8, mut len: usize) -> usize {
+	if from == 1_000_000_000 {
+		if src >= 1_000_000_000 {
+			buf.add(len).write((src / 1_000_000_000) as u8 + 48);
+			src %= 1_000_000_000;
+		}
+		else { buf.add(len).write(48_u8); }
 
-	// We need 3 commas.
-	if len > 9 {
-		ptr::copy(src.add(len - 9), src.add(len - 8), 9);
-		src.add(len - 9).write(b',');
-
-		ptr::copy(src.add(len - 5), src.add(len - 4), 6);
-		src.add(len - 5).write(b',');
-
-		ptr::copy(src.add(len - 1), src.add(len), 3);
-		src.add(len - 1).write(b',');
-
-		3
+		buf.add(len + 1).write(b',');
+		len += 2;
+		from = 100_000_000;
 	}
-	else if len > 6 {
-		ptr::copy(src.add(len - 6), src.add(len - 5), 6);
-		src.add(len - 6).write(b',');
 
-		ptr::copy(src.add(len - 2), src.add(len - 1), 3);
-		src.add(len - 2).write(b',');
+	if from == 100_000_000 {
+		if src >= 100_000_000 {
+			buf.add(len).write((src / 100_000_000) as u8 + 48);
+			src %= 100_000_000;
+		}
+		else { buf.add(len).write(48_u8); }
 
-		2
+		len += 1;
+		from = 10_000_000;
 	}
-	else if len > 3 {
-		ptr::copy(src.add(len - 3), src.add(len - 2), 3);
-		src.add(len - 3).write(b',');
 
-		1
+	if from == 10_000_000 {
+		if src >= 10_000_000 {
+			buf.add(len).write((src / 10_000_000) as u8 + 48);
+			src %= 10_000_000;
+		}
+		else { buf.add(len).write(48_u8); }
+
+		len += 1;
+		from = 1_000_000;
 	}
-	else { 0 }
+
+	if from == 1_000_000 {
+		if src >= 1_000_000 {
+			buf.add(len).write((src / 1_000_000) as u8 + 48);
+			src %= 1_000_000;
+		}
+		else { buf.add(len).write(48_u8); }
+
+		buf.add(len + 1).write(b',');
+		len += 2;
+		from = 100_000;
+	}
+
+	if from == 100_000 {
+		if src >= 100_000 {
+			buf.add(len).write((src / 100_000) as u8 + 48);
+			src %= 100_000;
+		}
+		else { buf.add(len).write(48_u8); }
+
+		len += 1;
+		from = 10_000;
+	}
+
+	// We only need to crunch this as a u32 if the source is too big to be
+	// represented as a u16.
+	if from == 10_000 && src > 65_535 {
+		buf.add(len).write((src / 10_000) as u8 + 48);
+		src %= 10_000;
+
+		len += 1;
+		from = 1_000;
+	}
+
+	write_16_from(src as u16, from as u16, buf, len)
+}
+
+#[allow(clippy::integer_division)]
+/// # Write `u16` Portions.
+///
+/// This writes all remaining decimals to the buffer. Numbers small enough to
+/// be represented as a `u8` won't arrive here, but bigger numbers might after
+/// their leading bits have been written.
+unsafe fn write_16_from(mut src: u16, mut from: u16, buf: *mut u8, mut len: usize) -> usize {
+	if from == 10_000 {
+		if src >= 10_000 {
+			buf.add(len).write((src / 10_000) as u8 + 48);
+			src %= 10_000;
+		}
+		else { buf.add(len).write(48_u8); }
+
+		from = 1_000;
+		len += 1;
+	}
+
+	if from == 1_000 {
+		if src >= 1_000 {
+			buf.add(len).write((src / 1_000) as u8 + 48);
+			src %= 1_000;
+		}
+		else { buf.add(len).write(48_u8); }
+
+		buf.add(len + 1).write(b',');
+		len += 2;
+		from = 100;
+	}
+
+	if from == 100 {
+		if src >= 100 {
+			buf.add(len).write((src / 100) as u8 + 48);
+			src %= 100;
+		}
+		else { buf.add(len).write(48_u8); }
+
+		len += 1;
+		from = 10;
+	}
+
+	if from == 10 {
+		if src >= 10 {
+			buf.add(len).write((src / 10) as u8 + 48);
+			src %= 10;
+		}
+		else { buf.add(len).write(48_u8); }
+
+		len += 1;
+	}
+
+	buf.add(len).write(src as u8 + 48);
+	len + 1
 }
 
 
