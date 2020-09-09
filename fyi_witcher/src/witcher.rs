@@ -201,15 +201,19 @@ impl Witcher {
 	#[must_use]
 	/// # With Extension Filter.
 	///
-	/// This method — and [`with_ext2()`](Witcher::with_ext2), [`with_ext3()`](Witcher::with_ext3) — can be faster for
-	/// matching simple file extensions than [`with_regex()`](Witcher::with_regex),
+	/// This method — and [`Witcher::with_ext2`], [`Witcher::with_ext3`] — can be faster for
+	/// matching simple file extensions than [`Witcher::with_regex`],
 	/// particularly if regular expressions are not used anywhere else.
 	///
-	/// Note: The extension should include the leading period and be in lower case.
+	/// Comparisons are done case-insensitively from the leading periods in the
+	/// needle — `ext1` — and haystack — the path. Extensions must be at least
+	/// 2 bytes (e.g. ".h") and no longer than 8 bytes (e.g. ".longone").
+	///
+	/// Note: The extension must include a leading period or nothing will match.
 	///
 	/// ## Panics
 	///
-	/// This method will panic if the extension is less than 2 bytes.
+	/// This method will panic if the extension is greater than 8 bytes.
 	///
 	/// ## Examples
 	///
@@ -224,7 +228,7 @@ impl Witcher {
 	pub fn with_ext1(mut self, ext1: &[u8]) -> Self {
 		self.cb = {
 			let ext1 = with_ext_key(ext1);
-			Box::new(move |p: &PathBuf| ext1.eq(with_path_key(utility::path_as_bytes(p))).all())
+			Box::new(move |p: &PathBuf| ext1.eq(with_ext_path_key(utility::path_as_bytes(p))).all())
 		};
 
 		self
@@ -234,11 +238,11 @@ impl Witcher {
 	#[must_use]
 	/// # With Extensions (2) Filter.
 	///
-	/// Note: The extension should include the leading period and be in lower case.
+	/// Note: The extensions should include their leading periods.
 	///
 	/// ## Panics
 	///
-	/// This method will panic if any extension is less than 2 bytes.
+	/// This method will panic if any extension is greater than 8 bytes.
 	///
 	/// ## Examples
 	///
@@ -256,7 +260,7 @@ impl Witcher {
 			let ext2 = with_ext_key(ext2);
 
 			Box::new(move |p: &PathBuf| {
-				let src = with_path_key(utility::path_as_bytes(p));
+				let src = with_ext_path_key(utility::path_as_bytes(p));
 				ext1.eq(src).all() || ext2.eq(src).all()
 			})
 		};
@@ -268,11 +272,11 @@ impl Witcher {
 	#[must_use]
 	/// # With Extensions (3) Filter.
 	///
-	/// Note: The extension should include the leading period and be in lower case.
+	/// Note: The extensions should include their leading periods.
 	///
 	/// ## Panics
 	///
-	/// This method will panic if any extension is less than 2 bytes.
+	/// This method will panic if any extension is greater than 8 bytes.
 	///
 	/// ## Examples
 	///
@@ -296,7 +300,7 @@ impl Witcher {
 			let ext3 = with_ext_key(ext3);
 
 			Box::new(move |p: &PathBuf| {
-				let src = with_path_key(utility::path_as_bytes(p));
+				let src = with_ext_path_key(utility::path_as_bytes(p));
 				ext1.eq(src).all() || ext2.eq(src).all() || ext3.eq(src).all()
 			})
 		};
@@ -502,7 +506,10 @@ fn with_ext_key(ext: &[u8]) -> u8x8 {
 ///
 /// This method plucks the extension piece off a [`PathBuf`] and converts it
 /// into a SIMD vector for comparison.
-fn with_path_key(ext: &[u8]) -> u8x8 {
+///
+/// Because we're only comparing 8-lane values, if no period is found after 8
+/// checks, an zeroed vector is returned instead.
+fn with_ext_path_key(ext: &[u8]) -> u8x8 {
 	let mut idx: usize = ext.len();
 	let stop: usize = idx.saturating_sub(8);
 	while stop < idx {
