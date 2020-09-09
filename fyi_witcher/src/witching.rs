@@ -20,7 +20,6 @@ use fyi_msg::{
 use rayon::prelude::*;
 use std::{
 	cmp::Ordering,
-	ffi::OsStr,
 	hash::{
 		Hash,
 		Hasher,
@@ -292,13 +291,12 @@ impl WitchingInner {
 	// Setters
 	// ------------------------------------------------------------------------
 
-	#[allow(trivial_casts)] // We need triviality!
 	/// # End Task.
 	///
 	/// Remove a task from the currently-running list and increment `done` by
 	/// one.
 	pub(crate) fn end_task(&mut self, task: &PathBuf) {
-		if self.doing.remove(unsafe { &*(task.as_os_str() as *const OsStr as *const [u8]) }) {
+		if self.doing.remove(utility::path_as_bytes(task)) {
 			self.flags |= TICK_DOING | TICK_BAR;
 			self.increment();
 		}
@@ -336,12 +334,11 @@ impl WitchingInner {
 		}
 	}
 
-	#[allow(trivial_casts)] // We need triviality!
 	/// # Start Task.
 	///
 	/// Add a task to the currently-running list.
 	pub(crate) fn start_task(&mut self, task: &PathBuf) {
-		let task: Vec<u8> = unsafe { &*(task.as_os_str() as *const OsStr as *const [u8]) }.to_vec();
+		let task: Vec<u8> = utility::path_as_bytes(task).to_vec();
 		if self.doing.insert(task) {
 			self.flags |= TICK_DOING | TICK_BAR;
 		}

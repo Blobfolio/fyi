@@ -221,6 +221,15 @@ pub const fn hms_u64(mut num: u64) -> [u8; 3] {
 }
 
 #[must_use]
+#[allow(trivial_casts)] // We need triviality!
+/// # Path to Bytes.
+///
+/// This is exactly the way [`std::path::PathBuf`] handles it.
+pub fn path_as_bytes(p: &std::path::PathBuf) -> &[u8] {
+    unsafe { &*(p.as_os_str() as *const std::ffi::OsStr as *const [u8]) }
+}
+
+#[must_use]
 /// # Term Width.
 ///
 /// This is a simple wrapper around `term_size::dimensions()` to provide

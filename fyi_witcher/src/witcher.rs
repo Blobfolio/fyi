@@ -7,24 +7,16 @@ use ahash::{
 	AHashSet
 };
 
-#[cfg(not(feature = "simd"))]
 use crate::{
 	utility,
 	Witching,
 };
-#[cfg(feature = "simd")] use crate::Witching;
 
-#[cfg(feature = "simd")]
-use packed_simd::{
-	FromCast,
-	m8x8,
-	u8x8,
-};
+#[cfg(feature = "simd")] use packed_simd::u8x8;
 
 use rayon::prelude::*;
 use std::{
 	borrow::Borrow,
-	ffi::OsStr,
 	fs,
 	hash::Hasher,
 	path::{
@@ -56,6 +48,7 @@ use std::{
 ///
 /// ```no_run
 /// use fyi_witcher::Witcher;
+/// use fyi_witcher::utility;
 ///
 /// // Return all files under "/usr/share/man".
 /// let res: Vec<PathBuf> = Witcher::default()
@@ -71,7 +64,7 @@ use std::{
 /// // If you're just matching one pattern, it can be faster to not use Regex:
 /// let res: Vec<PathBuf> = Witcher::default()
 ///     .with_filter(|p: &PathBuf| {
-///         let bytes: &[u8] = unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) };
+///         let bytes: &[u8] = utility::path_as_bytes(p);
 ///         bytes.len() > 3 && bytes[bytes.len()-3..].eq_ignore_ascii_case(b".gz")
 ///     })
 ///     .with_path("/usr/share/man")
@@ -123,7 +116,6 @@ impl Witcher {
 
 	#[cfg(not(feature = "simd"))]
 	#[must_use]
-	#[allow(trivial_casts)] // Triviality is required!
 	/// # With Extension Filter.
 	///
 	/// This method — and [`with_ext2()`](Witcher::with_ext2), [`with_ext3()`](Witcher::with_ext3) — can be faster for
@@ -144,17 +136,13 @@ impl Witcher {
 	/// ```
 	pub fn with_ext1(mut self, ext: &'static [u8]) -> Self {
 		self.cb = Box::new(move |p: &PathBuf|
-			utility::ends_with_ignore_ascii_case(
-				unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) },
-				ext
-			)
+			utility::ends_with_ignore_ascii_case(utility::path_as_bytes(p), ext)
 		);
 		self
 	}
 
 	#[cfg(not(feature = "simd"))]
 	#[must_use]
-	#[allow(trivial_casts)] // Triviality is required!
 	/// # With Extensions (2) Filter.
 	///
 	/// Note: The extension should include the leading period and be in lower case.
@@ -171,7 +159,7 @@ impl Witcher {
 	/// ```
 	pub fn with_ext2(mut self, ext1: &'static [u8], ext2: &'static [u8]) -> Self {
 		self.cb = Box::new(move |p: &PathBuf| {
-			let bytes: &[u8] = unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) };
+			let bytes: &[u8] = utility::path_as_bytes(p);
 			utility::ends_with_ignore_ascii_case(bytes, ext1) ||
 			utility::ends_with_ignore_ascii_case(bytes, ext2)
 		});
@@ -180,7 +168,6 @@ impl Witcher {
 
 	#[cfg(not(feature = "simd"))]
 	#[must_use]
-	#[allow(trivial_casts)] // Triviality is required!
 	/// # With Extensions (3) Filter.
 	///
 	/// Note: The extension should include the leading period and be in lower case.
@@ -202,7 +189,7 @@ impl Witcher {
 		ext3: &'static [u8]
 	) -> Self {
 		self.cb = Box::new(move |p: &PathBuf| {
-			let bytes: &[u8] = unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) };
+			let bytes: utility::path_as_bytes(p);
 			utility::ends_with_ignore_ascii_case(bytes, ext1) ||
 			utility::ends_with_ignore_ascii_case(bytes, ext2) ||
 			utility::ends_with_ignore_ascii_case(bytes, ext3)
@@ -212,7 +199,6 @@ impl Witcher {
 
 	#[cfg(feature = "simd")]
 	#[must_use]
-	#[allow(trivial_casts)] // Triviality is required!
 	/// # With Extension Filter.
 	///
 	/// This method — and [`with_ext2()`](Witcher::with_ext2), [`with_ext3()`](Witcher::with_ext3) — can be faster for
@@ -255,7 +241,6 @@ impl Witcher {
 
 	#[cfg(feature = "simd")]
 	#[must_use]
-	#[allow(trivial_casts)] // Triviality is required!
 	/// # With Extensions (2) Filter.
 	///
 	/// Note: The extension should include the leading period and be in lower case.
@@ -297,7 +282,6 @@ impl Witcher {
 
 	#[cfg(feature = "simd")]
 	#[must_use]
-	#[allow(trivial_casts)] // Triviality is required!
 	/// # With Extensions (3) Filter.
 	///
 	/// Note: The extension should include the leading period and be in lower case.
@@ -345,7 +329,6 @@ impl Witcher {
 		self
 	}
 
-	#[allow(trivial_casts)] // Triviality is required!
 	/// # With a Regex Callback.
 	///
 	/// This is a convenience method for filtering files by regular expression.
@@ -364,9 +347,7 @@ impl Witcher {
 	where R: Borrow<str> {
 		use regex::bytes::Regex;
 		let pattern: Regex = Regex::new(reg.borrow()).expect("Invalid Regex.");
-		self.cb = Box::new(move|p: &PathBuf| pattern.is_match(
-			unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) }
-		));
+		self.cb = Box::new(move|p: &PathBuf| pattern.is_match(utility::path_as_bytes(p)));
 		self
 	}
 
@@ -502,7 +483,6 @@ impl Witcher {
 
 
 #[must_use]
-#[allow(trivial_casts)] // Doesn't work without it.
 /// # Hash Path.
 ///
 /// This method calculates a unique `u64` hash from a canonical `PathBuf` using
@@ -515,7 +495,7 @@ impl Witcher {
 /// copies of all the `PathBuf`s.
 fn hash_path_buf(path: &PathBuf) -> u64 {
 	let mut hasher = AHasher::default();
-	hasher.write(unsafe { &*(path.as_os_str() as *const OsStr as *const [u8]) });
+	hasher.write(utility::path_as_bytes(path));
 	hasher.finish()
 }
 
