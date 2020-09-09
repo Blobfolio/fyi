@@ -124,7 +124,9 @@ impl KeyMaster {
 	pub fn get(&self, key: &str) -> Option<usize> {
 		let res = self.keys.eq(u64x8::splat(hash_arg_key(key)));
 		if res.any() {
-			Some(res.select(self.values, u16x8::splat(0)).max_element() as usize)
+			Some(unsafe {
+				self.values.extract_unchecked(res.bitmask().trailing_zeros() as usize)
+			} as usize)
 		}
 		else { None }
 	}

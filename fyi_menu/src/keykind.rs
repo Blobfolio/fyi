@@ -94,12 +94,7 @@ fn find_eq(txt: &[u8]) -> KeyKind {
 			let res = u8x8::from_slice_unaligned_unchecked(&txt[offset..offset+8])
 				.eq(u8x8::splat(b'='));
 			if res.any() {
-				return KeyKind::LongV(
-					res.select(
-						u8x8::new(0, 1, 2, 3, 4, 5, 6, 7),
-						u8x8::splat(9)
-					).min_element() as usize + offset
-				);
+				return KeyKind::LongV(res.bitmask().trailing_zeros() as usize + offset);
 			}
 
 			offset += 8;
@@ -113,12 +108,7 @@ fn find_eq(txt: &[u8]) -> KeyKind {
 			let res = u8x4::from_slice_unaligned_unchecked(&txt[offset..offset+4])
 				.eq(u8x4::splat(b'='));
 			if res.any() {
-				return KeyKind::LongV(
-					res.select(
-						u8x4::new(0, 1, 2, 3),
-						u8x4::splat(9)
-					).min_element() as usize + offset
-				);
+				return KeyKind::LongV(res.bitmask().trailing_zeros() as usize + offset);
 			}
 
 			offset += 4;
