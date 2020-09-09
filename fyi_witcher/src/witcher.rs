@@ -223,17 +223,8 @@ impl Witcher {
 	/// ```
 	pub fn with_ext1(mut self, ext1: &[u8]) -> Self {
 		self.cb = {
-			let splat = u8x8::splat(0);
 			let ext1 = with_ext_key(ext1);
-			let mask1 = m8x8::from_cast(ext1);
-			Box::new(move |p: &PathBuf|
-				mask1.select(
-					with_ext_key(
-						unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) }
-					),
-					splat
-				) == ext1
-			)
+			Box::new(move |p: &PathBuf| ext1.eq(with_path_key(utility::path_as_bytes(p))).all())
 		};
 
 		self
@@ -261,19 +252,12 @@ impl Witcher {
 	/// ```
 	pub fn with_ext2(mut self, ext1: &[u8], ext2: &[u8]) -> Self {
 		self.cb = {
-			let splat = u8x8::splat(0);
 			let ext1 = with_ext_key(ext1);
 			let ext2 = with_ext_key(ext2);
-			let mask1 = m8x8::from_cast(ext1);
-			let mask2 = m8x8::from_cast(ext2);
 
 			Box::new(move |p: &PathBuf| {
-				let src = with_ext_key(
-					unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) }
-				);
-
-				mask1.select(src, splat) == ext1 ||
-				mask2.select(src, splat) == ext2
+				let src = with_path_key(utility::path_as_bytes(p));
+				ext1.eq(src).all() || ext2.eq(src).all()
 			})
 		};
 
@@ -307,22 +291,13 @@ impl Witcher {
 		ext3: &'static [u8]
 	) -> Self {
 		self.cb = {
-			let splat = u8x8::splat(0);
 			let ext1 = with_ext_key(ext1);
 			let ext2 = with_ext_key(ext2);
 			let ext3 = with_ext_key(ext3);
-			let mask1 = m8x8::from_cast(ext1);
-			let mask2 = m8x8::from_cast(ext2);
-			let mask3 = m8x8::from_cast(ext3);
 
 			Box::new(move |p: &PathBuf| {
-				let src = with_ext_key(
-					unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) }
-				);
-
-				mask1.select(src, splat) == ext1 ||
-				mask2.select(src, splat) == ext2 ||
-				mask3.select(src, splat) == ext3
+				let src = with_path_key(utility::path_as_bytes(p));
+				ext1.eq(src).all() || ext2.eq(src).all() || ext3.eq(src).all()
 			})
 		};
 
@@ -502,27 +477,42 @@ fn hash_path_buf(path: &PathBuf) -> u64 {
 #[cfg(feature = "simd")]
 /// # SIMD Haystack
 ///
-/// This method converts a path into a SIMD-optimized haystack to match
-/// against a needle, converting the bytes to lower case as needed.
+/// This method converts a path extension (e.g. `b".jpg"`) into an 8-lane SIMD
+/// vector for easy comparison.
 ///
-/// The result is zero-padded from the left in cases where the path is
-/// shorter than 8, otherwise the last eight bytes of the path are used.
+/// Note the leading period. This should be present in passed values.
 ///
-/// Note: any value shorter than
+/// Extensions requiring fewer than 8 lanes are zero-padded on the right.
 fn with_ext_key(ext: &[u8]) -> u8x8 {
-	let ext = match ext.len() {
+	match ext.len() {
+		2 => u8x8::new(b'.', ext[1].to_ascii_lowercase(), 0, 0, 0, 0, 0, 0),
+		3 => u8x8::new(b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), 0, 0, 0, 0, 0),
+		4 => u8x8::new(b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), 0, 0, 0, 0),
+		5 => u8x8::new(b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase(), 0, 0, 0),
+		6 => u8x8::new(b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase(), ext[5].to_ascii_lowercase(), 0, 0),
+		7 => u8x8::new(b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase(), ext[5].to_ascii_lowercase(), ext[6].to_ascii_lowercase(), 0),
+		8 => u8x8::new(b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase(), ext[5].to_ascii_lowercase(), ext[6].to_ascii_lowercase(), ext[7].to_ascii_lowercase()),
 		0 | 1 => u8x8::splat(0),
-		2 => u8x8::new(0, 0, 0, 0, 0, 0, ext[0], ext[1]),
-		3 => u8x8::new(0, 0, 0, 0, 0, ext[0], ext[1], ext[2]),
-		4 => u8x8::new(0, 0, 0, 0, ext[0], ext[1], ext[2], ext[3]),
-		5 => u8x8::new(0, 0, 0, ext[0], ext[1], ext[2], ext[3], ext[4]),
-		6 => u8x8::new(0, 0, ext[0], ext[1], ext[2], ext[3], ext[4], ext[5]),
-		7 => u8x8::new(0, ext[0], ext[1], ext[2], ext[3], ext[4], ext[5], ext[6]),
-		len => unsafe { u8x8::from_slice_unaligned_unchecked(&ext[len - 8..]) },
-	};
+		_ => panic!("Out of range."),
+	}
+}
 
-	// Lower-case the result by adding "32" to any bytes in `65..=90`.
-	(ext.le(u8x8::splat(90)) & ext.ge(u8x8::splat(65))).select(ext + u8x8::splat(32), ext)
+#[cfg(feature = "simd")]
+/// # SIMD Path Extension.
+///
+/// This method plucks the extension piece off a [`PathBuf`] and converts it
+/// into a SIMD vector for comparison.
+fn with_path_key(ext: &[u8]) -> u8x8 {
+	let mut idx: usize = ext.len();
+	let stop: usize = idx.saturating_sub(8);
+	while stop < idx {
+		idx -= 1;
+		if ext[idx] == b'.' {
+			return with_ext_key(&ext[idx..]);
+		}
+	}
+
+	u8x8::splat(0)
 }
 
 
