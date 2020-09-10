@@ -88,7 +88,7 @@ fn fitted_range(c: &mut Criterion) {
 	group.finish();
 }
 
-fn secs_chunks(c: &mut Criterion) {
+fn hms(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::utility");
 
 	for secs in [10_u64, 113_u64, 10502_u64].iter() {
@@ -116,6 +116,6 @@ criterion_group!(
 	count_nl,
 	ends_with_ignore_ascii_case,
 	fitted_range,
-	secs_chunks,
+	hms,
 );
 criterion_main!(benches);

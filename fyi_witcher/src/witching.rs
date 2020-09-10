@@ -141,7 +141,7 @@ const MIN_DRAW_WIDTH: usize = 40;
 struct WitchingInner {
 	buf: Vec<u8>,
 	toc: Toc,
-	elapsed: u64,
+	elapsed: u32,
 	last_hash: u64,
 	last_lines: usize,
 	last_time: u128,
@@ -259,8 +259,8 @@ impl WitchingInner {
 	/// # Elapsed (Seconds).
 	///
 	/// Return the elapsed time in seconds.
-	pub(crate) fn elapsed(&self) -> u64 {
-		86400.min(self.started.elapsed().as_secs())
+	pub(crate) fn elapsed(&self) -> u32 {
+		86400.min(self.started.elapsed().as_secs()) as u32
 	}
 
 	/// # Percent.
@@ -634,13 +634,13 @@ impl WitchingInner {
 	/// A value of `true` is returned if one or more seconds has elapsed since
 	/// the last tick, otherwise `false` is returned.
 	fn tick_set_secs(&mut self) -> bool {
-		let secs: u64 = self.elapsed();
+		let secs: u32 = self.elapsed();
 		if secs == self.elapsed { false }
 		else {
 			self.elapsed = secs;
 			let ptr = self.buf.as_mut_ptr();
 			unsafe {
-				utility::hms_u64(secs).iter()
+				utility::hms_u32(secs).iter()
 					.fold(
 						self.toc.start(PART_ELAPSED),
 						|len, x| {
@@ -1166,7 +1166,7 @@ impl Witching {
 	// These just return the inner values.
 	get_inner!(doing, u32);
 	get_inner!(done, u32);
-	get_inner!(elapsed, u64);
+	get_inner!(elapsed, u32);
 	get_inner!(percent, f64);
 	get_inner!(total, u32);
 	get_inner!(is_running, bool);

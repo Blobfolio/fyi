@@ -220,6 +220,31 @@ pub const fn hms_u64(mut num: u64) -> [u8; 3] {
 	else { [23, 59, 59] }
 }
 
+#[allow(clippy::integer_division)]
+#[must_use]
+/// # Time Chunks.
+///
+/// This method splits seconds into hours, minutes, and seconds. Days are not
+/// supported; the maximum return value is `(23, 59, 59)`.
+pub const fn hms_u32(mut num: u32) -> [u8; 3] {
+	if num < 60 { [0, 0, num as u8] }
+	else if num < 86399 {
+		let mut buf = [0_u8; 3];
+		if num >= 3600 {
+			buf[0] = (num / 3600) as u8;
+			num %= 3600;
+		}
+		if num >= 60 {
+			buf[1] = (num / 60) as u8;
+			buf[2] = (num % 60) as u8;
+		}
+		else if num > 0 { buf[2] = num as u8; }
+
+		buf
+	}
+	else { [23, 59, 59] }
+}
+
 #[must_use]
 #[allow(trivial_casts)] // We need triviality!
 /// # Path to Bytes.
