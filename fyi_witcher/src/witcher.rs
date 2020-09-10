@@ -189,7 +189,7 @@ impl Witcher {
 		ext3: &'static [u8]
 	) -> Self {
 		self.cb = Box::new(move |p: &PathBuf| {
-			let bytes: utility::path_as_bytes(p);
+			let bytes: &[u8] = utility::path_as_bytes(p);
 			utility::ends_with_ignore_ascii_case(bytes, ext1) ||
 			utility::ends_with_ignore_ascii_case(bytes, ext2) ||
 			utility::ends_with_ignore_ascii_case(bytes, ext3)
