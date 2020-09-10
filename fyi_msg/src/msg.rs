@@ -872,7 +872,6 @@ impl Msg {
 		// each of their time part methods individually, convert those
 		// integers to bytes, and copy them into our static buffer.
 		let now = Local::now();
-		let ptr = self.buf.as_mut_ptr();
 		unsafe {
 			[
 				(now.year() as u16).saturating_sub(2000) as u8,
@@ -883,10 +882,10 @@ impl Msg {
 				now.second() as u8,
 			].iter()
 				.fold(
-					self.toc.start(PART_TIMESTAMP) + 14,
-					|dst_off, x| {
-						utility::write_time_dd(ptr.add(dst_off), *x);
-						dst_off + 3
+					self.buf.as_mut_ptr().add(self.toc.start(PART_TIMESTAMP) + 14),
+					|ptr, x| {
+						utility::write_time_dd(ptr, *x);
+						ptr.add(3)
 					}
 				);
 		}

@@ -638,14 +638,13 @@ impl WitchingInner {
 		if secs == self.elapsed { false }
 		else {
 			self.elapsed = secs;
-			let ptr = self.buf.as_mut_ptr();
 			unsafe {
 				utility::hms_u32(secs).iter()
 					.fold(
-						self.toc.start(PART_ELAPSED),
-						|len, x| {
-							write_time_dd(ptr.add(len), *x);
-							len + 3
+						self.buf.as_mut_ptr().add(self.toc.start(PART_ELAPSED)),
+						|ptr, x| {
+							write_time_dd(ptr, *x);
+							ptr.add(3)
 						}
 					);
 			}
