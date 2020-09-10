@@ -540,24 +540,6 @@ impl Msg {
 		self
 	}
 
-	/// # With Suffix.
-	///
-	/// This appends a bit after the message. Like a prefix, but at the end.
-	///
-	/// ## Example
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	/// use fyi_msg::MsgKind;
-	/// let msg = Msg::new("Hello world.")
-	///     .with_suffix("(It worked!)", 199);
-	/// ```
-	pub fn with_suffix<S>(mut self, suffix: S, color: u8) -> Self
-	where S: AsRef<str> {
-		self.set_suffix(suffix, color);
-		self
-	}
-
 	#[must_use]
 	/// # With Timestamp.
 	///
@@ -655,39 +637,6 @@ impl Msg {
 	/// ```
 	pub fn set_prefix(&mut self, prefix: MsgKind) {
 		self.toc.replace(&mut self.buf, PART_PREFIX, prefix.as_bytes());
-	}
-
-	/// # Set Suffix.
-	///
-	/// Set or reset the message suffix.
-	///
-	/// ## Example
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	/// use fyi_msg::MsgKind;
-	///
-	/// let mut msg = Msg::new("Hello world.");
-	/// msg.set_suffix("(It worked!)", 199);
-	/// ```
-	pub fn set_suffix<S>(&mut self, suffix: S, color: u8)
-	where S: AsRef<str> {
-		let suffix: &[u8] = suffix.as_ref().as_bytes();
-		if suffix.is_empty() {
-			self.toc.resize(&mut self.buf, PART_SUFFIX, 0);
-		}
-		else {
-			self.toc.replace(
-				&mut self.buf,
-				PART_SUFFIX,
-				&[
-					b" ",
-					utility::ansi_code_bold(color),
-					suffix,
-					b"\x1b[0m",
-				].concat()
-			);
-		}
 	}
 
 	/// # Set Suffix (Unchecked)
@@ -956,9 +905,9 @@ mod tests {
 		msg.set_indent(0);
 		assert!(msg.starts_with(MsgKind::Error.as_bytes()));
 
-		msg.set_suffix("Heyo", 199);
-		assert!(msg.ends_with(b" \x1b[1;38;5;199mHeyo\x1b[0m"), "{:?}", msg.as_str());
-		msg.set_suffix("", 0);
+		unsafe { msg.set_suffix_unchecked(b" Heyo"); }
+		assert!(msg.ends_with(b" Heyo"), "{:?}", msg.as_str());
+		unsafe { msg.set_suffix_unchecked(b""); }
 		assert!(msg.ends_with(b"My dear aunt sally."));
 
 		msg.set_msg("My dear aunt");
