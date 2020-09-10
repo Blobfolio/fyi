@@ -28,37 +28,39 @@ pub unsafe fn write_ansi_code_bold(buf: *mut u8, num: u8) -> usize {
 		5051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899\
 		100101102103104105106107108109110111112113114115116117118119120121122123124125126127128129130131132133134135136137138139140141142143144145146147148149\
 		150151152153154155156157158159160161162163164165166167168169170171172173174175176177178179180181182183184185186187188189190191192193194195196197198199\
-		200201202203204205206207208209210211212213214215216217218219220221222223224225226227228229230231232233234235236237238239240241242243244245246247248249250251252253254255\
+		200201202203204205206207208209210211212213214215216217218219220221222223224225226227228229230231232233234235236237238239240241242243244245246247248249\
+		250251252253254255\
 		";
 
-	let ptr = ANSI.as_ptr();
-
-	// Bad Data.
+	// Bad Data/Overflow.
 	if num == 0 {
-		std::ptr::copy_nonoverlapping(ptr, buf, 4);
+		ptr::copy_nonoverlapping(ANSI.as_ptr(), buf, 4);
 		return 4;
 	}
 
+	// Grab the pointer.
+	let ptr = ANSI.as_ptr();
+
 	// Otherwise they all start the same.
-	std::ptr::copy_nonoverlapping(ptr.add(4), buf, 9);
+	ptr::copy_nonoverlapping(ptr.add(4), buf, 9);
 
 	// Add the color.
 	let len: usize =
 		if num < 10 {
-			std::ptr::copy_nonoverlapping(ptr.add(14 + num as usize), buf.add(9), 1);
+			ptr::copy_nonoverlapping(ptr.add(14 + num as usize), buf.add(9), 1);
 			10
 		}
 		else if num < 100 {
-			std::ptr::copy_nonoverlapping(ptr.add(24 + ((num - 10) * 2) as usize), buf.add(9), 2);
+			ptr::copy_nonoverlapping(ptr.add(24 + ((num - 10) * 2) as usize), buf.add(9), 2);
 			11
 		}
 		else {
-			std::ptr::copy_nonoverlapping(ptr.add(204 + (num - 100) as usize * 3), buf.add(9), 3);
+			ptr::copy_nonoverlapping(ptr.add(204 + (num - 100) as usize * 3), buf.add(9), 3);
 			12
 		};
 
 	// And finish off with the "m".
-	std::ptr::copy_nonoverlapping(ptr.add(13), buf.add(len), 1);
+	ptr::copy_nonoverlapping(ptr.add(13), buf.add(len), 1);
 
 	len + 1
 }
@@ -72,12 +74,14 @@ pub unsafe fn write_ansi_code_bold(buf: *mut u8, num: u8) -> usize {
 ///
 /// This writes two bytes to a mutable pointer; that pointer must be valid and
 /// allocated accordingly or undefined things will happen.
-pub unsafe fn write_time_dd(ptr: *mut u8, num: u8) {
-	static TIME: [u8; 120] = [48, 48, 48, 49, 48, 50, 48, 51, 48, 52, 48, 53, 48, 54, 48, 55, 48, 56, 48, 57, 49, 48, 49, 49, 49, 50, 49, 51, 49, 52, 49, 53, 49, 54, 49, 55, 49, 56, 49, 57, 50, 48, 50, 49, 50, 50, 50, 51, 50, 52, 50, 53, 50, 54, 50, 55, 50, 56, 50, 57, 51, 48, 51, 49, 51, 50, 51, 51, 51, 52, 51, 53, 51, 54, 51, 55, 51, 56, 51, 57, 52, 48, 52, 49, 52, 50, 52, 51, 52, 52, 52, 53, 52, 54, 52, 55, 52, 56, 52, 57, 53, 48, 53, 49, 53, 50, 53, 51, 53, 52, 53, 53, 53, 54, 53, 55, 53, 56, 53, 57];
+pub unsafe fn write_time_dd(buf: *mut u8, num: u8) {
+	static TIME: [u8; 120] =
+		*b"000102030405060708091011121314151617181920212223242526272829\
+		   303132333435363738394041424344454647484950515253545556575859";
 
-	std::ptr::copy_nonoverlapping(
+	ptr::copy_nonoverlapping(
 		TIME.as_ptr().add((59.min(num) * 2) as usize),
-		ptr,
+		buf,
 		2
 	);
 }
