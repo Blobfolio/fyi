@@ -31,22 +31,6 @@ fn ansi_code_bold(c: &mut Criterion) {
 	group.finish();
 }
 
-fn time_format_dd(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_msg::utility");
-
-	for num in [0, 10, 100].iter() {
-		group.bench_with_input(
-			BenchmarkId::from_parameter(format!("time_format_dd({})", num)),
-			num,
-			|b, &num| {
-				b.iter(|| utility::time_format_dd(num));
-			}
-		);
-	}
-
-	group.finish();
-}
-
 fn vec_resize_at(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::utility");
 
@@ -71,7 +55,6 @@ adjtime_config.5.gz________deb-old.5.gz_______________devscripts.conf.5.gz______
 criterion_group!(
 	benches,
 	ansi_code_bold,
-	time_format_dd,
 	vec_resize_at,
 );
 criterion_main!(benches);

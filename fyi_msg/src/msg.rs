@@ -875,20 +875,17 @@ impl Msg {
 		let ptr = self.buf.as_mut_ptr();
 		unsafe {
 			[
-				(now.year() as u32).saturating_sub(2000),
-				now.month(),
-				now.day(),
-				now.hour(),
-				now.minute(),
-				now.second(),
+				(now.year() as u16).saturating_sub(2000) as u8,
+				now.month() as u8,
+				now.day() as u8,
+				now.hour() as u8,
+				now.minute() as u8,
+				now.second() as u8,
 			].iter()
 				.fold(
 					self.toc.start(PART_TIMESTAMP) + 14,
 					|dst_off, x| {
-						ptr.add(dst_off).copy_from_nonoverlapping(
-							utility::time_format_dd(*x as usize).as_ptr(),
-							2
-						);
+						utility::write_time_dd(ptr.add(dst_off), *x);
 						dst_off + 3
 					}
 				);

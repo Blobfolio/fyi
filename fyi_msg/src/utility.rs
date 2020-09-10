@@ -49,27 +49,23 @@ pub fn ansi_code_bold(num: u8) -> &'static [u8] {
 	}
 }
 
-#[must_use]
-/// # Time Number to String.
+/// # Write Double-Digit Time Value.
 ///
-/// This is a simple conversion table for turning `u32` representations of
-/// numbers 0–59 into double-digit strings like "00" and "59". It is faster
-/// having these ready than trying to `itoa::write` them on-the-fly.
+/// This writes a number `0..60` as ASCII-fied bytes, e.g. "00" or "13". Any
+/// value over `59` is simply written as "59".
 ///
-/// Out of range always comes back as "59".
+/// ## Safety
 ///
-/// ## Examples
-///
-/// ```
-/// assert_eq!(fyi_msg::utility::time_format_dd(3), b"03");
-/// assert_eq!(fyi_msg::utility::time_format_dd(10), b"10");
-/// ```
-pub fn time_format_dd(num: usize) -> &'static [u8] {
-	// Each entry is 2 bytes.
+/// This writes two bytes to a mutable pointer; that pointer must be valid and
+/// allocated accordingly or undefined things will happen.
+pub unsafe fn write_time_dd(ptr: *mut u8, num: u8) {
 	static TIME: [u8; 120] = [48, 48, 48, 49, 48, 50, 48, 51, 48, 52, 48, 53, 48, 54, 48, 55, 48, 56, 48, 57, 49, 48, 49, 49, 49, 50, 49, 51, 49, 52, 49, 53, 49, 54, 49, 55, 49, 56, 49, 57, 50, 48, 50, 49, 50, 50, 50, 51, 50, 52, 50, 53, 50, 54, 50, 55, 50, 56, 50, 57, 51, 48, 51, 49, 51, 50, 51, 51, 51, 52, 51, 53, 51, 54, 51, 55, 51, 56, 51, 57, 52, 48, 52, 49, 52, 50, 52, 51, 52, 52, 52, 53, 52, 54, 52, 55, 52, 56, 52, 57, 53, 48, 53, 49, 53, 50, 53, 51, 53, 52, 53, 53, 53, 54, 53, 55, 53, 56, 53, 57];
 
-	let num: usize = 59.min(num) * 2;
-	&TIME[num..num+2]
+	std::ptr::copy_nonoverlapping(
+		TIME.as_ptr().add((59.min(num) * 2) as usize),
+		ptr,
+		2
+	);
 }
 
 /// # Grow `Vec<u8>` From Middle.
@@ -143,22 +139,21 @@ mod tests {
 	fn t_time_format_dd() {
 		// Test the supported values.
 		for i in 0..=59 {
+			let mut buf = [0_u8, 0_u8];
+			unsafe { write_time_dd(buf.as_mut_ptr(), i); }
 			assert_eq!(
-				time_format_dd(i),
+				buf,
 				format!("{:02}", i).as_bytes(),
 				"DD for {} is incorrect: {:?}",
 				i,
-				time_format_dd(i)
+				buf
 			);
 		}
 
 		// And make sure overflow works.
-		assert_eq!(
-			time_format_dd(60),
-			time_format_dd(59),
-			"DD for 60 is incorrect: {:?}",
-			time_format_dd(60)
-		);
+		let mut buf = [0_u8, 0_u8];
+		unsafe { write_time_dd(buf.as_mut_ptr(), 60); }
+		assert_eq!(buf, &b"59"[..]);
 	}
 
 	#[test]

@@ -15,7 +15,7 @@ use fyi_msg::{
 	Msg,
 	MsgKind,
 	Toc,
-	utility::time_format_dd,
+	utility::write_time_dd,
 };
 use rayon::prelude::*;
 use std::{
@@ -644,10 +644,7 @@ impl WitchingInner {
 					.fold(
 						self.toc.start(PART_ELAPSED),
 						|len, x| {
-							ptr.add(len).copy_from_nonoverlapping(
-								time_format_dd(usize::from(*x)).as_ptr(),
-								2
-							);
+							write_time_dd(ptr.add(len), *x);
 							len + 3
 						}
 					);
