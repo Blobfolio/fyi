@@ -118,7 +118,7 @@ impl Toc {
 	pub fn len(&self, idx: usize) -> usize {
 		assert!(idx < 16);
 		unsafe {
-			self.0.extract_unchecked(idx * 2 + 1) as usize - self.0.extract_unchecked(idx * 2) as usize
+			(self.0.extract_unchecked(idx * 2 + 1) - self.0.extract_unchecked(idx * 2)) as usize
 		}
 	}
 

@@ -112,7 +112,7 @@ impl Toc {
 	///
 	/// This method might panic if `idx` is out of range.
 	pub const fn len(&self, idx: usize) -> usize {
-		self.0[idx * 2 + 1] as usize - self.0[idx * 2] as usize
+		(self.0[idx * 2 + 1] - self.0[idx * 2]) as usize
 	}
 
 	#[must_use]
@@ -211,7 +211,7 @@ impl Toc {
 
 			// End-of-buffer shortcut.
 			if end == src.len() {
-				let last: u16 = end as u16 - adj as u16;
+				let last: u16 = (end - adj) as u16;
 				src.truncate(last as usize);
 				self.0.iter_mut().skip(idx * 2 + 1).for_each(|x| *x = last);
 			}
