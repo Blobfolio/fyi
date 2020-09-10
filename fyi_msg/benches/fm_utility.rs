@@ -12,25 +12,6 @@ use fyi_msg::utility;
 
 
 
-fn ansi_code_bold(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_msg::utility");
-
-	for color in [1, 50, 100].iter() {
-		group.bench_with_input(
-			BenchmarkId::from_parameter(format!(
-				"ansi_code_bold({})",
-				color
-			)),
-			color,
-			|b, &color| {
-				b.iter(|| utility::ansi_code_bold(color));
-			}
-		);
-	}
-
-	group.finish();
-}
-
 fn vec_resize_at(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::utility");
 
@@ -54,7 +35,6 @@ adjtime_config.5.gz________deb-old.5.gz_______________devscripts.conf.5.gz______
 
 criterion_group!(
 	benches,
-	ansi_code_bold,
 	vec_resize_at,
 );
 criterion_main!(benches);

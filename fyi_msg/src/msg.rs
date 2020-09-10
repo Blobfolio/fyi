@@ -127,11 +127,7 @@ impl PrefixBuffer {
 		let dst = buf.as_mut_ptr() as *mut u8;
 
 		// Write the color.
-		let mut len: usize = {
-			let color: &[u8] = utility::ansi_code_bold(color);
-			ptr::copy_nonoverlapping(color.as_ptr(), dst, color.len());
-			color.len()
-		};
+		let mut len: usize = utility::write_ansi_code_bold(dst, color);
 
 		// Write the prefix.
 		ptr::copy_nonoverlapping(prefix.as_ptr(), dst.add(len), prefix.len());
