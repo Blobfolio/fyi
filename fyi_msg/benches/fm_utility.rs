@@ -23,9 +23,7 @@ fn ansi_code_bold(c: &mut Criterion) {
 			)),
 			color,
 			|b, &color| {
-				b.iter(||
-					utility::ansi_code_bold(color)
-				);
+				b.iter(|| utility::ansi_code_bold(color));
 			}
 		);
 	}
@@ -41,9 +39,7 @@ fn time_format_dd(c: &mut Criterion) {
 			BenchmarkId::from_parameter(format!("time_format_dd({})", num)),
 			num,
 			|b, &num| {
-				b.iter(||
-					utility::time_format_dd(num)
-				);
+				b.iter(|| utility::time_format_dd(num));
 			}
 		);
 	}
