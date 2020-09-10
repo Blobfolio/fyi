@@ -55,43 +55,11 @@ impl fmt::Display for NiceInt {
 
 impl From<u8> for NiceInt {
 	#[allow(clippy::integer_division)]
-	fn from(mut num: u8) -> Self {
+	fn from(num: u8) -> Self {
+		use fyi_msg::utility::write_u8;
 		unsafe {
 			let mut buf = [MaybeUninit::<u8>::uninit(); 15];
-			let dst = buf.as_mut_ptr() as *mut u8;
-
-			let len: usize =
-				if num >= 100 {
-					if num >= 200 {
-						dst.write(50_u8);
-						num -= 200;
-					}
-					else {
-						dst.write(49_u8);
-						num -= 100;
-					}
-
-					if num >= 10 {
-						dst.add(1).write(num / 10 + 48);
-						dst.add(2).write(num % 10 + 48);
-					}
-					else {
-						dst.add(1).write(48_u8);
-						dst.add(2).write(num + 48);
-					}
-
-					3
-				}
-				else if num >= 10 {
-					dst.write(num / 10 + 48);
-					dst.add(1).write(num % 10 + 48);
-					2
-				}
-				else {
-					dst.write(num + 48);
-					1
-				};
-
+			let len: usize = write_u8(buf.as_mut_ptr() as *mut u8, num);
 			Self {
 				inner: mem::transmute::<_, [u8; 15]>(buf),
 				len

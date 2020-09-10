@@ -144,6 +144,8 @@ impl NiceElapsed {
 	/// All numbers must be — but should be — less than 99 or undefined things
 	/// may happen.
 	unsafe fn from_hms(h: u8, m: u8, s: u8) -> Self {
+		use fyi_msg::utility::write_u8;
+
 		let mut buf = [MaybeUninit::<u8>::uninit(); 36];
 		let dst = buf.as_mut_ptr() as *mut u8;
 		let count: u8 = h.ne(&0) as u8 + m.ne(&0) as u8 + s.ne(&0) as u8;
@@ -151,7 +153,7 @@ impl NiceElapsed {
 
 		// Hours.
 		if h > 0 {
-			len += Self::write_int(dst, h);
+			len += write_u8(dst, h);
 			if h == 1 {
 				ptr::copy_nonoverlapping(b" hour".as_ptr(), dst.add(len), 5);
 				len += 5;
@@ -173,7 +175,7 @@ impl NiceElapsed {
 
 		// Minutes.
 		if m > 0 {
-			len += Self::write_int(dst.add(len), m);
+			len += write_u8(dst.add(len), m);
 			if m == 1 {
 				ptr::copy_nonoverlapping(b" minute".as_ptr(), dst.add(len), 7);
 				len += 7;
@@ -195,7 +197,7 @@ impl NiceElapsed {
 
 		// Seconds.
 		if s > 0 {
-			len += Self::write_int(dst.add(len), s);
+			len += write_u8(dst.add(len), s);
 			if s == 1 {
 				ptr::copy_nonoverlapping(b" second".as_ptr(), dst.add(len), 7);
 				len += 7;
@@ -210,27 +212,6 @@ impl NiceElapsed {
 		Self {
 			inner: mem::transmute::<_, [u8; 36]>(buf),
 			len
-		}
-	}
-
-	#[allow(clippy::integer_division)]
-	/// # Write Number.
-	///
-	/// This pushes the ASCII equivalent of a one- or two-digit number to the
-	/// buffer.
-	///
-	/// ## Safety
-	///
-	/// Undefined things may happen if the number is greater than 99!
-	unsafe fn write_int(buf: *mut u8, num: u8) -> usize {
-		if num < 10 {
-			buf.write(num + 48);
-			1
-		}
-		else {
-			buf.write(num / 10 + 48);
-			buf.add(1).write(num % 10 + 48);
-			2
 		}
 	}
 
