@@ -270,7 +270,7 @@ fn helper(cmd: Option<&str>) {
 				Some(x) if MsgKind::from(x) != MsgKind::None => format!(
 					include_str!("../help/generic.txt"),
 					x,
-					MsgKind::from(x).into_msg("Hello World").as_str(),
+					Msg::prefixed(MsgKind::from(x), "Hello World").as_str(),
 					x.to_lowercase(),
 				),
 				_ => include_str!("../help/help.txt").to_string(),
@@ -312,7 +312,7 @@ fn message(kind: MsgKind, args: &mut Argue) {
 	if args.switch2("-t", "--timestamp") { flags |= FLAG_TIMESTAMP; }
 
 	// Let's build the message!
-	let msg = kind.into_msg(args.take_arg()).with_flags(flags);
+	let msg = Msg::prefixed(kind, args.take_arg()).with_flags(flags);
 
 	// It's a prompt!
 	if MsgKind::Confirm == kind {

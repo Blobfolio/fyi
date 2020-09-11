@@ -309,7 +309,7 @@ impl MsgKind {
 	/// ```
 	pub fn into_msg<S> (self, msg: S) -> Msg
 	where S: AsRef<str> {
-		Msg::from(msg.as_ref()).with_prefix(self)
+		Msg::prefixed(self, msg)
 	}
 
 	#[must_use]
@@ -470,6 +470,74 @@ impl Msg {
 	/// ```
 	pub fn new<S> (msg: S) -> Self
 	where S: AsRef<str> { Self::from(msg.as_ref()) }
+
+	#[must_use]
+	/// # Prefixed Message.
+	///
+	/// This is an optimized way to generate a new message with a prefix and
+	/// body.
+	///
+	/// ## Example
+	///
+	/// ```no_run
+	/// use fyi_msg::Msg;
+	/// use fyi_msg::MsgKind;
+	/// let msg = Msg::prefixed(MsgKind::Success, "Hello world.");
+	/// ```
+	pub fn prefixed<S> (prefix: MsgKind, msg: S) -> Self
+	where S: AsRef<str> {
+		if prefix == MsgKind::None { Self::new(msg) }
+		else {
+			let msg: &[u8] = msg.as_ref().as_bytes();
+			if msg.is_empty() {
+				Self::default().with_prefix(prefix)
+			}
+			else {
+				unsafe { Self::prefixed_unchecked(prefix, msg) }
+			}
+		}
+	}
+
+	#[must_use]
+	/// # Prefixed Message (Unchecked).
+	///
+	/// This method creates a prefixed message without worrying about the
+	/// potential sanity of either component.
+	///
+	/// ## Safety
+	///
+	/// This method accepts raw bytes for the message body; that body should be
+	/// valid UTF-8 or undefined things may happen.
+	pub unsafe fn prefixed_unchecked(prefix: MsgKind, msg: &[u8]) -> Self {
+		use std::ptr;
+
+		let p_len: usize = prefix.len();
+		let m_len: usize = msg.len();
+		let mut buf: Vec<u8> = Vec::with_capacity(p_len + m_len);
+
+		{
+			let ptr = buf.as_mut_ptr();
+			ptr::copy_nonoverlapping(prefix.as_bytes().as_ptr(), ptr, p_len);
+			ptr::copy_nonoverlapping(msg.as_ptr(), ptr.add(p_len), m_len);
+			buf.set_len(m_len + p_len);
+		}
+
+		let end: u16 = m_len as u16 + p_len as u16;
+		Self {
+			buf,
+			toc: Toc::new(
+				0_u16, 0_u16,        // Indentation.
+				0_u16, 0_u16,        // Timestamp.
+				0_u16, p_len as u16, // Prefix.
+				p_len as u16, end,   // Message.
+				end, end,            // Suffix.
+				// Unused...
+				end, end, end, end, end, end, end, end, end,
+				end, end, end, end, end, end, end, end, end,
+				end, end, end, end
+			),
+		}
+	}
 
 	#[must_use]
 	/// # With Flags.
@@ -769,8 +837,12 @@ impl Msg {
 			}
 
 			// Print an error and do it all over again.
-			MsgKind::Error.into_msg("Invalid input: enter \x1b[91mN\x1b[34m or \x1b[92mY\x1b[34m.")
-				.println();
+			unsafe {
+				Self::prefixed_unchecked(
+					MsgKind::Error,
+					b"Invalid input: enter \x1b[91mN\x1b[0m or \x1b[92mY\x1b[0m."
+				).println();
+			}
 		}
 	}
 

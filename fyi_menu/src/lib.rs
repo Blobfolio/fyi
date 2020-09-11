@@ -93,8 +93,6 @@ pub use argue::Argue;
 ///
 /// The `msg` must be valid UTF-8 or undefined things may happen.
 pub fn die(msg: &[u8]) {
-	Msg::from(msg)
-		.with_prefix(MsgKind::Error)
-		.eprintln();
+	unsafe { Msg::prefixed_unchecked(MsgKind::Error, msg) }.eprintln();
 	std::process::exit(1);
 }
