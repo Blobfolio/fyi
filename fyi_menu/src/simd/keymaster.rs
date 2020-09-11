@@ -12,7 +12,7 @@ use crate::{
 	utility::hash_arg_key,
 };
 use packed_simd::{
-	u16x8,
+	usizex8,
 	u64x8,
 };
 
@@ -33,7 +33,7 @@ const MAX_KEYS: usize = 8;
 /// overhead versus using an actual [`std::collections::HashMap`].
 pub struct KeyMaster {
 	keys: u64x8,
-	values: u16x8,
+	values: usizex8,
 	len: usize,
 }
 
@@ -69,7 +69,7 @@ impl KeyMaster {
 		if self.keys.eq(u64x8::splat(key)).none() {
 			unsafe {
 				self.keys = self.keys.replace_unchecked(self.len, key);
-				self.values = self.values.replace_unchecked(self.len, idx as u16);
+				self.values = self.values.replace_unchecked(self.len, idx);
 			}
 			self.len += 1;
 			true
@@ -95,7 +95,7 @@ impl KeyMaster {
 
 		unsafe {
 			self.keys = self.keys.replace_unchecked(self.len, key);
-			self.values = self.values.replace_unchecked(self.len, idx as u16);
+			self.values = self.values.replace_unchecked(self.len, idx);
 		}
 		self.len += 1;
 	}
@@ -126,7 +126,7 @@ impl KeyMaster {
 		if res.any() {
 			Some(unsafe {
 				self.values.extract_unchecked(res.bitmask().trailing_zeros() as usize)
-			} as usize)
+			})
 		}
 		else { None }
 	}
