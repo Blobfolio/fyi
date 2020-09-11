@@ -1089,7 +1089,7 @@ impl Witching {
 			b" in ",
 			NiceElapsed::from(self.elapsed()).as_bytes(),
 			b".",
-		].concat())
+		])
 	}
 
 	/// # Summarize.
@@ -1148,7 +1148,7 @@ impl Witching {
 			b"No ",
 			self.label(),
 			b" were found.",
-		].concat())
+		])
 			.with_prefix(MsgKind::Warning)
 			.eprint();
 	}

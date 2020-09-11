@@ -293,7 +293,7 @@ fn helper(_: Option<&str>) {
 		env!("CARGO_PKG_DESCRIPTION").as_bytes(),
 		b"\n\n",
 		include_bytes!("../help/generic.txt"),
-	].concat())
+	])
 		.println();
 }
 

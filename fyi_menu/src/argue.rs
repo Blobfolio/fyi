@@ -414,7 +414,7 @@ impl Argue {
 	/// ```
 	pub fn with_version(self, name: &[u8], version: &[u8]) -> Self {
 		if self.keys.contains2("-V", "--version") {
-			Msg::from([name, b" v", version].concat()).println();
+			Msg::from([name, b" v", version]).println();
 			exit(0);
 		}
 

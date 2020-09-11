@@ -405,6 +405,61 @@ impl From<&[u8]> for Msg {
 	fn from(src: &[u8]) -> Self { Self::from(src.to_vec()) }
 }
 
+/// # Helper: From (Fixed) Slice.
+///
+/// This leverages specialized concatenation methods for byte slices of fixed
+/// length, avoiding the need to `[].concat()` or `iter().collect()`.
+macro_rules! from_slice {
+	($num:literal, $slicer:ident) => {
+		impl From<[&[u8]; $num]> for Msg {
+			fn from(src: [&[u8]; $num]) -> Self {
+				let (src, end) = utility::$slicer(src);
+
+				Self {
+					toc: Toc::new(
+						0_u16, 0_u16, // Indentation.
+						0_u16, 0_u16, // Timestamp.
+						0_u16, 0_u16, // Prefix.
+						0_u16, end,   // Message.
+						end, end,     // Suffix.
+						// Unused...
+						end, end, end, end, end, end, end, end, end,
+						end, end, end, end, end, end, end, end, end,
+						end, end, end, end
+					),
+					buf: src,
+				}
+			}
+		}
+	};
+}
+
+from_slice!(2, concat_slice2);
+from_slice!(3, concat_slice3);
+from_slice!(4, concat_slice4);
+from_slice!(5, concat_slice5);
+from_slice!(6, concat_slice6);
+
+impl From<&[&[u8]]> for Msg {
+	fn from(src: &[&[u8]]) -> Self {
+		let len: usize = src.iter().map(|x| x.len()).sum();
+		let mut v: Vec<u8> = Vec::with_capacity(len);
+
+		unsafe {
+			src.iter().fold(
+				v.as_mut_ptr(),
+				|ptr, s| {
+					std::ptr::copy_nonoverlapping(s.as_ptr(), ptr, s.len());
+					ptr.add(s.len())
+				}
+			);
+			v.set_len(len);
+		}
+
+		Self::from(v)
+	}
+}
+
 impl From<Vec<u8>> for Msg {
 	fn from(src: Vec<u8>) -> Self {
 		let end: u16 = src.len() as u16;

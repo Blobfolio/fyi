@@ -45,6 +45,33 @@ fn new(c: &mut Criterion) {
 	group.finish();
 }
 
+fn from(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_msg::Msg");
+
+	group.bench_function("from::<Vec<u8>>::()", move |b| {
+		b.iter_with_setup(||
+			b"My dear aunt sally eats cake.".to_vec(),
+			|v| Msg::from(v)
+		)
+	});
+
+	group.bench_function("from::<[&[u8]; 3]>::()", move |b| {
+		b.iter_with_setup(||
+			[&b"My "[..], b"dear ", b"aunt."],
+			|v| Msg::from(v)
+		)
+	});
+
+	group.bench_function("from::<[&[u8]; 6]>::()", move |b| {
+		b.iter_with_setup(||
+			[&b"My "[..], b"dear ", b"aunt ", b"sally ", b"eats ", b"cake."],
+			|v| Msg::from(v)
+		)
+	});
+
+	group.finish();
+}
+
 fn with_timestamp(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::Msg");
 
@@ -71,6 +98,7 @@ fn msgkind(c: &mut Criterion) {
 criterion_group!(
 	benches,
 	new,
+	from,
 	with_timestamp,
 	msgkind,
 );
