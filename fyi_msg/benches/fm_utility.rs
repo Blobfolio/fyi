@@ -3,7 +3,6 @@
 */
 
 use criterion::{
-	BenchmarkId,
 	Criterion,
 	criterion_group,
 	criterion_main,
