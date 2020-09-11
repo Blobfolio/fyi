@@ -511,8 +511,7 @@ impl Msg {
 	pub unsafe fn prefixed_unchecked(prefix: MsgKind, msg: &[u8]) -> Self {
 		use std::ptr;
 
-		let p_len: usize = prefix.len();
-		let m_len: usize = msg.len();
+		let (p_len, m_len) = (prefix.len(), msg.len());
 		let mut buf: Vec<u8> = Vec::with_capacity(p_len + m_len);
 
 		{
@@ -522,15 +521,16 @@ impl Msg {
 			buf.set_len(m_len + p_len);
 		}
 
-		let end: u16 = m_len as u16 + p_len as u16;
+		let p_len: u16 = p_len as u16;
+		let end: u16 = m_len as u16 + p_len;
 		Self {
 			buf,
 			toc: Toc::new(
-				0_u16, 0_u16,        // Indentation.
-				0_u16, 0_u16,        // Timestamp.
-				0_u16, p_len as u16, // Prefix.
-				p_len as u16, end,   // Message.
-				end, end,            // Suffix.
+				0_u16, 0_u16, // Indentation.
+				0_u16, 0_u16, // Timestamp.
+				0_u16, p_len, // Prefix.
+				p_len, end,   // Message.
+				end, end,     // Suffix.
 				// Unused...
 				end, end, end, end, end, end, end, end, end,
 				end, end, end, end, end, end, end, end, end,
