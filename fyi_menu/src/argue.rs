@@ -272,13 +272,14 @@ impl Argue {
 	/// ```
 	pub fn with_help<F>(self, cb: F) -> Self
 	where F: Fn(Option<&str>) {
+		// There has to be a first entry...
 		if let Some(x) = self.peek() {
-			// Is "help" the subcommand?
+			// If that entry is "help", we're done!
 			if x == "help" {
 				cb(None);
 				exit(0);
 			}
-			// Check the flags.
+			// Otherwise we need to check for the flags.
 			else if self.keys.contains2("-h", "--help") {
 				cb(
 					if x.as_bytes()[0] == b'-' { None }
