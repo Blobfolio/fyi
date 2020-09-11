@@ -156,6 +156,7 @@ impl Toc {
 		}
 	}
 
+	#[inline]
 	/// # Decrease Part Length.
 	///
 	/// This decreases the length of a part by `adj`, and shifts any subsequent
@@ -169,6 +170,7 @@ impl Toc {
 		self.0 -= pad_adj(idx, adj);
 	}
 
+	#[inline]
 	/// # Increase Part Length.
 	///
 	/// This increases the length of a part by `adj`, and shifts any subsequent
