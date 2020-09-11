@@ -549,8 +549,8 @@ impl WitchingInner {
 	/// The combined width of the `###` will never exceed 255, and will never
 	/// be less than 10.
 	fn tick_set_bar(&mut self) {
-		static BAR: &[u8; 255] = &[b'#'; 255];
-		static DASH: &[u8; 255] = &[b'-'; 255];
+		static BAR: [u8; 255] = [b'#'; 255];
+		static DASH: [u8; 255] = [b'-'; 255];
 
 		if 0 != self.flags & TICK_BAR {
 			self.flags &= ! TICK_BAR;

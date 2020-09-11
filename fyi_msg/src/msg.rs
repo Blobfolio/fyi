@@ -588,16 +588,17 @@ impl Msg {
 	/// msg.set_indent(2); // "        Hello World."
 	/// ```
 	pub fn set_indent(&mut self, indent: u8) {
+		static INDENT: [u8; 16] = *b"                ";
+
 		self.toc.replace(
 			&mut self.buf,
 			PART_INDENT,
-			match 4.min(indent) {
+			match indent {
 				0 => b"",
-				1 => b"    ",
-				2 => b"        ",
-				3 => b"            ",
-				4 => b"                ",
-				_ => unreachable!(),
+				1 => &INDENT[0..4],
+				2 => &INDENT[0..8],
+				3 => &INDENT[0..12],
+				_ => &INDENT,
 			}
 		);
 	}
