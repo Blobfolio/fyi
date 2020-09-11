@@ -840,6 +840,7 @@ impl Msg {
 
 
 
+#[inline]
 /// # Locked Print.
 ///
 /// Print data to `Stdout`, locking the writer until all data has been flushed.
@@ -855,6 +856,7 @@ fn locked_print(buf: &[u8], line: bool) {
 	handle.flush().unwrap();
 }
 
+#[inline]
 /// # Locked Error Print.
 ///
 /// Print data to `Stderr`, locking the writer until all data has been flushed.

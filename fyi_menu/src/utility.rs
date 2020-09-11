@@ -66,6 +66,7 @@ pub fn esc_arg(mut s: String) -> String {
 }
 
 #[must_use]
+#[inline]
 /// # Hash Argument Key.
 ///
 /// This method is used internally to key the pseudo-hashmap in the [`Argue`](crate::Argue)
