@@ -70,10 +70,6 @@ mod keykind;
 #[cfg(feature = "simd")]      mod simd;
 pub mod utility;
 
-use fyi_msg::{
-	Msg,
-	MsgKind,
-};
 pub use keykind::KeyKind;
 #[cfg(not(feature = "simd"))] pub use keymaster::KeyMaster;
 #[cfg(feature = "simd")]      pub use simd::KeyMaster;
@@ -93,6 +89,6 @@ pub use argue::Argue;
 ///
 /// The `msg` must be valid UTF-8 or undefined things may happen.
 pub fn die(msg: &[u8]) {
-	unsafe { Msg::prefixed_unchecked(MsgKind::Error, msg) }.eprintln();
+	unsafe { fyi_msg::Msg::prefixed_unchecked(fyi_msg::MsgKind::Error, msg) }.eprintln();
 	std::process::exit(1);
 }

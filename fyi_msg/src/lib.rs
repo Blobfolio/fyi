@@ -53,6 +53,7 @@ processing under modern CPUs. This feature requires Rust nightly.
 
 
 mod msg;
+pub mod traits;
 #[cfg(not(feature = "simd"))] mod toc;
 #[cfg(feature = "simd")]      mod simd;
 pub mod utility;

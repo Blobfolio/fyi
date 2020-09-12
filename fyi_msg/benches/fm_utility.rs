@@ -11,6 +11,27 @@ use fyi_msg::utility;
 
 
 
+fn concat_slice(c: &mut Criterion) {
+	use fyi_msg::traits::FastConcat;
+	let mut group = c.benchmark_group("fyi_msg::utility");
+
+	group.bench_function("[&[u8]; 6].fast_concat()", move |b| {
+		b.iter_with_setup(||
+			[
+				&b"Most platforms"[..],
+				b" fundamentally can't",
+				b" even construct",
+				b" such",
+				b" an",
+				b" allocation.",
+			], |buf: [&[u8]; 6]|
+			buf.fast_concat()
+		)
+	});
+
+	group.finish();
+}
+
 fn vec_resize_at(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::utility");
 
@@ -34,6 +55,7 @@ adjtime_config.5.gz________deb-old.5.gz_______________devscripts.conf.5.gz______
 
 criterion_group!(
 	benches,
+	concat_slice,
 	vec_resize_at,
 );
 criterion_main!(benches);

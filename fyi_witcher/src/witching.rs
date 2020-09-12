@@ -407,6 +407,8 @@ impl WitchingInner {
 	/// This method "erases" any prior output so that new output can be written
 	/// in the same place. That's animation, folks!
 	fn print_cls(&mut self) {
+		use fyi_msg::traits::FastConcat;
+
 		// Buffer 10 Line Clears.
 		// 0..10 moves the cursor left. This is done only once per reset.
 		// 14 is the length of each subsequent command, which moves the cursor up.
@@ -427,7 +429,7 @@ impl WitchingInner {
 					Self::print(&[
 						&CLS10[..],
 						&CLS10[14..28].repeat(self.last_lines - 10),
-					].concat());
+					].fast_concat());
 				},
 			}
 
