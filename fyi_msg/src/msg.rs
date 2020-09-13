@@ -666,24 +666,6 @@ impl Msg {
 	// Setters
 	// ------------------------------------------------------------------------
 
-	/// # Extend Message.
-	///
-	/// This appends bits to the message body, similar to [`std::vec::Vec::extend_from_slice`].
-	pub fn extend_msg(&mut self, src: &[u8]) {
-		let len: usize = src.len();
-		if len != 0 {
-			let from: usize = self.toc.end(PART_MSG);
-			self.toc.resize(&mut self.buf, PART_MSG, self.toc.len(PART_MSG) + len);
-			unsafe {
-				ptr::copy_nonoverlapping(
-					src.as_ptr(),
-					self.buf.as_mut_ptr().add(from),
-					len
-				);
-			}
-		}
-	}
-
 	/// # Set Indent.
 	///
 	/// Set or reset the level of indentation. See [`Msg::with_indent`] for more
@@ -1026,8 +1008,5 @@ mod tests {
 
 		msg.set_msg("My dear aunt");
 		assert!(msg.ends_with(b"My dear aunt"));
-
-		msg.extend_msg(b" sally.");
-		assert!(msg.ends_with(b"My dear aunt sally."));
 	}
 }
