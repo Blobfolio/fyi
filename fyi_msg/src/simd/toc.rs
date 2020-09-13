@@ -13,6 +13,10 @@ use std::ops::Range;
 
 
 
+const IDX_LEN: usize = 16;
+
+
+
 #[derive(Debug, Copy, Clone, Default)]
 /// `Toc` stores arbitrary index ranges (`start..end`), providing a means of
 /// logically partitioning the byte streams used by [Msg](crate::Msg) and `Witching`.
@@ -88,7 +92,7 @@ impl Toc {
 	///
 	/// Get the (inclusive) starting index of the part number `idx`.
 	///
-	/// # Panic
+	/// ## Panics
 	///
 	/// This method might panic if `idx` is out of range.
 	pub fn start(&self, idx: usize) -> usize {
@@ -100,7 +104,7 @@ impl Toc {
 	///
 	/// Get the (exclusive) terminating index of the part number `idx`.
 	///
-	/// # Panic
+	/// ## Panics
 	///
 	/// This method might panic if `idx` is out of range.
 	pub fn end(&self, idx: usize) -> usize {
@@ -112,7 +116,7 @@ impl Toc {
 	///
 	/// Return the total length of a given part, equivalent to `end - start`.
 	///
-	/// # Panic
+	/// ## Panics
 	///
 	/// This method might panic if `idx` is out of range.
 	pub fn len(&self, idx: usize) -> usize {
@@ -127,7 +131,7 @@ impl Toc {
 	///
 	/// This returns `true` if the part has no length, or `false` if it does.
 	///
-	/// # Panic
+	/// ## Panics
 	///
 	/// This method might panic if `idx` is out of range.
 	pub fn is_empty(&self, idx: usize) -> bool {
@@ -146,7 +150,7 @@ impl Toc {
 	/// This is typically used to slice a partition from its corresponding
 	/// buffer.
 	///
-	/// # Panic
+	/// ## Panics
 	///
 	/// This method might panic if `idx` is out of range.
 	pub fn range(&self, idx: usize) -> Range<usize> {
@@ -176,7 +180,7 @@ impl Toc {
 	/// This increases the length of a part by `adj`, and shifts any subsequent
 	/// part boundaries that many places to the right.
 	///
-	/// # Panic
+	/// ## Panics
 	///
 	/// This method might panic if `idx` is out of range.
 	pub fn increase(&mut self, idx: usize, adj: u16) {
@@ -190,7 +194,7 @@ impl Toc {
 	/// different length than the original, the partitions will be realigned
 	/// accordingly.
 	///
-	/// # Panic
+	/// ## Panics
 	///
 	/// This method might panic if `idx` is out of range.
 	pub fn replace(&mut self, src: &mut Vec<u8>, idx: usize, buf: &[u8]) {
@@ -220,7 +224,7 @@ impl Toc {
 	/// data can safely be written into that range afterwards as it will be the
 	/// correct size.
 	///
-	/// # Panic
+	/// ## Panics
 	///
 	/// This method might panic if `idx` is out of range.
 	pub fn resize(&mut self, src: &mut Vec<u8>, idx: usize, len: usize) {
