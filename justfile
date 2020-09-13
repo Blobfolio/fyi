@@ -252,6 +252,7 @@ doc DEFAULT_FEATURES="":
 	cargo run \
 		-q \
 		--example "{{ DEMO }}" \
+		--all-features \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
@@ -261,6 +262,7 @@ doc DEFAULT_FEATURES="":
 	RUSTFLAGS="{{ rustflags }}" cargo run \
 		--bin "{{ pkg_id }}" \
 		--release \
+		--all-features \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}" \
 		-- {{ ARGS }}
