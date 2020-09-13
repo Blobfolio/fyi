@@ -758,12 +758,7 @@ impl Msg {
 	pub fn set_timestamp(&mut self, on: bool) {
 		if on == self.toc.is_empty(PART_TIMESTAMP) {
 			if on {
-				self.toc.replace(
-					&mut self.buf,
-					PART_TIMESTAMP,
-					b"\x1b[2m[\x1b[0;34m2000-00-00 00:00:00\x1b[39;2m]\x1b[0m ",
-				);
-				self.write_timestamp();
+				unsafe { self.write_timestamp(); }
 			}
 			else {
 				self.toc.resize(&mut self.buf, PART_TIMESTAMP, 0);
@@ -904,34 +899,38 @@ impl Msg {
 	/// This method updates the timestamp slice of the message buffer. While
 	/// `chrono` provides formatting helpers of its own, they are too slow for
 	/// our use cases.
-	fn write_timestamp(&mut self) {
+	unsafe fn write_timestamp(&mut self) {
 		use chrono::{
 			Datelike,
 			Local,
 			Timelike,
 		};
 
+		self.toc.replace(
+			&mut self.buf,
+			PART_TIMESTAMP,
+			b"\x1b[2m[\x1b[0;34m2000-00-00 00:00:00\x1b[39;2m]\x1b[0m ",
+		);
+
 		// Chrono's formatter is slow as shit. It is faster for us to call
 		// each of their time part methods individually, convert those
 		// integers to bytes, and copy them into our static buffer.
 		let now = Local::now();
-		unsafe {
-			[
-				(now.year() as u16).saturating_sub(2000) as u8,
-				now.month() as u8,
-				now.day() as u8,
-				now.hour() as u8,
-				now.minute() as u8,
-				now.second() as u8,
-			].iter()
-				.fold(
-					self.buf.as_mut_ptr().add(self.toc.start(PART_TIMESTAMP) + 14),
-					|ptr, x| {
-						utility::write_time_dd(ptr, *x);
-						ptr.add(3)
-					}
-				);
-		}
+		[
+			(now.year() as u16).saturating_sub(2000) as u8,
+			now.month() as u8,
+			now.day() as u8,
+			now.hour() as u8,
+			now.minute() as u8,
+			now.second() as u8,
+		].iter()
+			.fold(
+				self.buf.as_mut_ptr().add(self.toc.start(PART_TIMESTAMP) + 14),
+				|ptr, x| {
+					utility::write_time_dd(ptr, *x);
+					ptr.add(3)
+				}
+			);
 	}
 }
 
