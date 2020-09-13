@@ -275,18 +275,16 @@ impl Argue {
 	pub fn with_help<F>(self, cb: F) -> Self
 	where F: Fn(Option<&str>) {
 		// There has to be a first entry...
-		if let Some(x) = self.peek() {
+		if ! self.args.is_empty() {
 			// If that entry is "help", we're done!
-			if x == "help" {
+			if self.args[0] == "help" {
 				cb(None);
 				exit(0);
 			}
 			// Otherwise we need to check for the flags.
 			else if self.keys.contains2("-h", "--help") {
-				cb(
-					if x.as_bytes()[0] == b'-' { None }
-					else { Some(x) }
-				);
+				if self.args[0].as_bytes()[0] == b'-' { cb(None); }
+				else { cb(Some(&self.args[0])); }
 				exit(0);
 			}
 		}
