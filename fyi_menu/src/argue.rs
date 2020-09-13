@@ -113,6 +113,7 @@ pub struct Argue {
 }
 
 impl Default for Argue {
+	#[inline]
 	fn default() -> Self {
 		Self {
 			args: Vec::with_capacity(16),
@@ -125,6 +126,7 @@ impl Default for Argue {
 
 impl Deref for Argue {
 	type Target = [String];
+	#[inline]
 	fn deref(&self) -> &Self::Target { &self.args }
 }
 
@@ -423,6 +425,7 @@ impl Argue {
 
 	#[allow(clippy::missing_const_for_fn)] // Doesn't work!
 	#[must_use]
+	#[inline]
 	/// # Into Owned Vec.
 	///
 	/// Use this method to consume the struct and return the parsed arguments
@@ -469,6 +472,7 @@ impl Argue {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # First Entry.
 	///
 	/// Borrow the first entry without first checking for its existence.
@@ -494,6 +498,7 @@ impl Argue {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # Switch.
 	///
 	/// Returns `true` if the switch is present, `false` if not.
@@ -511,6 +516,7 @@ impl Argue {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # Switch x2.
 	///
 	/// This is a convenience method that checks for the existence of two

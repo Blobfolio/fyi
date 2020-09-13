@@ -5,7 +5,6 @@
 */
 
 use crate::utility;
-use std::ops::Range;
 
 
 
@@ -84,10 +83,21 @@ impl Toc {
 	///
 	/// Get the (inclusive) starting index of the part number `idx`.
 	///
-	/// # Panic
+	/// ## Panics
 	///
 	/// This method might panic if `idx` is out of range.
 	pub const fn start(&self, idx: usize) -> usize {
+		self.0[idx * 2] as usize
+	}
+
+	#[must_use]
+	/// # Part Start (Unchecked).
+	///
+	/// ## Safety
+	///
+	/// This is identical to [`Toc::start`] and included only for API
+	/// compatibility with the SIMD version.
+	pub unsafe fn start_unchecked(&self, idx: usize) -> usize {
 		self.0[idx * 2] as usize
 	}
 
@@ -96,10 +106,21 @@ impl Toc {
 	///
 	/// Get the (exclusive) terminating index of the part number `idx`.
 	///
-	/// # Panic
+	/// ## Panics
 	///
 	/// This method might panic if `idx` is out of range.
 	pub const fn end(&self, idx: usize) -> usize {
+		self.0[idx * 2 + 1] as usize
+	}
+
+	#[must_use]
+	/// # Part End (Unchecked).
+	///
+	/// ## Safety
+	///
+	/// This is identical to [`Toc::end`] and included only for API
+	/// compatibility with the SIMD version.
+	pub unsafe fn end_unchecked(&self, idx: usize) -> usize {
 		self.0[idx * 2 + 1] as usize
 	}
 
@@ -108,10 +129,21 @@ impl Toc {
 	///
 	/// Return the total length of a given part, equivalent to `end - start`.
 	///
-	/// # Panic
+	/// ## Panics
 	///
 	/// This method might panic if `idx` is out of range.
 	pub const fn len(&self, idx: usize) -> usize {
+		(self.0[idx * 2 + 1] - self.0[idx * 2]) as usize
+	}
+
+	#[must_use]
+	/// # Part Length (Unchecked).
+	///
+	/// ## Safety
+	///
+	/// This is identical to [`Toc::len`] and included only for API
+	/// compatibility with the SIMD version.
+	pub unsafe fn len_unchecked(&self, idx: usize) -> usize {
 		(self.0[idx * 2 + 1] - self.0[idx * 2]) as usize
 	}
 
@@ -120,7 +152,7 @@ impl Toc {
 	///
 	/// This returns `true` if the part has no length, or `false` if it does.
 	///
-	/// # Panic
+	/// ## Panics
 	///
 	/// This method might panic if `idx` is out of range.
 	pub const fn is_empty(&self, idx: usize) -> bool {
@@ -128,19 +160,14 @@ impl Toc {
 	}
 
 	#[must_use]
-	/// # Part Range.
+	/// # Part Is Empty (Unchecked)?
 	///
-	/// Convert a given part into a `Range<usize>` with inclusive start and
-	/// exclusive end boundaries.
+	/// ## Safety
 	///
-	/// This is typically used to slice a partition from its corresponding
-	/// buffer.
-	///
-	/// # Panic
-	///
-	/// This method might panic if `idx` is out of range.
-	pub const fn range(&self, idx: usize) -> Range<usize> {
-		self.0[idx * 2] as usize .. self.0[idx * 2 + 1] as usize
+	/// This is identical to [`Toc::len`] and included only for API
+	/// compatibility with the SIMD version.
+	pub unsafe fn is_empty_unchecked(&self, idx: usize) -> bool {
+		self.0[idx * 2] == self.0[idx * 2 + 1]
 	}
 
 	/// # Decrease Part Length.
@@ -161,7 +188,7 @@ impl Toc {
 	/// This increases the length of a part by `adj`, and shifts any subsequent
 	/// part boundaries that many places to the right.
 	///
-	/// # Panic
+	/// ## Panics
 	///
 	/// This method might panic if `idx` is out of range.
 	pub fn increase(&mut self, idx: usize, adj: u16) {
@@ -175,7 +202,7 @@ impl Toc {
 	/// different length than the original, the partitions will be realigned
 	/// accordingly.
 	///
-	/// # Panic
+	/// ## Panics
 	///
 	/// This method might panic if `idx` is out of range.
 	pub fn replace(&mut self, src: &mut Vec<u8>, idx: usize, buf: &[u8]) {
@@ -191,6 +218,16 @@ impl Toc {
 		}
 	}
 
+	/// # Replace Vec Range (Unchecked).
+	///
+	/// ## Safety
+	///
+	/// This is identical to [`Toc::replace`] and included only for API
+	/// compatibility with the SIMD version.
+	pub unsafe fn replace_unchecked(&mut self, src: &mut Vec<u8>, idx: usize, buf: &[u8]) {
+		self.replace(src, idx, buf)
+	}
+
 	#[allow(clippy::comparison_chain)] // We only need two arms.
 	/// # Resize Vec Range.
 	///
@@ -204,10 +241,10 @@ impl Toc {
 	/// data can safely be written into that range afterwards as it will be the
 	/// correct size.
 	///
-	/// # Panic
+	/// ## Panics
 	///
 	/// This method might panic if `idx` is out of range.
-	pub fn resize(&mut self, src: &mut Vec<u8>, idx: usize, len: usize) {
+	fn resize(&mut self, src: &mut Vec<u8>, idx: usize, len: usize) {
 		let old_len: usize = self.len(idx);
 
 		// Shrink it.
@@ -234,6 +271,27 @@ impl Toc {
 			self.increase(idx, adj as u16);
 		}
 	}
+
+	/// # Zero Part.
+	///
+	/// Truncate a part to zero-length.
+	///
+	/// ## Panics
+	///
+	/// This method might panic if `idx` is out of range.
+	pub fn zero(&mut self, src: &mut Vec<u8>, idx: usize) {
+		self.resize(src, idx, 0);
+	}
+
+	/// # Zero Part (Unchecked).
+	///
+	/// ## Safety
+	///
+	/// This is identical to [`Toc::zero`] and included only for API
+	/// compatibility with the SIMD version.
+	pub unsafe fn zero_unchecked(&mut self, src: &mut Vec<u8>, idx: usize) {
+		self.resize(src, idx, 0);
+	}
 }
 
 #[cfg(test)]
@@ -254,37 +312,37 @@ mod tests {
 		// Bigger.
 		toc.replace(&mut buf, 0, &[2, 2, 2]);
 		assert_eq!(buf, vec![0, 0, 2, 2, 2, 0, 0]);
-		assert_eq!(toc.range(0), 2..5);
-		assert_eq!(toc.range(1), 5..7);
+		assert_eq!(toc.start(0)..toc.end(0), 2..5);
+		assert_eq!(toc.start(1)..toc.end(1), 5..7);
 
 		// Same Size.
 		toc.replace(&mut buf, 0, &[3, 3, 3]);
 		assert_eq!(buf, vec![0, 0, 3, 3, 3, 0, 0]);
-		assert_eq!(toc.range(0), 2..5);
-		assert_eq!(toc.range(1), 5..7);
+		assert_eq!(toc.start(0)..toc.end(0), 2..5);
+		assert_eq!(toc.start(1)..toc.end(1), 5..7);
 
 		// Smaller.
 		toc.replace(&mut buf, 0, &[1]);
 		assert_eq!(buf, vec![0, 0, 1, 0, 0]);
-		assert_eq!(toc.range(0), 2..3);
-		assert_eq!(toc.range(1), 3..5);
+		assert_eq!(toc.start(0)..toc.end(0), 2..3);
+		assert_eq!(toc.start(1)..toc.end(1), 3..5);
 
 		// Empty.
 		toc.replace(&mut buf, 0, &[]);
 		assert_eq!(buf, vec![0, 0, 0, 0]);
-		assert_eq!(toc.range(0), 2..2);
-		assert_eq!(toc.range(1), 2..4);
+		assert_eq!(toc.start(0)..toc.end(0), 2..2);
+		assert_eq!(toc.start(1)..toc.end(1), 2..4);
 
 		// Bigger (End).
 		toc.replace(&mut buf, 1, &[2, 2, 2]);
 		assert_eq!(buf, vec![0, 0, 2, 2, 2]);
-		assert_eq!(toc.range(0), 2..2);
-		assert_eq!(toc.range(1), 2..5);
+		assert_eq!(toc.start(0)..toc.end(0), 2..2);
+		assert_eq!(toc.start(1)..toc.end(1), 2..5);
 
 		// Smaller (End).
 		toc.replace(&mut buf, 1, &[3, 3]);
 		assert_eq!(buf, vec![0, 0, 3, 3]);
-		assert_eq!(toc.range(0), 2..2);
-		assert_eq!(toc.range(1), 2..4);
+		assert_eq!(toc.start(0)..toc.end(0), 2..2);
+		assert_eq!(toc.start(1)..toc.end(1), 2..4);
 	}
 }

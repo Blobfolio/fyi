@@ -74,6 +74,7 @@ impl fmt::Debug for PrefixBuffer {
 }
 
 impl Default for PrefixBuffer {
+	#[inline]
 	fn default() -> Self {
 		Self {
 			buf: [0; 64],
@@ -84,6 +85,7 @@ impl Default for PrefixBuffer {
 
 impl Deref for PrefixBuffer {
 	type Target = [u8];
+	#[inline]
 	fn deref(&self) -> &Self::Target { &self.buf[0..self.len] }
 }
 
@@ -144,14 +146,17 @@ impl PrefixBuffer {
 		}
 	}
 
+	#[inline]
 	/// # As Bytes.
 	///
 	/// Return the value as a slice of bytes.
-	pub fn as_bytes(&self) -> &[u8] { &self }
+	pub fn as_bytes(&self) -> &[u8] { self }
 
+	#[inline]
 	/// # Is Empty?
 	pub const fn is_empty(&self) -> bool { 0 == self.len }
 
+	#[inline]
 	/// # Length.
 	pub const fn len(&self) -> usize { self.len }
 }
@@ -191,6 +196,7 @@ pub enum MsgKind {
 }
 
 impl Default for MsgKind {
+	#[inline]
 	fn default() -> Self { Self::None }
 }
 
@@ -385,6 +391,7 @@ impl AsRef<str> for Msg {
 
 impl Deref for Msg {
 	type Target = [u8];
+	#[inline]
 	fn deref(&self) -> &Self::Target { &self.buf }
 }
 
@@ -495,6 +502,7 @@ impl PartialEq<&str> for Msg {
 }
 
 impl Msg {
+	#[inline]
 	/// # New Instance.
 	///
 	/// Create a new message without a prefix. This is basically just a string,
@@ -683,19 +691,22 @@ impl Msg {
 	pub fn set_indent(&mut self, indent: u8) {
 		static INDENT: [u8; 16] = *b"                ";
 
-		self.toc.replace(
-			&mut self.buf,
-			PART_INDENT,
-			match indent {
-				0 => b"",
-				1 => &INDENT[0..4],
-				2 => &INDENT[0..8],
-				3 => &INDENT[0..12],
-				_ => &INDENT,
-			}
-		);
+		unsafe {
+			self.toc.replace_unchecked(
+				&mut self.buf,
+				PART_INDENT,
+				match indent {
+					0 => b"",
+					1 => &INDENT[0..4],
+					2 => &INDENT[0..8],
+					3 => &INDENT[0..12],
+					_ => &INDENT,
+				}
+			);
+		}
 	}
 
+	#[inline]
 	/// # Set Message.
 	///
 	/// Set or reset the message body.
@@ -709,9 +720,12 @@ impl Msg {
 	/// ```
 	pub fn set_msg<S> (&mut self, msg: S)
 	where S: AsRef<str> {
-		self.toc.replace(&mut self.buf, PART_MSG, msg.as_ref().as_bytes());
+		unsafe {
+			self.toc.replace_unchecked(&mut self.buf, PART_MSG, msg.as_ref().as_bytes());
+		}
 	}
 
+	#[inline]
 	/// # Set Prefix.
 	///
 	/// Set or reset the message prefix.
@@ -726,7 +740,9 @@ impl Msg {
 	/// msg.set_prefix(MsgKind::Error);
 	/// ```
 	pub fn set_prefix(&mut self, prefix: MsgKind) {
-		self.toc.replace(&mut self.buf, PART_PREFIX, prefix.as_bytes());
+		unsafe {
+			self.toc.replace_unchecked(&mut self.buf, PART_PREFIX, prefix.as_bytes());
+		}
 	}
 
 	/// # Set Suffix (Unchecked)
@@ -739,7 +755,7 @@ impl Msg {
 	/// This method is "unsafe" insofar as the data is accepted without any
 	/// checks or manipulation.
 	pub unsafe fn set_suffix_unchecked(&mut self, suffix: &[u8]) {
-		self.toc.replace(&mut self.buf, PART_SUFFIX, suffix);
+		self.toc.replace_unchecked(&mut self.buf, PART_SUFFIX, suffix);
 	}
 
 	/// # Set Timestamp.
@@ -757,11 +773,13 @@ impl Msg {
 	/// ```
 	pub fn set_timestamp(&mut self, on: bool) {
 		if on == self.toc.is_empty(PART_TIMESTAMP) {
-			if on {
-				unsafe { self.write_timestamp(); }
-			}
-			else {
-				self.toc.resize(&mut self.buf, PART_TIMESTAMP, 0);
+			unsafe {
+				if on {
+					self.write_timestamp();
+				}
+				else {
+					self.toc.zero_unchecked(&mut self.buf, PART_TIMESTAMP);
+				}
 			}
 		}
 	}
@@ -773,6 +791,7 @@ impl Msg {
 	// ------------------------------------------------------------------------
 
 	#[must_use]
+	#[inline]
 	/// # As Bytes.
 	///
 	/// Return the message as a slice of bytes.
@@ -787,6 +806,7 @@ impl Msg {
 	pub fn as_bytes(&self) -> &[u8] { &self.buf }
 
 	#[must_use]
+	#[inline]
 	/// # As Str.
 	///
 	/// Return the message as a string slice.
@@ -804,6 +824,7 @@ impl Msg {
 
 	#[allow(clippy::missing_const_for_fn)] // Doesn't work!
 	#[must_use]
+	#[inline]
 	/// # Into Vec.
 	///
 	/// Consume the message, converting it into an owned byte vector.
@@ -906,7 +927,7 @@ impl Msg {
 			Timelike,
 		};
 
-		self.toc.replace(
+		self.toc.replace_unchecked(
 			&mut self.buf,
 			PART_TIMESTAMP,
 			b"\x1b[2m[\x1b[0;34m2000-00-00 00:00:00\x1b[39;2m]\x1b[0m ",
@@ -916,21 +937,24 @@ impl Msg {
 		// each of their time part methods individually, convert those
 		// integers to bytes, and copy them into our static buffer.
 		let now = Local::now();
-		[
-			(now.year() as u16).saturating_sub(2000) as u8,
-			now.month() as u8,
-			now.day() as u8,
-			now.hour() as u8,
-			now.minute() as u8,
-			now.second() as u8,
-		].iter()
-			.fold(
-				self.buf.as_mut_ptr().add(self.toc.start(PART_TIMESTAMP) + 14),
-				|ptr, x| {
-					utility::write_time_dd(ptr, *x);
-					ptr.add(3)
-				}
-			);
+
+		let mut ptr = self.buf.as_mut_ptr().add(self.toc.start_unchecked(PART_TIMESTAMP) + 14);
+		utility::write_time_dd(ptr, (now.year() as u16).saturating_sub(2000) as u8);
+
+		ptr = ptr.add(3);
+		utility::write_time_dd(ptr, now.month() as u8);
+
+		ptr = ptr.add(3);
+		utility::write_time_dd(ptr, now.day() as u8);
+
+		ptr = ptr.add(3);
+		utility::write_time_dd(ptr, now.hour() as u8);
+
+		ptr = ptr.add(3);
+		utility::write_time_dd(ptr, now.minute() as u8);
+
+		ptr = ptr.add(3);
+		utility::write_time_dd(ptr, now.second() as u8);
 	}
 }
 

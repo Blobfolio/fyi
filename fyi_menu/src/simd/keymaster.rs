@@ -39,12 +39,14 @@ pub struct KeyMaster {
 
 impl KeyMaster {
 	#[must_use]
+	#[inline]
 	/// # Is Empty?
 	///
 	/// This returns `true` if no keys are present.
 	pub const fn is_empty(&self) -> bool { self.len == 0 }
 
 	#[must_use]
+	#[inline]
 	/// # Length.
 	///
 	/// Return the total number of keys.
@@ -101,6 +103,7 @@ impl KeyMaster {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # Has Key?
 	///
 	/// Returns `true` if the key is stored, or `false` if not.
@@ -109,6 +112,7 @@ impl KeyMaster {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # Has Either of Two Keys?
 	///
 	/// This is a convenience method that checks for the existence of two keys
@@ -132,6 +136,7 @@ impl KeyMaster {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # Get Either of Two Key's Index.
 	///
 	/// This is a convenience method that checks for the existence of two keys

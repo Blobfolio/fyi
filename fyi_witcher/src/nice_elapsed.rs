@@ -74,6 +74,7 @@ pub struct NiceElapsed {
 }
 
 impl Default for NiceElapsed {
+	#[inline]
 	fn default() -> Self {
 		Self {
 			inner: [0; 36],
@@ -84,6 +85,7 @@ impl Default for NiceElapsed {
 
 impl Deref for NiceElapsed {
 	type Target = [u8];
+	#[inline]
 	fn deref(&self) -> &Self::Target { &self.inner[0..self.len] }
 }
 
@@ -216,17 +218,19 @@ impl NiceElapsed {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # As Bytes.
 	///
 	/// Return the nice value as a byte string.
-	pub fn as_bytes(&self) -> &[u8] { &self }
+	pub fn as_bytes(&self) -> &[u8] { self }
 
 	#[must_use]
+	#[inline]
 	/// # As Str.
 	///
 	/// Return the nice value as a string slice.
 	pub fn as_str(&self) -> &str {
-		unsafe { std::str::from_utf8_unchecked(&self) }
+		unsafe { std::str::from_utf8_unchecked(self) }
 	}
 }
 

@@ -514,13 +514,13 @@ impl WitchingInner {
 		// 2: the spaces after total;
 		// 2: the braces around the bar itself (should there be one);
 		// 2: the spaces after the bar itself (should there be one);
-		let space: usize = 255_usize.min(self.last_width.saturating_sub(
+		let space: usize = 255_usize.min(self.last_width.saturating_sub(unsafe {
 			11 +
-			self.toc.len(PART_ELAPSED) +
-			self.toc.len(PART_DONE) +
-			self.toc.len(PART_TOTAL) +
-			self.toc.len(PART_PERCENT)
-		));
+			self.toc.len_unchecked(PART_ELAPSED) +
+			self.toc.len_unchecked(PART_DONE) +
+			self.toc.len_unchecked(PART_TOTAL) +
+			self.toc.len_unchecked(PART_PERCENT)
+		}));
 
 		// Insufficient space!
 		if space < MIN_BARS_WIDTH || 0 == self.total { (0, 0, 0) }
@@ -559,14 +559,16 @@ impl WitchingInner {
 			let (w_done, w_doing, w_undone) = self.tick_bar_widths();
 
 			// Update the parts!.
-			if self.toc.len(PART_BAR_DONE) != w_done {
-				self.toc.replace(&mut self.buf, PART_BAR_DONE, &BAR[0..w_done]);
-			}
-			if self.toc.len(PART_BAR_DOING) != w_doing {
-				self.toc.replace(&mut self.buf, PART_BAR_DOING, &DASH[0..w_doing]);
-			}
-			if self.toc.len(PART_BAR_UNDONE) != w_undone {
-				self.toc.replace(&mut self.buf, PART_BAR_UNDONE, &DASH[0..w_undone]);
+			unsafe {
+				if self.toc.len_unchecked(PART_BAR_DONE) != w_done {
+					self.toc.replace_unchecked(&mut self.buf, PART_BAR_DONE, &BAR[0..w_done]);
+				}
+				if self.toc.len_unchecked(PART_BAR_DOING) != w_doing {
+					self.toc.replace_unchecked(&mut self.buf, PART_BAR_DOING, &DASH[0..w_doing]);
+				}
+				if self.toc.len_unchecked(PART_BAR_UNDONE) != w_undone {
+					self.toc.replace_unchecked(&mut self.buf, PART_BAR_UNDONE, &DASH[0..w_undone]);
+				}
 			}
 		}
 	}
@@ -580,7 +582,9 @@ impl WitchingInner {
 		if 0 != self.flags & TICK_DOING {
 			self.flags &= ! TICK_DOING;
 			if self.doing.is_empty() {
-				self.toc.resize(&mut self.buf, PART_DOING, 0);
+				unsafe {
+					self.toc.zero_unchecked(&mut self.buf, PART_DOING);
+				}
 			}
 			else {
 				let width: usize = self.last_width.saturating_sub(6);
@@ -598,7 +602,9 @@ impl WitchingInner {
 					.copied()
 					.collect();
 
-				self.toc.replace(&mut self.buf, PART_DOING, &tasks);
+				unsafe {
+					self.toc.replace_unchecked(&mut self.buf, PART_DOING, &tasks);
+				}
 			}
 		}
 	}
@@ -609,7 +615,9 @@ impl WitchingInner {
 	fn tick_set_done(&mut self) {
 		if 0 != self.flags & TICK_DONE {
 			self.flags &= ! TICK_DONE;
-			self.toc.replace(&mut self.buf, PART_DONE, &NiceInt::from(self.done));
+			unsafe {
+				self.toc.replace_unchecked(&mut self.buf, PART_DONE, &NiceInt::from(self.done));
+			}
 		}
 	}
 
@@ -620,7 +628,9 @@ impl WitchingInner {
 		if 0 != self.flags & TICK_PERCENT {
 			self.flags &= ! TICK_PERCENT;
 			let p: String = format!("{:>3.*}%", 2, self.percent() * 100.0);
-			self.toc.replace(&mut self.buf, PART_PERCENT, p.as_bytes());
+			unsafe {
+				self.toc.replace_unchecked(&mut self.buf, PART_PERCENT, p.as_bytes());
+			}
 		}
 	}
 
@@ -643,7 +653,7 @@ impl WitchingInner {
 			unsafe {
 				utility::hms_u32(secs).iter()
 					.fold(
-						self.buf.as_mut_ptr().add(self.toc.start(PART_ELAPSED)),
+						self.buf.as_mut_ptr().add(self.toc.start_unchecked(PART_ELAPSED)),
 						|ptr, x| {
 							write_time_dd(ptr, *x);
 							ptr.add(3)
@@ -662,23 +672,25 @@ impl WitchingInner {
 	fn tick_set_title(&mut self) {
 		if 0 != self.flags & TICK_TITLE {
 			self.flags &= ! TICK_TITLE;
-			if self.title.is_empty() {
-				self.toc.resize(&mut self.buf, PART_TITLE, 0);
-			}
-			else {
-				self.toc.replace(
-					&mut self.buf,
-					PART_TITLE,
-					&{
-						let mut m = self.title.clone();
-						let rg = utility::fitted_range(&m, self.last_width - 1);
-						if rg.end > m.len() {
-							m.truncate(rg.end);
+			unsafe {
+				if self.title.is_empty() {
+					self.toc.zero_unchecked(&mut self.buf, PART_TITLE);
+				}
+				else {
+					self.toc.replace_unchecked(
+						&mut self.buf,
+						PART_TITLE,
+						&{
+							let mut m = self.title.clone();
+							let rg = utility::fitted_range(&m, self.last_width - 1);
+							if rg.end > m.len() {
+								m.truncate(rg.end);
+							}
+							m.push(b'\n');
+							m
 						}
-						m.push(b'\n');
-						m
-					}
-				);
+					);
+				}
 			}
 		}
 	}
@@ -689,7 +701,9 @@ impl WitchingInner {
 	fn tick_set_total(&mut self) {
 		if 0 != self.flags & TICK_TOTAL {
 			self.flags &= ! TICK_TOTAL;
-			self.toc.replace(&mut self.buf, PART_TOTAL, &NiceInt::from(self.total));
+			unsafe {
+				self.toc.replace_unchecked(&mut self.buf, PART_TOTAL, &NiceInt::from(self.total));
+			}
 		}
 	}
 

@@ -36,10 +36,12 @@ pub struct NiceInt {
 
 impl Deref for NiceInt {
 	type Target = [u8];
+	#[inline]
 	fn deref(&self) -> &Self::Target { &self.inner[..self.len] }
 }
 
 impl Default for NiceInt {
+	#[inline]
 	fn default() -> Self {
 		Self {
 			inner: [48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -185,17 +187,19 @@ impl From<u128> for NiceInt {
 
 impl NiceInt {
 	#[must_use]
+	#[inline]
 	/// # As Bytes.
 	///
 	/// Return the value as a byte string.
-	pub fn as_bytes(&self) -> &[u8] { &self }
+	pub fn as_bytes(&self) -> &[u8] { self }
 
 	#[must_use]
+	#[inline]
 	/// # As Str.
 	///
 	/// Return the value as a string slice.
 	pub fn as_str(&self) -> &str {
-		unsafe { std::str::from_utf8_unchecked(&self) }
+		unsafe { std::str::from_utf8_unchecked(self) }
 	}
 }
 
