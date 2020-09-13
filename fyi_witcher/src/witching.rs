@@ -609,7 +609,7 @@ impl WitchingInner {
 	fn tick_set_done(&mut self) {
 		if 0 != self.flags & TICK_DONE {
 			self.flags &= ! TICK_DONE;
-			self.toc.replace(&mut self.buf, PART_DONE, NiceInt::from(self.done).as_bytes());
+			self.toc.replace(&mut self.buf, PART_DONE, &NiceInt::from(self.done));
 		}
 	}
 
@@ -689,7 +689,7 @@ impl WitchingInner {
 	fn tick_set_total(&mut self) {
 		if 0 != self.flags & TICK_TOTAL {
 			self.flags &= ! TICK_TOTAL;
-			self.toc.replace(&mut self.buf, PART_TOTAL, NiceInt::from(self.total).as_bytes());
+			self.toc.replace(&mut self.buf, PART_TOTAL, &NiceInt::from(self.total));
 		}
 	}
 
@@ -912,8 +912,8 @@ impl Witching {
 	/// ```
 	pub fn set_labels<S>(&mut self, one: S, many: S)
 	where S: AsRef<str> {
-		let one = one.as_ref().as_bytes();
-		let many = many.as_ref().as_bytes();
+		let one: &[u8] = one.as_ref().as_bytes();
+		let many: &[u8] = many.as_ref().as_bytes();
 
 		assert!(! one.is_empty() && ! many.is_empty() && one.len() + many.len() <= 255);
 
@@ -1089,7 +1089,7 @@ impl Witching {
 			b" ",
 			self.label(),
 			b" in ",
-			NiceElapsed::from(self.elapsed()).as_bytes(),
+			&NiceElapsed::from(self.elapsed()),
 			b".",
 		])
 	}

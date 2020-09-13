@@ -9,6 +9,7 @@ use std::{
 		MaybeUninit,
 	},
 	ops::Deref,
+	ptr,
 };
 
 
@@ -35,7 +36,7 @@ pub struct NiceInt {
 
 impl Deref for NiceInt {
 	type Target = [u8];
-	fn deref(&self) -> &Self::Target { self.as_bytes() }
+	fn deref(&self) -> &Self::Target { &self.inner[..self.len] }
 }
 
 impl Default for NiceInt {
@@ -187,14 +188,14 @@ impl NiceInt {
 	/// # As Bytes.
 	///
 	/// Return the value as a byte string.
-	pub fn as_bytes(&self) -> &[u8] { &self.inner[..self.len] }
+	pub fn as_bytes(&self) -> &[u8] { &self }
 
 	#[must_use]
 	/// # As Str.
 	///
 	/// Return the value as a string slice.
 	pub fn as_str(&self) -> &str {
-		unsafe { std::str::from_utf8_unchecked(self.as_bytes()) }
+		unsafe { std::str::from_utf8_unchecked(&self) }
 	}
 }
 
@@ -210,10 +211,10 @@ impl NiceInt {
 unsafe fn write_64_from(mut src: u64, mut from: u64, buf: *mut u8, mut len: usize) -> usize {
 	if from == 100_000_000_000 {
 		if src >= 100_000_000_000 {
-			buf.add(len).write((src / 100_000_000_000) as u8 + 48);
+			ptr::write(buf.add(len), (src / 100_000_000_000) as u8 + 48);
 			src %= 100_000_000_000;
 		}
-		else { buf.add(len).write(48_u8); }
+		else { ptr::write(buf.add(len), 48_u8); }
 
 		len += 1;
 		from = 10_000_000_000;
@@ -221,10 +222,10 @@ unsafe fn write_64_from(mut src: u64, mut from: u64, buf: *mut u8, mut len: usiz
 
 	if from == 10_000_000_000 {
 		if src >= 10_000_000_000 {
-			buf.add(len).write((src / 10_000_000_000) as u8 + 48);
+			ptr::write(buf.add(len), (src / 10_000_000_000) as u8 + 48);
 			src %= 10_000_000_000;
 		}
-		else { buf.add(len).write(48_u8); }
+		else { ptr::write(buf.add(len), 48_u8); }
 
 		len += 1;
 		from = 1_000_000_000;
@@ -233,10 +234,10 @@ unsafe fn write_64_from(mut src: u64, mut from: u64, buf: *mut u8, mut len: usiz
 	// We only need to crunch this as a u64 if the source is too big to be
 	// represented as a u32.
 	if from == 1_000_000_000 && src > 4_294_967_295 {
-		buf.add(len).write((src / 1_000_000_000) as u8 + 48);
+		ptr::write(buf.add(len), (src / 1_000_000_000) as u8 + 48);
 		src %= 1_000_000_000;
 
-		buf.add(len + 1).write(b',');
+		ptr::write(buf.add(len + 1), b',');
 		len += 2;
 		from = 100_000_000;
 	}
@@ -252,22 +253,22 @@ unsafe fn write_64_from(mut src: u64, mut from: u64, buf: *mut u8, mut len: usiz
 unsafe fn write_32_from(mut src: u32, mut from: u32, buf: *mut u8, mut len: usize) -> usize {
 	if from == 1_000_000_000 {
 		if src >= 1_000_000_000 {
-			buf.add(len).write((src / 1_000_000_000) as u8 + 48);
+			ptr::write(buf.add(len), (src / 1_000_000_000) as u8 + 48);
 			src %= 1_000_000_000;
 		}
-		else { buf.add(len).write(48_u8); }
+		else { ptr::write(buf.add(len), 48_u8); }
 
-		buf.add(len + 1).write(b',');
+		ptr::write(buf.add(len + 1), b',');
 		len += 2;
 		from = 100_000_000;
 	}
 
 	if from == 100_000_000 {
 		if src >= 100_000_000 {
-			buf.add(len).write((src / 100_000_000) as u8 + 48);
+			ptr::write(buf.add(len), (src / 100_000_000) as u8 + 48);
 			src %= 100_000_000;
 		}
-		else { buf.add(len).write(48_u8); }
+		else { ptr::write(buf.add(len), 48_u8); }
 
 		len += 1;
 		from = 10_000_000;
@@ -275,10 +276,10 @@ unsafe fn write_32_from(mut src: u32, mut from: u32, buf: *mut u8, mut len: usiz
 
 	if from == 10_000_000 {
 		if src >= 10_000_000 {
-			buf.add(len).write((src / 10_000_000) as u8 + 48);
+			ptr::write(buf.add(len), (src / 10_000_000) as u8 + 48);
 			src %= 10_000_000;
 		}
-		else { buf.add(len).write(48_u8); }
+		else { ptr::write(buf.add(len), 48_u8); }
 
 		len += 1;
 		from = 1_000_000;
@@ -286,22 +287,22 @@ unsafe fn write_32_from(mut src: u32, mut from: u32, buf: *mut u8, mut len: usiz
 
 	if from == 1_000_000 {
 		if src >= 1_000_000 {
-			buf.add(len).write((src / 1_000_000) as u8 + 48);
+			ptr::write(buf.add(len), (src / 1_000_000) as u8 + 48);
 			src %= 1_000_000;
 		}
-		else { buf.add(len).write(48_u8); }
+		else { ptr::write(buf.add(len), 48_u8); }
 
-		buf.add(len + 1).write(b',');
+		ptr::write(buf.add(len + 1), b',');
 		len += 2;
 		from = 100_000;
 	}
 
 	if from == 100_000 {
 		if src >= 100_000 {
-			buf.add(len).write((src / 100_000) as u8 + 48);
+			ptr::write(buf.add(len), (src / 100_000) as u8 + 48);
 			src %= 100_000;
 		}
-		else { buf.add(len).write(48_u8); }
+		else { ptr::write(buf.add(len), 48_u8); }
 
 		len += 1;
 		from = 10_000;
@@ -310,7 +311,7 @@ unsafe fn write_32_from(mut src: u32, mut from: u32, buf: *mut u8, mut len: usiz
 	// We only need to crunch this as a u32 if the source is too big to be
 	// represented as a u16.
 	if from == 10_000 && src > 65_535 {
-		buf.add(len).write((src / 10_000) as u8 + 48);
+		ptr::write(buf.add(len), (src / 10_000) as u8 + 48);
 		src %= 10_000;
 
 		len += 1;
@@ -329,10 +330,10 @@ unsafe fn write_32_from(mut src: u32, mut from: u32, buf: *mut u8, mut len: usiz
 unsafe fn write_16_from(mut src: u16, mut from: u16, buf: *mut u8, mut len: usize) -> usize {
 	if from == 10_000 {
 		if src >= 10_000 {
-			buf.add(len).write((src / 10_000) as u8 + 48);
+			ptr::write(buf.add(len), (src / 10_000) as u8 + 48);
 			src %= 10_000;
 		}
-		else { buf.add(len).write(48_u8); }
+		else { ptr::write(buf.add(len), 48_u8); }
 
 		from = 1_000;
 		len += 1;
@@ -340,22 +341,22 @@ unsafe fn write_16_from(mut src: u16, mut from: u16, buf: *mut u8, mut len: usiz
 
 	if from == 1_000 {
 		if src >= 1_000 {
-			buf.add(len).write((src / 1_000) as u8 + 48);
+			ptr::write(buf.add(len), (src / 1_000) as u8 + 48);
 			src %= 1_000;
 		}
-		else { buf.add(len).write(48_u8); }
+		else { ptr::write(buf.add(len), 48_u8); }
 
-		buf.add(len + 1).write(b',');
+		ptr::write(buf.add(len + 1), b',');
 		len += 2;
 		from = 100;
 	}
 
 	if from == 100 {
 		if src >= 100 {
-			buf.add(len).write((src / 100) as u8 + 48);
+			ptr::write(buf.add(len), (src / 100) as u8 + 48);
 			src %= 100;
 		}
-		else { buf.add(len).write(48_u8); }
+		else { ptr::write(buf.add(len), 48_u8); }
 
 		len += 1;
 		from = 10;
@@ -363,15 +364,15 @@ unsafe fn write_16_from(mut src: u16, mut from: u16, buf: *mut u8, mut len: usiz
 
 	if from == 10 {
 		if src >= 10 {
-			buf.add(len).write((src / 10) as u8 + 48);
+			ptr::write(buf.add(len), (src / 10) as u8 + 48);
 			src %= 10;
 		}
-		else { buf.add(len).write(48_u8); }
+		else { ptr::write(buf.add(len), 48_u8); }
 
 		len += 1;
 	}
 
-	buf.add(len).write(src as u8 + 48);
+	ptr::write(buf.add(len), src as u8 + 48);
 	len + 1
 }
 

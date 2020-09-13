@@ -20,6 +20,7 @@ use std::{
 	},
 	iter::FromIterator,
 	ops::Deref,
+	ptr,
 };
 
 
@@ -67,7 +68,7 @@ pub struct PrefixBuffer {
 impl fmt::Debug for PrefixBuffer {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("PrefixBuffer")
-			.field("buf", &self.as_bytes())
+			.field("buf", &self)
 			.finish()
 	}
 }
@@ -83,7 +84,7 @@ impl Default for PrefixBuffer {
 
 impl Deref for PrefixBuffer {
 	type Target = [u8];
-	fn deref(&self) -> &Self::Target { self.as_bytes() }
+	fn deref(&self) -> &Self::Target { &self.buf[0..self.len] }
 }
 
 impl Eq for PrefixBuffer {}
@@ -122,7 +123,6 @@ impl PrefixBuffer {
 	/// The prefix must be valid UTF-8 and cannot exceed 45 bytes in length.
 	pub unsafe fn new_unchecked(prefix: &[u8], color: u8) -> Self {
 		use std::mem;
-		use std::ptr;
 
 		let mut buf = [mem::MaybeUninit::<u8>::uninit(); 64];
 		let dst = buf.as_mut_ptr() as *mut u8;
@@ -147,7 +147,7 @@ impl PrefixBuffer {
 	/// # As Bytes.
 	///
 	/// Return the value as a slice of bytes.
-	pub fn as_bytes(&self) -> &[u8] { &self.buf[0..self.len] }
+	pub fn as_bytes(&self) -> &[u8] { &self }
 
 	/// # Is Empty?
 	pub const fn is_empty(&self) -> bool { 0 == self.len }
@@ -385,7 +385,7 @@ impl AsRef<str> for Msg {
 
 impl Deref for Msg {
 	type Target = [u8];
-	fn deref(&self) -> &Self::Target { self.as_bytes() }
+	fn deref(&self) -> &Self::Target { &self.buf }
 }
 
 impl fmt::Display for Msg {
@@ -548,8 +548,6 @@ impl Msg {
 	/// This method accepts raw bytes for the message body; that body should be
 	/// valid UTF-8 or undefined things may happen.
 	pub unsafe fn prefixed_unchecked(prefix: MsgKind, msg: &[u8]) -> Self {
-		use std::ptr;
-
 		let (p_len, m_len) = (prefix.len(), msg.len());
 		let mut buf: Vec<u8> = Vec::with_capacity(p_len + m_len);
 
@@ -676,7 +674,13 @@ impl Msg {
 		if len != 0 {
 			let from: usize = self.toc.end(PART_MSG);
 			self.toc.resize(&mut self.buf, PART_MSG, self.toc.len(PART_MSG) + len);
-			self.buf[from..self.toc.end(PART_MSG)].copy_from_slice(src);
+			unsafe {
+				ptr::copy_nonoverlapping(
+					src.as_ptr(),
+					self.buf.as_mut_ptr().add(from),
+					len
+				);
+			}
 		}
 	}
 

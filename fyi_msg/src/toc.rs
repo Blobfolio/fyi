@@ -181,7 +181,13 @@ impl Toc {
 	pub fn replace(&mut self, src: &mut Vec<u8>, idx: usize, buf: &[u8]) {
 		self.resize(src, idx, buf.len());
 		if ! buf.is_empty() {
-			src[self.range(idx)].copy_from_slice(buf);
+			unsafe {
+				std::ptr::copy_nonoverlapping(
+					buf.as_ptr(),
+					src.as_mut_ptr().add(self.start(idx)),
+					buf.len()
+				);
+			}
 		}
 	}
 

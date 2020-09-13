@@ -197,7 +197,13 @@ impl Toc {
 		let len: usize = buf.len();
 		self.resize(src, idx, len);
 		if 0 != len {
-			src[self.range(idx)].copy_from_slice(buf);
+			unsafe {
+				std::ptr::copy_nonoverlapping(
+					buf.as_ptr(),
+					src.as_mut_ptr().add(self.start(idx)),
+					len
+				);
+			}
 		}
 	}
 

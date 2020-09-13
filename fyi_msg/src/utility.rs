@@ -100,7 +100,7 @@ pub unsafe fn write_ansi_code_bold(buf: *mut u8, num: u8) -> usize {
 /// allocated accordingly or undefined things will happen.
 pub unsafe fn write_time_dd(buf: *mut u8, num: u8) {
 	if num < 10 {
-		buf.write(48_u8);
+		ptr::write(buf, 48_u8);
 		write_u8(buf.add(1), num);
 	}
 	else {
