@@ -92,9 +92,11 @@ fn find_eq(txt: &[u8]) -> KeyKind {
 		while len - offset >= 8 {
 			use packed_simd::u8x8;
 			let res = u8x8::from_slice_unaligned_unchecked(&txt[offset..offset+8])
-				.eq(u8x8::splat(b'='));
-			if res.any() {
-				return KeyKind::LongV(res.bitmask().trailing_zeros() as usize + offset);
+				.eq(u8x8::splat(b'='))
+				.bitmask()
+				.trailing_zeros();
+			if res < 8 {
+				return KeyKind::LongV(res as usize + offset);
 			}
 
 			offset += 8;
@@ -106,9 +108,11 @@ fn find_eq(txt: &[u8]) -> KeyKind {
 			use packed_simd::u8x4;
 
 			let res = u8x4::from_slice_unaligned_unchecked(&txt[offset..offset+4])
-				.eq(u8x4::splat(b'='));
-			if res.any() {
-				return KeyKind::LongV(res.bitmask().trailing_zeros() as usize + offset);
+				.eq(u8x4::splat(b'='))
+				.bitmask()
+				.trailing_zeros();
+			if res < 4 {
+				return KeyKind::LongV(res as usize + offset);
 			}
 
 			offset += 4;

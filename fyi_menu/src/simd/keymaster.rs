@@ -126,11 +126,9 @@ impl KeyMaster {
 	///
 	/// If a key is present, return its corresponding index; if not, `None`.
 	pub fn get(&self, key: &str) -> Option<usize> {
-		let res = self.keys.eq(u64x8::splat(hash_arg_key(key)));
-		if res.any() {
-			Some(unsafe {
-				self.values.extract_unchecked(res.bitmask().trailing_zeros() as usize)
-			})
+		let res = self.keys.eq(u64x8::splat(hash_arg_key(key))).bitmask().trailing_zeros();
+		if res < 8 {
+			Some(unsafe { self.values.extract_unchecked(res as usize) })
 		}
 		else { None }
 	}
