@@ -128,9 +128,6 @@ bench BENCH="" FILTER="":
 
 # Build Release!
 @build: clean
-	# For perf runs, use RUSTFLAGS="-C force-frame-pointers=y -g", and update
-	# Cargo.toml: no lto, opt-level 1, debug = true
-
 	# First let's build the Rust bit.
 	RUSTFLAGS="{{ rustflags }}" cargo -Z package-features build \
 		--bin "{{ pkg_id }}" \
