@@ -651,14 +651,16 @@ impl WitchingInner {
 		else {
 			self.elapsed = secs;
 			unsafe {
-				utility::hms_u32(secs).iter()
-					.fold(
-						self.buf.as_mut_ptr().add(self.toc.start_unchecked(PART_ELAPSED)),
-						|ptr, x| {
-							write_time_dd(ptr, *x);
-							ptr.add(3)
-						}
-					);
+				let [h, m, s] = utility::hms_u32(secs);
+
+				let mut ptr = self.buf.as_mut_ptr().add(self.toc.start_unchecked(PART_ELAPSED));
+				write_time_dd(ptr, h);
+
+				ptr = ptr.add(3);
+				write_time_dd(ptr, m);
+
+				ptr = ptr.add(3);
+				write_time_dd(ptr, s);
 			}
 
 			true
