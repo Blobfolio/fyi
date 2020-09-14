@@ -95,16 +95,16 @@ fn hms(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::utility");
 	group.sample_size(50);
 
-	for secs in [10_u64, 113_u64, 10502_u64].iter() {
+	for secs in [10_u32, 113_u32, 10502_u32].iter() {
 		group.bench_with_input(
 			BenchmarkId::from_parameter(format!(
-				"hms_u64({})",
+				"hms_u32({})",
 				secs,
 			)),
 			secs,
 			|b, &secs| {
 				b.iter(||
-					utility::hms_u64(secs)
+					utility::hms_u32(secs)
 				);
 			}
 		);
