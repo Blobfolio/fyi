@@ -2,6 +2,7 @@
 # FYI Witcher: "Nice" Elapsed
 */
 
+use crate::utility;
 use std::{
 	fmt,
 	mem::{
@@ -22,25 +23,10 @@ macro_rules! elapsed_from {
 			fn from(num: $type) -> Self {
 				// Nothing!
 				if 0 == num { Self::min() }
-				// Just seconds.
-				else if num < 60 {
-					unsafe { Self::from_hms(0, 0, num as u8) }
-				}
-				// Minutes and maybe seconds.
-				else if num < 3600 {
-					unsafe { Self::from_hms(0, (num / 60) as u8, (num % 60) as u8) }
-				}
 				// Hours, and maybe minutes and/or seconds.
 				else if num < 86400 {
-					// Break up the parts.
-					let h: u8 = (num / 3600) as u8;
-					let s: $type = num % 3600;
-					if s < 60 {
-						unsafe { Self::from_hms(h, 0, s as u8) }
-					}
-					else {
-						unsafe { Self::from_hms(h, (s / 60) as u8, (s % 60) as u8) }
-					}
+					let [h, m, s] = utility::hms_u32(num as u32);
+					unsafe { Self::from_hms(h, m, s) }
 				}
 				// We're into days, which we don't do.
 				else { Self::max() }
@@ -104,8 +90,22 @@ impl fmt::Display for NiceElapsed {
 	}
 }
 
+impl From<u32> for NiceElapsed {
+	#[allow(clippy::integer_division)]
+	fn from(num: u32) -> Self {
+		// Nothing!
+		if 0 == num { Self::min() }
+		// Hours, and maybe minutes and/or seconds.
+		else if num < 86400 {
+			let [h, m, s] = utility::hms_u32(num);
+			unsafe { Self::from_hms(h, m, s) }
+		}
+		// We're into days, which we don't do.
+		else { Self::max() }
+	}
+}
+
 elapsed_from!(usize);
-elapsed_from!(u32);
 elapsed_from!(u64);
 elapsed_from!(u128);
 

@@ -14,7 +14,7 @@ use fyi_witcher::NiceElapsed;
 
 fn from(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::NiceElapsed");
-	group.sample_size(50);
+	group.sample_size(30);
 
 	for secs in [1_u32, 50, 100, 2121, 37732, 428390].iter() {
 		group.bench_with_input(
