@@ -486,18 +486,17 @@ fn hash_path_buf(path: &PathBuf) -> u64 {
 ///
 /// Note the leading period. This should be present in passed values.
 ///
-/// Extensions requiring fewer than 8 lanes are zero-padded on the right.
+/// Extensions requiring fewer than 8 lanes are zero-padded on the left.
 fn with_ext_key(ext: &[u8]) -> u8x8 {
 	match ext.len() {
-		2 => u8x8::new(b'.', ext[1].to_ascii_lowercase(), 0, 0, 0, 0, 0, 0),
-		3 => u8x8::new(b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), 0, 0, 0, 0, 0),
-		4 => u8x8::new(b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), 0, 0, 0, 0),
-		5 => u8x8::new(b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase(), 0, 0, 0),
-		6 => u8x8::new(b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase(), ext[5].to_ascii_lowercase(), 0, 0),
-		7 => u8x8::new(b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase(), ext[5].to_ascii_lowercase(), ext[6].to_ascii_lowercase(), 0),
+		2 => u8x8::new(0, 0, 0, 0, 0, 0, b'.', ext[1].to_ascii_lowercase()),
+		3 => u8x8::new(0, 0, 0, 0, 0, b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase()),
+		4 => u8x8::new(0, 0, 0, 0, b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase()),
+		5 => u8x8::new(0, 0, 0, b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase()),
+		6 => u8x8::new(0, 0, b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase(), ext[5].to_ascii_lowercase()),
+		7 => u8x8::new(0, b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase(), ext[5].to_ascii_lowercase(), ext[6].to_ascii_lowercase()),
 		8 => u8x8::new(b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase(), ext[5].to_ascii_lowercase(), ext[6].to_ascii_lowercase(), ext[7].to_ascii_lowercase()),
-		0 | 1 => u8x8::splat(0),
-		_ => panic!("Out of range."),
+		_ => u8x8::splat(0),
 	}
 }
 
@@ -508,14 +507,39 @@ fn with_ext_key(ext: &[u8]) -> u8x8 {
 /// into a SIMD vector for comparison.
 ///
 /// Because we're only comparing 8-lane values, if no period is found after 8
-/// checks, an zeroed vector is returned instead.
+/// checks, a zeroed vector is returned instead.
 fn with_ext_path_key(ext: &[u8]) -> u8x8 {
-	let mut idx: usize = ext.len();
-	let stop: usize = idx.saturating_sub(8);
-	while stop < idx {
-		idx -= 1;
-		if ext[idx] == b'.' {
-			return with_ext_key(&ext[idx..]);
+	let len: usize = ext.len();
+	if len >= 8 {
+		use packed_simd::m8x8;
+
+		let mut raw = unsafe { u8x8::from_slice_unaligned_unchecked(&ext[len-8..]) };
+
+		// Calculate the position of the extension portion — including the
+		// period — from the bitmask's leading zeros. Inclusivity means taking
+		// one value more than the result, unless that result is eight, which
+		// means no match.
+		raw = match raw.eq(u8x8::splat(b'.')).bitmask().leading_zeros() {
+			1 => m8x8::new(false, false, false, false, false, false, true, true).select(raw, u8x8::splat(0)),
+			2 => m8x8::new(false, false, false, false, false, true, true, true).select(raw, u8x8::splat(0)),
+			3 => m8x8::new(false, false, false, false, true, true, true, true).select(raw, u8x8::splat(0)),
+			4 => m8x8::new(false, false, false, true, true, true, true, true).select(raw, u8x8::splat(0)),
+			5 => m8x8::new(false, false, true, true, true, true, true, true).select(raw, u8x8::splat(0)),
+			6 => m8x8::new(false, true, true, true, true, true, true, true).select(raw, u8x8::splat(0)),
+			7 => raw,
+			_ => return u8x8::splat(0),
+		};
+
+		// This terrible bit of wizardry adds `32` to anything between `65..=90`
+		// to force lower case. As we already have a SIMD vector, this is
+		// cheaper than passing a sub-slice through `with_ext_key()`.
+		return (raw.ge(u8x8::splat(b'A')) & raw.le(u8x8::splat(b'Z'))).select(raw | u8x8::splat(32), raw);
+	}
+	else if len > 1 {
+		for i in 1..=8.min(len) {
+			if ext[len - i] == b'.' {
+				return with_ext_key(&ext[len - i..]);
+			}
 		}
 	}
 
