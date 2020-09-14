@@ -15,6 +15,7 @@ use std::path::PathBuf;
 
 fn build(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::Witcher");
+	group.sample_size(50);
 
 	group.bench_function("with_path(/usr/share/man).build()", move |b| {
 		b.iter(||
@@ -27,6 +28,7 @@ fn build(c: &mut Criterion) {
 
 fn regex(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::Witcher");
+	group.sample_size(50);
 
 	group.bench_function(r"with_regex((?i).+\.gz$).with_path(/usr/share/man).build()", move |b| {
 		b.iter(||
@@ -39,6 +41,7 @@ fn regex(c: &mut Criterion) {
 
 fn filter(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::Witcher");
+	group.sample_size(50);
 
 	fn cb(path: &PathBuf) -> bool {
 		let bytes: &[u8] = unsafe { &*(path.as_os_str() as *const OsStr as *const [u8]) };
@@ -56,6 +59,7 @@ fn filter(c: &mut Criterion) {
 
 fn with_ext1(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::Witcher");
+	group.sample_size(30);
 
 	group.bench_function(r"with_ext1(.jpg).with_path(/usr/share).build()", move |b| {
 		b.iter(||
@@ -68,6 +72,7 @@ fn with_ext1(c: &mut Criterion) {
 
 fn with_ext2(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::Witcher");
+	group.sample_size(30);
 
 	group.bench_function(r"with_ext2(.jpg, .png).with_path(/usr/share).build()", move |b| {
 		b.iter(||
@@ -81,6 +86,7 @@ fn with_ext2(c: &mut Criterion) {
 
 fn with_ext3(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::Witcher");
+	group.sample_size(30);
 
 	group.bench_function(r"with_ext3(.jpg, .png, .jpeg).with_path(/usr/share).build()", move |b| {
 		b.iter(||

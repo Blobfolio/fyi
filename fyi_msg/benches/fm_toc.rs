@@ -13,6 +13,7 @@ use fyi_msg::Toc;
 
 fn replace(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg");
+	group.sample_size(50);
 
 	fn data() -> (Vec<u8>, Toc) {
 		(

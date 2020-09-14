@@ -13,6 +13,7 @@ use fyi_menu::KeyMaster;
 
 fn insert(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_menu::KeyMaster");
+	group.sample_size(50);
 
 	group.bench_function("default().insert(Hello World, 2)", move |b| {
 		b.iter_with_setup(||
@@ -43,6 +44,7 @@ fn insert(c: &mut Criterion) {
 
 fn contains(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_menu::KeyMaster");
+	group.sample_size(50);
 
 	group.bench_function(".contains(0/8)", move |b| {
 		b.iter_with_setup(||
@@ -103,6 +105,7 @@ fn contains(c: &mut Criterion) {
 
 fn get(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_menu::KeyMaster");
+	group.sample_size(50);
 
 	group.bench_function(".get(5/8)", move |b| {
 		b.iter_with_setup(||

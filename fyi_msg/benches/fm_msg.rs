@@ -21,6 +21,7 @@ fn new(c: &mut Criterion) {
 	let one99_u8 = black_box(199_u8);
 
 	let mut group = c.benchmark_group("fyi_msg::Msg");
+	group.sample_size(50);
 
 	group.bench_function("default()", move |b| {
 		b.iter(|| Msg::default())
@@ -47,6 +48,7 @@ fn new(c: &mut Criterion) {
 
 fn from(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::Msg");
+	group.sample_size(50);
 
 	group.bench_function("from::<Vec<u8>>::()", move |b| {
 		b.iter_with_setup(||
@@ -74,6 +76,7 @@ fn from(c: &mut Criterion) {
 
 fn with_timestamp(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::Msg");
+	group.sample_size(50);
 
 	group.bench_function("with_timestamp()", move |b| {
 		b.iter_with_setup(||
@@ -85,6 +88,7 @@ fn with_timestamp(c: &mut Criterion) {
 
 fn msgkind(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::MsgKind");
+	group.sample_size(50);
 
 	group.bench_function("new(Hello Dolly, 199)", move |b| {
 		b.iter(||

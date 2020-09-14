@@ -14,6 +14,7 @@ use fyi_witcher::utility;
 
 fn count_nl(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::utility");
+	group.sample_size(50);
 
 	fn data() -> &'static [u8] {
 		"Witcher Demo: Gzipped MAN Pages
@@ -40,6 +41,7 @@ fn count_nl(c: &mut Criterion) {
 
 fn ends_with_ignore_ascii_case(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::utility");
+	group.sample_size(50);
 
 	for paths in [
 		b"/home/user/Pictures/file01.jpg",
@@ -65,6 +67,7 @@ fn ends_with_ignore_ascii_case(c: &mut Criterion) {
 
 fn fitted_range(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::utility");
+	group.sample_size(50);
 
 	for txt in [
 		"Hello World",
@@ -90,6 +93,7 @@ fn fitted_range(c: &mut Criterion) {
 
 fn hms(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::utility");
+	group.sample_size(50);
 
 	for secs in [10_u64, 113_u64, 10502_u64].iter() {
 		group.bench_with_input(

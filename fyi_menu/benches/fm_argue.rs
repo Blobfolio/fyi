@@ -13,6 +13,7 @@ use fyi_menu::Argue;
 
 fn from_iter(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_menu::Argue");
+	group.sample_size(50);
 
 	group.bench_function("from_iter(debug -t A penny saved...)", move |b| {
 		b.iter_with_setup(||

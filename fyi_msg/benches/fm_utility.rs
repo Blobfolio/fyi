@@ -14,6 +14,7 @@ use fyi_msg::utility;
 fn concat_slice(c: &mut Criterion) {
 	use fyi_msg::traits::FastConcat;
 	let mut group = c.benchmark_group("fyi_msg::utility");
+	group.sample_size(50);
 
 	group.bench_function("[&[u8]; 6].fast_concat()", move |b| {
 		b.iter_with_setup(||
@@ -34,6 +35,7 @@ fn concat_slice(c: &mut Criterion) {
 
 fn vec_resize_at(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::utility");
+	group.sample_size(50);
 
 	fn data() -> Vec<u8> {
 		"access.conf.5.gz___________deb-control.5.gz___________deb-triggers.5.gz__________gitignore.5.gz_____________locale.gen.5.gz____________pear.conf.5.gz_____________term.5.gz
