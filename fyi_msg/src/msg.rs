@@ -200,9 +200,30 @@ impl Default for MsgKind {
 	fn default() -> Self { Self::None }
 }
 
+impl Deref for MsgKind {
+	type Target = [u8];
+	#[inline]
+	fn deref(&self) -> &Self::Target {
+		match self {
+			Self::None => &[],
+			Self::Confirm => b"\x1b[1;38;5;208mConfirm:\x1b[0m ",
+			Self::Crunched => b"\x1b[92;1mCrunched:\x1b[0m ",
+			Self::Debug => b"\x1b[96;1mDebug:\x1b[0m ",
+			Self::Done => b"\x1b[92;1mDone:\x1b[0m ",
+			Self::Error => b"\x1b[91;1mError:\x1b[0m ",
+			Self::Info => b"\x1b[95;1mInfo:\x1b[0m ",
+			Self::Notice => b"\x1b[95;1mNotice:\x1b[0m ",
+			Self::Success => b"\x1b[92;1mSuccess:\x1b[0m ",
+			Self::Task => b"\x1b[1;38;5;199mTask:\x1b[0m ",
+			Self::Warning => b"\x1b[93;1mWarning:\x1b[0m ",
+			Self::Other(x) => x,
+		}
+	}
+}
+
 impl fmt::Display for MsgKind {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str(unsafe { std::str::from_utf8_unchecked(self.as_bytes()) })
+		f.write_str(unsafe { std::str::from_utf8_unchecked(self) })
 	}
 }
 
@@ -267,22 +288,7 @@ impl MsgKind {
 	/// use fyi_msg::MsgKind;
 	/// let kind: &[u8] = MsgKind::new("Hello", 199).as_bytes();
 	/// ```
-	pub fn as_bytes(&self) -> &[u8] {
-		match self {
-			Self::None => &[],
-			Self::Confirm => b"\x1b[1;38;5;208mConfirm:\x1b[0m ",
-			Self::Crunched => b"\x1b[92;1mCrunched:\x1b[0m ",
-			Self::Debug => b"\x1b[96;1mDebug:\x1b[0m ",
-			Self::Done => b"\x1b[92;1mDone:\x1b[0m ",
-			Self::Error => b"\x1b[91;1mError:\x1b[0m ",
-			Self::Info => b"\x1b[95;1mInfo:\x1b[0m ",
-			Self::Notice => b"\x1b[95;1mNotice:\x1b[0m ",
-			Self::Success => b"\x1b[92;1mSuccess:\x1b[0m ",
-			Self::Task => b"\x1b[1;38;5;199mTask:\x1b[0m ",
-			Self::Warning => b"\x1b[93;1mWarning:\x1b[0m ",
-			Self::Other(x) => x,
-		}
-	}
+	pub fn as_bytes(&self) -> &[u8] { self }
 
 	#[must_use]
 	/// # As Str.
@@ -297,7 +303,7 @@ impl MsgKind {
 	/// let kind = MsgKind::new("Hello", 199).as_str();
 	/// ```
 	pub fn as_str(&self) -> &str {
-		unsafe { std::str::from_utf8_unchecked(self.as_bytes()) }
+		unsafe { std::str::from_utf8_unchecked(self) }
 	}
 
 	/// Into `Msg`.
@@ -561,7 +567,7 @@ impl Msg {
 
 		{
 			let ptr = buf.as_mut_ptr();
-			ptr::copy_nonoverlapping(prefix.as_bytes().as_ptr(), ptr, p_len);
+			ptr::copy_nonoverlapping(prefix.as_ptr(), ptr, p_len);
 			ptr::copy_nonoverlapping(msg.as_ptr(), ptr.add(p_len), m_len);
 			buf.set_len(m_len + p_len);
 		}
@@ -741,7 +747,7 @@ impl Msg {
 	/// ```
 	pub fn set_prefix(&mut self, prefix: MsgKind) {
 		unsafe {
-			self.toc.replace_unchecked(&mut self.buf, PART_PREFIX, prefix.as_bytes());
+			self.toc.replace_unchecked(&mut self.buf, PART_PREFIX, &prefix);
 		}
 	}
 
@@ -933,9 +939,9 @@ impl Msg {
 			b"\x1b[2m[\x1b[0;34m2000-00-00 00:00:00\x1b[39;2m]\x1b[0m ",
 		);
 
-		// Chrono's formatter is slow as shit. It is faster for us to call
-		// each of their time part methods individually, convert those
-		// integers to bytes, and copy them into our static buffer.
+		// Referencing Chrono's formatting methods adds a ton of overhead to
+		// the crate. Instead, we'll just write each double-digit number pair
+		// directly into place.
 		let now = Local::now();
 
 		let mut ptr = self.buf.as_mut_ptr().add(self.toc.start_unchecked(PART_TIMESTAMP) + 14);
