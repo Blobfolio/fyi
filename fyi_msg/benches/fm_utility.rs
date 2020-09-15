@@ -16,17 +16,35 @@ fn concat_slice(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::utility");
 	group.sample_size(50);
 
-	group.bench_function("[&[u8]; 6].fast_concat()", move |b| {
+	group.bench_function("[&[u8]; 8].fast_concat()", move |b| {
 		b.iter_with_setup(||
 			[
 				&b"Most platforms"[..],
-				b" fundamentally can't",
-				b" even construct",
+				b" fundamentally",
+				b" can't",
+				b" even",
+				b" construct",
 				b" such",
 				b" an",
 				b" allocation.",
-			], |buf: [&[u8]; 6]|
+			], |buf: [&[u8]; 8]|
 			buf.fast_concat()
+		)
+	});
+
+	group.bench_function("[&[u8]; 8].fast_concat_len()", move |b| {
+		b.iter_with_setup(||
+			[
+				&b"Most platforms"[..],
+				b" fundamentally",
+				b" can't",
+				b" even",
+				b" construct",
+				b" such",
+				b" an",
+				b" allocation.",
+			], |buf: [&[u8]; 8]|
+			buf.fast_concat_len()
 		)
 	});
 
