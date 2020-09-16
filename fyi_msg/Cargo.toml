@@ -22,7 +22,7 @@ name = "fm_msg"
 harness = false
 
 [[bench]]
-name = "fm_toc"
+name = "fm_buffer"
 harness = false
 
 [[bench]]

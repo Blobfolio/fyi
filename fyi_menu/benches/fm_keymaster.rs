@@ -46,24 +46,6 @@ fn contains(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_menu::KeyMaster");
 	group.sample_size(50);
 
-	group.bench_function(".contains(0/8)", move |b| {
-		b.iter_with_setup(||
-			{
-				let mut k = KeyMaster::default();
-				k.insert("This", 10);
-				k.insert("Is", 20);
-				k.insert("The", 30);
-				k.insert("Song", 40);
-				k.insert("That", 50);
-				k.insert("Never", 60);
-				k.insert("Ends", 70);
-				k.insert("It", 80);
-				k
-			},
-			|k| k.contains("This")
-		)
-	});
-
 	group.bench_function(".contains(5/8)", move |b| {
 		b.iter_with_setup(||
 			{
@@ -79,24 +61,6 @@ fn contains(c: &mut Criterion) {
 				k
 			},
 			|k| k.contains("That")
-		)
-	});
-
-	group.bench_function(".contains(-/8)", move |b| {
-		b.iter_with_setup(||
-			{
-				let mut k = KeyMaster::default();
-				k.insert("This", 10);
-				k.insert("Is", 20);
-				k.insert("The", 30);
-				k.insert("Song", 40);
-				k.insert("That", 50);
-				k.insert("Never", 60);
-				k.insert("Ends", 70);
-				k.insert("It", 80);
-				k
-			},
-			|k| k.contains("Missing")
 		)
 	});
 

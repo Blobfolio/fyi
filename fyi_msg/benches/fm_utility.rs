@@ -3,6 +3,7 @@
 */
 
 use criterion::{
+	BenchmarkId,
 	Criterion,
 	criterion_group,
 	criterion_main,
@@ -51,6 +52,30 @@ fn concat_slice(c: &mut Criterion) {
 	group.finish();
 }
 
+fn hash64(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_msg::utility");
+	group.sample_size(50);
+
+	for kv in [
+		&b"--prefix"[..],
+		b"-p",
+		b"--prefix-color",
+	].iter() {
+		group.bench_with_input(
+			BenchmarkId::from_parameter(&format!(
+				"hash64({:?})",
+				unsafe { std::str::from_utf8_unchecked(kv) }
+			)),
+			kv,
+			|b, kv| {
+				b.iter(|| utility::hash64(&kv))
+			}
+		);
+	}
+
+	group.finish();
+}
+
 fn vec_resize_at(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::utility");
 	group.sample_size(50);
@@ -76,6 +101,7 @@ adjtime_config.5.gz________deb-old.5.gz_______________devscripts.conf.5.gz______
 criterion_group!(
 	benches,
 	concat_slice,
+	hash64,
 	vec_resize_at,
 );
 criterion_main!(benches);

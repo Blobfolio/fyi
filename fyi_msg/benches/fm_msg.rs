@@ -28,7 +28,7 @@ fn new(c: &mut Criterion) {
 	});
 
 	group.bench_function("new(\"This is an example message!\")", move |b| {
-		b.iter(|| Msg::new(example_str))
+		b.iter(|| Msg::from(example_str))
 	});
 
 	group.bench_function("new(\"Prefix:\", 199, \"This is an example message!\")", move |b| {

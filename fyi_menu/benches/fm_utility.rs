@@ -36,32 +36,10 @@ fn esc_arg(c: &mut Criterion) {
 	group.finish();
 }
 
-fn hash_arg_key(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_menu::utility");
-	group.sample_size(50);
-
-	for kv in [
-		"--prefix",
-		"-p",
-		"--prefix-color",
-	].iter() {
-		group.bench_with_input(
-			BenchmarkId::from_parameter(&format!("hash_arg_key({:?})", kv.to_string())),
-			&kv.to_string(),
-			|b, kv| {
-				b.iter(|| fyi_menu::utility::hash_arg_key(&kv))
-			}
-		);
-	}
-
-	group.finish();
-}
-
 
 
 criterion_group!(
 	benches,
 	esc_arg,
-	hash_arg_key,
 );
 criterion_main!(benches);
