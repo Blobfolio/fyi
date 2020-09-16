@@ -4,10 +4,8 @@
 **Note:** This is not intended for external use and is subject to change.
 */
 
-use crate::{
-	die,
-	utility::hash_arg_key,
-};
+use crate::die;
+use fyi_msg::utility::hash64;
 use std::{
 	hash::{
 		Hash,
@@ -60,7 +58,7 @@ impl KeyEntry {
 	/// Generate a new `KeyEntry` for a given string at index `idx`.
 	pub(crate) fn new(key: &str, idx: usize) -> Self {
 		Self {
-			hash: hash_arg_key(key),
+			hash: hash64(key.as_bytes()),
 			idx
 		}
 	}
@@ -140,7 +138,7 @@ impl KeyMaster {
 	///
 	/// Returns `true` if the key is stored, or `false` if not.
 	pub fn contains(&self, key: &str) -> bool {
-		let key = hash_arg_key(key);
+		let key = hash64(key.as_bytes());
 		self.keys[0..self.len].iter().any(|x| x.hash == key)
 	}
 
@@ -150,8 +148,8 @@ impl KeyMaster {
 	/// This is a convenience method that checks for the existence of two keys
 	/// at once, returning `true` if either are present.
 	pub fn contains2(&self, short: &str, long: &str) -> bool {
-		let short = hash_arg_key(short);
-		let long = hash_arg_key(long);
+		let short = hash64(short.as_bytes());
+		let long = hash64(long.as_bytes());
 		self.keys[0..self.len].iter().any(|x| x.hash == short || x.hash == long)
 	}
 
@@ -160,7 +158,7 @@ impl KeyMaster {
 	///
 	/// If a key is present, return its corresponding index; if not, `None`.
 	pub fn get(&self, key: &str) -> Option<usize> {
-		let key = hash_arg_key(key);
+		let key = hash64(key.as_bytes());
 		self.keys[0..self.len].iter()
 			.find_map(|x|
 				if x.hash == key { Some(x.idx) }
@@ -174,8 +172,8 @@ impl KeyMaster {
 	/// This is a convenience method that checks for the existence of two keys
 	/// at once, returning the first index found, if any.
 	pub fn get2(&self, short: &str, long: &str) -> Option<usize> {
-		let short = hash_arg_key(short);
-		let long = hash_arg_key(long);
+		let short = hash64(short.as_bytes());
+		let long = hash64(long.as_bytes());
 		self.keys[0..self.len].iter()
 			.find_map(|x|
 				if x.hash == short || x.hash == long { Some(x.idx) }

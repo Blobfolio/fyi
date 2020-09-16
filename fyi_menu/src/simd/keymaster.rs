@@ -7,10 +7,8 @@ just faster for x86-64 machines supporting SSE/AVX/etc.
 **Note:** This is not intended for external use and is subject to change.
 */
 
-use crate::{
-	die,
-	utility::hash_arg_key,
-};
+use crate::die;
+use fyi_msg::utility::hash64;
 use packed_simd::{
 	usizex8,
 	u64x8,
@@ -67,7 +65,7 @@ impl KeyMaster {
 			unreachable!();
 		}
 
-		let key = hash_arg_key(key);
+		let key = hash64(key.as_bytes());
 		if self.keys.eq(u64x8::splat(key)).none() {
 			unsafe {
 				self.keys = self.keys.replace_unchecked(self.len, key);
@@ -89,7 +87,7 @@ impl KeyMaster {
 			unreachable!();
 		}
 
-		let key = hash_arg_key(key);
+		let key = hash64(key.as_bytes());
 		if self.keys.eq(u64x8::splat(key)).any() {
 			die(b"Duplicate key.");
 			unreachable!();
@@ -108,7 +106,7 @@ impl KeyMaster {
 	///
 	/// Returns `true` if the key is stored, or `false` if not.
 	pub fn contains(&self, key: &str) -> bool {
-		self.keys.eq(u64x8::splat(hash_arg_key(key))).any()
+		self.keys.eq(u64x8::splat(hash64(key.as_bytes()))).any()
 	}
 
 	#[must_use]
@@ -126,7 +124,7 @@ impl KeyMaster {
 	///
 	/// If a key is present, return its corresponding index; if not, `None`.
 	pub fn get(&self, key: &str) -> Option<usize> {
-		let res = self.keys.eq(u64x8::splat(hash_arg_key(key))).bitmask().trailing_zeros();
+		let res = self.keys.eq(u64x8::splat(hash64(key.as_bytes()))).bitmask().trailing_zeros();
 		if res < 8 {
 			Some(unsafe { self.values.extract_unchecked(res as usize) })
 		}

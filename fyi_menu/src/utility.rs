@@ -65,20 +65,6 @@ pub fn esc_arg(mut s: String) -> String {
 	s
 }
 
-#[must_use]
-#[inline]
-/// # Hash Argument Key.
-///
-/// This method is used internally to key the pseudo-hashmap in the [`Argue`](crate::Argue)
-/// struct. It simply converts a `&str` into a `u64` using the fast [`AHash`](https://crates.io/crates/ahash)
-/// algorithm.
-pub fn hash_arg_key(key: &str) -> u64 {
-	use std::hash::Hasher;
-	let mut hasher = ahash::AHasher::default();
-	hasher.write(key.as_bytes());
-	hasher.finish()
-}
-
 
 
 #[cfg(test)]

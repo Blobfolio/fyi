@@ -2,23 +2,17 @@
 # FYI Witcher: Witcher
 */
 
-use ahash::{
-	AHasher,
-	AHashSet
-};
-
+use ahash::AHashSet;
 use crate::{
 	utility,
 	Witching,
 };
-
+use fyi_msg::utility::hash64;
 #[cfg(feature = "simd")] use packed_simd::u8x8;
-
 use rayon::prelude::*;
 use std::{
 	borrow::Borrow,
 	fs,
-	hash::Hasher,
 	path::{
 		Path,
 		PathBuf,
@@ -370,7 +364,7 @@ impl Witcher {
 	pub fn with_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
 		if let Ok(path) = fs::canonicalize(path.as_ref()) {
-			if self.seen.insert(hash_path_buf(&path)) {
+			if self.seen.insert(hash64(utility::path_as_bytes(&path))) {
 				if path.is_dir() {
 					self.dirs.push(path);
 				}
@@ -446,7 +440,7 @@ impl Witcher {
 
 			// Collect the paths found.
 			rx.iter().for_each(|p| {
-				if self.seen.insert(hash_path_buf(&p)) {
+				if self.seen.insert(hash64(utility::path_as_bytes(&p))) {
 					if p.is_dir() {
 						self.dirs.push(p);
 					}
@@ -460,23 +454,6 @@ impl Witcher {
 }
 
 
-
-#[must_use]
-/// # Hash Path.
-///
-/// This method calculates a unique `u64` hash from a canonical `PathBuf` using
-/// the [`AHash`](https://crates.io/crates/ahash) algorithm. It is faster than the default `Hash` implementation
-/// because it works against the full byte string, rather than crunching each
-/// path component individually.
-///
-/// Speed aside, the main reason for this is it allows us to track uniqueness
-/// as simple, `Copy`able `u64`s instead of having to redundantly store owned
-/// copies of all the `PathBuf`s.
-fn hash_path_buf(path: &PathBuf) -> u64 {
-	let mut hasher = AHasher::default();
-	hasher.write(utility::path_as_bytes(path));
-	hasher.finish()
-}
 
 #[cfg(feature = "simd")]
 /// # SIMD Haystack

@@ -54,16 +54,13 @@ processing under modern CPUs. This feature requires Rust nightly.
 
 mod msg;
 pub mod traits;
-#[cfg(not(feature = "simd"))] mod toc;
-#[cfg(feature = "simd")]      mod simd;
 pub mod utility;
 
 pub use msg::{
 	Msg,
+	MsgBuffer,
 	MsgKind,
+	MsgPrefix,
 	FLAG_INDENT,
 	FLAG_TIMESTAMP,
 };
-
-#[cfg(not(feature = "simd"))] pub use toc::Toc;
-#[cfg(feature = "simd")]      pub use simd::Toc;

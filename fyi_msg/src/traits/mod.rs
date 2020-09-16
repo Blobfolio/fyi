@@ -1,5 +1,5 @@
 /*!
-# FYI Msg Traits
+# FYI Msg: Traits
 */
 
 mod fast_concat;

@@ -6,9 +6,6 @@ edition = "2018"
 description = "FYI is a dead-simple status message printer for CLI use applications."
 publish = false
 
-[dependencies]
-ahash = "0.4.*"
-
 [dependencies.fyi_msg]
 path = "../fyi_msg"
 
@@ -37,4 +34,4 @@ harness = false
 
 [features]
 default = []
-simd = [ "packed_simd", "ahash/specialize", "criterion/real_blackbox" ]
+simd = [ "packed_simd", "criterion/real_blackbox" ]

@@ -2,10 +2,7 @@
 # FYI Witcher: `Witching`
 */
 
-use ahash::{
-	AHasher,
-	AHashSet,
-};
+use ahash::AHashSet;
 use crate::{
 	NiceElapsed,
 	NiceInt,
@@ -14,16 +11,15 @@ use crate::{
 use fyi_msg::{
 	Msg,
 	MsgKind,
-	Toc,
-	utility::write_time_dd,
+	MsgBuffer,
+	utility::{
+		hash64,
+		write_time_dd,
+	},
 };
 use rayon::prelude::*;
 use std::{
 	cmp::Ordering,
-	hash::{
-		Hash,
-		Hasher,
-	},
 	io::{
 		self,
 		Write,
@@ -139,8 +135,7 @@ const MIN_DRAW_WIDTH: usize = 40;
 /// Most of the stateful data for our [`Witching`] struct lives here so that
 /// it can be wrapped up in an `Arc<Mutex>` and passed between threads.
 struct WitchingInner {
-	buf: Vec<u8>,
-	toc: Toc,
+	buf: MsgBuffer,
 	elapsed: u32,
 	last_hash: u64,
 	last_lines: usize,
@@ -158,74 +153,79 @@ struct WitchingInner {
 impl Default for WitchingInner {
 	fn default() -> Self {
 		Self {
-			buf: vec![
-			//  Title would go here.
+			buf: unsafe {
+				MsgBuffer::from_raw_parts(
+					vec![
+						//  Title would go here.
 
-			//  \e   [   2    m   [   \e  [   0   ;   1    m
-				27, 91, 50, 109, 91, 27, 91, 48, 59, 49, 109,
-			//   0   0   :   0   0   :   0   0
-				48, 48, 58, 48, 48, 58, 48, 48,
-			//  \e   [   0   ;   2    m   ]  \e   [   0    m   •   •
-				27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32,
+						//  \e   [   2    m   [   \e  [   0   ;   1    m
+							27, 91, 50, 109, 91, 27, 91, 48, 59, 49, 109,
+						//   0   0   :   0   0   :   0   0
+							48, 48, 58, 48, 48, 58, 48, 48,
+						//  \e   [   0   ;   2    m   ]  \e   [   0    m   •   •
+							27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32,
 
-			//  \e   [   2    m   [  \e   [   0   ;   1   ;   9   6    m
-				27, 91, 50, 109, 91, 27, 91, 48, 59, 49, 59, 57, 54, 109,
+						//  \e   [   2    m   [  \e   [   0   ;   1   ;   9   6    m
+							27, 91, 50, 109, 91, 27, 91, 48, 59, 49, 59, 57, 54, 109,
 
-			//  Bar Done would go here.
+						//  Bar Done would go here.
 
-			//  \e   [   0   ;   1   ;   9   5    m
-				27, 91, 48, 59, 49, 59, 57, 53, 109,
+						//  \e   [   0   ;   1   ;   9   5    m
+							27, 91, 48, 59, 49, 59, 57, 53, 109,
 
-			//  Bar Doing would go here.
+						//  Bar Doing would go here.
 
-			//  \e   [   0   ;   1   ;   3   4    m
-				27, 91, 48, 59, 49, 59, 51, 52, 109,
+						//  \e   [   0   ;   1   ;   3   4    m
+							27, 91, 48, 59, 49, 59, 51, 52, 109,
 
-			//  Bar Undone would go here.
+						//  Bar Undone would go here.
 
-			//  \e   [   0   ;   2    m   ]  \e   [   0    m   •   •
-				27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32,
+						//  \e   [   0   ;   2    m   ]  \e   [   0    m   •   •
+							27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32,
 
-			//  Done.
-			//  \e   [   1   ;   9   6    m
-				27, 91, 49, 59, 57, 54, 109,
-			//   0
-				48,
+						//  Done.
+						//  \e   [   1   ;   9   6    m
+							27, 91, 49, 59, 57, 54, 109,
+						//   0
+							48,
 
-			//  The slash between Done and Total.
-			//  \e   [   0   ;   2    m   /  \e   [   0   ;   1   ;   3   4    m
-				27, 91, 48, 59, 50, 109, 47, 27, 91, 48, 59, 49, 59, 51, 52, 109,
+						//  The slash between Done and Total.
+						//  \e   [   0   ;   2    m   /  \e   [   0   ;   1   ;   3   4    m
+							27, 91, 48, 59, 50, 109, 47, 27, 91, 48, 59, 49, 59, 51, 52, 109,
 
-			//  Total.
-			//   0
-				48,
+						//  Total.
+						//   0
+							48,
 
-			//  The bit between Total and Percent.
-			//  \e   [   0   ;   1    m   •   •
-				27, 91, 48, 59, 49, 109, 32, 32,
+						//  The bit between Total and Percent.
+						//  \e   [   0   ;   1    m   •   •
+							27, 91, 48, 59, 49, 109, 32, 32,
 
-			//  Percent.
-			//   0   .   0   0   %
-				48, 46, 48, 48, 37,
-			//  \e   [   0    m  \n
-				27, 91, 48, 109, 10,
+						//  Percent.
+						//   0   .   0   0   %
+							48, 46, 48, 48, 37,
+						//  \e   [   0    m  \n
+							27, 91, 48, 109, 10,
 
-			//  Doing would go here.
-			],
-			toc: Toc::new(
-				0_u16, 0_u16,     // Title.
-				11_u16, 19_u16,   // Elapsed.
-				46_u16, 46_u16,   // Bar Done.
-				55_u16, 55_u16,   // Bar Doing.
-				64_u16, 64_u16,   // Bar Undone.
-				84_u16, 85_u16,   // Done.
-				101_u16, 102_u16, // Total.
-				110_u16, 115_u16, // Percent.
-				120_u16, 120_u16, // Current Tasks.
-				// Unused...
-				120_u16, 120_u16, 120_u16, 120_u16, 120_u16, 120_u16, 120_u16, 120_u16,
-				120_u16, 120_u16, 120_u16, 120_u16, 120_u16, 120_u16,
-			),
+					//  Doing would go here.
+					],
+
+					[
+						0_u16, 0_u16,     // Title.
+						11_u16, 19_u16,   // Elapsed.
+						46_u16, 46_u16,   // Bar Done.
+						55_u16, 55_u16,   // Bar Doing.
+						64_u16, 64_u16,   // Bar Undone.
+						84_u16, 85_u16,   // Done.
+						101_u16, 102_u16, // Total.
+						110_u16, 115_u16, // Percent.
+						120_u16, 120_u16, // Current Tasks.
+						// Unused...
+						120_u16, 120_u16, 120_u16, 120_u16, 120_u16, 120_u16,
+						120_u16, 120_u16, 120_u16, 120_u16, 120_u16, 120_u16,
+						120_u16, 120_u16,
+					]
+				)},
 			doing: AHashSet::new(),
 			done: 0,
 			elapsed: 0,
@@ -356,18 +356,14 @@ impl WitchingInner {
 	/// for comparison with the last job. If unique, the previous output is
 	/// erased and replaced with the new output.
 	fn preprint(&mut self) {
-		if self.buf.is_empty() {
+		if 0 == self.buf.total_len() {
 			self.print_blank();
 			return;
 		}
 
 		// Make sure the content is unique, otherwise we can leave the old bits
 		// up.
-		let hash = {
-			let mut hasher = AHasher::default();
-			self.buf.hash(&mut hasher);
-			hasher.finish()
-		};
+		let hash = hash64(&self.buf);
 		if hash == self.last_hash {
 			return;
 		}
@@ -515,12 +511,12 @@ impl WitchingInner {
 		// 2: the braces around the bar itself (should there be one);
 		// 2: the spaces after the bar itself (should there be one);
 		let space: usize = 255_usize.min(self.last_width.saturating_sub(unsafe {
-			11 +
-			self.toc.len_unchecked(PART_ELAPSED) +
-			self.toc.len_unchecked(PART_DONE) +
-			self.toc.len_unchecked(PART_TOTAL) +
-			self.toc.len_unchecked(PART_PERCENT)
-		}));
+			11_u16 +
+			self.buf.len_unchecked(PART_ELAPSED) +
+			self.buf.len_unchecked(PART_DONE) +
+			self.buf.len_unchecked(PART_TOTAL) +
+			self.buf.len_unchecked(PART_PERCENT)
+		} as usize));
 
 		// Insufficient space!
 		if space < MIN_BARS_WIDTH || 0 == self.total { (0, 0, 0) }
@@ -560,14 +556,14 @@ impl WitchingInner {
 
 			// Update the parts!.
 			unsafe {
-				if self.toc.len_unchecked(PART_BAR_DONE) != w_done {
-					self.toc.replace_unchecked(&mut self.buf, PART_BAR_DONE, &BAR[0..w_done]);
+				if self.buf.len_unchecked(PART_BAR_DONE) as usize != w_done {
+					self.buf.replace_unchecked(PART_BAR_DONE, &BAR[0..w_done]);
 				}
-				if self.toc.len_unchecked(PART_BAR_DOING) != w_doing {
-					self.toc.replace_unchecked(&mut self.buf, PART_BAR_DOING, &DASH[0..w_doing]);
+				if self.buf.len_unchecked(PART_BAR_DOING) as usize != w_doing {
+					self.buf.replace_unchecked(PART_BAR_DOING, &DASH[0..w_doing]);
 				}
-				if self.toc.len_unchecked(PART_BAR_UNDONE) != w_undone {
-					self.toc.replace_unchecked(&mut self.buf, PART_BAR_UNDONE, &DASH[0..w_undone]);
+				if self.buf.len_unchecked(PART_BAR_UNDONE) as usize != w_undone {
+					self.buf.replace_unchecked(PART_BAR_UNDONE, &DASH[0..w_undone]);
 				}
 			}
 		}
@@ -583,7 +579,7 @@ impl WitchingInner {
 			self.flags &= ! TICK_DOING;
 			if self.doing.is_empty() {
 				unsafe {
-					self.toc.zero_unchecked(&mut self.buf, PART_DOING);
+					self.buf.zero_unchecked(PART_DOING);
 				}
 			}
 			else {
@@ -603,7 +599,7 @@ impl WitchingInner {
 					.collect();
 
 				unsafe {
-					self.toc.replace_unchecked(&mut self.buf, PART_DOING, &tasks);
+					self.buf.replace_unchecked(PART_DOING, &tasks);
 				}
 			}
 		}
@@ -616,7 +612,7 @@ impl WitchingInner {
 		if 0 != self.flags & TICK_DONE {
 			self.flags &= ! TICK_DONE;
 			unsafe {
-				self.toc.replace_unchecked(&mut self.buf, PART_DONE, &NiceInt::from(self.done));
+				self.buf.replace_unchecked(PART_DONE, &NiceInt::from(self.done));
 			}
 		}
 	}
@@ -629,7 +625,7 @@ impl WitchingInner {
 			self.flags &= ! TICK_PERCENT;
 			let p: String = format!("{:>3.*}%", 2, self.percent() * 100.0);
 			unsafe {
-				self.toc.replace_unchecked(&mut self.buf, PART_PERCENT, p.as_bytes());
+				self.buf.replace_unchecked(PART_PERCENT, p.as_bytes());
 			}
 		}
 	}
@@ -653,7 +649,7 @@ impl WitchingInner {
 			unsafe {
 				let [h, m, s] = utility::hms_u32(secs);
 
-				let mut ptr = self.buf.as_mut_ptr().add(self.toc.start_unchecked(PART_ELAPSED));
+				let mut ptr = self.buf.as_mut_ptr().add(self.buf.start_unchecked(PART_ELAPSED) as usize);
 				write_time_dd(ptr, h);
 
 				ptr = ptr.add(3);
@@ -676,11 +672,10 @@ impl WitchingInner {
 			self.flags &= ! TICK_TITLE;
 			unsafe {
 				if self.title.is_empty() {
-					self.toc.zero_unchecked(&mut self.buf, PART_TITLE);
+					self.buf.zero_unchecked(PART_TITLE);
 				}
 				else {
-					self.toc.replace_unchecked(
-						&mut self.buf,
+					self.buf.replace_unchecked(
 						PART_TITLE,
 						&{
 							let mut m = self.title.clone();
@@ -704,7 +699,7 @@ impl WitchingInner {
 		if 0 != self.flags & TICK_TOTAL {
 			self.flags &= ! TICK_TOTAL;
 			unsafe {
-				self.toc.replace_unchecked(&mut self.buf, PART_TOTAL, &NiceInt::from(self.total));
+				self.buf.replace_unchecked(PART_TOTAL, &NiceInt::from(self.total));
 			}
 		}
 	}

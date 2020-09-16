@@ -6,6 +6,26 @@ use std::ptr;
 
 
 
+#[must_use]
+#[inline]
+/// # `AHash` Byte Hash.
+///
+/// This is a convenience method for quickly hashing bytes using the
+/// [`AHash`](https://crates.io/crates/ahash) crate. Check out that project's
+/// home page for more details. Otherwise, TL;DR it is very fast.
+///
+/// ## Examples
+///
+/// ```no_run
+/// let hash = fyi_msg::utility::hash64(b"Hello World");
+/// ```
+pub fn hash64(src: &[u8]) -> u64 {
+	use std::hash::Hasher;
+	let mut hasher = ahash::AHasher::default();
+	hasher.write(src);
+	hasher.finish()
+}
+
 /// # Grow `Vec<u8>` From Middle.
 ///
 /// This works like [`std::vec::Vec::resize`], except it supports expansion from the

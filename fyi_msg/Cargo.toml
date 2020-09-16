@@ -7,6 +7,7 @@ description = "FYI is a dead-simple status message printer for CLI use applicati
 publish = false
 
 [dependencies]
+ahash = "0.4.*"
 chrono = "0.4.*"
 
 [dependencies.packed_simd]
@@ -33,4 +34,4 @@ name = "msg"
 
 [features]
 default = []
-simd = [ "packed_simd", "criterion/real_blackbox" ]
+simd = [ "packed_simd", "ahash/specialize", "criterion/real_blackbox" ]
