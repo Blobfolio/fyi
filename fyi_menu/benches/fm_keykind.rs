@@ -17,11 +17,11 @@ fn keykind_from(c: &mut Criterion) {
 	group.sample_size(30);
 
 	for kv in [
-		&b"Hello World"[..],
-		&b"--key"[..],
-		&b"--long-key=Value"[..],
-		&b"-k"[..],
-		&b"-kValue"[..],
+		&b"Hello World!"[..],
+		&b"--prefix"[..],
+		&b"--prefix-color=Value"[..],
+		&b"-p"[..],
+		&b"-c199"[..],
 	].iter() {
 		group.bench_with_input(
 			BenchmarkId::from_parameter(&format!(
