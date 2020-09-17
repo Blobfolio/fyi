@@ -45,22 +45,18 @@ impl Default for KeyKind {
 impl From<&[u8]> for KeyKind {
 	fn from(txt: &[u8]) -> Self {
 		let len: usize = txt.len();
-		if len >= 2 {
-			let dashes: usize =
-				if txt[0] == b'-' {
-					if txt[1] == b'-' { 2 }
-					else { 1 }
-				}
-				else { 0 };
-
-			if 0 < dashes && dashes < len && is_letter(txt[dashes]) {
-				if dashes == 1 {
-					if len == 2 { return Self::Short; }
-					else { return Self::ShortV; }
-				}
-				else if dashes == 2 {
+		if len >= 2 && txt[0] == b'-' {
+			// Could be long.
+			if txt[1] == b'-' {
+				// Is a long.
+				if len > 2 && is_letter(txt[2]) {
 					return find_eq(txt);
 				}
+			}
+			// Is short.
+			else if is_letter(txt[1]) {
+				if len == 2 { return Self::Short; }
+				else { return Self::ShortV; }
 			}
 		}
 
