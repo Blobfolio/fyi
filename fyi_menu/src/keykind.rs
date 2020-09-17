@@ -6,8 +6,8 @@
 
 #[cfg(feature = "simd")]
 use packed_simd::{
-	u8x8,
 	u8x4,
+	u8x8,
 };
 
 
