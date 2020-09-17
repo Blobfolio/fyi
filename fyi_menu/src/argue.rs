@@ -656,6 +656,7 @@ impl Argue {
 		else { self.last + 1 }
 	}
 
+	#[inline]
 	/// # Update Last Read.
 	///
 	/// Set the position of the last known key (or key value) to `idx`. If
