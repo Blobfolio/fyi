@@ -143,6 +143,7 @@ where I: Iterator<Item=String> {
 }
 
 impl FromIterator<String> for Argue {
+	#[inline]
 	fn from_iter<I: IntoIterator<Item=String>>(src: I) -> Self {
 		Self::from(src.into_iter())
 	}
@@ -154,6 +155,7 @@ impl Argue {
 	// ------------------------------------------------------------------------
 
 	#[must_use]
+	#[inline]
 	/// # New Instance.
 	///
 	/// Populate arguments from `std::env::args()`. The first (command path)
@@ -491,9 +493,7 @@ impl Argue {
 	/// // nothing were present.
 	/// let first: &str = unsafe { args.peek_unchecked() };
 	/// ```
-	pub unsafe fn peek_unchecked(&self) -> &str {
-		&self.args[0]
-	}
+	pub unsafe fn peek_unchecked(&self) -> &str { &self.args[0] }
 
 	#[must_use]
 	#[inline]
@@ -509,9 +509,7 @@ impl Argue {
 	/// let mut args = Argue::new();
 	/// let switch: bool = args.switch("--my-switch");
 	/// ```
-	pub fn switch(&self, key: &str) -> bool {
-		self.keys.contains(key)
-	}
+	pub fn switch(&self, key: &str) -> bool { self.keys.contains(key) }
 
 	#[must_use]
 	#[inline]
