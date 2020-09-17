@@ -66,13 +66,11 @@ processing under modern CPUs. This feature requires Rust nightly.
 
 mod argue;
 mod keykind;
-#[cfg(not(feature = "simd"))] mod keymaster;
-#[cfg(feature = "simd")]      mod simd;
+mod keymaster;
 pub mod utility;
 
 pub use keykind::KeyKind;
-#[cfg(not(feature = "simd"))] pub use keymaster::KeyMaster;
-#[cfg(feature = "simd")]      pub use simd::KeyMaster;
+pub use keymaster::KeyMaster;
 pub use argue::Argue;
 
 

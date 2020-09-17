@@ -1,17 +1,19 @@
 /*!
-# FYI Menu: Key Master
+# FYI Menu: Key Master (SIMD)
+
+The functionality is identical to that of the non-SIMD-optimized version; it is
+just faster for x86-64 machines supporting SSE/AVX/etc.
 
 **Note:** This is not intended for external use and is subject to change.
 */
 
 use crate::die;
 use fyi_msg::utility::hash64;
-use std::{
-	hash::{
-		Hash,
-		Hasher,
-	},
-	ops::Deref,
+
+#[cfg(feature = "simd")]
+use packed_simd::{
+	usizex8,
+	u64x8,
 };
 
 
@@ -24,71 +26,43 @@ const MAX_KEYS: usize = 8;
 
 
 
-#[derive(Debug, Default, Copy, Clone)]
-/// A `KeyEntry` is a key/idx pairing, where the key is a `u64` hash of the
-/// original string value, and the index is the `usize` corresponding to the
-/// key's position in the full [`Argue`](crate::Argue) set.
-struct KeyEntry {
-	pub(crate) hash: u64,
-	pub(crate) idx: usize,
-}
-
-impl Deref for KeyEntry {
-	type Target = u64;
-	fn deref(&self) -> &Self::Target { &self.hash }
-}
-
-impl Hash for KeyEntry {
-	fn hash<H: Hasher>(&self, state: &mut H) { self.hash.hash(state); }
-}
-
-impl Eq for KeyEntry {}
-
-impl PartialEq<u64> for KeyEntry {
-	fn eq(&self, other: &u64) -> bool { self.hash == *other }
-}
-
-impl PartialEq for KeyEntry {
-	fn eq(&self, other: &Self) -> bool { self.hash == other.hash }
-}
-
-impl KeyEntry {
-	/// # New Instance.
-	///
-	/// Generate a new `KeyEntry` for a given string at index `idx`.
-	pub(crate) fn new(key: &str, idx: usize) -> Self {
-		Self {
-			hash: hash64(key.as_bytes()),
-			idx
-		}
-	}
-}
-
-
-
 #[derive(Debug, Copy, Clone, Default)]
 /// `KeyMaster` is a simple, pseudo-hashmap for storing [`Argue`](crate::Argue) keys and
 /// indexes. Because the maximum number of keys is highly constrained — up to
 /// **8** — and the behaviors have a very narrow scope, this saves some
 /// overhead versus using an actual [`std::collections::HashMap`].
 pub struct KeyMaster {
-	keys: [KeyEntry; MAX_KEYS],
+	#[cfg(feature = "simd")] keys: u64x8,
+	#[cfg(feature = "simd")] values: usizex8,
+	#[cfg(not(feature = "simd"))] keys: [u64; MAX_KEYS],
+	#[cfg(not(feature = "simd"))] values: [usize; MAX_KEYS],
 	len: usize,
 }
 
+/// ## Common Methods.
+///
+/// These methods apply regardless of the `simd` crate feature.
 impl KeyMaster {
 	#[must_use]
+	#[inline]
 	/// # Is Empty?
 	///
 	/// This returns `true` if no keys are present.
 	pub const fn is_empty(&self) -> bool { self.len == 0 }
 
 	#[must_use]
+	#[inline]
 	/// # Length.
 	///
 	/// Return the total number of keys.
 	pub const fn len(&self) -> usize { self.len }
+}
 
+#[cfg(not(feature = "simd"))]
+/// ## Safe Implementations.
+///
+/// These methods do not make use of the crate feature `simd`.
+impl KeyMaster {
 	/// # Insert.
 	///
 	/// If the key is not already stored, it will be added and `true` will be
@@ -104,9 +78,10 @@ impl KeyMaster {
 			unreachable!();
 		}
 
-		let key = KeyEntry::new(key, idx);
+		let key = hash64(key.as_bytes());
 		if self.keys[0..self.len].iter().all(|x| x.ne(&key)) {
 			self.keys[self.len] = key;
+			self.values[self.len] = idx;
 			self.len += 1;
 			true
 		}
@@ -123,13 +98,14 @@ impl KeyMaster {
 			unreachable!();
 		}
 
-		let key = KeyEntry::new(key, idx);
+		let key = hash64(key.as_bytes());
 		if self.keys[0..self.len].iter().any(|x| x.eq(&key)) {
 			die(b"Duplicate key.");
 			unreachable!();
 		}
 
 		self.keys[self.len] = key;
+		self.values[self.len] = idx;
 		self.len += 1;
 	}
 
@@ -139,7 +115,7 @@ impl KeyMaster {
 	/// Returns `true` if the key is stored, or `false` if not.
 	pub fn contains(&self, key: &str) -> bool {
 		let key = hash64(key.as_bytes());
-		self.keys[0..self.len].iter().any(|x| x.hash == key)
+		self.keys[0..self.len].iter().any(|x| x.eq(&key))
 	}
 
 	#[must_use]
@@ -150,7 +126,7 @@ impl KeyMaster {
 	pub fn contains2(&self, short: &str, long: &str) -> bool {
 		let short = hash64(short.as_bytes());
 		let long = hash64(long.as_bytes());
-		self.keys[0..self.len].iter().any(|x| x.hash == short || x.hash == long)
+		self.keys[0..self.len].iter().any(|x| x.eq(&short) || x.eq(&long))
 	}
 
 	#[must_use]
@@ -160,10 +136,8 @@ impl KeyMaster {
 	pub fn get(&self, key: &str) -> Option<usize> {
 		let key = hash64(key.as_bytes());
 		self.keys[0..self.len].iter()
-			.find_map(|x|
-				if x.hash == key { Some(x.idx) }
-				else { None }
-			)
+			.position(|x| x.eq(&key))
+			.map(|x| self.values[x])
 	}
 
 	#[must_use]
@@ -175,10 +149,105 @@ impl KeyMaster {
 		let short = hash64(short.as_bytes());
 		let long = hash64(long.as_bytes());
 		self.keys[0..self.len].iter()
-			.find_map(|x|
-				if x.hash == short || x.hash == long { Some(x.idx) }
-				else { None }
-			)
+			.position(|x| x.eq(&short) || x.eq(&long))
+			.map(|x| self.values[x])
+	}
+}
+
+#[cfg(feature = "simd")]
+/// ## SIMD Implementations.
+///
+/// These methods make use of the crate feature `simd`.
+impl KeyMaster {
+	/// # Insert.
+	///
+	/// If the key is not already stored, it will be added and `true` will be
+	/// returned, otherwise no action will be taken and `false` will be
+	/// returned.
+	///
+	/// If the maximum number of keys has already been reached, an error
+	/// message will be printed and the program will exit with a status code of
+	/// `1`.
+	pub fn insert(&mut self, key: &str, idx: usize) -> bool {
+		if self.len >= MAX_KEYS {
+			die(b"Too many options.");
+			unreachable!();
+		}
+
+		let key = hash64(key.as_bytes());
+		if self.keys.eq(u64x8::splat(key)).none() {
+			unsafe {
+				self.keys = self.keys.replace_unchecked(self.len, key);
+				self.values = self.values.replace_unchecked(self.len, idx);
+			}
+			self.len += 1;
+			true
+		}
+		else { false }
+	}
+
+	/// # Insert (Unique).
+	///
+	/// This is just like '[`KeyMaster::insert`] except that if a duplicate key
+	/// is submitted, it will print an error and exit with status code 1.
+	pub fn insert_unique(&mut self, key: &str, idx: usize) {
+		if self.len >= MAX_KEYS {
+			die(b"Too many options.");
+			unreachable!();
+		}
+
+		let key = hash64(key.as_bytes());
+		if self.keys.eq(u64x8::splat(key)).any() {
+			die(b"Duplicate key.");
+			unreachable!();
+		}
+
+		unsafe {
+			self.keys = self.keys.replace_unchecked(self.len, key);
+			self.values = self.values.replace_unchecked(self.len, idx);
+		}
+		self.len += 1;
+	}
+
+	#[must_use]
+	#[inline]
+	/// # Has Key?
+	///
+	/// Returns `true` if the key is stored, or `false` if not.
+	pub fn contains(&self, key: &str) -> bool {
+		self.keys.eq(u64x8::splat(hash64(key.as_bytes()))).any()
+	}
+
+	#[must_use]
+	#[inline]
+	/// # Has Either of Two Keys?
+	///
+	/// This is a convenience method that checks for the existence of two keys
+	/// at once, returning `true` if either are present.
+	pub fn contains2(&self, short: &str, long: &str) -> bool {
+		self.contains(short) || self.contains(long)
+	}
+
+	#[must_use]
+	/// # Get Key's Index.
+	///
+	/// If a key is present, return its corresponding index; if not, `None`.
+	pub fn get(&self, key: &str) -> Option<usize> {
+		let res = self.keys.eq(u64x8::splat(hash64(key.as_bytes()))).bitmask().trailing_zeros();
+		if res < 8 {
+			Some(unsafe { self.values.extract_unchecked(res as usize) })
+		}
+		else { None }
+	}
+
+	#[must_use]
+	#[inline]
+	/// # Get Either of Two Key's Index.
+	///
+	/// This is a convenience method that checks for the existence of two keys
+	/// at once, returning the first index found, if any.
+	pub fn get2(&self, short: &str, long: &str) -> Option<usize> {
+		self.get(short).or_else(|| self.get(long))
 	}
 }
 
