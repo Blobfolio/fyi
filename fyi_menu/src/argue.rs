@@ -151,21 +151,21 @@ where I: Iterator<Item=String> {
 		while idx < len {
 			match KeyKind::from(out.args[idx].as_bytes()) {
 				// Passthrough.
-				KeyKind::None => { idx += 1; },
+				KeyKind::None => {},
 				// Record the keys and passthrough.
 				KeyKind::Short | KeyKind::Long => {
 					out.keys.insert_unique(&out.args[idx], idx);
 					out.last = idx;
-					idx += 1;
 				},
 				// Split a short key/value pair.
 				KeyKind::ShortV => {
 					let tmp: String = out.args[idx].split_off(2);
 					out.keys.insert_unique(&out.args[idx], idx);
-					out.args.insert(idx + 1, tmp);
-					out.last = idx + 1;
+					idx += 1;
+					out.args.insert(idx, tmp);
+					out.last = idx;
 					len += 1;
-					idx += 2;
+
 				},
 				// Split a long key/value pair.
 				KeyKind::LongV(x) => {
@@ -177,12 +177,14 @@ where I: Iterator<Item=String> {
 					out.args[idx].truncate(x);
 
 					out.keys.insert_unique(&out.args[idx], idx);
-					out.args.insert(idx + 1, tmp);
-					out.last = idx + 1;
+					idx += 1;
+					out.args.insert(idx, tmp);
+					out.last = idx;
 					len += 1;
-					idx += 2;
 				},
 			}
+
+			idx += 1;
 		}
 
 		out
