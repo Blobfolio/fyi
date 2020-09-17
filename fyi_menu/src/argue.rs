@@ -134,11 +134,58 @@ impl<I> From<I> for Argue
 where I: Iterator<Item=String> {
 	fn from(src: I) -> Self
 	where I: Iterator<Item=String> {
-		src.skip_while(|x|
-			x.is_empty() ||
-			x.as_bytes().iter().all(u8::is_ascii_whitespace)
-		)
-			.fold(Self::default(), Self::fold_entry)
+		// Collect everything.
+		let mut out = Self {
+			args: src
+				.skip_while(|x| x.is_empty() || x.as_bytes().iter().all(u8::is_ascii_whitespace))
+				.collect(),
+			keys: KeyMaster::default(),
+			last: 0,
+			last_offset: false,
+		};
+
+		// Do an extra loop to sort out the keys and shit.
+		let mut len: usize = out.len();
+		let mut idx: usize = 0;
+
+		while idx < len {
+			match KeyKind::from(out.args[idx].as_bytes()) {
+				// Passthrough.
+				KeyKind::None => { idx += 1; },
+				// Record the keys and passthrough.
+				KeyKind::Short | KeyKind::Long => {
+					out.keys.insert_unique(&out.args[idx], idx);
+					out.last = idx;
+					idx += 1;
+				},
+				// Split a short key/value pair.
+				KeyKind::ShortV => {
+					let tmp: String = out.args[idx].split_off(2);
+					out.keys.insert_unique(&out.args[idx], idx);
+					out.args.insert(idx + 1, tmp);
+					out.last = idx + 1;
+					len += 1;
+					idx += 2;
+				},
+				// Split a long key/value pair.
+				KeyKind::LongV(x) => {
+					let tmp: String =
+						if x + 1 < out.args[idx].len() { out.args[idx].split_off(x + 1) }
+						else { String::new() };
+
+					// Chop off the "=" sign.
+					out.args[idx].truncate(x);
+
+					out.keys.insert_unique(&out.args[idx], idx);
+					out.args.insert(idx + 1, tmp);
+					out.last = idx + 1;
+					len += 1;
+					idx += 2;
+				},
+			}
+		}
+
+		out
 	}
 }
 
@@ -149,11 +196,8 @@ impl FromIterator<String> for Argue {
 	}
 }
 
+/// ## Instantiation and Builder Patterns.
 impl Argue {
-	// ------------------------------------------------------------------------
-	// Builder
-	// ------------------------------------------------------------------------
-
 	#[must_use]
 	#[inline]
 	/// # New Instance.
@@ -171,57 +215,7 @@ impl Argue {
 	///
 	/// let mut args = Argue::new();
 	/// ```
-	pub fn new() -> Self {
-		Self::from(env::args().skip(1))
-	}
-
-	/// # With Entry.
-	///
-	/// This is an internal method used to fold entries into a collection from
-	/// an iterator.
-	///
-	/// While it is slightly more efficient to split the collection and parsing
-	/// into two loops, this approach is significantly cleaner and more
-	/// readable.
-	fn fold_entry(mut self, mut e: String) -> Self {
-		match KeyKind::from(e.as_bytes()) {
-			// Passthrough.
-			KeyKind::None => { self.args.push(e); },
-			// Record the keys and passthrough.
-			KeyKind::Short | KeyKind::Long => {
-				let idx: usize = self.args.len();
-				self.keys.insert_unique(&e, idx);
-				self.args.push(e);
-				self.last = idx;
-			},
-			// Split a short key/value pair.
-			KeyKind::ShortV => {
-				let idx: usize = self.args.len();
-				let tmp: String = e.split_off(2);
-				self.keys.insert_unique(&e, idx);
-				self.args.push(e);
-				self.args.push(tmp);
-				self.last = idx + 1;
-			},
-			// Split a long key/value pair.
-			KeyKind::LongV(x) => {
-				let idx: usize = self.args.len();
-				let tmp: String =
-					if x + 1 < e.len() { e.split_off(x + 1) }
-					else { String::new() };
-
-				// Chop off the "=" sign.
-				e.truncate(x);
-
-				self.keys.insert_unique(&e, idx);
-				self.args.push(e);
-				self.args.push(tmp);
-				self.last = idx + 1;
-			},
-		}
-
-		self
-	}
+	pub fn new() -> Self { Self::from(env::args().skip(1)) }
 
 	#[must_use]
 	/// # Assert Non-Empty.
@@ -422,7 +416,12 @@ impl Argue {
 
 		self
 	}
+}
 
+/// ## Casting.
+///
+/// These methods convert `Argue` into different data structures.
+impl Argue {
 	#[allow(clippy::missing_const_for_fn)] // Doesn't work!
 	#[must_use]
 	#[inline]
@@ -445,13 +444,12 @@ impl Argue {
 	/// let args: Vec<String> = Argue::new().take();
 	/// ```
 	pub fn take(self) -> Vec<String> { self.args }
+}
 
-
-
-	// ------------------------------------------------------------------------
-	// Getters
-	// ------------------------------------------------------------------------
-
+/// ## Queries.
+///
+/// These methods allow data to be questioned and extracted.
+impl Argue {
 	#[must_use]
 	/// # First Entry.
 	///
@@ -643,13 +641,10 @@ impl Argue {
 
 		self.args.remove(idx)
 	}
+}
 
-
-
-	// ------------------------------------------------------------------------
-	// Internal
-	// ------------------------------------------------------------------------
-
+/// ## Internal Helpers.
+impl Argue {
 	/// # Arg Index.
 	///
 	/// This is an internal method that returns the index at which the first
