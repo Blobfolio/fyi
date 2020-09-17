@@ -21,6 +21,7 @@ use unicode_width::UnicodeWidthChar;
 
 #[cfg(not(feature = "simd"))]
 #[must_use]
+#[inline]
 /// # Count Line Breaks.
 ///
 /// This simply adds up the occurrences of `\n` within a byte string.
@@ -203,6 +204,7 @@ where P: AsRef<Path> {
 
 #[allow(clippy::integer_division)]
 #[must_use]
+#[inline]
 /// # Time Chunks.
 ///
 /// This method splits seconds into hours, minutes, and seconds. Days are not
@@ -235,8 +237,9 @@ pub const fn hms_u32(mut num: u32) -> [u8; 3] {
 	else { [23, 59, 59] }
 }
 
-#[must_use]
 #[allow(trivial_casts)] // We need triviality!
+#[must_use]
+#[inline]
 /// # Path to Bytes.
 ///
 /// This is exactly the way [`std::path::PathBuf`] handles it.
@@ -245,6 +248,7 @@ pub fn path_as_bytes(p: &std::path::PathBuf) -> &[u8] {
 }
 
 #[must_use]
+#[inline]
 /// # Term Width.
 ///
 /// This is a simple wrapper around `term_size::dimensions()` to provide

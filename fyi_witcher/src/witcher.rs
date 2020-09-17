@@ -509,7 +509,7 @@ fn with_ext_path_key(ext: &[u8]) -> u8x8 {
 
 		// This terrible bit of wizardry adds `32` to anything between `65..=90`
 		// to force lower case. As we already have a SIMD vector, this is
-		// cheaper than passing a sub-slice through `with_ext_key()`.
+		// cheaper than reslicing and going through `with_ext_key()`.
 		return (raw.ge(u8x8::splat(b'A')) & raw.le(u8x8::splat(b'Z'))).select(raw | u8x8::splat(32), raw);
 	}
 	else if len > 1 {
