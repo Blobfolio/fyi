@@ -4,6 +4,12 @@
 **Note:** This is not intended for external use and is subject to change.
 */
 
+#[cfg(feature = "simd")]
+use packed_simd::{
+	u8x8,
+	u8x4,
+};
+
 
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq)]
@@ -47,7 +53,7 @@ impl From<&[u8]> for KeyKind {
 				}
 				else { 0 };
 
-			if 0 < dashes && dashes < len && matches!(txt[dashes], b'A'..=b'Z' | b'a'..=b'z') {
+			if 0 < dashes && dashes < len && is_letter(txt[dashes]) {
 				if dashes == 1 {
 					if len == 2 { return Self::Short; }
 					else { return Self::ShortV; }
@@ -62,7 +68,16 @@ impl From<&[u8]> for KeyKind {
 	}
 }
 
+#[must_use]
+#[inline]
+/// # Is Letter.
+const fn is_letter(byte: u8) -> bool {
+	(b'a' <= byte && byte <= b'z') || (b'A' <= byte && byte <= b'Z')
+}
+
 #[cfg(not(feature = "simd"))]
+#[must_use]
+#[inline]
 /// # Find First `=`
 ///
 /// This is used solely for deciding between [`KeyKind::Long`] and
@@ -74,6 +89,7 @@ fn find_eq(txt: &[u8]) -> KeyKind {
 }
 
 #[cfg(feature = "simd")]
+#[must_use]
 /// # Find First `=`
 ///
 /// This is used solely for deciding between [`KeyKind::Long`] and
@@ -90,7 +106,6 @@ fn find_eq(txt: &[u8]) -> KeyKind {
 		// For long strings, we can check 8 bytes at a time, returning the first
 		// match, if any.
 		while len - offset >= 8 {
-			use packed_simd::u8x8;
 			let res = u8x8::from_slice_unaligned_unchecked(&txt[offset..offset+8])
 				.eq(u8x8::splat(b'='))
 				.bitmask()
@@ -105,8 +120,6 @@ fn find_eq(txt: &[u8]) -> KeyKind {
 		// We can use the same trick again if the remainder is at least four
 		// bytes.
 		if len - offset >= 4 {
-			use packed_simd::u8x4;
-
 			let res = u8x4::from_slice_unaligned_unchecked(&txt[offset..offset+4])
 				.eq(u8x4::splat(b'='))
 				.bitmask()
