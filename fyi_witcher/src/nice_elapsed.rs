@@ -165,13 +165,13 @@ impl NiceElapsed {
 				len += 6;
 			}
 
-			if 2 == count {
-				ptr::copy_nonoverlapping(b" and ".as_ptr(), dst.add(len), 5);
-				len += 5;
-			}
-			else if 3 == count {
+			if 3 == count {
 				ptr::copy_nonoverlapping(b", ".as_ptr(), dst.add(len), 2);
 				len += 2;
+			}
+			else if 2 == count {
+				ptr::copy_nonoverlapping(b" and ".as_ptr(), dst.add(len), 5);
+				len += 5;
 			}
 		}
 
