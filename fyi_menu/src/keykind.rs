@@ -101,7 +101,7 @@ fn find_eq(txt: &[u8]) -> KeyKind {
 	unsafe {
 		// For long strings, we can check 8 bytes at a time, returning the first
 		// match, if any.
-		while len - offset >= 8 {
+		while offset + 8 <= len {
 			let res = u8x8::from_slice_unaligned_unchecked(&txt[offset..offset+8])
 				.eq(u8x8::splat(b'='))
 				.bitmask()
@@ -115,7 +115,7 @@ fn find_eq(txt: &[u8]) -> KeyKind {
 
 		// We can use the same trick again if the remainder is at least four
 		// bytes.
-		if len - offset >= 4 {
+		if offset + 4 <= len {
 			let res = u8x4::from_slice_unaligned_unchecked(&txt[offset..offset+4])
 				.eq(u8x4::splat(b'='))
 				.bitmask()

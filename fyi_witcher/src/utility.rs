@@ -2,6 +2,15 @@
 # FYI Witcher: Utility Methods.
 */
 
+#[cfg(feature = "simd")]
+use packed_simd::{
+	u8x4,
+	u8x8,
+	u8x16,
+	u8x32,
+	u8x64,
+};
+
 use std::{
 	ops::Range,
 	path::Path,
@@ -33,14 +42,15 @@ pub fn count_nl(src: &[u8]) -> usize {
 	unsafe {
 		// Break indefinitely long strings into chunks of 64 characters, counting
 		// newlines as we go.
-		if len - offset >= 64 {
-			use packed_simd::u8x64;
+		if offset + 64 <= len {
 			let mut tmp = u8x64::splat(0);
-			while len - offset >= 64 {
+			loop {
 				tmp += u8x64::from_slice_unaligned_unchecked(&src[offset..offset+64])
 					.eq(u8x64::splat(b'\n'))
 					.select(u8x64::splat(1), u8x64::splat(0));
+
 				offset += 64;
+				if len < offset + 64 { break; }
 			}
 			total += tmp.wrapping_sum() as usize;
 		}
@@ -48,8 +58,7 @@ pub fn count_nl(src: &[u8]) -> usize {
 		// We can use the same trick for progressively smaller power-of-two-sized
 		// chunks, but none of these will hit more than once, so their totals can
 		// be added directly without looping.
-		if len - offset >= 32 {
-			use packed_simd::u8x32;
+		if offset + 32 <= len {
 			total += u8x32::from_slice_unaligned_unchecked(&src[offset..offset+32])
 				.eq(u8x32::splat(b'\n'))
 				.select(u8x32::splat(1), u8x32::splat(0))
@@ -57,8 +66,7 @@ pub fn count_nl(src: &[u8]) -> usize {
 			offset += 32;
 		}
 
-		if len - offset >= 16 {
-			use packed_simd::u8x16;
+		if offset + 16 <= len {
 			total += u8x16::from_slice_unaligned_unchecked(&src[offset..offset+16])
 				.eq(u8x16::splat(b'\n'))
 				.select(u8x16::splat(1), u8x16::splat(0))
@@ -66,8 +74,7 @@ pub fn count_nl(src: &[u8]) -> usize {
 			offset += 16;
 		}
 
-		if len - offset >= 8 {
-			use packed_simd::u8x8;
+		if offset + 8 <= len {
 			total += u8x8::from_slice_unaligned_unchecked(&src[offset..offset+8])
 				.eq(u8x8::splat(b'\n'))
 				.select(u8x8::splat(1), u8x8::splat(0))
@@ -75,8 +82,7 @@ pub fn count_nl(src: &[u8]) -> usize {
 			offset += 8;
 		}
 
-		if len - offset >= 4 {
-			use packed_simd::u8x4;
+		if offset + 4 <= len {
 			total += u8x4::from_slice_unaligned_unchecked(&src[offset..offset+4])
 				.eq(u8x4::splat(b'\n'))
 				.select(u8x4::splat(1), u8x4::splat(0))
