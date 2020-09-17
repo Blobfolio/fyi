@@ -14,7 +14,7 @@ use fyi_menu::KeyKind;
 
 fn keykind_from(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_menu::KeyKind");
-	group.sample_size(50);
+	group.sample_size(30);
 
 	for kv in [
 		&b"Hello World"[..],
