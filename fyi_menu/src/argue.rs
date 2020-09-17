@@ -137,7 +137,10 @@ where I: Iterator<Item=String> {
 		// Collect everything.
 		let mut out = Self {
 			args: src
-				.skip_while(|x| x.is_empty() || x.as_bytes().iter().all(u8::is_ascii_whitespace))
+				.skip_while(|x|
+					x.is_empty() ||
+					x.as_bytes().iter().all(u8::is_ascii_whitespace)
+				)
 				.collect(),
 			keys: KeyMaster::default(),
 			last: 0,
