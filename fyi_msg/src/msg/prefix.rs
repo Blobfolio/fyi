@@ -153,22 +153,26 @@ impl MsgPrefix {
 	/// The prefix must be valid UTF-8 and cannot exceed 45 bytes in length.
 	pub unsafe fn new_unchecked(prefix: &[u8], color: u8) -> Self {
 		let mut buf = [mem::MaybeUninit::<u8>::uninit(); 64];
-		let dst = buf.as_mut_ptr() as *mut u8;
 
-		// Write the color.
-		let mut len: usize = utility::write_ansi_code_bold(dst, color);
+		let len: usize = {
+			let mut dst = buf.as_mut_ptr() as *mut u8;
+			// Write the color.
+			dst = dst.add(utility::write_ansi_code_bold(dst, color));
 
-		// Write the prefix.
-		ptr::copy_nonoverlapping(prefix.as_ptr(), dst.add(len), prefix.len());
-		len += prefix.len();
+			// Write the prefix.
+			ptr::copy_nonoverlapping(prefix.as_ptr(), dst, prefix.len());
+			dst = dst.add(prefix.len());
 
-		// Write the closer.
-		ptr::copy_nonoverlapping(b":\x1b[0m ".as_ptr(), dst.add(len), 6);
+			// Write the closer.
+			ptr::copy_nonoverlapping(b":\x1b[0m ".as_ptr(), dst, 6);
+
+			dst.add(6) as usize - buf.as_ptr() as *const u8 as usize
+		};
 
 		// Align and return!
 		Self {
 			buf: mem::transmute::<_, [u8; 64]>(buf),
-			len: len + 6,
+			len
 		}
 	}
 
