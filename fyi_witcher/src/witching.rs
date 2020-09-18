@@ -5,13 +5,14 @@
 use ahash::AHashSet;
 use crate::{
 	NiceElapsed,
-	NiceInt,
 	utility,
 };
 use fyi_msg::{
 	Msg,
 	MsgKind,
 	MsgBuffer,
+	NiceInt,
+	traits::FastConcat,
 	utility::{
 		hash64,
 		write_time_dd,
@@ -401,8 +402,6 @@ impl WitchingInner {
 	/// This method "erases" any prior output so that new output can be written
 	/// in the same place. That's animation, folks!
 	fn print_cls(&mut self) {
-		use fyi_msg::traits::FastConcat;
-
 		// Buffer 10 Line Clears.
 		// 0..10 moves the cursor left. This is done only once per reset.
 		// 14 is the length of each subsequent command, which moves the cursor up.
@@ -621,9 +620,8 @@ impl WitchingInner {
 	fn tick_set_percent(&mut self) {
 		if 0 != self.flags & TICK_PERCENT {
 			self.flags &= ! TICK_PERCENT;
-			let p: String = format!("{:>3.*}%", 2, self.percent() * 100.0);
 			unsafe {
-				self.buf.replace_unchecked(PART_PERCENT, p.as_bytes());
+				self.buf.replace_unchecked(PART_PERCENT, &NiceInt::percent_f64(self.percent()));
 			}
 		}
 	}
@@ -1135,13 +1133,11 @@ impl Witching {
 				msg.set_suffix_unchecked(b" \x1b[2m(No savings.)\x1b[0m");
 			}
 			else {
-				msg.set_suffix_unchecked(
-					format!(
-						" \x1b[2m({:3.*}%)\x1b[0m",
-						2,
-						(1.0 - (after as f64 / before as f64)) * 100.0
-					).as_bytes()
-				);
+				msg.set_suffix_unchecked(&[
+					&b" \x1b[2m("[..],
+					&NiceInt::percent_f64(1.0 - (after as f64 / before as f64)),
+					b"\x1b[0m",
+				].fast_concat());
 			}
 		}
 

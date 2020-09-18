@@ -10,7 +10,6 @@ Out of necessity, this crate also contains a few random odds and ends that
 might be independently useful, namely:
 
 * [`NiceElapsed`] converts a given number of seconds into a human-readable, Oxford-joined list of units, like "1 hour, 2 minutes, and 3 seconds", suitable for summaries and the like.
-* [`NiceInt`] is a fast, (US) formatting-aware integer stringifier. (It turns numbers into byte strings for e.g. printing.)
 
 
 
@@ -58,13 +57,11 @@ and major refactors may be introduced between releases.
 
 
 mod nice_elapsed;
-mod nice_int;
 mod witcher;
 mod witching;
 pub mod utility;
 
 pub use nice_elapsed::NiceElapsed;
-pub use nice_int::NiceInt;
 pub use witcher::Witcher;
 pub use witching::{
 	Witching,

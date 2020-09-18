@@ -24,11 +24,6 @@ optional = true
 
 [dev-dependencies]
 criterion = "*"
-num-format = "0.4.*"
-
-[[bench]]
-name = "fw_nice_int"
-harness = false
 
 [[bench]]
 name = "fw_nice_elapsed"

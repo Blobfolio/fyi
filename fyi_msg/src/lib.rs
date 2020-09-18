@@ -53,6 +53,7 @@ processing under modern CPUs. This feature requires Rust nightly.
 
 
 mod msg;
+mod nice_int;
 pub mod traits;
 pub mod utility;
 
@@ -64,3 +65,4 @@ pub use msg::{
 	FLAG_INDENT,
 	FLAG_TIMESTAMP,
 };
+pub use nice_int::NiceInt;

@@ -16,6 +16,7 @@ optional = true
 
 [dev-dependencies]
 criterion = "*"
+num-format = "0.4.*"
 
 [[bench]]
 name = "fm_msg"
@@ -23,6 +24,10 @@ harness = false
 
 [[bench]]
 name = "fm_buffer"
+harness = false
+
+[[bench]]
+name = "fm_nice_int"
 harness = false
 
 [[bench]]
