@@ -19,7 +19,7 @@ fn keykind_from(c: &mut Criterion) {
 	for kv in [
 		&b"Hello World!"[..],
 		&b"--prefix"[..],
-		&b"--prefix-color=Value"[..],
+		&b"--prefix-color=199"[..],
 		&b"-p"[..],
 		&b"-c199"[..],
 	].iter() {
