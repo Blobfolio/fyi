@@ -10,6 +10,7 @@ use std::{
 		Hasher,
 	},
 	ops::Deref,
+	ops::DerefMut,
 	ptr,
 };
 
@@ -57,6 +58,11 @@ impl Deref for MsgBuffer {
 	type Target = [u8];
 	#[inline]
 	fn deref(&self) -> &Self::Target { &self.buf }
+}
+
+impl DerefMut for MsgBuffer {
+	#[inline]
+	fn deref_mut(&mut self) -> &mut Self::Target { &mut self.buf }
 }
 
 impl fmt::Display for MsgBuffer {
