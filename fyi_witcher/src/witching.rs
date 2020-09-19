@@ -15,7 +15,7 @@ use fyi_msg::{
 	traits::FastConcat,
 	utility::{
 		hash64,
-		write_time_dd,
+		write_time,
 	},
 };
 use rayon::prelude::*;
@@ -644,15 +644,12 @@ impl WitchingInner {
 			self.elapsed = secs;
 			unsafe {
 				let [h, m, s] = utility::hms_u32(secs);
-
-				let mut ptr = self.buf.as_mut_ptr().add(self.buf.start_unchecked(PART_ELAPSED) as usize);
-				write_time_dd(ptr, h);
-
-				ptr = ptr.add(3);
-				write_time_dd(ptr, m);
-
-				ptr = ptr.add(3);
-				write_time_dd(ptr, s);
+				write_time(
+					self.buf.as_mut_ptr().add(self.buf.start_unchecked(PART_ELAPSED) as usize),
+					h,
+					m,
+					s,
+				);
 			}
 
 			true

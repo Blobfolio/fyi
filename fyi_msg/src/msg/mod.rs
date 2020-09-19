@@ -18,6 +18,7 @@ use crate::{
 use std::{
 	fmt,
 	iter::FromIterator,
+	mem,
 	ops::Deref,
 	ptr,
 	io::{
@@ -504,39 +505,47 @@ impl Msg {
 	/// [`chrono`](https://crates.io/crates/chrono) provides formatting helpers of its own, they come with too
 	/// much overhead for our single use case.
 	unsafe fn write_timestamp(&mut self) {
-		use chrono::{
-			Datelike,
-			Local,
-			Timelike,
-		};
+		let mut buf = [mem::MaybeUninit::<u8>::uninit(); 44];
+		let dst = buf.as_mut_ptr() as *mut u8;
 
+		// Write the opener.
+		ptr::copy_nonoverlapping(b"\x1b[2m[\x1b[0;34m".as_ptr(), dst, 12);
+		// Chunk in the space.
+		ptr::write(dst.add(22), b' ');
+		// Write the closer.
+		ptr::copy_nonoverlapping(b"\x1b[39;2m]\x1b[0m ".as_ptr(), dst.add(31), 13);
+
+		// Now the time bits.
+		{
+			use chrono::{
+				Datelike,
+				Local,
+				Timelike,
+			};
+
+			// Current time.
+			let now = Local::now();
+
+			utility::write_date(
+				dst.add(12),
+				(now.year() as u16).saturating_sub(2000) as u8,
+				now.month() as u8,
+				now.day() as u8,
+			);
+
+			utility::write_time(
+				dst.add(23),
+				now.hour() as u8,
+				now.minute() as u8,
+				now.day() as u8,
+			);
+		}
+
+		// Shove the result into the buffer.
 		self.0.replace_unchecked(
 			PART_TIMESTAMP,
-			b"\x1b[2m[\x1b[0;34m2000-00-00 00:00:00\x1b[39;2m]\x1b[0m ",
+			&mem::transmute::<_, [u8; 44]>(buf),
 		);
-
-		// Referencing Chrono's formatting methods adds a ton of overhead to
-		// the crate. Instead, we'll just write each double-digit number pair
-		// directly into place.
-		let now = Local::now();
-
-		let mut ptr = self.0.as_mut_ptr().add(self.0.start_unchecked(PART_TIMESTAMP) as usize + 14);
-		utility::write_time_dd(ptr, (now.year() as u16).saturating_sub(2000) as u8);
-
-		ptr = ptr.add(3);
-		utility::write_time_dd(ptr, now.month() as u8);
-
-		ptr = ptr.add(3);
-		utility::write_time_dd(ptr, now.day() as u8);
-
-		ptr = ptr.add(3);
-		utility::write_time_dd(ptr, now.hour() as u8);
-
-		ptr = ptr.add(3);
-		utility::write_time_dd(ptr, now.minute() as u8);
-
-		ptr = ptr.add(3);
-		utility::write_time_dd(ptr, now.second() as u8);
 	}
 }
 
