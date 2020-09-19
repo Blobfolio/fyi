@@ -128,35 +128,35 @@ impl From<u32> for NiceInt {
 		unsafe {
 			let mut buf = [MaybeUninit::<u8>::uninit(); 15];
 
-			let len: usize = match digits_32(num) {
-				5 => {
-					write_from_5(buf.as_mut_ptr() as *mut u8, num);
-					6_usize
-				},
-				6 => {
-					write_from_6(buf.as_mut_ptr() as *mut u8, num);
-					7_usize
-				},
-				7 => {
-					write_from_7(buf.as_mut_ptr() as *mut u8, num);
-					9_usize
-				},
-				8 => {
+			let len: usize =
+				if num < 10_000_000 {
+					if num < 100_000 {
+						write_from_5(buf.as_mut_ptr() as *mut u8, num);
+						6_usize
+					}
+					else if num < 1_000_000 {
+						write_from_6(buf.as_mut_ptr() as *mut u8, num);
+						7_usize
+					}
+					else {
+						write_from_7(buf.as_mut_ptr() as *mut u8, num);
+						9_usize
+					}
+				}
+				else if num < 100_000_000 {
 					write_from_8(buf.as_mut_ptr() as *mut u8, num);
 					10_usize
-				},
-				9 => {
+				}
+				else if num < 1_000_000_000 {
 					write_from_9(buf.as_mut_ptr() as *mut u8, num);
 					11_usize
-				},
-				10 => {
+				}
+				else {
 					let dst = buf.as_mut_ptr() as *mut u8;
 					ptr::write(dst, (num / 1_000_000_000) as u8 | utility::MASK_U8);
 					write_from_9(write_comma(dst.add(1)), num % 1_000_000_000);
 					13_usize
-				},
-				_ => unreachable!(),
-			};
+				};
 
 			Self {
 				inner: mem::transmute::<_, [u8; 15]>(buf),
@@ -286,21 +286,6 @@ impl NiceInt {
 unsafe fn write_comma(buf: *mut u8) -> *mut u8 {
 	ptr::write(buf, b',');
 	buf.add(1)
-}
-
-/// # Count Digits `u32`.
-///
-/// We're only interested in the unique range a `u32` can have, i.e.
-/// `65_536..=4_294_967_295`.
-const fn digits_32(num: u32) -> u8 {
-	if num < 10_000_000 {
-		if num < 100_000 { 5 }
-		else if num < 1_000_000 { 6 }
-		else { 7 }
-	}
-	else if num < 100_000_000 { 8 }
-	else if num < 1_000_000_000 { 9 }
-	else { 10 }
 }
 
 #[allow(clippy::integer_division)]
@@ -440,16 +425,5 @@ mod tests {
 			assert_eq!(NiceInt::percent_f64(0.18999_f64).as_str(), "18.99%");
 			assert_eq!(NiceInt::percent_f64(1.0_f64).as_str(), "100.00%");
 		}
-	}
-
-	#[test]
-	fn t_digits() {
-		// Ten possibilities with `u32`.
-		assert_eq!(digits_32(45510), 5);
-		assert_eq!(digits_32(345510), 6);
-		assert_eq!(digits_32(3345510), 7);
-		assert_eq!(digits_32(99999999), 8);
-		assert_eq!(digits_32(599999999), 9);
-		assert_eq!(digits_32(u32::MAX), 10);
 	}
 }
