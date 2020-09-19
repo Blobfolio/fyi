@@ -10,7 +10,7 @@ use std::ptr;
 ///
 /// This is a simple mask that can be applied against a decimal between `0..10`
 /// to turn it into the equivalent ASCII. This is the same thing as adding `48`
-/// but is minutely faster because it's bitwise!
+/// (for this particular range) but is minutely faster because it's bitwise!
 ///
 /// ```no_run
 /// let x: u8 = 5;
@@ -159,10 +159,13 @@ pub unsafe fn write_u8(buf: *mut u8, num: u8) -> usize {
 
 /// # Write 2 Digits.
 ///
+/// This will always write two digits to the pointer, zero-padding on the left
+/// as necessary.
+///
 /// ## Safety
 ///
-/// This will write between 1 and 3 bytes to a mutable pointer. That pointer
-/// must be valid and sized correctly or undefined things will happen.
+/// The number must be in `0..=99`, and the pointer must be allocated for two
+/// bytes, or undefined things will happen.
 pub unsafe fn write_u8_2(buf: *mut u8, num: u8) {
 	static INTS: [u8; 200] = *b"\
 		0001020304050607080910111213141516171819\
@@ -181,10 +184,13 @@ pub unsafe fn write_u8_2(buf: *mut u8, num: u8) {
 #[allow(clippy::integer_division)]
 /// # Write 3 Digits.
 ///
+/// This will always write three digits to the pointer, zero-padding on the
+/// left as necessary.
+///
 /// ## Safety
 ///
-/// This will write between 1 and 3 bytes to a mutable pointer. That pointer
-/// must be valid and sized correctly or undefined things will happen.
+/// The number must be in `0..=999`, and the pointer must be allocated for
+/// three bytes, or undefined things will happen.
 pub unsafe fn write_u8_3(buf: *mut u8, num: u16) {
 	if num >= 100 {
 		if num <= 255 {
