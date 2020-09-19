@@ -93,22 +93,19 @@ impl From<u16> for NiceInt {
 			let mut buf = [MaybeUninit::<u8>::uninit(); 15];
 
 			let len: usize =
-				// Number is in `256..=999`.
-				if num < 1000 {
+				if num < 1_000 {
 					utility::write_u8_3(buf.as_mut_ptr() as *mut u8, num);
-					3
+					3_usize
 				}
-				// Number is in `1000..=65_535`.
+				else if num < 10_000 {
+					write_from_4(buf.as_mut_ptr() as *mut u8, num);
+					5_usize
+				}
 				else {
-					let mut dst = buf.as_mut_ptr() as *mut u8;
-
-					// The thousands will only ever be one or two digits.
-					dst = dst.add(utility::write_u8(dst, (num / 1000) as u8));
-					dst = write_comma(dst);
-
-					// Whatever's left.
-					utility::write_u8_3(dst, num % 1000);
-					dst.add(3) as usize - buf.as_ptr() as *const u8 as usize
+					let dst = buf.as_mut_ptr() as *mut u8;
+					utility::write_u8_2(dst, (num / 1_000) as u8);
+					utility::write_u8_3(write_comma(dst.add(2)), num % 1_000);
+					6_usize
 				};
 
 			Self {
@@ -121,7 +118,7 @@ impl From<u16> for NiceInt {
 
 impl From<u32> for NiceInt {
 	#[allow(clippy::integer_division)]
-	fn from(mut num: u32) -> Self {
+	fn from(num: u32) -> Self {
 		// Smaller integers have more efficient conversions.
 		if num <= 65_535 {
 			if num <= 255 { return Self::from(num as u8); }
@@ -131,60 +128,34 @@ impl From<u32> for NiceInt {
 		unsafe {
 			let mut buf = [MaybeUninit::<u8>::uninit(); 15];
 
-			let len: usize = {
-				let mut dst = buf.as_mut_ptr() as *mut u8;
-
-				// Number is in `65_536..=99_999`.
-				if num < 100_000 {
-					utility::write_u8_2(dst, (num / 1_000) as u8);
-					dst = write_comma(dst.add(2));
-				}
-				// Number is in `100_000..=999_999`.
-				else if num < 1_000_000 {
-					utility::write_u8_3(dst, (num / 1_000) as u16);
-					dst = write_comma(dst.add(3));
-				}
-				// Number is in `1_000_000..=999_999_999`.
-				else if num < 1_000_000_000 {
-					// Number is in `1_000_000..=99_999_999`.
-					if num < 100_000_000 {
-						dst = dst.add(utility::write_u8(dst, (num / 1_000_000) as u8));
-					}
-					// Number is in `100_000_000..=999_999_999`.
-					else {
-						utility::write_u8_3(dst, (num / 1_000_000) as u16);
-						dst = dst.add(3);
-					}
-
-					num %= 1_000_000;
-					dst = write_comma(dst);
-
-					// Thousands and comma.
-					utility::write_u8_3(dst, (num / 1_000) as u16);
-					dst = write_comma(dst.add(3));
-				}
-				// Number is in `1_000_000_000..=4_294_967_295`.
-				else {
-					// Billions and comma.
+			let len: usize = match digits_32(num) {
+				5 => {
+					write_from_5(buf.as_mut_ptr() as *mut u8, num);
+					6_usize
+				},
+				6 => {
+					write_from_6(buf.as_mut_ptr() as *mut u8, num);
+					7_usize
+				},
+				7 => {
+					write_from_7(buf.as_mut_ptr() as *mut u8, num);
+					9_usize
+				},
+				8 => {
+					write_from_8(buf.as_mut_ptr() as *mut u8, num);
+					10_usize
+				},
+				9 => {
+					write_from_9(buf.as_mut_ptr() as *mut u8, num);
+					11_usize
+				},
+				10 => {
+					let dst = buf.as_mut_ptr() as *mut u8;
 					ptr::write(dst, (num / 1_000_000_000) as u8 | utility::MASK_U8);
-					num %= 1_000_000_000;
-					dst = write_comma(dst.add(1));
-
-					// Millions and comma.
-					utility::write_u8_3(dst, (num / 1_000_000) as u16);
-					num %= 1_000_000;
-					dst = write_comma(dst.add(3));
-
-					// Thousands and comma.
-					utility::write_u8_3(dst, (num / 1_000) as u16);
-					dst = write_comma(dst.add(3));
-				}
-
-				// Whatever's left.
-				utility::write_u8_3(dst, (num % 1_000) as u16);
-
-				// How much did we write?
-				dst.add(3) as usize - buf.as_ptr() as *const u8 as usize
+					write_from_9(write_comma(dst.add(1)), num % 1_000_000_000);
+					13_usize
+				},
+				_ => unreachable!(),
 			};
 
 			Self {
@@ -215,44 +186,23 @@ impl From<u64> for NiceInt {
 		unsafe {
 			let mut buf = [MaybeUninit::<u8>::uninit(); 15];
 
-			let len: usize = {
-				let mut dst = buf.as_mut_ptr() as *mut u8;
-
-				// Number is in `4_294_967_296..=99_999_999_999`. Write either
-				// one or two digits.
-				if num < 100_000_000_000 {
-					dst = dst.add(utility::write_u8(dst, (num / 1_000_000_000) as u8));
+			let len: usize =
+				if num < 10_000_000_000 {
+					write_from_10(buf.as_mut_ptr() as *mut u8, num);
+					13_usize
 				}
-				// Number is in `100_000_000_000..=999_999_999_998`. Write
-				// three digits.
+				else if num < 100_000_000_000 {
+					write_from_11(buf.as_mut_ptr() as *mut u8, num);
+					14_usize
+				}
 				else {
-					utility::write_u8_3(dst, (num / 1_000_000_000) as u16);
-					dst = dst.add(3);
-				}
-
-				// With billions out of the way, we can switch to `u32`.
-				let mut num: u32 = (num % 1_000_000_000) as u32;
-				dst = write_comma(dst);
-
-				// Millions and comma.
-				utility::write_u8_3(dst, (num / 1_000_000) as u16);
-				num %= 1_000_000;
-				dst = write_comma(dst.add(3));
-
-				// Thousands and comma.
-				utility::write_u8_3(dst, (num / 1_000) as u16);
-				dst = write_comma(dst.add(3));
-
-				// Whatever's left.
-				utility::write_u8_3(dst, (num % 1_000) as u16);
-
-				// How much did we write?
-				dst.add(3) as usize - buf.as_ptr() as *const u8 as usize
-			};
+					write_from_12(buf.as_mut_ptr() as *mut u8, num);
+					15_usize
+				};
 
 			Self {
 				inner: mem::transmute::<_, [u8; 15]>(buf),
-				len,
+				len
 			}
 		}
 	}
@@ -338,6 +288,102 @@ unsafe fn write_comma(buf: *mut u8) -> *mut u8 {
 	buf.add(1)
 }
 
+/// # Count Digits `u32`.
+///
+/// We're only interested in the unique range a `u32` can have, i.e.
+/// `65_536..=4_294_967_295`.
+const fn digits_32(num: u32) -> u8 {
+	if num < 10_000_000 {
+		if num < 100_000 { 5 }
+		else if num < 1_000_000 { 6 }
+		else { 7 }
+	}
+	else if num < 100_000_000 { 8 }
+	else if num < 1_000_000_000 { 9 }
+	else { 10 }
+}
+
+#[allow(clippy::integer_division)]
+/// # Write From 12 Digits.
+///
+/// This covers all values under 1,000,000,000,000.
+unsafe fn write_from_12(buf: *mut u8, num: u64) {
+	utility::write_u8_3(buf, (num / 1_000_000_000) as u16);
+	write_from_9(write_comma(buf.add(3)), (num % 1_000_000_000) as u32);
+}
+
+#[allow(clippy::integer_division)]
+/// # Write From 11 Digits.
+///
+/// This covers all values under 100,000,000,000.
+unsafe fn write_from_11(buf: *mut u8, num: u64) {
+	utility::write_u8_2(buf, (num / 1_000_000_000) as u8);
+	write_from_9(write_comma(buf.add(2)), (num % 1_000_000_000) as u32);
+}
+
+#[allow(clippy::integer_division)]
+/// # Write From 10 Digits.
+///
+/// This covers all values under 10,000,000,000.
+unsafe fn write_from_10(buf: *mut u8, num: u64) {
+	ptr::write(buf, (num / 1_000_000_000) as u8 | utility::MASK_U8);
+	write_from_9(write_comma(buf.add(1)), (num % 1_000_000_000) as u32);
+}
+
+#[allow(clippy::integer_division)]
+/// # Write From 9 Digits.
+///
+/// This covers all values under 1,000,000,000.
+unsafe fn write_from_9(buf: *mut u8, num: u32) {
+	utility::write_u8_3(buf, (num / 1_000_000) as u16);
+	write_from_6(write_comma(buf.add(3)), num % 1_000_000);
+}
+
+#[allow(clippy::integer_division)]
+/// # Write From 8 Digits.
+///
+/// This covers all values under 100,000,000.
+unsafe fn write_from_8(buf: *mut u8, num: u32) {
+	utility::write_u8_2(buf, (num / 1_000_000) as u8);
+	write_from_6(write_comma(buf.add(2)), num % 1_000_000);
+}
+
+#[allow(clippy::integer_division)]
+/// # Write From 7 Digits.
+///
+/// This covers all values under 10,000,000.
+unsafe fn write_from_7(buf: *mut u8, num: u32) {
+	ptr::write(buf, (num / 1_000_000) as u8 | utility::MASK_U8);
+	write_from_6(write_comma(buf.add(1)), num % 1_000_000);
+}
+
+#[allow(clippy::integer_division)]
+/// # Write From 6 Digits.
+///
+/// This covers all values under 1,000,000.
+unsafe fn write_from_6(buf: *mut u8, num: u32) {
+	utility::write_u8_3(buf, (num / 1_000) as u16);
+	utility::write_u8_3(write_comma(buf.add(3)), (num % 1_000) as u16);
+}
+
+#[allow(clippy::integer_division)]
+/// # Write From 5 Digits.
+///
+/// This covers all values under 100,000.
+unsafe fn write_from_5(buf: *mut u8, num: u32) {
+	utility::write_u8_2(buf, (num / 1_000) as u8);
+	utility::write_u8_3(write_comma(buf.add(2)), (num % 1_000) as u16);
+}
+
+#[allow(clippy::integer_division)]
+/// # Write From 4 Digits.
+///
+/// This covers all values under 10,000.
+unsafe fn write_from_4(buf: *mut u8, num: u16) {
+	ptr::write(buf, (num / 1_000) as u8 | utility::MASK_U8);
+	utility::write_u8_3(write_comma(buf.add(1)), num % 1_000);
+}
+
 
 
 #[cfg(test)]
@@ -394,5 +440,16 @@ mod tests {
 			assert_eq!(NiceInt::percent_f64(0.18999_f64).as_str(), "18.99%");
 			assert_eq!(NiceInt::percent_f64(1.0_f64).as_str(), "100.00%");
 		}
+	}
+
+	#[test]
+	fn t_digits() {
+		// Ten possibilities with `u32`.
+		assert_eq!(digits_32(45510), 5);
+		assert_eq!(digits_32(345510), 6);
+		assert_eq!(digits_32(3345510), 7);
+		assert_eq!(digits_32(99999999), 8);
+		assert_eq!(digits_32(599999999), 9);
+		assert_eq!(digits_32(u32::MAX), 10);
 	}
 }
