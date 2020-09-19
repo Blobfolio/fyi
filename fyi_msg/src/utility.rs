@@ -95,28 +95,20 @@ pub fn vec_resize_at(src: &mut Vec<u8>, idx: usize, adj: usize) {
 /// This will write between 11 and 13 bytes to a mutable pointer. That pointer
 /// must be valid and sized correctly or undefined things will happen.
 pub unsafe fn write_ansi_code_bold(buf: *mut u8, num: u8) -> usize {
-	// 0..4     Reset.
-	// 4..13    Opener.
-	// 13..14   m.
-	static ANSI: [u8; 14] = *b"\x1b[0m\x1b[1;38;5;m";
-
 	// Bad Data/Overflow.
 	if num == 0 {
-		ptr::copy_nonoverlapping(ANSI.as_ptr(), buf, 4);
+		ptr::copy_nonoverlapping(b"\x1b[0m".as_ptr(), buf, 4);
 		return 4;
 	}
 
-	// Grab the pointer.
-	let ptr = ANSI.as_ptr();
-
 	// Otherwise they all start the same.
-	ptr::copy_nonoverlapping(ptr.add(4), buf, 9);
+	ptr::copy_nonoverlapping(b"\x1b[1;38;5;".as_ptr(), buf, 9);
 
 	// Add the color.
 	let len: usize = write_u8(buf.add(9), num) + 9;
 
 	// And finish off with the "m".
-	ptr::copy_nonoverlapping(ptr.add(13), buf.add(len), 1);
+	ptr::write(buf.add(len), b'm');
 
 	len + 1
 }
