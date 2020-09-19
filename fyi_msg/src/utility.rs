@@ -136,6 +136,20 @@ pub unsafe fn write_date(buf: *mut u8, y: u8, m: u8, d: u8) {
 	write_u8_2(buf.add(8), d);
 }
 
+/// # Write Datetime.
+///
+/// This combines [`write_date`] and [`write_time`] in the way you'd expect.
+///
+/// ## Safety
+///
+/// The pointer must have 19 bytes available, and the numbers must all be in
+/// valid ranges or undefined things will happen.
+pub unsafe fn write_datetime(buf: *mut u8, y: u8, mo: u8, d: u8, h: u8, mn: u8, s: u8) {
+	write_date(buf, y, mo, d);
+	ptr::write(buf.add(10), b' ');
+	write_time(buf.add(11), h, mn, s);
+}
+
 /// # Write Time
 ///
 /// This writes hours, minutes, and seconds into a digital clock-like format,
@@ -307,6 +321,15 @@ mod tests {
 		}
 
 		assert_eq!(buf, *b"2020-09-18 18:37:05");
+
+		unsafe {
+			write_datetime(
+				buf.as_mut_ptr(),
+				21, 10, 31, 5, 1, 0
+			);
+		}
+
+		assert_eq!(buf, *b"2021-10-31 05:01:00");
 	}
 
 	#[test]

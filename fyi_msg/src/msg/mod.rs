@@ -490,62 +490,40 @@ impl Msg {
 		unsafe {
 			if on == self.0.is_empty_unchecked(PART_TIMESTAMP) {
 				if on {
-					self.write_timestamp();
+					let mut buf = [mem::MaybeUninit::<u8>::uninit(); 44];
+					let dst = buf.as_mut_ptr() as *mut u8;
+
+					// Write the opener.
+					ptr::copy_nonoverlapping(b"\x1b[2m[\x1b[0;34m".as_ptr(), dst, 12);
+					// Write the closer.
+					ptr::copy_nonoverlapping(b"\x1b[39;2m]\x1b[0m ".as_ptr(), dst.add(31), 13);
+
+					// Now the time bits.
+					{
+						use chrono::{Datelike, Local, Timelike};
+						let now = Local::now();
+						utility::write_datetime(
+							dst.add(12),
+							(now.year() as u16).saturating_sub(2000) as u8,
+							now.month() as u8,
+							now.day() as u8,
+							now.hour() as u8,
+							now.minute() as u8,
+							now.day() as u8,
+						);
+					}
+
+					// Shove the result into the buffer.
+					self.0.replace_unchecked(
+						PART_TIMESTAMP,
+						&mem::transmute::<_, [u8; 44]>(buf),
+					);
 				}
 				else {
 					self.0.zero_unchecked(PART_TIMESTAMP);
 				}
 			}
 		}
-	}
-
-	/// # Write the timestamp bit.
-	///
-	/// This method updates the timestamp slice of the message buffer. While
-	/// [`chrono`](https://crates.io/crates/chrono) provides formatting helpers of its own, they come with too
-	/// much overhead for our single use case.
-	unsafe fn write_timestamp(&mut self) {
-		let mut buf = [mem::MaybeUninit::<u8>::uninit(); 44];
-		let dst = buf.as_mut_ptr() as *mut u8;
-
-		// Write the opener.
-		ptr::copy_nonoverlapping(b"\x1b[2m[\x1b[0;34m".as_ptr(), dst, 12);
-		// Chunk in the space.
-		ptr::write(dst.add(22), b' ');
-		// Write the closer.
-		ptr::copy_nonoverlapping(b"\x1b[39;2m]\x1b[0m ".as_ptr(), dst.add(31), 13);
-
-		// Now the time bits.
-		{
-			use chrono::{
-				Datelike,
-				Local,
-				Timelike,
-			};
-
-			// Current time.
-			let now = Local::now();
-
-			utility::write_date(
-				dst.add(12),
-				(now.year() as u16).saturating_sub(2000) as u8,
-				now.month() as u8,
-				now.day() as u8,
-			);
-
-			utility::write_time(
-				dst.add(23),
-				now.hour() as u8,
-				now.minute() as u8,
-				now.day() as u8,
-			);
-		}
-
-		// Shove the result into the buffer.
-		self.0.replace_unchecked(
-			PART_TIMESTAMP,
-			&mem::transmute::<_, [u8; 44]>(buf),
-		);
 	}
 }
 
