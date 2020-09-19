@@ -102,17 +102,8 @@ impl From<u16> for NiceInt {
 				else {
 					let mut dst = buf.as_mut_ptr() as *mut u8;
 
-					// Number is in `1000..=9999`.
-					if num < 10_000 {
-						ptr::write(dst, (num / 1000) as u8 | utility::MASK_U8);
-						dst = dst.add(1);
-					}
-					// Number is in `10_000..=65_535`.
-					else {
-						utility::write_u8_2(dst, (num / 1000) as u8);
-						dst = dst.add(2);
-					}
-
+					// The thousands will only ever be one or two digits.
+					dst = dst.add(utility::write_u8(dst, (num / 1000) as u8));
 					dst = write_comma(dst);
 
 					// Whatever's left.
@@ -132,8 +123,10 @@ impl From<u32> for NiceInt {
 	#[allow(clippy::integer_division)]
 	fn from(mut num: u32) -> Self {
 		// Smaller integers have more efficient conversions.
-		if num <= 255 { return Self::from(num as u8); }
-		else if num <= 65_535 { return Self::from(num as u16); }
+		if num <= 65_535 {
+			if num <= 255 { return Self::from(num as u8); }
+			else { return Self::from(num as u16); }
+		}
 
 		unsafe {
 			let mut buf = [MaybeUninit::<u8>::uninit(); 15];
@@ -153,15 +146,9 @@ impl From<u32> for NiceInt {
 				}
 				// Number is in `1_000_000..=999_999_999`.
 				else if num < 1_000_000_000 {
-					// Number is in `1_000_000..=9_999_999`.
-					if num < 10_000_000 {
-						ptr::write(dst, (num / 1_000_000) as u8 | utility::MASK_U8);
-						dst = dst.add(1);
-					}
-					// Number is in `10_000_000..=99_999_999`.
-					else if num < 100_000_000 {
-						utility::write_u8_2(dst, (num / 1_000_000) as u8);
-						dst = dst.add(2);
+					// Number is in `1_000_000..=99_999_999`.
+					if num < 100_000_000 {
+						dst = dst.add(utility::write_u8(dst, (num / 1_000_000) as u8));
 					}
 					// Number is in `100_000_000..=999_999_999`.
 					else {
@@ -212,9 +199,11 @@ impl From<u64> for NiceInt {
 	#[allow(clippy::integer_division)]
 	fn from(num: u64) -> Self {
 		// Smaller integers have more efficient conversions.
-		if num <= 255 { return Self::from(num as u8); }
-		else if num <= 65_535 { return Self::from(num as u16); }
-		else if num <= 4_294_967_295 { return Self::from(num as u32); }
+		if num <= 4_294_967_295 {
+			if num <= 255 { return Self::from(num as u8); }
+			else if num <= 65_535 { return Self::from(num as u16); }
+			else { return Self::from(num as u32); }
+		}
 		// `NiceInt` don't support values in the trillions.
 		else if num >= MAX_NICE_INT {
 			return Self {
@@ -229,17 +218,13 @@ impl From<u64> for NiceInt {
 			let len: usize = {
 				let mut dst = buf.as_mut_ptr() as *mut u8;
 
-				// Number is in `4_294_967_296..=9_999_999_999`.
-				if num < 10_000_000_000 {
-					ptr::write(dst, (num / 1_000_000_000) as u8 | utility::MASK_U8);
-					dst = dst.add(1);
+				// Number is in `4_294_967_296..=99_999_999_999`. Write either
+				// one or two digits.
+				if num < 100_000_000_000 {
+					dst = dst.add(utility::write_u8(dst, (num / 1_000_000_000) as u8));
 				}
-				// Number is in `10_000_000_000..=99_999_999_999`.
-				else if num < 100_000_000_000 {
-					utility::write_u8_2(dst, (num / 1_000_000_000) as u8);
-					dst = dst.add(2);
-				}
-				// Number is in `100_000_000_000..=999_999_999_998`.
+				// Number is in `100_000_000_000..=999_999_999_998`. Write
+				// three digits.
 				else {
 					utility::write_u8_3(dst, (num / 1_000_000_000) as u16);
 					dst = dst.add(3);
