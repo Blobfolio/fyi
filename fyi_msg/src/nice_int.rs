@@ -129,23 +129,25 @@ impl From<u32> for NiceInt {
 			let mut buf = [MaybeUninit::<u8>::uninit(); 15];
 
 			let len: usize =
-				if num < 10_000_000 {
+				if num < 1_000_000 {
 					if num < 100_000 {
 						write_from_5(buf.as_mut_ptr() as *mut u8, num);
 						6_usize
 					}
-					else if num < 1_000_000 {
+					else {
 						write_from_6(buf.as_mut_ptr() as *mut u8, num);
 						7_usize
 					}
-					else {
+				}
+				else if num < 100_000_000 {
+					if num < 10_000_000 {
 						write_from_7(buf.as_mut_ptr() as *mut u8, num);
 						9_usize
 					}
-				}
-				else if num < 100_000_000 {
-					write_from_8(buf.as_mut_ptr() as *mut u8, num);
-					10_usize
+					else {
+						write_from_8(buf.as_mut_ptr() as *mut u8, num);
+						10_usize
+					}
 				}
 				else if num < 1_000_000_000 {
 					write_from_9(buf.as_mut_ptr() as *mut u8, num);
