@@ -463,7 +463,7 @@ impl MsgBuffer {
 	///
 	/// Undefined things will happen if `idx` is out of bounds.
 	pub unsafe fn start_unchecked(&self, idx: usize) -> u16 {
-		self.toc.extract_unchecked(idx * 2)
+		self.toc.extract_unchecked(idx << 1)
 	}
 
 	#[cfg(not(feature = "simd"))]
@@ -477,7 +477,7 @@ impl MsgBuffer {
 	///
 	/// Undefined things will happen if `idx` is out of bounds.
 	pub const unsafe fn end_unchecked(&self, idx: usize) -> u16 {
-		self.toc[idx * 2 + 1]
+		self.toc[(idx << 1) + 1]
 	}
 
 	#[cfg(feature = "simd")]
@@ -491,7 +491,7 @@ impl MsgBuffer {
 	///
 	/// Undefined things will happen if `idx` is out of bounds.
 	pub unsafe fn end_unchecked(&self, idx: usize) -> u16 {
-		self.toc.extract_unchecked(idx * 2 + 1)
+		self.toc.extract_unchecked((idx << 1) + 1)
 	}
 
 	#[cfg(feature = "simd")]
@@ -519,7 +519,7 @@ impl MsgBuffer {
 	/// This method will panic if the adjustent is larger than any of the
 	/// affected parts.
 	fn decrease(&mut self, mut idx: usize, adj: u16) {
-		idx = idx * 2 + 1;
+		idx = (idx << 1) + 1;
 		while idx < 32 {
 			self.toc[idx] -= adj;
 			idx += 1;
@@ -541,7 +541,7 @@ impl MsgBuffer {
 	/// This increases the length of a partition, nudging all subsequent
 	/// partitions to the right.
 	fn increase(&mut self, mut idx: usize, adj: u16) {
-		idx = idx * 2 + 1;
+		idx = (idx << 1) + 1;
 		while idx < 32 {
 			self.toc[idx] += adj;
 			idx += 1;
