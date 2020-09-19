@@ -149,66 +149,70 @@ impl NiceElapsed {
 		use fyi_msg::utility::write_u8;
 
 		let mut buf = [MaybeUninit::<u8>::uninit(); 36];
-		let dst = buf.as_mut_ptr() as *mut u8;
 		let count: u8 = h.ne(&0) as u8 + m.ne(&0) as u8 + s.ne(&0) as u8;
-		let mut len: usize = 0;
 
-		// Hours.
-		if h > 0 {
-			len += write_u8(dst, h);
-			if h == 1 {
-				ptr::copy_nonoverlapping(b" hour".as_ptr(), dst.add(len), 5);
-				len += 5;
-			}
-			else {
-				ptr::copy_nonoverlapping(b" hours".as_ptr(), dst.add(len), 6);
-				len += 6;
-			}
+		let len: usize = {
+			let mut dst = buf.as_mut_ptr() as *mut u8;
 
-			if 3 == count {
-				ptr::copy_nonoverlapping(b", ".as_ptr(), dst.add(len), 2);
-				len += 2;
-			}
-			else if 2 == count {
-				ptr::copy_nonoverlapping(b" and ".as_ptr(), dst.add(len), 5);
-				len += 5;
-			}
-		}
+			// Hours.
+			if h > 0 {
+				dst = dst.add(write_u8(dst, h));
+				if h == 1 {
+					ptr::copy_nonoverlapping(b" hour".as_ptr(), dst, 5);
+					dst = dst.add(5);
+				}
+				else {
+					ptr::copy_nonoverlapping(b" hours".as_ptr(), dst, 6);
+					dst = dst.add(6);
+				}
 
-		// Minutes.
-		if m > 0 {
-			len += write_u8(dst.add(len), m);
-			if m == 1 {
-				ptr::copy_nonoverlapping(b" minute".as_ptr(), dst.add(len), 7);
-				len += 7;
-			}
-			else {
-				ptr::copy_nonoverlapping(b" minutes".as_ptr(), dst.add(len), 8);
-				len += 8;
+				if 3 == count {
+					ptr::copy_nonoverlapping(b", ".as_ptr(), dst, 2);
+					dst = dst.add(2);
+				}
+				else if 2 == count {
+					ptr::copy_nonoverlapping(b" and ".as_ptr(), dst, 5);
+					dst = dst.add(5);
+				}
 			}
 
-			if 3 == count {
-				ptr::copy_nonoverlapping(b", and ".as_ptr(), dst.add(len), 6);
-				len += 6;
-			}
-			else if 2 == count && h == 0 {
-				ptr::copy_nonoverlapping(b" and ".as_ptr(), dst.add(len), 5);
-				len += 5;
-			}
-		}
+			// Minutes.
+			if m > 0 {
+				dst = dst.add(write_u8(dst, m));
+				if m == 1 {
+					ptr::copy_nonoverlapping(b" minute".as_ptr(), dst, 7);
+					dst = dst.add(7);
+				}
+				else {
+					ptr::copy_nonoverlapping(b" minutes".as_ptr(), dst, 8);
+					dst = dst.add(8);
+				}
 
-		// Seconds.
-		if s > 0 {
-			len += write_u8(dst.add(len), s);
-			if s == 1 {
-				ptr::copy_nonoverlapping(b" second".as_ptr(), dst.add(len), 7);
-				len += 7;
+				if 3 == count {
+					ptr::copy_nonoverlapping(b", and ".as_ptr(), dst, 6);
+					dst = dst.add(6);
+				}
+				else if 2 == count && h == 0 {
+					ptr::copy_nonoverlapping(b" and ".as_ptr(), dst, 5);
+					dst = dst.add(5);
+				}
 			}
-			else {
-				ptr::copy_nonoverlapping(b" seconds".as_ptr(), dst.add(len), 8);
-				len += 8;
+
+			// Seconds.
+			if s > 0 {
+				dst = dst.add(write_u8(dst, s));
+				if s == 1 {
+					ptr::copy_nonoverlapping(b" second".as_ptr(), dst, 7);
+					dst = dst.add(7);
+				}
+				else {
+					ptr::copy_nonoverlapping(b" seconds".as_ptr(), dst, 8);
+					dst = dst.add(8);
+				}
 			}
-		}
+
+			dst as usize - buf.as_ptr() as *const u8 as usize
+		};
 
 		// Put it all together!
 		Self {
