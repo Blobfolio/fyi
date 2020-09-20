@@ -5,22 +5,17 @@
 use crate::utility;
 use std::{
 	fmt,
-	mem::{
-		self,
-		MaybeUninit,
-	},
 	ops::Deref,
 	ptr,
 };
 
 
 
-/// # Integer Ceiling.
-///
-/// We have no need for formatting truly titanic numbers. The `NiceInt`
-/// routines are capped at `999_999_999_999`, i.e. support exists for anything
-/// under a trillion.
-const MAX_NICE_INT: u64 = 999_999_999_999;
+/// # Total Buffer Size.
+const SIZE: usize = 15;
+
+/// # Starting Index For Percentage Decimal.
+const IDX_PERCENT_DECIMAL: usize = SIZE - 3;
 
 
 
@@ -40,22 +35,22 @@ const MAX_NICE_INT: u64 = 999_999_999_999;
 ///     "33,231"
 /// );
 pub struct NiceInt {
-	inner: [u8; 15],
-	len: usize,
+	inner: [u8; SIZE],
+	from: usize,
 }
 
 impl Deref for NiceInt {
 	type Target = [u8];
 	#[inline]
-	fn deref(&self) -> &Self::Target { &self.inner[..self.len] }
+	fn deref(&self) -> &Self::Target { &self.inner[self.from..] }
 }
 
 impl Default for NiceInt {
 	#[inline]
 	fn default() -> Self {
 		Self {
-			inner: [48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			len: 1,
+			inner: [0, 0, 0, b',', 0, 0, 0, b',', 0, 0, 0, b',', 0, 0, 0],
+			from: SIZE,
 		}
 	}
 }
@@ -73,149 +68,165 @@ impl From<u8> for NiceInt {
 	/// We can just defer to [`utility::write_u8`](super::utility::write_u8) for this.
 	fn from(num: u8) -> Self {
 		unsafe {
-			let mut buf = [MaybeUninit::<u8>::uninit(); 15];
-			let len: usize = utility::write_u8(buf.as_mut_ptr() as *mut u8, num);
-			Self {
-				inner: mem::transmute::<_, [u8; 15]>(buf),
-				len
+			let mut out = Self::default();
+			let ptr = out.inner.as_mut_ptr();
+
+			if num >= 100 {
+				out.from -= 3;
+				utility::write_u8(ptr.add(out.from), num);
 			}
+			else if num >= 10 {
+				out.from -= 2;
+				utility::write_u8_2(ptr.add(out.from), num);
+			}
+			else {
+				out.from -= 1;
+				ptr::write(ptr.add(out.from), num | utility::MASK_U8);
+			}
+
+			out
 		}
 	}
 }
 
 impl From<u16> for NiceInt {
 	#[allow(clippy::integer_division)]
-	fn from(num: u16) -> Self {
+	fn from(mut num: u16) -> Self {
 		unsafe {
-			let mut buf = [MaybeUninit::<u8>::uninit(); 15];
+			let mut out = Self::default();
+			let ptr = out.inner.as_mut_ptr();
 
-			let len: usize =
-				if num < 1_000 {
-					// Smaller integers have more efficient conversions.
-					if num <= 255 { return Self::from(num as u8); }
-
-					utility::write_u8_3(buf.as_mut_ptr() as *mut u8, num);
-					3_usize
-				}
-				else if num < 10_000 {
-					write_from_4(buf.as_mut_ptr() as *mut u8, num);
-					5_usize
-				}
-				else {
-					let dst = buf.as_mut_ptr() as *mut u8;
-					utility::write_u8_2(dst, (num / 1_000) as u8);
-					utility::write_u8_3(write_comma(dst.add(2)), num % 1_000);
-					6_usize
-				};
-
-			Self {
-				inner: mem::transmute::<_, [u8; 15]>(buf),
-				len
+			// For `u16` this can only trigger once.
+			if num >= 1000 {
+				utility::write_u8_3(ptr.add(out.from - 3), num % 1000);
+				num /= 1000;
+				out.from -= 4;
 			}
+
+			if num >= 100 {
+				out.from -= 3;
+				utility::write_u8_3(ptr.add(out.from), num);
+			}
+			else if num >= 10 {
+				out.from -= 2;
+				utility::write_u8_2(ptr.add(out.from), num as u8);
+			}
+			else {
+				out.from -= 1;
+				ptr::write(ptr.add(out.from), num as u8 | utility::MASK_U8);
+			}
+
+			out
 		}
 	}
 }
 
 impl From<u32> for NiceInt {
 	#[allow(clippy::integer_division)]
-	fn from(num: u32) -> Self {
+	fn from(mut num: u32) -> Self {
 		unsafe {
-			let mut buf = [MaybeUninit::<u8>::uninit(); 15];
+			let mut out = Self::default();
+			let ptr = out.inner.as_mut_ptr();
 
-			let len: usize =
-				if num < 1_000_000 {
-					if num < 100_000 {
-						// Smaller integers have more efficient conversions.
-						if num <= 65_535 {
-							if num <= 255 { return Self::from(num as u8); }
-							else { return Self::from(num as u16); }
-						}
-
-						write_from_5(buf.as_mut_ptr() as *mut u8, num);
-						6_usize
-					}
-					else {
-						write_from_6(buf.as_mut_ptr() as *mut u8, num);
-						7_usize
-					}
-				}
-				else if num < 100_000_000 {
-					if num < 10_000_000 {
-						write_from_7(buf.as_mut_ptr() as *mut u8, num);
-						9_usize
-					}
-					else {
-						write_from_8(buf.as_mut_ptr() as *mut u8, num);
-						10_usize
-					}
-				}
-				else if num < 1_000_000_000 {
-					write_from_9(buf.as_mut_ptr() as *mut u8, num);
-					11_usize
-				}
-				else {
-					let dst = buf.as_mut_ptr() as *mut u8;
-					ptr::write(dst, (num / 1_000_000_000) as u8 | utility::MASK_U8);
-					write_from_9(write_comma(dst.add(1)), num % 1_000_000_000);
-					13_usize
-				};
-
-			Self {
-				inner: mem::transmute::<_, [u8; 15]>(buf),
-				len
+			while num >= 1000 {
+				utility::write_u8_3(ptr.add(out.from - 3), (num % 1000) as u16);
+				num /= 1000;
+				out.from -= 4;
 			}
+
+			if num >= 100 {
+				out.from -= 3;
+				utility::write_u8_3(ptr.add(out.from), num as u16);
+			}
+			else if num >= 10 {
+				out.from -= 2;
+				utility::write_u8_2(ptr.add(out.from), num as u8);
+			}
+			else {
+				out.from -= 1;
+				ptr::write(ptr.add(out.from), num as u8 | utility::MASK_U8);
+			}
+
+			out
 		}
 	}
 }
 
-impl From<u64> for NiceInt {
-	#[allow(clippy::integer_division)]
-	fn from(num: u64) -> Self {
-		unsafe {
-			let mut buf = [MaybeUninit::<u8>::uninit(); 15];
+macro_rules! nice_int_from_big {
+	($type:ty) => {
+		impl From<$type> for NiceInt {
+			#[allow(clippy::integer_division)]
+			fn from(mut num: $type) -> Self {
+				// Cap under a trillion.
+				if num >= 999_999_999_999 {
+					return Self {
+						inner: *b"999,999,999,999",
+						from: 0,
+					};
+				}
 
-			let len: usize =
-				if num < 10_000_000_000 {
-					// Smaller integers have more efficient conversions.
-					if num <= 4_294_967_295 {
-						if num <= 255 { return Self::from(num as u8); }
-						else if num <= 65_535 { return Self::from(num as u16); }
-						else { return Self::from(num as u32); }
-					}
-					write_from_10(buf.as_mut_ptr() as *mut u8, num);
-					13_usize
-				}
-				else if num < 100_000_000_000 {
-					write_from_11(buf.as_mut_ptr() as *mut u8, num);
-					14_usize
-				}
-				else {
-					// `NiceInt` don't support values in the trillions.
-					if num >= MAX_NICE_INT {
-						return Self {
-							inner: *b"999,999,999,999",
-							len: 15,
-						};
+				unsafe {
+					let mut out = Self::default();
+					let ptr = out.inner.as_mut_ptr();
+
+					while num >= 1000 {
+						utility::write_u8_3(ptr.add(out.from - 3), (num % 1000) as u16);
+						num /= 1000;
+						out.from -= 4;
 					}
 
-					write_from_12(buf.as_mut_ptr() as *mut u8, num);
-					15_usize
-				};
+					if num >= 100 {
+						out.from -= 3;
+						utility::write_u8_3(ptr.add(out.from), num as u16);
+					}
+					else if num >= 10 {
+						out.from -= 2;
+						utility::write_u8_2(ptr.add(out.from), num as u8);
+					}
+					else {
+						out.from -= 1;
+						ptr::write(ptr.add(out.from), num as u8 | utility::MASK_U8);
+					}
 
-			Self {
-				inner: mem::transmute::<_, [u8; 15]>(buf),
-				len
+					out
+				}
 			}
 		}
-	}
+	};
 }
 
-impl From<usize> for NiceInt {
+nice_int_from_big!(u64);
+nice_int_from_big!(usize);
+
+
+
+/// ## Miscellaneous.
+///
+/// This section provides contains a few random odds and ends.
+impl NiceInt {
+	#[must_use]
 	#[inline]
-	fn from(num: usize) -> Self { Self::from(num as u64) }
+	/// # Is Empty.
+	///
+	/// Returns true if the struct is uninitialized.
+	///
+	/// Note: a value of "0" would not be empty.
+	pub const fn is_empty(&self) -> bool { self.from == SIZE }
+
+	#[must_use]
+	#[inline]
+	/// # Is Zero.
+	///
+	/// Returns true if the value is equivalent to "0".
+	pub const fn is_zero(&self) -> bool { self.len() == 1 && self.inner[SIZE - 1] == utility::MASK_U8 }
+
+	#[must_use]
+	#[inline]
+	/// # Length.
+	///
+	/// Return the byte length of the value.
+	pub const fn len(&self) -> usize { SIZE - self.from }
 }
-
-
 
 /// ## Casting.
 ///
@@ -254,121 +265,50 @@ impl NiceInt {
 	///
 	/// ## Safety
 	///
-	/// It's fine; it just uses a lot of pointer writes.
+	/// It's fine; this method just uses a lot of pointer writes.
 	pub unsafe fn percent_f64(mut num: f64) -> Self {
-		if num < 0.0 {
-			num = 0.0;
+		// Shortcut for overflowing values.
+		if num <= 0.0 {
+			return Self {
+				inner: *b"00000000000.00%",
+				from: SIZE - 5,
+			};
 		}
-		else if 1.0 < num {
-			num = 1.0;
+		else if 1.0 <= num {
+			return Self {
+				inner: *b"00000000100.00%",
+				from: SIZE - 7,
+			};
 		}
+
+		// Start with the bits we know.
+		let mut out = Self {
+			inner: *b"00000000000.00%",
+			from: SIZE - 4,
+		};
+		let ptr = out.inner.as_mut_ptr();
 
 		// Write the integer parts.
 		num *= 100.0;
-		let mut out = Self::from(f64::floor(num) as u8);
+		let base = f64::floor(num);
+
+		if base >= 10.0 {
+			out.from -= 2;
+			utility::write_u8_2(ptr.add(out.from), base as u8);
+		}
+		else {
+			out.from -= 1;
+			ptr::write(ptr.add(out.from), base as u8 | utility::MASK_U8);
+		}
 
 		// Write the rest.
-		let dst = out.inner.as_mut_ptr().add(out.len);
-		ptr::write(dst, b'.');
-		utility::write_u8_2(dst.add(1), f64::floor((num - f64::floor(num)) * 100.0) as u8);
-		ptr::write(dst.add(3), b'%');
-		out.len += 4;
+		utility::write_u8_2(
+			ptr.add(IDX_PERCENT_DECIMAL),
+			f64::floor((num - base) * 100.0) as u8
+		);
 
 		out
 	}
-}
-
-
-
-#[inline]
-/// # Write Comma.
-///
-/// This simply writes a comma to the specified pointer and returns a new
-/// pointer advanced by one.
-unsafe fn write_comma(buf: *mut u8) -> *mut u8 {
-	ptr::write(buf, b',');
-	buf.add(1)
-}
-
-#[allow(clippy::integer_division)]
-/// # Write From 12 Digits.
-///
-/// This covers all values under 1,000,000,000,000.
-unsafe fn write_from_12(buf: *mut u8, num: u64) {
-	utility::write_u8_3(buf, (num / 1_000_000_000) as u16);
-	write_from_9(write_comma(buf.add(3)), (num % 1_000_000_000) as u32);
-}
-
-#[allow(clippy::integer_division)]
-/// # Write From 11 Digits.
-///
-/// This covers all values under 100,000,000,000.
-unsafe fn write_from_11(buf: *mut u8, num: u64) {
-	utility::write_u8_2(buf, (num / 1_000_000_000) as u8);
-	write_from_9(write_comma(buf.add(2)), (num % 1_000_000_000) as u32);
-}
-
-#[allow(clippy::integer_division)]
-/// # Write From 10 Digits.
-///
-/// This covers all values under 10,000,000,000.
-unsafe fn write_from_10(buf: *mut u8, num: u64) {
-	ptr::write(buf, (num / 1_000_000_000) as u8 | utility::MASK_U8);
-	write_from_9(write_comma(buf.add(1)), (num % 1_000_000_000) as u32);
-}
-
-#[allow(clippy::integer_division)]
-/// # Write From 9 Digits.
-///
-/// This covers all values under 1,000,000,000.
-unsafe fn write_from_9(buf: *mut u8, num: u32) {
-	utility::write_u8_3(buf, (num / 1_000_000) as u16);
-	write_from_6(write_comma(buf.add(3)), num % 1_000_000);
-}
-
-#[allow(clippy::integer_division)]
-/// # Write From 8 Digits.
-///
-/// This covers all values under 100,000,000.
-unsafe fn write_from_8(buf: *mut u8, num: u32) {
-	utility::write_u8_2(buf, (num / 1_000_000) as u8);
-	write_from_6(write_comma(buf.add(2)), num % 1_000_000);
-}
-
-#[allow(clippy::integer_division)]
-/// # Write From 7 Digits.
-///
-/// This covers all values under 10,000,000.
-unsafe fn write_from_7(buf: *mut u8, num: u32) {
-	ptr::write(buf, (num / 1_000_000) as u8 | utility::MASK_U8);
-	write_from_6(write_comma(buf.add(1)), num % 1_000_000);
-}
-
-#[allow(clippy::integer_division)]
-/// # Write From 6 Digits.
-///
-/// This covers all values under 1,000,000.
-unsafe fn write_from_6(buf: *mut u8, num: u32) {
-	utility::write_u8_3(buf, (num / 1_000) as u16);
-	utility::write_u8_3(write_comma(buf.add(3)), (num % 1_000) as u16);
-}
-
-#[allow(clippy::integer_division)]
-/// # Write From 5 Digits.
-///
-/// This covers all values under 100,000.
-unsafe fn write_from_5(buf: *mut u8, num: u32) {
-	utility::write_u8_2(buf, (num / 1_000) as u8);
-	utility::write_u8_3(write_comma(buf.add(2)), (num % 1_000) as u16);
-}
-
-#[allow(clippy::integer_division)]
-/// # Write From 4 Digits.
-///
-/// This covers all values under 10,000.
-unsafe fn write_from_4(buf: *mut u8, num: u16) {
-	ptr::write(buf, (num / 1_000) as u8 | utility::MASK_U8);
-	utility::write_u8_3(write_comma(buf.add(1)), num % 1_000);
 }
 
 
@@ -419,13 +359,38 @@ mod tests {
 	}
 
 	#[test]
+	fn t_other() {
+		let mut tmp = NiceInt::from(10_usize);
+		assert_eq!(tmp.is_empty(), false);
+		assert_eq!(tmp.len(), 2);
+		assert_eq!(tmp.is_zero(), false);
+
+		tmp = NiceInt::from(10_000_usize);
+		assert_eq!(tmp.is_empty(), false);
+		assert_eq!(tmp.len(), 6);
+		assert_eq!(tmp.is_zero(), false);
+
+		tmp = NiceInt::default();
+		assert_eq!(tmp.is_empty(), true);
+		assert_eq!(tmp.len(), 0);
+		assert_eq!(tmp.is_zero(), false);
+
+		tmp = NiceInt::from(0_usize);
+		assert_eq!(tmp.is_empty(), false);
+		assert_eq!(tmp.len(), 1);
+		assert_eq!(tmp.is_zero(), true);
+	}
+
+	#[test]
 	fn t_percent_f64() {
 		unsafe {
+			assert_eq!(NiceInt::percent_f64(-30.0_f64).as_str(), "0.00%");
 			assert_eq!(NiceInt::percent_f64(0.0_f64).as_str(), "0.00%");
 			assert_eq!(NiceInt::percent_f64(0.5656_f64).as_str(), "56.56%");
 			assert_eq!(NiceInt::percent_f64(0.2_f64).as_str(), "20.00%");
 			assert_eq!(NiceInt::percent_f64(0.18999_f64).as_str(), "18.99%");
 			assert_eq!(NiceInt::percent_f64(1.0_f64).as_str(), "100.00%");
+			assert_eq!(NiceInt::percent_f64(1.1_f64).as_str(), "100.00%");
 		}
 	}
 }
