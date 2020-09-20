@@ -86,14 +86,14 @@ impl From<u8> for NiceInt {
 impl From<u16> for NiceInt {
 	#[allow(clippy::integer_division)]
 	fn from(num: u16) -> Self {
-		// Smaller integers have more efficient conversions.
-		if num <= 255 { return Self::from(num as u8); }
-
 		unsafe {
 			let mut buf = [MaybeUninit::<u8>::uninit(); 15];
 
 			let len: usize =
 				if num < 1_000 {
+					// Smaller integers have more efficient conversions.
+					if num <= 255 { return Self::from(num as u8); }
+
 					utility::write_u8_3(buf.as_mut_ptr() as *mut u8, num);
 					3_usize
 				}
@@ -119,18 +119,18 @@ impl From<u16> for NiceInt {
 impl From<u32> for NiceInt {
 	#[allow(clippy::integer_division)]
 	fn from(num: u32) -> Self {
-		// Smaller integers have more efficient conversions.
-		if num <= 65_535 {
-			if num <= 255 { return Self::from(num as u8); }
-			else { return Self::from(num as u16); }
-		}
-
 		unsafe {
 			let mut buf = [MaybeUninit::<u8>::uninit(); 15];
 
 			let len: usize =
 				if num < 1_000_000 {
 					if num < 100_000 {
+						// Smaller integers have more efficient conversions.
+						if num <= 65_535 {
+							if num <= 255 { return Self::from(num as u8); }
+							else { return Self::from(num as u16); }
+						}
+
 						write_from_5(buf.as_mut_ptr() as *mut u8, num);
 						6_usize
 					}
@@ -171,25 +171,17 @@ impl From<u32> for NiceInt {
 impl From<u64> for NiceInt {
 	#[allow(clippy::integer_division)]
 	fn from(num: u64) -> Self {
-		// Smaller integers have more efficient conversions.
-		if num <= 4_294_967_295 {
-			if num <= 255 { return Self::from(num as u8); }
-			else if num <= 65_535 { return Self::from(num as u16); }
-			else { return Self::from(num as u32); }
-		}
-		// `NiceInt` don't support values in the trillions.
-		else if num >= MAX_NICE_INT {
-			return Self {
-				inner: *b"999,999,999,999",
-				len: 15,
-			};
-		}
-
 		unsafe {
 			let mut buf = [MaybeUninit::<u8>::uninit(); 15];
 
 			let len: usize =
 				if num < 10_000_000_000 {
+					// Smaller integers have more efficient conversions.
+					if num <= 4_294_967_295 {
+						if num <= 255 { return Self::from(num as u8); }
+						else if num <= 65_535 { return Self::from(num as u16); }
+						else { return Self::from(num as u32); }
+					}
 					write_from_10(buf.as_mut_ptr() as *mut u8, num);
 					13_usize
 				}
@@ -198,6 +190,14 @@ impl From<u64> for NiceInt {
 					14_usize
 				}
 				else {
+					// `NiceInt` don't support values in the trillions.
+					if num >= MAX_NICE_INT {
+						return Self {
+							inner: *b"999,999,999,999",
+							len: 15,
+						};
+					}
+
 					write_from_12(buf.as_mut_ptr() as *mut u8, num);
 					15_usize
 				};
