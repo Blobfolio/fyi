@@ -494,7 +494,7 @@ impl Msg {
 					let dst = buf.as_mut_ptr() as *mut u8;
 
 					// Write the opener.
-					ptr::copy_nonoverlapping(b"\x1b[2m[\x1b[0;34m".as_ptr(), dst, 12);
+					ptr::copy_nonoverlapping(b"\x1b[2m[\x1b[0;34m20".as_ptr(), dst, 14);
 					// Write the space.
 					ptr::write(dst.add(22), b' ');
 					// Write the closer.
@@ -505,17 +505,19 @@ impl Msg {
 						use chrono::{Datelike, Local, Timelike};
 						let now = Local::now();
 
-						utility::write_date(
-							dst.add(12),
+						utility::write_time(
+							dst.add(14),
 							(now.year() as u16).saturating_sub(2000) as u8,
 							now.month() as u8,
-							now.day() as u8
+							now.day() as u8,
+							b'-',
 						);
 						utility::write_time(
 							dst.add(23),
 							now.hour() as u8,
 							now.minute() as u8,
 							now.second() as u8,
+							b':',
 						);
 					}
 

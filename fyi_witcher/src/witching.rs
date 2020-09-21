@@ -649,6 +649,7 @@ impl WitchingInner {
 					h,
 					m,
 					s,
+					b':',
 				);
 			}
 

@@ -113,44 +113,21 @@ pub unsafe fn write_ansi_code_bold(buf: *mut u8, num: u8) -> usize {
 	len + 1
 }
 
-/// # Write Date
+/// # Write Date or Time.
 ///
-/// This writes the year, month, and day into a nice Unix date format,
-/// `YYYY-MM-DD`.
-///
-/// ## Y2.1K
-///
-/// Note: only two digit years are dynamically written; the "20" is assumed
-/// as that won't change for another eighty years.
-///
-/// ## Safety
-///
-/// The pointer must have 10 bytes available, and the numbers must all be in
-/// valid ranges or undefined things will happen.
-pub unsafe fn write_date(buf: *mut u8, y: u8, m: u8, d: u8) {
-	ptr::copy_nonoverlapping(b"20".as_ptr(), buf, 2);
-	write_u8_2(buf.add(2), y);
-	ptr::write(buf.add(4), b'-');
-	write_u8_2(buf.add(5), m);
-	ptr::write(buf.add(7), b'-');
-	write_u8_2(buf.add(8), d);
-}
-
-/// # Write Time
-///
-/// This writes hours, minutes, and seconds into a digital clock-like format,
-/// `00:00:00`.
+/// This is used to quickly write date/time values to a buffer, each number
+/// presented as two digits, separated by `sep`.
 ///
 /// ## Safety
 ///
 /// The pointer must have 8 bytes available, and hours, minutes, and seconds
 /// must all be in valid ranges or undefined things will happen.
-pub unsafe fn write_time(buf: *mut u8, h: u8, m: u8, s: u8) {
-	write_u8_2(buf, h);
-	ptr::write(buf.add(2), b':');
-	write_u8_2(buf.add(3), m);
-	ptr::write(buf.add(5), b':');
-	write_u8_2(buf.add(6), s);
+pub unsafe fn write_time(buf: *mut u8, n1: u8, n2: u8, n3: u8, sep: u8) {
+	write_u8_2(buf, n1);
+	ptr::write(buf.add(2), sep);
+	write_u8_2(buf.add(3), n2);
+	ptr::write(buf.add(5), sep);
+	write_u8_2(buf.add(6), n3);
 }
 
 #[inline]
@@ -300,10 +277,10 @@ mod tests {
 
 	#[test]
 	fn t_write_datetime() {
-		let mut buf = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0];
+		let mut buf = [50, 48, 0, 0, 0, 0, 0, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0];
 		unsafe {
-			write_date(buf.as_mut_ptr(), 20, 9, 18);
-			write_time(buf.as_mut_ptr().add(11), 18, 37, 5);
+			write_time(buf.as_mut_ptr().add(2), 20, 9, 18, b'-');
+			write_time(buf.as_mut_ptr().add(11), 18, 37, 5, b':');
 		}
 
 		assert_eq!(buf, *b"2020-09-18 18:37:05");
