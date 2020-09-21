@@ -96,6 +96,20 @@ adjtime_config.5.gz________deb-old.5.gz_______________devscripts.conf.5.gz______
 	group.finish();
 }
 
+fn write_time(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_msg::utility");
+	group.sample_size(30);
+
+	group.bench_function("write_time()", move |b| {
+		b.iter_with_setup(||
+			([0_u8; 8].as_mut_ptr(), 13, 45, 20), |(v, h, m, s)|
+				unsafe { utility::write_time(v, h, m, s, b':') }
+		)
+	});
+
+	group.finish();
+}
+
 
 
 criterion_group!(
@@ -103,5 +117,6 @@ criterion_group!(
 	concat_slice,
 	hash64,
 	vec_resize_at,
+	write_time,
 );
 criterion_main!(benches);
