@@ -42,4 +42,4 @@ name = "witcher"
 
 [features]
 default = []
-simd = [ "packed_simd", "ahash/specialize", "criterion/real_blackbox" ]
+simd = [ "packed_simd", "criterion/real_blackbox" ]
