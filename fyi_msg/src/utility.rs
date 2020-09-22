@@ -130,20 +130,6 @@ pub unsafe fn write_time(buf: *mut u8, n1: u8, n2: u8, n3: u8, sep: u8) {
 	write_u8_2(buf.add(6), n3);
 }
 
-#[inline]
-/// # Write Double-Digit Time Value.
-///
-/// This writes a number `0..60` as ASCII-fied bytes, e.g. "00" or "13". Any
-/// value over `59` is simply written as "59".
-///
-/// ## Safety
-///
-/// This writes two bytes to a mutable pointer; that pointer must be valid and
-/// allocated accordingly or undefined things will happen.
-pub unsafe fn write_time_dd(buf: *mut u8, num: u8) {
-	write_u8_2(buf, 59.min(num))
-}
-
 /// # Write `u8` as ASCII.
 ///
 /// This method references a quick lookup table to efficiently write a number
@@ -252,27 +238,6 @@ mod tests {
 			assert_eq!(unsafe { write_ansi_code_bold(ptr, i) }, 13);
 			assert_eq!(&buf[0..13], format!("\x1B[1;38;5;{}m", i).as_bytes());
 		}
-	}
-
-	#[test]
-	fn t_time_format_dd() {
-		// Test the supported values.
-		for i in 0..=59 {
-			let mut buf = [0_u8, 0_u8];
-			unsafe { write_time_dd(buf.as_mut_ptr(), i); }
-			assert_eq!(
-				buf,
-				format!("{:02}", i).as_bytes(),
-				"DD for {} is incorrect: {:?}",
-				i,
-				buf
-			);
-		}
-
-		// And make sure overflow works.
-		let mut buf = [0_u8, 0_u8];
-		unsafe { write_time_dd(buf.as_mut_ptr(), 60); }
-		assert_eq!(buf, &b"59"[..]);
 	}
 
 	#[test]
