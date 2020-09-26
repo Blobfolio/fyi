@@ -381,24 +381,16 @@ impl MsgBuffer {
 	///
 	/// This method will panic if the adjustent is larger than any of the
 	/// affected parts.
-	fn decrease(&mut self, mut idx: usize, adj: u16) {
-		idx = (idx << 1) + 1;
-		while idx < 32 {
-			self.toc[idx] -= adj;
-			idx += 1;
-		}
+	fn decrease(&mut self, idx: usize, adj: u16) {
+		self.toc.iter_mut().skip((idx << 1) + 1).for_each(|x| *x -= adj);
 	}
 
 	/// # Increase Indexing From.
 	///
 	/// This increases the length of a partition, nudging all subsequent
 	/// partitions to the right.
-	fn increase(&mut self, mut idx: usize, adj: u16) {
-		idx = (idx << 1) + 1;
-		while idx < 32 {
-			self.toc[idx] += adj;
-			idx += 1;
-		}
+	fn increase(&mut self, idx: usize, adj: u16) {
+		self.toc.iter_mut().skip((idx << 1) + 1).for_each(|x| *x += adj);
 	}
 }
 
