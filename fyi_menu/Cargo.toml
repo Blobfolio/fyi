@@ -9,10 +9,6 @@ publish = false
 [dependencies.fyi_msg]
 path = "../fyi_msg"
 
-[dependencies.packed_simd]
-version = "0.3.*"
-optional = true
-
 [dev-dependencies]
 criterion = "*"
 
@@ -31,7 +27,3 @@ harness = false
 [[bench]]
 name = "fm_utility"
 harness = false
-
-[features]
-default = []
-simd = [ "packed_simd", "criterion/real_blackbox" ]

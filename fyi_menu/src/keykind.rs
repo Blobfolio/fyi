@@ -4,10 +4,20 @@
 **Note:** This is not intended for external use and is subject to change.
 */
 
-#[cfg(feature = "simd")]
-use packed_simd::{
-	u8x4,
-	u8x8,
+#[cfg(target_arch = "x86")]
+use std::arch::x86::{
+	_mm_cmpeq_epi8,
+	_mm_loadu_si128,
+	_mm_movemask_epi8,
+	_mm_set1_epi8
+};
+
+#[cfg(target_arch = "x86_64")]
+use std::arch::x86_64::{
+	_mm_cmpeq_epi8,
+	_mm_loadu_si128,
+	_mm_movemask_epi8,
+	_mm_set1_epi8
 };
 
 
@@ -71,20 +81,6 @@ const fn is_letter(byte: u8) -> bool {
 	(b'a' <= byte && byte <= b'z') || (b'A' <= byte && byte <= b'Z')
 }
 
-#[cfg(not(feature = "simd"))]
-#[must_use]
-#[inline]
-/// # Find First `=`
-///
-/// This is used solely for deciding between [`KeyKind::Long`] and
-/// [`KeyKind::LongV`] variants. It will always be one of the two.
-fn find_eq(txt: &[u8]) -> KeyKind {
-	txt.iter()
-		.position(|x| *x == b'=')
-		.map_or(KeyKind::Long, KeyKind::LongV)
-}
-
-#[cfg(feature = "simd")]
 #[must_use]
 /// # Find First `=`
 ///
@@ -92,46 +88,62 @@ fn find_eq(txt: &[u8]) -> KeyKind {
 /// [`KeyKind::LongV`] variants. It will always be one of the two.
 ///
 /// This method leverages SIMD to search for that pesky `=` sign in chunks of
-/// up to 8 bytes at a time.
+/// up to 16 bytes at a time.
 fn find_eq(txt: &[u8]) -> KeyKind {
 	let len: usize = txt.len();
-	let mut offset: usize = 3;
 
 	// We're checking lengths all along the way so this isn't really unsafe.
-	unsafe {
-		// For long strings, we can check 8 bytes at a time, returning the first
-		// match, if any.
-		while offset + 8 <= len {
-			let res = u8x8::from_slice_unaligned_unchecked(&txt[offset..offset+8])
-				.eq(u8x8::splat(b'='))
-				.bitmask()
-				.trailing_zeros();
-			if res < 8 {
-				return KeyKind::LongV(res as usize + offset);
-			}
+	if 16 <= len && is_x86_feature_detected!("sse2") {
+		unsafe { find_eq_sse2(txt) }
+	}
+	else {
+		let mut offset: usize = 3;
 
-			offset += 8;
+		// And a sad manual check for the remainder.
+		while offset < len {
+			if txt[offset] == b'=' { return KeyKind::LongV(offset); }
+			offset += 1;
 		}
 
-		// We can use the same trick again if the remainder is at least four
-		// bytes.
-		if offset + 4 <= len {
-			let res = u8x4::from_slice_unaligned_unchecked(&txt[offset..offset+4])
-				.eq(u8x4::splat(b'='))
-				.bitmask()
-				.trailing_zeros();
-			if res < 4 {
-				return KeyKind::LongV(res as usize + offset);
-			}
+		KeyKind::Long
+	}
+}
 
-			offset += 4;
+#[allow(clippy::cast_possible_wrap)] // It's fine.
+#[allow(clippy::cast_ptr_alignment)] // It's fine.
+#[target_feature(enable = "sse2")]
+/// # Find First `=` (SSE2).
+///
+/// This is an SSE2/SIMD-optimized implementation of `find_eq` used for strings
+/// that are at least 16 bytes.
+unsafe fn find_eq_sse2(txt: &[u8]) -> KeyKind {
+	let len: usize = txt.len();
+	let ptr = txt.as_ptr();
+	let needle = _mm_set1_epi8(b'=' as i8);
+	let mut offset: usize = 3;
+
+	// Check for matches 16 bytes at a time.
+	while offset + 16 <= len {
+		let haystack = _mm_loadu_si128(ptr.add(offset) as *const _);
+		let eq = _mm_cmpeq_epi8(needle, haystack);
+		let res = _mm_movemask_epi8(eq).trailing_zeros();
+		if res < 16 {
+			return KeyKind::LongV(res as usize + offset);
 		}
+
+		offset += 16;
 	}
 
-	// And a sad manual check for the remainder.
-	while offset < len {
-		if txt[offset] == b'=' { return KeyKind::LongV(offset); }
-		offset += 1;
+	// If there's a remainder, recheck from the end (to fill the
+	// registers).
+	if offset < len {
+		offset = len - 16;
+		let haystack = _mm_loadu_si128(ptr.add(offset) as *const _);
+		let eq = _mm_cmpeq_epi8(needle, haystack);
+		let res = _mm_movemask_epi8(eq).trailing_zeros();
+		if res < 16 {
+			return KeyKind::LongV(res as usize + offset);
+		}
 	}
 
 	KeyKind::Long
@@ -156,5 +168,30 @@ mod tests {
 		assert_eq!(KeyKind::from(&b"--y-p"[..]), KeyKind::Long);
 		assert_eq!(KeyKind::from(&b"--yes=no"[..]), KeyKind::LongV(5));
 		assert_eq!(KeyKind::from(&b"--yes="[..]), KeyKind::LongV(5));
+
+		// Test in and around the 16-char boundary.
+		assert_eq!(KeyKind::from(&b"--yes_="[..]), KeyKind::LongV(6));
+		assert_eq!(KeyKind::from(&b"--yes__="[..]), KeyKind::LongV(7));
+		assert_eq!(KeyKind::from(&b"--yes___="[..]), KeyKind::LongV(8));
+		assert_eq!(KeyKind::from(&b"--yes____="[..]), KeyKind::LongV(9));
+		assert_eq!(KeyKind::from(&b"--yes_____="[..]), KeyKind::LongV(10));
+		assert_eq!(KeyKind::from(&b"--yes______="[..]), KeyKind::LongV(11));
+		assert_eq!(KeyKind::from(&b"--yes_______="[..]), KeyKind::LongV(12));
+		assert_eq!(KeyKind::from(&b"--yes________="[..]), KeyKind::LongV(13));
+		assert_eq!(KeyKind::from(&b"--yes_________="[..]), KeyKind::LongV(14));
+		assert_eq!(KeyKind::from(&b"--yes__________="[..]), KeyKind::LongV(15));
+		assert_eq!(KeyKind::from(&b"--yes___________="[..]), KeyKind::LongV(16));
+		assert_eq!(KeyKind::from(&b"--yes____________="[..]), KeyKind::LongV(17));
+		assert_eq!(KeyKind::from(&b"--yes_____________"[..]), KeyKind::Long);
+
+		// Does this work?
+		assert_eq!(
+			KeyKind::from("--BjörkGuðmundsdóttir".as_bytes()),
+			KeyKind::Long
+		);
+		assert_eq!(
+			KeyKind::from("--BjörkGuðmunds=dóttir".as_bytes()),
+			KeyKind::LongV(17)
+		);
 	}
 }

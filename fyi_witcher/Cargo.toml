@@ -18,10 +18,6 @@ unicode-width = "0.1.*"
 [dependencies.fyi_msg]
 path = "../fyi_msg"
 
-[dependencies.packed_simd]
-version = "0.3.*"
-optional = true
-
 [dev-dependencies]
 criterion = "*"
 
@@ -39,7 +35,3 @@ harness = false
 
 [[example]]
 name = "witcher"
-
-[features]
-default = []
-simd = [ "packed_simd", "criterion/real_blackbox" ]

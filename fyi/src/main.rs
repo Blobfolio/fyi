@@ -42,17 +42,6 @@ RUSTFLAGS="-C link-arg=-s" cargo install \
     --target x86_64-unknown-linux-gnu
 ```
 
-For a 10-20% boost in performance — perhaps a whole millisecond! — you can
-build a SIMD-optimized version using Rust nightly:
-```bash
-RUSTFLAGS="-C link-arg=-s" cargo +nightly -Z package-features \
-    install \
-    --git https://github.com/Blobfolio/fyi.git \
-    --bin fyi \
-    --features simd \
-    --target x86_64-unknown-linux-gnu
-```
-
 
 
 ## Usage

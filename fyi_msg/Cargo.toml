@@ -10,10 +10,6 @@ publish = false
 ahash = "0.4.*"
 chrono = "0.4.*"
 
-[dependencies.packed_simd]
-version = "0.3.*"
-optional = true
-
 [dev-dependencies]
 criterion = "*"
 num-format = "0.4.*"
@@ -36,7 +32,3 @@ harness = false
 
 [[example]]
 name = "msg"
-
-[features]
-default = []
-simd = [ "packed_simd", "criterion/real_blackbox" ]

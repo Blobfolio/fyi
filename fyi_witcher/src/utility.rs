@@ -2,14 +2,10 @@
 # FYI Witcher: Utility Methods.
 */
 
-#[cfg(feature = "simd")]
-use packed_simd::{
-	u8x4,
-	u8x8,
-	u8x16,
-	u8x32,
-	u8x64,
-};
+#![allow(clippy::wildcard_imports)]
+
+#[cfg(target_arch = "x86")]    use std::arch::x86::*;
+#[cfg(target_arch = "x86_64")] use std::arch::x86_64::*;
 
 use std::{
 	ops::Range,
@@ -19,87 +15,116 @@ use unicode_width::UnicodeWidthChar;
 
 
 
-#[cfg(not(feature = "simd"))]
-#[must_use]
-#[inline]
-/// # Count Line Breaks.
-///
-/// This simply adds up the occurrences of `\n` within a byte string.
-pub fn count_nl(src: &[u8]) -> usize {
-	src.iter().filter(|v| **v == b'\n').count()
-}
-
-#[cfg(feature = "simd")]
 #[must_use]
 /// # Count Line Breaks.
 ///
 /// This simply adds up the occurrences of `\n` within a byte string.
 pub fn count_nl(src: &[u8]) -> usize {
 	let len: usize = src.len();
+
+	if 32 <= len && is_x86_feature_detected!("avx2") {
+		unsafe { count_nl_avx2(src) }
+	}
+	else if 16 <= len && is_x86_feature_detected!("sse2") {
+		unsafe { count_nl_sse2(src) }
+	}
+	else {
+		let mut total: usize = 0;
+		let mut offset: usize = 0;
+		while offset < len {
+			if src[offset] == b'\n' { total += 1; }
+			offset += 1;
+		}
+
+		total
+	}
+}
+
+#[allow(clippy::cast_possible_wrap)] // It's fine.
+#[allow(clippy::cast_ptr_alignment)] // It's fine.
+#[target_feature(enable = "avx2")]
+/// # Count Line Breaks (AVX2).
+///
+/// This is an AVX2/SIMD-optimized implementation of the line counter. It is
+/// used for strings that are at least 32 bytes.
+unsafe fn count_nl_avx2(src: &[u8]) -> usize {
+	const MASK: [u8; 64] = [
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+		255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+	];
+
+	let len: usize = src.len();
+	let ptr = src.as_ptr();
+	let needle = _mm256_set1_epi8(b'\n' as i8);
+
 	let mut offset: usize = 0;
-	let mut total: usize = 0;
-
-	// We're checking lengths all along the way, so this isn't really unsafe.
-	unsafe {
-		// Break indefinitely long strings into chunks of 64 characters, counting
-		// newlines as we go.
-		if offset + 64 <= len {
-			let mut tmp = u8x64::splat(0);
-			loop {
-				tmp += u8x64::from_slice_unaligned_unchecked(&src[offset..offset+64])
-					.eq(u8x64::splat(b'\n'))
-					.select(u8x64::splat(1), u8x64::splat(0));
-
-				offset += 64;
-				if len < offset + 64 { break; }
-			}
-			total += tmp.wrapping_sum() as usize;
-		}
-
-		// We can use the same trick for progressively smaller power-of-two-sized
-		// chunks, but none of these will hit more than once, so their totals can
-		// be added directly without looping.
-		if offset + 32 <= len {
-			total += u8x32::from_slice_unaligned_unchecked(&src[offset..offset+32])
-				.eq(u8x32::splat(b'\n'))
-				.select(u8x32::splat(1), u8x32::splat(0))
-				.wrapping_sum() as usize;
-			offset += 32;
-		}
-
-		if offset + 16 <= len {
-			total += u8x16::from_slice_unaligned_unchecked(&src[offset..offset+16])
-				.eq(u8x16::splat(b'\n'))
-				.select(u8x16::splat(1), u8x16::splat(0))
-				.wrapping_sum() as usize;
-			offset += 16;
-		}
-
-		if offset + 8 <= len {
-			total += u8x8::from_slice_unaligned_unchecked(&src[offset..offset+8])
-				.eq(u8x8::splat(b'\n'))
-				.select(u8x8::splat(1), u8x8::splat(0))
-				.wrapping_sum() as usize;
-			offset += 8;
-		}
-
-		if offset + 4 <= len {
-			total += u8x4::from_slice_unaligned_unchecked(&src[offset..offset+4])
-				.eq(u8x4::splat(b'\n'))
-				.select(u8x4::splat(1), u8x4::splat(0))
-				.wrapping_sum() as usize;
-			offset += 4;
-		}
+	let mut total = _mm256_setzero_si256();
+	while offset + 32 <= len {
+		total = _mm256_sub_epi8(
+			total,
+			_mm256_cmpeq_epi8(_mm256_loadu_si256(ptr.add(offset) as *const _), needle)
+		);
+		offset += 32;
 	}
 
-	// The last few bytes have to be checked manually, but that's fine. The
-	// remainder can't be much.
-	while offset < len {
-		if src[offset] == b'\n' { total += 1; }
-		offset += 1;
+	if offset < len {
+		total = _mm256_sub_epi8(
+			total,
+			_mm256_and_si256(
+				_mm256_cmpeq_epi8(_mm256_loadu_si256(ptr.add(len - 32) as *const _), needle),
+				_mm256_loadu_si256(MASK.as_ptr().add(len - offset) as *const _)
+			)
+		);
 	}
 
-	total
+	let sums = _mm256_sad_epu8(total, _mm256_setzero_si256());
+	(
+		_mm256_extract_epi64(sums, 0) + _mm256_extract_epi64(sums, 1) +
+		_mm256_extract_epi64(sums, 2) + _mm256_extract_epi64(sums, 3)
+	) as usize
+}
+
+#[allow(clippy::cast_possible_wrap)] // It's fine.
+#[allow(clippy::cast_ptr_alignment)] // It's fine.
+#[target_feature(enable = "sse2")]
+/// # Count Line Breaks (SSE2).
+///
+/// This is an SSE2/SIMD-optimized implementation of the line counter. It is
+/// used for strings that are at least 16 bytes.
+unsafe fn count_nl_sse2(src: &[u8]) -> usize {
+	const MASK: [u8; 32] = [
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+	];
+
+	let len: usize = src.len();
+	let ptr = src.as_ptr();
+	let needle = _mm_set1_epi8(b'\n' as i8);
+
+	let mut offset: usize = 0;
+	let mut total = _mm_setzero_si128();
+	while offset + 16 <= len {
+		total = _mm_sub_epi8(
+			total,
+			_mm_cmpeq_epi8(_mm_loadu_si128(ptr.add(offset) as *const _), needle)
+		);
+		offset += 16;
+	}
+
+	if offset < len {
+		total = _mm_sub_epi8(
+			total,
+			_mm_and_si128(
+				_mm_cmpeq_epi8(_mm_loadu_si128(ptr.add(len - 16) as *const _), needle),
+				_mm_loadu_si128(MASK.as_ptr().add(len - offset) as *const _)
+			)
+		);
+	}
+
+	let sums = _mm_sad_epu8(total, _mm_setzero_si128());
+	(_mm_extract_epi32(sums, 0) + _mm_extract_epi32(sums, 2)) as usize
 }
 
 #[must_use]
@@ -244,7 +269,7 @@ pub const fn hms_u32(mut num: u32) -> [u8; 3] {
 ///
 /// This is exactly the way [`std::path::PathBuf`] handles it.
 pub fn path_as_bytes(p: &std::path::PathBuf) -> &[u8] {
-    unsafe { &*(p.as_os_str() as *const std::ffi::OsStr as *const [u8]) }
+	unsafe { &*(p.as_os_str() as *const std::ffi::OsStr as *const [u8]) }
 }
 
 #[must_use]

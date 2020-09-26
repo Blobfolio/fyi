@@ -146,15 +146,17 @@ macro_rules! from_fast_concat {
 				unsafe {
 					Self(MsgBuffer::from_raw_parts(
 						src,
-						0_u16, 0_u16, // Indentation.
-						0_u16, 0_u16, // Timestamp.
-						0_u16, 0_u16, // Prefix.
-						0_u16, end,   // Message.
-						end, end,     // Suffix.
-						// Unused...
-						end, end, end, end, end, end, end, end, end,
-						end, end, end, end, end, end, end, end, end,
-						end, end, end, end
+						[
+							0_u16, 0_u16, // Indentation.
+							0_u16, 0_u16, // Timestamp.
+							0_u16, 0_u16, // Prefix.
+							0_u16, end,   // Message.
+							end, end,     // Suffix.
+							// Unused...
+							end, end, end, end, end, end, end, end, end,
+							end, end, end, end, end, end, end, end, end,
+							end, end, end, end
+						]
 					))
 				}
 			}
@@ -176,15 +178,17 @@ impl From<Vec<u8>> for Msg {
 		unsafe {
 			Self(MsgBuffer::from_raw_parts(
 				src,
-				0_u16, 0_u16, // Indentation.
-				0_u16, 0_u16, // Timestamp.
-				0_u16, 0_u16, // Prefix.
-				0_u16, end,   // Message.
-				end, end,     // Suffix.
-				// Unused...
-				end, end, end, end, end, end, end, end, end,
-				end, end, end, end, end, end, end, end, end,
-				end, end, end, end
+				[
+					0_u16, 0_u16, // Indentation.
+					0_u16, 0_u16, // Timestamp.
+					0_u16, 0_u16, // Prefix.
+					0_u16, end,   // Message.
+					end, end,     // Suffix.
+					// Unused...
+					end, end, end, end, end, end, end, end, end,
+					end, end, end, end, end, end, end, end, end,
+					end, end, end, end
+				]
 			))
 		}
 	}
@@ -219,15 +223,17 @@ impl Msg {
 		let end: u16 = m_len as u16 + p_len;
 		Self(MsgBuffer::from_raw_parts(
 			buf,
-			0_u16, 0_u16, // Indentation.
-			0_u16, 0_u16, // Timestamp.
-			0_u16, p_len, // Prefix.
-			p_len, end,   // Message.
-			end, end,     // Suffix.
-			// Unused...
-			end, end, end, end, end, end, end, end, end,
-			end, end, end, end, end, end, end, end, end,
-			end, end, end, end
+			[
+				0_u16, 0_u16, // Indentation.
+				0_u16, 0_u16, // Timestamp.
+				0_u16, p_len, // Prefix.
+				p_len, end,   // Message.
+				end, end,     // Suffix.
+				// Unused...
+				end, end, end, end, end, end, end, end, end,
+				end, end, end, end, end, end, end, end, end,
+				end, end, end, end
+			]
 		))
 	}
 

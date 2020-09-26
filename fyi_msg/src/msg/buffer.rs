@@ -2,7 +2,6 @@
 # FYI Msg: Buffer
 */
 
-#[cfg(feature = "simd")] use packed_simd::u16x32;
 use std::{
 	fmt,
 	hash::{
@@ -50,8 +49,7 @@ use std::{
 /// breaking ways.
 pub struct MsgBuffer {
 	buf: Vec<u8>,
-	#[cfg(feature = "simd")] toc: u16x32,
-	#[cfg(not(feature = "simd"))] toc: [u16; 32],
+	toc: [u16; 32],
 }
 
 impl Deref for MsgBuffer {
@@ -97,9 +95,6 @@ impl PartialEq<Vec<u8>> for MsgBuffer {
 ///
 /// This section provides methods for generating new `MsgBuffer` objects.
 impl MsgBuffer {
-	#[cfg(feature = "simd")]
-	#[allow(clippy::too_many_arguments)] // Sorry not sorry.
-	#[allow(clippy::similar_names)] // Repetition is desirable here.
 	#[must_use]
 	#[inline]
 	/// # Instantiate From Raw Parts.
@@ -113,7 +108,7 @@ impl MsgBuffer {
 	/// ```no_run
 	/// use fyi_msg::MsgBuffer;
 	///
-	/// let buf = unsafe { MsgBuffer::from_raw_parts(vec![1, 2, 3], 0_u16...) };
+	/// let buf = unsafe { MsgBuffer::from_raw_parts(vec![1, 2, 3], [0_u16; 32]) };
 	/// ```
 	///
 	/// ## Safety
@@ -128,95 +123,8 @@ impl MsgBuffer {
 	/// The table of contents must be properly aligned and ordered. Any
 	/// "unused" parts must begin and end at the maximum position of the "used"
 	/// parts, e.g. `[0, 5, 5, 5, 5, 5, 5, 5...]`.
-	pub unsafe fn from_raw_parts(
-		buf: Vec<u8>,
-		s0: u16, e0: u16,
-		s1: u16, e1: u16,
-		s2: u16, e2: u16,
-		s3: u16, e3: u16,
-		s4: u16, e4: u16,
-		s5: u16, e5: u16,
-		s6: u16, e6: u16,
-		s7: u16, e7: u16,
-		s8: u16, e8: u16,
-		s9: u16, e9: u16,
-		s10: u16, e10: u16,
-		s11: u16, e11: u16,
-		s12: u16, e12: u16,
-		s13: u16, e13: u16,
-		s14: u16, e14: u16,
-		s15: u16, e15: u16,
-	) -> Self {
-		Self {
-			buf,
-			toc: u16x32::new(
-				s0, e0, s1, e1, s2, e2, s3, e3, s4, e4,
-				s5, e5, s6, e6, s7, e7, s8, e8, s9, e9,
-				s10, e10, s11, e11, s12, e12, s13, e13,
-				s14, e14, s15, e15,
-			)
-		}
-	}
-
-	#[cfg(not(feature = "simd"))]
-	#[allow(clippy::too_many_arguments)] // Sorry not sorry.
-	#[allow(clippy::similar_names)] // Repetition is desirable here.
-	#[must_use]
-	#[inline]
-	/// # Instantiate From Raw Parts.
-	///
-	/// This directly sets the struct's fields, exactly like constructing it
-	/// manually would, but since the fields are private, this is how that's
-	/// done.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::MsgBuffer;
-	///
-	/// let buf = unsafe { MsgBuffer::from_raw_parts(vec![1, 2, 3], 0_u16...) };
-	/// ```
-	///
-	/// ## Safety
-	///
-	/// No validation is performed; the data must make sense or undefined
-	/// things will happen.
-	///
-	/// The total buffer length is limited to [`u16::MAX`] — or more
-	/// specifically any portion defined by a partition may not land outside
-	/// the `u16` range.
-	///
-	/// The table of contents must be properly aligned and ordered. Any
-	/// "unused" parts must begin and end at the maximum position of the "used"
-	/// parts, e.g. `[0, 5, 5, 5, 5, 5, 5, 5...]`.
-	pub unsafe fn from_raw_parts(
-		buf: Vec<u8>,
-		s0: u16, e0: u16,
-		s1: u16, e1: u16,
-		s2: u16, e2: u16,
-		s3: u16, e3: u16,
-		s4: u16, e4: u16,
-		s5: u16, e5: u16,
-		s6: u16, e6: u16,
-		s7: u16, e7: u16,
-		s8: u16, e8: u16,
-		s9: u16, e9: u16,
-		s10: u16, e10: u16,
-		s11: u16, e11: u16,
-		s12: u16, e12: u16,
-		s13: u16, e13: u16,
-		s14: u16, e14: u16,
-		s15: u16, e15: u16,
-	) -> Self {
-		Self {
-			buf,
-			toc: [
-				s0, e0, s1, e1, s2, e2, s3, e3, s4, e4,
-				s5, e5, s6, e6, s7, e7, s8, e8, s9, e9,
-				s10, e10, s11, e11, s12, e12, s13, e13,
-				s14, e14, s15, e15,
-			]
-		}
+	pub unsafe fn from_raw_parts(buf: Vec<u8>, toc: [u16; 32]) -> Self {
+		Self { buf, toc }
 	}
 }
 
@@ -297,7 +205,7 @@ impl MsgBuffer {
 	/// use fyi_msg::MsgBuffer;
 	///
 	/// unsafe {
-	///     let mut buf = MsgBuffer::from_raw_parts(Vec::new(), 0_u16...);
+	///     let mut buf = MsgBuffer::from_raw_parts(Vec::new(), [0_u16; 32]);
 	///
 	///     assert_eq!(buf.deref(), b"");
 	///     assert_eq!(buf.len_unchecked(0), 0);
@@ -423,7 +331,7 @@ impl MsgBuffer {
 	/// ## Safety
 	///
 	/// Undefined things will happen if `idx` is out of bounds.
-	pub unsafe fn is_empty_unchecked(&self, idx: usize) -> bool {
+	pub const unsafe fn is_empty_unchecked(&self, idx: usize) -> bool {
 		self.start_unchecked(idx) == self.end_unchecked(idx)
 	}
 
@@ -436,11 +344,10 @@ impl MsgBuffer {
 	/// ## Safety
 	///
 	/// Undefined things will happen if `idx` is out of bounds.
-	pub unsafe fn len_unchecked(&self, idx: usize) -> u16 {
+	pub const unsafe fn len_unchecked(&self, idx: usize) -> u16 {
 		self.end_unchecked(idx) - self.start_unchecked(idx)
 	}
 
-	#[cfg(not(feature = "simd"))]
 	#[must_use]
 	#[inline]
 	/// # Part Start (Unchecked).
@@ -452,21 +359,6 @@ impl MsgBuffer {
 	/// Undefined things will happen if `idx` is out of bounds.
 	pub const unsafe fn start_unchecked(&self, idx: usize) -> u16 { self.toc[idx * 2] }
 
-	#[cfg(feature = "simd")]
-	#[must_use]
-	#[inline]
-	/// # Part Start (Unchecked).
-	///
-	/// This returns the inclusive buffer starting index  for a given part.
-	///
-	/// ## Safety
-	///
-	/// Undefined things will happen if `idx` is out of bounds.
-	pub unsafe fn start_unchecked(&self, idx: usize) -> u16 {
-		self.toc.extract_unchecked(idx << 1)
-	}
-
-	#[cfg(not(feature = "simd"))]
 	#[must_use]
 	#[inline]
 	/// # Part End (Unchecked).
@@ -480,35 +372,6 @@ impl MsgBuffer {
 		self.toc[(idx << 1) + 1]
 	}
 
-	#[cfg(feature = "simd")]
-	#[must_use]
-	#[inline]
-	/// # Part End (Unchecked).
-	///
-	/// This returns the exclusive buffer endind index for a given part.
-	///
-	/// ## Safety
-	///
-	/// Undefined things will happen if `idx` is out of bounds.
-	pub unsafe fn end_unchecked(&self, idx: usize) -> u16 {
-		self.toc.extract_unchecked((idx << 1) + 1)
-	}
-
-	#[cfg(feature = "simd")]
-	/// # Decrease Indexing From.
-	///
-	/// This decreases the length of a partition, nudging all subsequent
-	/// partitions to the left.
-	///
-	/// ## Panics
-	///
-	/// This method will panic if the adjustent is larger than any of the
-	/// affected parts.
-	fn decrease(&mut self, idx: usize, adj: u16) {
-		self.toc -= adjustment_mask(idx, adj)
-	}
-
-	#[cfg(not(feature = "simd"))]
 	/// # Decrease Indexing From.
 	///
 	/// This decreases the length of a partition, nudging all subsequent
@@ -526,16 +389,6 @@ impl MsgBuffer {
 		}
 	}
 
-	#[cfg(feature = "simd")]
-	/// # Increase Indexing From.
-	///
-	/// This increases the length of a partition, nudging all subsequent
-	/// partitions to the right.
-	fn increase(&mut self, idx: usize, adj: u16) {
-		self.toc += adjustment_mask(idx, adj)
-	}
-
-	#[cfg(not(feature = "simd"))]
 	/// # Increase Indexing From.
 	///
 	/// This increases the length of a partition, nudging all subsequent
@@ -551,7 +404,7 @@ impl MsgBuffer {
 
 
 
-#[cfg(feature = "simd")]
+/*
 /// # Generate Adjustment Mask From Offset.
 ///
 /// Offsets exclusively land on a partition's ending point, and affect all
@@ -578,6 +431,7 @@ fn adjustment_mask(idx: usize, adj: u16) -> u16x32 {
 		_ => panic!("Index out of range."),
 	}
 }
+*/
 
 
 
@@ -589,10 +443,12 @@ mod tests {
 	fn replace() { unsafe {
 		let mut buf = MsgBuffer::from_raw_parts(
 			vec![0, 0, 1, 1, 0, 0],
-			2, 4,
-			4, 6,
-			6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-			6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6
+			[
+				2, 4,
+				4, 6,
+				6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+				6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6
+			]
 		);
 
 		// Bigger.
@@ -644,10 +500,12 @@ mod tests {
 	fn zero() { unsafe {
 		let mut buf = MsgBuffer::from_raw_parts(
 			vec![0, 0, 1, 1, 0, 0],
-			2, 4,
-			4, 6,
-			6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-			6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6
+			[
+				2, 4,
+				4, 6,
+				6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+				6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6
+			]
 		);
 
 		// Empty.

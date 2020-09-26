@@ -20,12 +20,6 @@ in the `master` branch should always be in a "working" state, breaking changes
 and major refactors may be introduced between releases.
 
 (This should probably *not* be used in production-ready applications.)
-
-
-
-## Crate Features
-
-* `simd`: This feature enables some SIMD optimizations courtesy of [`packed_simd`](https://crates.io/crates/packed_simd) for minor performance gains. This requires Rust nightly.
 */
 
 #![warn(clippy::filetype_is_file)]

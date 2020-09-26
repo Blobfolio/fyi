@@ -8,7 +8,6 @@ use crate::{
 	Witching,
 };
 use fyi_msg::utility::hash64;
-#[cfg(feature = "simd")] use packed_simd::u8x8;
 use rayon::prelude::*;
 use std::{
 	borrow::Borrow,
@@ -108,7 +107,6 @@ impl Witcher {
 		self
 	}
 
-	#[cfg(not(feature = "simd"))]
 	#[must_use]
 	/// # With Extension Filter.
 	///
@@ -129,13 +127,15 @@ impl Witcher {
 	///     .build();
 	/// ```
 	pub fn with_ext1(mut self, ext: &'static [u8]) -> Self {
-		self.cb = Box::new(move |p: &PathBuf|
-			utility::ends_with_ignore_ascii_case(utility::path_as_bytes(p), ext)
-		);
+		let e_len: usize = ext.len();
+		self.cb = Box::new(move |p: &PathBuf| {
+			let p: &[u8] = utility::path_as_bytes(p);
+			let p_len: usize = p.len();
+			p_len >= e_len && p.iter().skip(p_len - e_len).zip(ext).all(|(a, b)| a.to_ascii_lowercase() == *b)
+		});
 		self
 	}
 
-	#[cfg(not(feature = "simd"))]
 	#[must_use]
 	/// # With Extensions (2) Filter.
 	///
@@ -152,15 +152,18 @@ impl Witcher {
 	///     .build();
 	/// ```
 	pub fn with_ext2(mut self, ext1: &'static [u8], ext2: &'static [u8]) -> Self {
+		let e1_len: usize = ext1.len();
+		let e2_len: usize = ext2.len();
 		self.cb = Box::new(move |p: &PathBuf| {
-			let bytes: &[u8] = utility::path_as_bytes(p);
-			utility::ends_with_ignore_ascii_case(bytes, ext1) ||
-			utility::ends_with_ignore_ascii_case(bytes, ext2)
+			let p: &[u8] = utility::path_as_bytes(p);
+			let p_len: usize = p.len();
+
+			p_len >= e1_len && p.iter().skip(p_len - e1_len).zip(ext1).all(|(a, b)| a.to_ascii_lowercase() == *b) ||
+			p_len >= e2_len && p.iter().skip(p_len - e2_len).zip(ext2).all(|(a, b)| a.to_ascii_lowercase() == *b)
 		});
 		self
 	}
 
-	#[cfg(not(feature = "simd"))]
 	#[must_use]
 	/// # With Extensions (3) Filter.
 	///
@@ -182,123 +185,17 @@ impl Witcher {
 		ext2: &'static [u8],
 		ext3: &'static [u8]
 	) -> Self {
+		let e1_len: usize = ext1.len();
+		let e2_len: usize = ext2.len();
+		let e3_len: usize = ext3.len();
 		self.cb = Box::new(move |p: &PathBuf| {
-			let bytes: &[u8] = utility::path_as_bytes(p);
-			utility::ends_with_ignore_ascii_case(bytes, ext1) ||
-			utility::ends_with_ignore_ascii_case(bytes, ext2) ||
-			utility::ends_with_ignore_ascii_case(bytes, ext3)
+			let p: &[u8] = utility::path_as_bytes(p);
+			let p_len: usize = p.len();
+
+			p_len >= e1_len && p.iter().skip(p_len - e1_len).zip(ext1).all(|(a, b)| a.to_ascii_lowercase() == *b) ||
+			p_len >= e2_len && p.iter().skip(p_len - e2_len).zip(ext2).all(|(a, b)| a.to_ascii_lowercase() == *b) ||
+			p_len >= e3_len && p.iter().skip(p_len - e3_len).zip(ext3).all(|(a, b)| a.to_ascii_lowercase() == *b)
 		});
-		self
-	}
-
-	#[cfg(feature = "simd")]
-	#[must_use]
-	/// # With Extension Filter.
-	///
-	/// This method — and [`Witcher::with_ext2`], [`Witcher::with_ext3`] — can be faster for
-	/// matching simple file extensions than [`Witcher::with_regex`],
-	/// particularly if regular expressions are not used anywhere else.
-	///
-	/// Comparisons are done case-insensitively from the leading periods in the
-	/// needle — `ext1` — and haystack — the path. Extensions must be at least
-	/// 2 bytes (e.g. ".h") and no longer than 8 bytes (e.g. ".longone").
-	///
-	/// Note: The extension must include a leading period or nothing will match.
-	///
-	/// ## Panics
-	///
-	/// This method will panic if the extension is greater than 8 bytes.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_witcher::Witcher;
-	///
-	/// let files = Witcher::default()
-	///     .with_path("/my/dir")
-	///     .with_ext1(b".jpg")
-	///     .build();
-	/// ```
-	pub fn with_ext1(mut self, ext1: &[u8]) -> Self {
-		self.cb = {
-			let ext1 = with_ext_key(ext1);
-			Box::new(move |p: &PathBuf| ext1.eq(with_ext_path_key(utility::path_as_bytes(p))).all())
-		};
-
-		self
-	}
-
-	#[cfg(feature = "simd")]
-	#[must_use]
-	/// # With Extensions (2) Filter.
-	///
-	/// Note: The extensions should include their leading periods.
-	///
-	/// ## Panics
-	///
-	/// This method will panic if any extension is greater than 8 bytes.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_witcher::Witcher;
-	///
-	/// let files = Witcher::default()
-	///     .with_path("/my/dir")
-	///     .with_ext2(b".jpg", b".jpeg")
-	///     .build();
-	/// ```
-	pub fn with_ext2(mut self, ext1: &[u8], ext2: &[u8]) -> Self {
-		self.cb = {
-			let ext1 = with_ext_key(ext1);
-			let ext2 = with_ext_key(ext2);
-
-			Box::new(move |p: &PathBuf| {
-				let src = with_ext_path_key(utility::path_as_bytes(p));
-				ext1.eq(src).all() || ext2.eq(src).all()
-			})
-		};
-
-		self
-	}
-
-	#[cfg(feature = "simd")]
-	#[must_use]
-	/// # With Extensions (3) Filter.
-	///
-	/// Note: The extensions should include their leading periods.
-	///
-	/// ## Panics
-	///
-	/// This method will panic if any extension is greater than 8 bytes.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_witcher::Witcher;
-	///
-	/// let files = Witcher::default()
-	///     .with_path("/my/dir")
-	///     .with_ext3(b".jpg", b".jpeg", b".png")
-	///     .build();
-	/// ```
-	pub fn with_ext3(
-		mut self,
-		ext1: &'static [u8],
-		ext2: &'static [u8],
-		ext3: &'static [u8]
-	) -> Self {
-		self.cb = {
-			let ext1 = with_ext_key(ext1);
-			let ext2 = with_ext_key(ext2);
-			let ext3 = with_ext_key(ext3);
-
-			Box::new(move |p: &PathBuf| {
-				let src = with_ext_path_key(utility::path_as_bytes(p));
-				ext1.eq(src).all() || ext2.eq(src).all() || ext3.eq(src).all()
-			})
-		};
-
 		self
 	}
 
@@ -451,76 +348,6 @@ impl Witcher {
 			});
 		}
 	}
-}
-
-
-
-#[cfg(feature = "simd")]
-/// # SIMD Haystack
-///
-/// This method converts a path extension (e.g. `b".jpg"`) into an 8-lane SIMD
-/// vector for easy comparison.
-///
-/// Note the leading period. This should be present in passed values.
-///
-/// Extensions requiring fewer than 8 lanes are zero-padded on the left.
-fn with_ext_key(ext: &[u8]) -> u8x8 {
-	match ext.len() {
-		2 => u8x8::new(0, 0, 0, 0, 0, 0, b'.', ext[1].to_ascii_lowercase()),
-		3 => u8x8::new(0, 0, 0, 0, 0, b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase()),
-		4 => u8x8::new(0, 0, 0, 0, b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase()),
-		5 => u8x8::new(0, 0, 0, b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase()),
-		6 => u8x8::new(0, 0, b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase(), ext[5].to_ascii_lowercase()),
-		7 => u8x8::new(0, b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase(), ext[5].to_ascii_lowercase(), ext[6].to_ascii_lowercase()),
-		8 => u8x8::new(b'.', ext[1].to_ascii_lowercase(), ext[2].to_ascii_lowercase(), ext[3].to_ascii_lowercase(), ext[4].to_ascii_lowercase(), ext[5].to_ascii_lowercase(), ext[6].to_ascii_lowercase(), ext[7].to_ascii_lowercase()),
-		_ => u8x8::splat(0),
-	}
-}
-
-#[cfg(feature = "simd")]
-/// # SIMD Path Extension.
-///
-/// This method plucks the extension piece off a [`PathBuf`] and converts it
-/// into a SIMD vector for comparison.
-///
-/// Because we're only comparing 8-lane values, if no period is found after 8
-/// checks, a zeroed vector is returned instead.
-fn with_ext_path_key(ext: &[u8]) -> u8x8 {
-	let len: usize = ext.len();
-	if len >= 8 {
-		use packed_simd::m8x8;
-
-		let mut raw = unsafe { u8x8::from_slice_unaligned_unchecked(&ext[len-8..]) };
-
-		// Calculate the position of the extension portion — including the
-		// period — from the bitmask's leading zeros. Inclusivity means taking
-		// one value more than the result, unless that result is eight, which
-		// means no match.
-		raw = match raw.eq(u8x8::splat(b'.')).bitmask().leading_zeros() {
-			1 => m8x8::new(false, false, false, false, false, false, true, true).select(raw, u8x8::splat(0)),
-			2 => m8x8::new(false, false, false, false, false, true, true, true).select(raw, u8x8::splat(0)),
-			3 => m8x8::new(false, false, false, false, true, true, true, true).select(raw, u8x8::splat(0)),
-			4 => m8x8::new(false, false, false, true, true, true, true, true).select(raw, u8x8::splat(0)),
-			5 => m8x8::new(false, false, true, true, true, true, true, true).select(raw, u8x8::splat(0)),
-			6 => m8x8::new(false, true, true, true, true, true, true, true).select(raw, u8x8::splat(0)),
-			7 => raw,
-			_ => return u8x8::splat(0),
-		};
-
-		// This terrible bit of wizardry adds `32` to anything between `65..=90`
-		// to force lower case. As we already have a SIMD vector, this is
-		// cheaper than reslicing and going through `with_ext_key()`.
-		return (raw.ge(u8x8::splat(b'A')) & raw.le(u8x8::splat(b'Z'))).select(raw | u8x8::splat(32), raw);
-	}
-	else if len > 1 {
-		for i in 1..=8.min(len) {
-			if ext[len - i] == b'.' {
-				return with_ext_key(&ext[len - i..]);
-			}
-		}
-	}
-
-	u8x8::splat(0)
 }
 
 

@@ -64,7 +64,6 @@ bench BENCH="" FILTER="":
 		cargo bench \
 			-q \
 			--workspace \
-			--all-features \
 			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}" -- "{{ FILTER }}"
 	else
@@ -72,7 +71,6 @@ bench BENCH="" FILTER="":
 			-q \
 			--bench "{{ BENCH }}" \
 			--workspace \
-			--all-features \
 			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}" -- "{{ FILTER }}"
 	fi
@@ -127,9 +125,8 @@ bench BENCH="" FILTER="":
 # Build Release!
 @build: clean
 	# First let's build the Rust bit.
-	RUSTFLAGS="{{ rustflags }}" cargo -Z package-features build \
+	RUSTFLAGS="{{ rustflags }}" cargo build \
 		--bin "{{ pkg_id }}" \
-		--features simd \
 		--release \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
@@ -157,10 +154,10 @@ bench BENCH="" FILTER="":
 	find "{{ pkg_dir1 }}/man" -type f -delete
 
 	# Build a quickie version with the unsexy help so help2man can parse it.
-	RUSTFLAGS="{{ rustflags }}" cargo -Z package-features build \
+	RUSTFLAGS="{{ rustflags }}" cargo build \
 		--bin "{{ pkg_id }}" \
 		--release \
-		--features man \
+		--all-features \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
@@ -178,7 +175,6 @@ bench BENCH="" FILTER="":
 	# First let's build the Rust bit.
 	RUSTFLAGS="{{ rustflags }}" cargo check \
 		--release \
-		--all-features \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
@@ -205,33 +201,21 @@ bench BENCH="" FILTER="":
 	RUSTFLAGS="{{ rustflags }}" cargo clippy \
 		--workspace \
 		--release \
-		--all-features \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
 
 # Build Docs.
-doc DEFAULT_FEATURES="":
+doc:
 	#!/usr/bin/env bash
 
-	if [ -z "{{ DEFAULT_FEATURES }}" ]; then
-		cargo -Z package-features doc \
-			--features simd \
-			--workspace \
-			--release \
-			--no-deps \
-			--document-private-items \
-			--target x86_64-unknown-linux-gnu \
-			--target-dir "{{ cargo_dir }}"
-	else
-		cargo doc \
-			--workspace \
-			--release \
-			--no-deps \
-			--document-private-items \
-			--target x86_64-unknown-linux-gnu \
-			--target-dir "{{ cargo_dir }}"
-	fi
+	cargo doc \
+		--workspace \
+		--release \
+		--no-deps \
+		--document-private-items \
+		--target x86_64-unknown-linux-gnu \
+		--target-dir "{{ cargo_dir }}"
 
 	[ ! -d "{{ justfile_directory() }}/doc" ] || rm -rf "{{ justfile_directory() }}/doc"
 	mv "{{ cargo_dir }}/x86_64-unknown-linux-gnu/doc" "{{ justfile_directory() }}"
@@ -247,7 +231,6 @@ doc DEFAULT_FEATURES="":
 	cargo run \
 		-q \
 		--example "{{ DEMO }}" \
-		--all-features \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
@@ -257,36 +240,24 @@ doc DEFAULT_FEATURES="":
 	RUSTFLAGS="{{ rustflags }}" cargo run \
 		--bin "{{ pkg_id }}" \
 		--release \
-		--all-features \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}" \
 		-- {{ ARGS }}
 
 
 # Unit tests!
-test DEFAULT_FEATURES="":
+test:
 	#!/usr/bin/env bash
 
 	clear
 
-	if [ -z "{{ DEFAULT_FEATURES }}" ]; then
-		RUST_TEST_THREADS=1 cargo -Z package-features test \
-			--tests \
-			--features simd \
-			--release \
-			--workspace \
-			--target x86_64-unknown-linux-gnu \
-			--target-dir "{{ cargo_dir }}" -- \
-				--format terse
-	else
-		RUST_TEST_THREADS=1 cargo test \
-			--tests \
-			--release \
-			--workspace \
-			--target x86_64-unknown-linux-gnu \
-			--target-dir "{{ cargo_dir }}" -- \
-				--format terse
-	fi
+	RUST_TEST_THREADS=1 cargo test \
+		--tests \
+		--release \
+		--workspace \
+		--target x86_64-unknown-linux-gnu \
+		--target-dir "{{ cargo_dir }}" -- \
+			--format terse
 
 	exit 0
 
@@ -328,8 +299,8 @@ version:
 
 # Init dependencies.
 @_init:
-	rustup default nightly-2020-09-15
-	rustup component add clippy --toolchain nightly-2020-09-15
+	#rustup default nightly-2020-09-15
+	#rustup component add clippy --toolchain nightly-2020-09-15
 	[ ! -f "{{ justfile_directory() }}/Cargo.lock" ] || rm "{{ justfile_directory() }}/Cargo.lock"
 	cargo update
 

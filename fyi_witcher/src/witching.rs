@@ -210,20 +210,21 @@ impl Default for WitchingInner {
 
 					//  Doing would go here.
 					],
-
-					0_u16, 0_u16,     // Title.
-					11_u16, 19_u16,   // Elapsed.
-					46_u16, 46_u16,   // Bar Done.
-					55_u16, 55_u16,   // Bar Doing.
-					64_u16, 64_u16,   // Bar Undone.
-					84_u16, 85_u16,   // Done.
-					101_u16, 102_u16, // Total.
-					110_u16, 115_u16, // Percent.
-					120_u16, 120_u16, // Current Tasks.
-					// Unused...
-					120_u16, 120_u16, 120_u16, 120_u16, 120_u16, 120_u16,
-					120_u16, 120_u16, 120_u16, 120_u16, 120_u16, 120_u16,
-					120_u16, 120_u16,
+					[
+						0_u16, 0_u16,     // Title.
+						11_u16, 19_u16,   // Elapsed.
+						46_u16, 46_u16,   // Bar Done.
+						55_u16, 55_u16,   // Bar Doing.
+						64_u16, 64_u16,   // Bar Undone.
+						84_u16, 85_u16,   // Done.
+						101_u16, 102_u16, // Total.
+						110_u16, 115_u16, // Percent.
+						120_u16, 120_u16, // Current Tasks.
+						// Unused...
+						120_u16, 120_u16, 120_u16, 120_u16, 120_u16, 120_u16,
+						120_u16, 120_u16, 120_u16, 120_u16, 120_u16, 120_u16,
+						120_u16, 120_u16,
+					]
 				)},
 			doing: AHashSet::new(),
 			done: 0,
