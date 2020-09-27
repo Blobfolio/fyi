@@ -37,9 +37,15 @@ pub const FLAG_SEPARATOR: u8 =  0b0010;
 pub const FLAG_SUBCOMMAND: u8 = 0b0100;
 
 /// # Flag: Has Help.
+///
+/// This flag is set if either `-h` or `--help` switches are present. It has
+/// no effect unless [`Argue::with_help`] is called.
 const FLAG_HAS_HELP: u8 =       0b1000;
 
 /// # Flag: Has Version.
+///
+/// This flag is set if either `-V` or `--version` switches are present. It has
+/// no effect unless [`Argue::with_version`] is called.
 const FLAG_HAS_VERSION: u8 =  0b1_0000;
 
 

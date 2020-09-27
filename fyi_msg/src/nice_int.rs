@@ -258,10 +258,11 @@ impl NiceInt {
 /// much not integers, at last after the decimal, but close enough.
 impl NiceInt {
 	#[must_use]
-	/// Percent `f64`.
+	/// # Percent `f64`.
 	///
 	/// The value will be cast between `0..=1`, multiplied by `100`, and
-	/// recorded with two additional decimal places.
+	/// recorded with two additional decimal places. The end result will look
+	/// something like `78.03%`.
 	///
 	/// ## Safety
 	///
