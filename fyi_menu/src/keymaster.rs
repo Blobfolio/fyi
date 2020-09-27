@@ -69,7 +69,7 @@ impl KeyMaster {
 		}
 
 		let key = hash64(key.as_bytes());
-		if self.keys[0..self.len].iter().all(|x| x.ne(&key)) {
+		if self.keys[0..self.len].iter().all(|x| *x != key) {
 			self.keys[self.len] = key;
 			self.values[self.len] = idx;
 			self.len += 1;
@@ -89,7 +89,7 @@ impl KeyMaster {
 		}
 
 		let key = hash64(key.as_bytes());
-		if self.keys[0..self.len].iter().any(|x| x.eq(&key)) {
+		if self.keys[0..self.len].iter().any(|x| *x == key) {
 			die(b"Duplicate key.");
 			unreachable!();
 		}
@@ -105,7 +105,7 @@ impl KeyMaster {
 	/// Returns `true` if the key is stored, or `false` if not.
 	pub fn contains(&self, key: &str) -> bool {
 		let key = hash64(key.as_bytes());
-		self.keys[0..self.len].iter().any(|x| x.eq(&key))
+		self.keys[0..self.len].iter().any(|x| *x == key)
 	}
 
 	#[must_use]
@@ -116,7 +116,7 @@ impl KeyMaster {
 	pub fn contains2(&self, short: &str, long: &str) -> bool {
 		let short = hash64(short.as_bytes());
 		let long = hash64(long.as_bytes());
-		self.keys[0..self.len].iter().any(|x| x.eq(&short) || x.eq(&long))
+		self.keys[0..self.len].iter().any(|x| *x == short || *x == long)
 	}
 
 	#[must_use]
@@ -126,7 +126,7 @@ impl KeyMaster {
 	pub fn get(&self, key: &str) -> Option<usize> {
 		let key = hash64(key.as_bytes());
 		self.keys[0..self.len].iter()
-			.position(|x| x.eq(&key))
+			.position(|x| *x == key)
 			.map(|x| self.values[x])
 	}
 
@@ -139,7 +139,7 @@ impl KeyMaster {
 		let short = hash64(short.as_bytes());
 		let long = hash64(long.as_bytes());
 		self.keys[0..self.len].iter()
-			.position(|x| x.eq(&short) || x.eq(&long))
+			.position(|x| *x == short || *x == long)
 			.map(|x| self.values[x])
 	}
 }
