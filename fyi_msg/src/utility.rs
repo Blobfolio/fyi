@@ -85,34 +85,6 @@ pub fn vec_resize_at(src: &mut Vec<u8>, idx: usize, adj: usize) {
 	}
 }
 
-/// # Write ANSI Color Sequence (Bold)
-///
-/// This method writes a bold ANSI color sequence (e.g. `\x1b[1;38;5;2m`) directly
-/// to a pointer.
-///
-/// ## Safety
-///
-/// This will write between 11 and 13 bytes to a mutable pointer. That pointer
-/// must be valid and sized correctly or undefined things will happen.
-pub unsafe fn write_ansi_code_bold(buf: *mut u8, num: u8) -> usize {
-	// Bad Data/Overflow.
-	if num == 0 {
-		ptr::copy_nonoverlapping(b"\x1b[0m".as_ptr(), buf, 4);
-		return 4;
-	}
-
-	// Otherwise they all start the same.
-	ptr::copy_nonoverlapping(b"\x1b[1;38;5;".as_ptr(), buf, 9);
-
-	// Add the color.
-	let len: usize = write_u8(buf.add(9), num) + 9;
-
-	// And finish off with the "m".
-	ptr::write(buf.add(len), b'm');
-
-	len + 1
-}
-
 /// # Write Date or Time.
 ///
 /// This is used to quickly write date/time values to a buffer, each number
@@ -215,30 +187,6 @@ pub unsafe fn write_u8_3(buf: *mut u8, num: u16) {
 #[cfg(test)]
 mod tests {
 	use super::*;
-
-	#[test]
-	fn t_ansi_code_bold() {
-		let mut buf = [0_u8; 13];
-		let ptr = buf.as_mut_ptr();
-
-		assert_eq!(unsafe { write_ansi_code_bold(ptr, 0) }, 4);
-		assert_eq!(&buf[0..4], b"\x1b[0m");
-
-		for i in 1..10 {
-			assert_eq!(unsafe { write_ansi_code_bold(ptr, i) }, 11);
-			assert_eq!(&buf[0..11], format!("\x1B[1;38;5;{}m", i).as_bytes());
-		}
-
-		for i in 10..100 {
-			assert_eq!(unsafe { write_ansi_code_bold(ptr, i) }, 12);
-			assert_eq!(&buf[0..12], format!("\x1B[1;38;5;{}m", i).as_bytes());
-		}
-
-		for i in 100..=255 {
-			assert_eq!(unsafe { write_ansi_code_bold(ptr, i) }, 13);
-			assert_eq!(&buf[0..13], format!("\x1B[1;38;5;{}m", i).as_bytes());
-		}
-	}
 
 	#[test]
 	fn t_write_datetime() {

@@ -156,8 +156,18 @@ impl MsgPrefix {
 
 		let len: usize = {
 			let mut dst = buf.as_mut_ptr() as *mut u8;
+
 			// Write the color.
-			dst = dst.add(utility::write_ansi_code_bold(dst, color));
+			if color == 0 {
+				ptr::copy_nonoverlapping(b"\x1b[0m".as_ptr(), dst, 4);
+				dst = dst.add(4);
+			}
+			else {
+				ptr::copy_nonoverlapping(b"\x1b[1;38;5;".as_ptr(), dst, 9);
+				let tmp: usize = utility::write_u8(dst.add(9), color) + 9;
+				ptr::write(dst.add(tmp), b'm');
+				dst = dst.add(tmp + 1);
+			}
 
 			// Write the prefix.
 			ptr::copy_nonoverlapping(prefix.as_ptr(), dst, prefix.len());
