@@ -80,7 +80,6 @@ fn with_ext2(c: &mut Criterion) {
 		)
 	});
 
-
 	group.finish();
 }
 
