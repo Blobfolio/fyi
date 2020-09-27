@@ -396,37 +396,6 @@ impl MsgBuffer {
 
 
 
-/*
-/// # Generate Adjustment Mask From Offset.
-///
-/// Offsets exclusively land on a partition's ending point, and affect all
-/// subsequent entries (starting and ending). Thankfully that cuts the number
-/// of variations in half, but that still leaves us with 16 chunks to fill...
-fn adjustment_mask(idx: usize, adj: u16) -> u16x32 {
-	match idx {
-		 0 => u16x32::new(0, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj),
-		 1 => u16x32::new(0, 0, 0, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj),
-		 2 => u16x32::new(0, 0, 0, 0, 0, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj),
-		 3 => u16x32::new(0, 0, 0, 0, 0, 0, 0, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj),
-		 4 => u16x32::new(0, 0, 0, 0, 0, 0, 0, 0, 0, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj),
-		 5 => u16x32::new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj),
-		 6 => u16x32::new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj),
-		 7 => u16x32::new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj),
-		 8 => u16x32::new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj),
-		 9 => u16x32::new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj),
-		10 => u16x32::new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj, adj),
-		11 => u16x32::new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, adj, adj, adj, adj, adj, adj, adj, adj, adj),
-		12 => u16x32::new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, adj, adj, adj, adj, adj, adj, adj),
-		13 => u16x32::new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, adj, adj, adj, adj, adj),
-		14 => u16x32::new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, adj, adj, adj),
-		15 => u16x32::new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, adj),
-		_ => panic!("Index out of range."),
-	}
-}
-*/
-
-
-
 #[cfg(test)]
 mod tests {
 	use super::*;
