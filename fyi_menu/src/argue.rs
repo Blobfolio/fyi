@@ -18,6 +18,27 @@ use std::{
 
 
 
+/// # Flag: Argument(s) Required.
+///
+/// If a program is called with zero arguments, an error will be printed and
+/// the thread will exit with status code `1`.
+pub const FLAG_REQUIRED: u8 =   0b0001;
+
+/// # Flag: Merge Separator Args.
+///
+/// If the program is called with `--` followed by additional arguments, those
+/// arguments are glued back together into a single entry, replacing that `--`.
+pub const FLAG_SEPARATOR: u8 =  0b0010;
+
+/// # Flag: Expect Subcommand.
+///
+/// Set this flag to treat the first value as a subcommand rather than a
+/// trailing argument. (This fixes the edge case where the command has zero
+/// keys.)
+pub const FLAG_SUBCOMMAND: u8 = 0b0100;
+
+
+
 #[derive(Debug)]
 /// `Argue` is a minimalistic, argnostic CLI argument parser. It does not hold
 /// information about all the expected or required arguments an application
@@ -67,10 +88,10 @@ use std::{
 /// `Argue` follows a builder pattern for construction.
 ///
 /// ```no_run
-/// use fyi_menu::Argue;
+/// use fyi_menu::{Argue, FLAG_REQUIRED};
 ///
 /// // Parse the env arguments, aborting if the set is empty.
-/// let mut args = Argue::new().with_any();
+/// let mut args = Argue::new(FLAG_REQUIRED);
 ///
 /// // Check to see what's there.
 /// let switch: bool = args.switch("-s");
@@ -104,12 +125,8 @@ pub struct Argue {
 	/// `last + 1`, except in cases where no keys were passed, in which case it
 	/// is assumed the arguments begin at `0`.
 	last: usize,
-	/// Last Offset.
-	///
-	/// For applications expecting a subcommand, this value ensures that if no
-	/// keys were passed, the argument index begins at `1` instead of `0` (as
-	/// the first slot would be the subcommand).
-	last_offset: bool,
+	/// Flags.
+	flags: u8,
 }
 
 impl Default for Argue {
@@ -119,7 +136,7 @@ impl Default for Argue {
 			args: Vec::with_capacity(16),
 			keys: KeyMaster::default(),
 			last: 0,
-			last_offset: false,
+			flags: 0,
 		}
 	}
 }
@@ -144,51 +161,10 @@ where I: Iterator<Item=String> {
 				.collect(),
 			keys: KeyMaster::default(),
 			last: 0,
-			last_offset: false,
+			flags: 0,
 		};
 
-		// Do an extra loop to sort out the keys and shit.
-		let mut len: usize = out.len();
-		let mut idx: usize = 0;
-
-		while idx < len {
-			match KeyKind::from(out.args[idx].as_bytes()) {
-				// Passthrough.
-				KeyKind::None => {},
-				// Record the keys and passthrough.
-				KeyKind::Short | KeyKind::Long => {
-					out.keys.insert_unique(&out.args[idx], idx);
-					out.last = idx;
-				},
-				// Split a short key/value pair.
-				KeyKind::ShortV => {
-					let tmp: String = out.args[idx].split_off(2);
-					out.keys.insert_unique(&out.args[idx], idx);
-					idx += 1;
-					out.args.insert(idx, tmp);
-					out.last = idx;
-					len += 1;
-
-				},
-				// Split a long key/value pair.
-				KeyKind::LongV(x) => {
-					let tmp: String =
-						if x + 1 < out.args[idx].len() { out.args[idx].split_off(x + 1) }
-						else { String::new() };
-
-					// Chop off the "=" sign.
-					out.args[idx].truncate(x);
-
-					out.keys.insert_unique(&out.args[idx], idx);
-					idx += 1;
-					out.args.insert(idx, tmp);
-					out.last = idx;
-					len += 1;
-				},
-			}
-
-			idx += 1;
-		}
+		out.parse_keys();
 
 		out
 	}
@@ -218,29 +194,45 @@ impl Argue {
 	/// ```no_run
 	/// use fyi_menu::Argue;
 	///
-	/// let mut args = Argue::new();
+	/// let mut args = Argue::new(0);
 	/// ```
-	pub fn new() -> Self { Self::from(env::args().skip(1)) }
+	pub fn new(flags: u8) -> Self {
+		// Collect everything.
+		let mut out = Self {
+			args: env::args()
+				.skip(1)
+				.skip_while(|x|
+					x.is_empty() ||
+					x.as_bytes().iter().all(u8::is_ascii_whitespace)
+				)
+				.collect(),
+			keys: KeyMaster::default(),
+			last: 0,
+			flags,
+		};
+
+		out.parse_keys();
+
+		out
+	}
 
 	#[must_use]
-	/// # Assert Non-Empty.
+	/// # With Flags.
 	///
-	/// Chain this method to `new()` to print an error and exit with a status
-	/// code of `1` in cases where no CLI arguments were present.
-	///
-	/// If arguments are found, this just transparently returns `self`.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_menu::Argue;
-	///
-	/// let mut args = Argue::new().with_any();
-	/// ```
-	pub fn with_any(self) -> Self {
-		if self.args.is_empty() {
+	/// This method can be used to set additional parsing options in cases
+	/// where the struct was initialized without calling [`Argue::new`].
+	pub fn with_flags(mut self, flags: u8) -> Self {
+		self.flags = flags;
+
+		// Required?
+		if 0 != flags & FLAG_REQUIRED && self.args.is_empty() {
 			die(b"Missing options, flags, arguments, and/or ketchup.");
 			unreachable!();
+		}
+
+		// Handle separator.
+		if 0 != flags & FLAG_SEPARATOR {
+			self.parse_separator();
 		}
 
 		self
@@ -269,7 +261,7 @@ impl Argue {
 	/// ```no_run
 	/// use fyi_menu::Argue;
 	///
-	/// let mut args = Argue::new().with_help(|_: Option<&str>| {
+	/// let mut args = Argue::new(0).with_help(|_: Option<&str>| {
 	///     println!("Help-o world!");
 	/// });
 	/// ```
@@ -315,7 +307,7 @@ impl Argue {
 	/// ```no_run
 	/// use fyi_menu::Argue;
 	///
-	/// let mut args = Argue::new().with_list();
+	/// let mut args = Argue::new(0).with_list();
 	/// ```
 	pub fn with_list(mut self) -> Self {
 		if let Some(path) = self.option2("-l", "--list") {
@@ -341,62 +333,6 @@ impl Argue {
 	}
 
 	#[must_use]
-	/// # With Separator.
-	///
-	/// Chain this method to `new()` if you would like any "separator"
-	/// arguments glued back together as a single argument (replacing the "--"
-	/// entry).
-	///
-	/// See the documentation for [`utility::esc_arg`] for a list of all the
-	/// assumptions this method makes. (It may not do what you want.)
-	///
-	/// This method always transparently returns `self`.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_menu::Argue;
-	///
-	/// let mut args = Argue::new().with_separator();
-	/// ```
-	pub fn with_separator(mut self) -> Self {
-		if let Some(idx) = self.args.iter().position(|x| x == "--") {
-			if idx + 1 < self.args.len() {
-				self.args[idx] = self.args.drain(idx + 1..)
-					.map(utility::esc_arg)
-					.collect::<Vec<String>>()
-					.join(" ");
-			}
-			else {
-				self.args.truncate(idx);
-			}
-		}
-
-		self
-	}
-
-	#[must_use]
-	/// # With Subcommand.
-	///
-	/// Chain this method to `new()` if your program might be executed with a
-	/// subcommand. In such cases, this helps ensure that the unnamed argument
-	/// boundary is correctly set in cases where no keys were passed.
-	///
-	/// This method always transparently returns `self`.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_menu::Argue;
-	///
-	/// let mut args = Argue::new().with_subcommand();
-	/// ```
-	pub const fn with_subcommand(mut self) -> Self {
-		self.last_offset = true;
-		self
-	}
-
-	#[must_use]
 	/// # Print Name/Version.
 	///
 	/// Similar to `with_help()`, this method can be chained to `new()` to
@@ -410,7 +346,7 @@ impl Argue {
 	/// ```no_run
 	/// use fyi_menu::Argue;
 	///
-	/// let mut args = Argue::new()
+	/// let mut args = Argue::new(0)
 	///     .with_version(b"My App", b"1.5");
 	/// ```
 	pub fn with_version(self, name: &[u8], version: &[u8]) -> Self {
@@ -446,7 +382,7 @@ impl Argue {
 	/// ```no_run
 	/// use fyi_menu::Argue;
 	///
-	/// let args: Vec<String> = Argue::new().take();
+	/// let args: Vec<String> = Argue::new(0).take();
 	/// ```
 	pub fn take(self) -> Vec<String> { self.args }
 }
@@ -465,7 +401,7 @@ impl Argue {
 	/// ```no_run
 	/// use fyi_menu::Argue;
 	///
-	/// let mut args = Argue::new();
+	/// let mut args = Argue::new(0);
 	///
 	/// if let Some("happy") = args.peek() { ... }
 	/// ```
@@ -488,12 +424,12 @@ impl Argue {
 	/// ## Examples
 	///
 	/// ```no_run
-	/// use fyi_menu::Argue;
+	/// use fyi_menu::{Argue, FLAG_REQUIRED};
 	///
-	/// let mut args = Argue::new().with_any();
+	/// let mut args = Argue::new(FLAG_REQUIRED);
 	///
-	/// // This is actually safe because with_any() would have errored out if
-	/// // nothing were present.
+	/// // This is actually safe because FLAG_REQUIRED would have errored out
+	/// // if nothing were present.
 	/// let first: &str = unsafe { args.peek_unchecked() };
 	/// ```
 	pub unsafe fn peek_unchecked(&self) -> &str { &self.args[0] }
@@ -509,7 +445,7 @@ impl Argue {
 	/// ```no_run
 	/// use fyi_menu::Argue;
 	///
-	/// let mut args = Argue::new();
+	/// let mut args = Argue::new(0);
 	/// let switch: bool = args.switch("--my-switch");
 	/// ```
 	pub fn switch(&self, key: &str) -> bool { self.keys.contains(key) }
@@ -526,7 +462,7 @@ impl Argue {
 	/// ```no_run
 	/// use fyi_menu::Argue;
 	///
-	/// let mut args = Argue::new();
+	/// let mut args = Argue::new(0);
 	/// let switch: bool = args.switch2("-s", "--my-switch");
 	/// ```
 	pub fn switch2(&self, short: &str, long: &str) -> bool {
@@ -549,7 +485,7 @@ impl Argue {
 	/// ```no_run
 	/// use fyi_menu::Argue;
 	///
-	/// let mut args = Argue::new();
+	/// let mut args = Argue::new(0);
 	/// let opt: Option<&str> = args.option("--my-opt");
 	/// ```
 	pub fn option(&mut self, key: &str) -> Option<&str> {
@@ -575,7 +511,7 @@ impl Argue {
 	/// ```no_run
 	/// use fyi_menu::Argue;
 	///
-	/// let mut args = Argue::new();
+	/// let mut args = Argue::new(0);
 	/// let opt: Option<&str> = args.option2("-o", "--my-opt");
 	/// ```
 	pub fn option2(&mut self, short: &str, long: &str) -> Option<&str> {
@@ -608,7 +544,7 @@ impl Argue {
 	/// ```no_run
 	/// use fyi_menu::Argue;
 	///
-	/// let mut args = Argue::new();
+	/// let mut args = Argue::new(0);
 	/// let extras: &[String] = args.args();
 	/// ```
 	pub fn args(&self) -> &[String] {
@@ -634,7 +570,7 @@ impl Argue {
 	/// ```no_run
 	/// use fyi_menu::Argue;
 	///
-	/// let mut args = Argue::new();
+	/// let mut args = Argue::new(0);
 	/// let opt: String = args.take_arg();
 	/// ```
 	pub fn take_arg(&mut self) -> String {
@@ -657,8 +593,74 @@ impl Argue {
 	///
 	/// Note: the index may be out of range, but won't be used in that case.
 	const fn arg_idx(&self) -> usize {
-		if self.keys.is_empty() && ! self.last_offset { 0 }
+		if 0 == self.flags & FLAG_SUBCOMMAND && self.keys.is_empty() { 0 }
 		else { self.last + 1 }
+	}
+
+	/// # Parse Keys.
+	///
+	/// This indexes the keys and parses out dangling values in cases like
+	/// `-aVal` or `--a=Val`.
+	fn parse_keys(&mut self) {
+		let mut len: usize = self.len();
+		let mut idx: usize = 0;
+
+		while idx < len {
+			match KeyKind::from(self.args[idx].as_bytes()) {
+				// Passthrough.
+				KeyKind::None => {},
+				// Record the keys and passthrough.
+				KeyKind::Short | KeyKind::Long => {
+					self.keys.insert_unique(&self.args[idx], idx);
+					self.last = idx;
+				},
+				// Split a short key/value pair.
+				KeyKind::ShortV => {
+					let tmp: String = self.args[idx].split_off(2);
+					self.keys.insert_unique(&self.args[idx], idx);
+					idx += 1;
+					self.args.insert(idx, tmp);
+					self.last = idx;
+					len += 1;
+
+				},
+				// Split a long key/value pair.
+				KeyKind::LongV(x) => {
+					let tmp: String =
+						if x + 1 < self.args[idx].len() { self.args[idx].split_off(x + 1) }
+						else { String::new() };
+
+					// Chop off the "=" sign.
+					self.args[idx].truncate(x);
+
+					self.keys.insert_unique(&self.args[idx], idx);
+					idx += 1;
+					self.args.insert(idx, tmp);
+					self.last = idx;
+					len += 1;
+				},
+			}
+
+			idx += 1;
+		}
+	}
+
+	/// # Parse Separator.
+	///
+	/// This concatenates all arguments trailing a "--" entry into a single
+	/// value, replacing the "--".
+	fn parse_separator(&mut self) {
+		if let Some(idx) = self.args.iter().position(|x| x == "--") {
+			if idx + 1 < self.args.len() {
+				self.args[idx] = self.args.drain(idx + 1..)
+					.map(utility::esc_arg)
+					.collect::<Vec<String>>()
+					.join(" ");
+			}
+			else {
+				self.args.truncate(idx);
+			}
+		}
 	}
 
 	#[inline]
@@ -694,7 +696,7 @@ mod tests {
 			String::from("and things")
 		];
 
-		let mut args = Argue::from_iter(base.clone()).with_separator();
+		let mut args = Argue::from_iter(base.clone()).with_flags(FLAG_SEPARATOR);
 		assert_eq!(
 			*args,
 			[

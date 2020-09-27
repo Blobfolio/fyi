@@ -149,8 +149,10 @@ This work is free. You can redistribute it and/or modify it under the terms of t
 
 
 use fyi_menu::{
-	die,
 	Argue,
+	die,
+	FLAG_REQUIRED,
+	FLAG_SUBCOMMAND,
 };
 use fyi_msg::{
 	Msg,
@@ -164,11 +166,9 @@ use fyi_msg::{
 /// Main.
 fn main() {
 	// Parse CLI arguments.
-	let mut args = Argue::new()
-		.with_any()
+	let mut args = Argue::new(FLAG_REQUIRED | FLAG_SUBCOMMAND)
 		.with_version(b"FYI", env!("CARGO_PKG_VERSION").as_bytes())
-		.with_help(helper)
-		.with_subcommand();
+		.with_help(helper);
 
 	// Where we going?
 	match unsafe { args.peek_unchecked() } {

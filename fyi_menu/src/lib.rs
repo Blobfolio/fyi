@@ -63,7 +63,12 @@ pub mod utility;
 
 pub use keykind::KeyKind;
 pub use keymaster::KeyMaster;
-pub use argue::Argue;
+pub use argue::{
+	Argue,
+	FLAG_REQUIRED,
+	FLAG_SEPARATOR,
+	FLAG_SUBCOMMAND,
+};
 
 
 
