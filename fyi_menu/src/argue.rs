@@ -44,17 +44,17 @@ const FLAG_HAS_VERSION: u8 =  0b1_0000;
 
 
 
-/// # The of our keys array.
+/// # The size of our keys array.
 const KEY_SIZE: usize = 16;
-/// # The index noting key length.
+/// # The index noting total key length.
 const KEY_LEN: usize = 14;
-/// # The index noting the last key/value position.
+/// # The index noting the last key/value position in `args`.
 const LAST: usize = 15;
 
 
 
 #[derive(Debug)]
-/// `Argue` is a minimalistic, argnostic CLI argument parser. It does not hold
+/// `Argue` is a minimalistic, agnostic CLI argument parser. It does not hold
 /// information about all the expected or required arguments an application
 /// might have; instead it merely parses the raw [`std::env::args`] output into a
 /// consistent state and provides various methods of querying the set
@@ -88,18 +88,19 @@ const LAST: usize = 15;
 ///
 /// ### Trailing Arguments
 ///
-/// All values beginning after the last known switch (or option value) are
+/// All values beginning after the last known switch or option value are
 /// considered to be trailing arguments. Any number (including zero) of
 /// trailing arguments can be provided.
 ///
 /// ### Restrictions
 ///
-/// 1. Keys must be unique. If the same key appears twice, `Argue` will print an error and terminate the thread with a status code of `1`.
-/// 2. A given argument set may only include up to **8** keys. If that number is exceeded, `Argue` will print an error and terminate the thread with a status code of `1`.
+/// 1. Keys are not checked for uniqueness, but only the first occurrence of a given key will match.
+/// 2. A given argument set may only include up to **14** keys. If that number is exceeded, `Argue` will print an error and terminate the thread with a status code of `1`.
 ///
 /// ## Examples
 ///
-/// `Argue` follows a builder pattern for construction.
+/// `Argue` follows a builder pattern for construction, with a few odds and
+/// ends tucked away as flags.
 ///
 /// ```no_run
 /// use fyi_menu::{Argue, FLAG_REQUIRED};
@@ -129,9 +130,8 @@ pub struct Argue {
 	args: Vec<String>,
 	/// Keys.
 	///
-	/// This array holds the indexes (in args) of any keys found so that they
-	/// can be iterated over without lots of additional runtime checks and non-
-	/// key entries.
+	/// This array holds the indexes (in args) of any keys found so checks can
+	/// iterate over the relevant subset (skipping values, etc.).
 	///
 	/// The last two slots are reserved to hold the number of keys and highest
 	/// non-trailing-arg index value respectively.
