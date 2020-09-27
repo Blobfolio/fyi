@@ -5,7 +5,6 @@
 use crate::{
 	die,
 	KeyKind,
-	KeyMaster,
 	utility,
 };
 use fyi_msg::Msg;
@@ -36,6 +35,21 @@ pub const FLAG_SEPARATOR: u8 =  0b0010;
 /// trailing argument. (This fixes the edge case where the command has zero
 /// keys.)
 pub const FLAG_SUBCOMMAND: u8 = 0b0100;
+
+/// # Flag: Has Help.
+const FLAG_HAS_HELP: u8 =       0b1000;
+
+/// # Flag: Has Version.
+const FLAG_HAS_VERSION: u8 =  0b1_0000;
+
+
+
+/// # The of our keys array.
+const KEY_SIZE: usize = 16;
+/// # The index noting key length.
+const KEY_LEN: usize = 14;
+/// # The index noting the last key/value position.
+const LAST: usize = 15;
 
 
 
@@ -113,18 +127,15 @@ pub const FLAG_SUBCOMMAND: u8 = 0b0100;
 pub struct Argue {
 	/// Parsed arguments.
 	args: Vec<String>,
-	/// A pseudo hash-map of key/idx pairs.
-	keys: KeyMaster,
-	/// The last known key/value index.
+	/// Keys.
 	///
-	/// Because `Argue` is agnostic, it needs to keep track of the position of
-	/// the last known key (or option value) so that it can make an educated
-	/// guess about where the unnamed arguments begin.
+	/// This array holds the indexes (in args) of any keys found so that they
+	/// can be iterated over without lots of additional runtime checks and non-
+	/// key entries.
 	///
-	/// This is an inclusive value; the first argument (if any) would exist at
-	/// `last + 1`, except in cases where no keys were passed, in which case it
-	/// is assumed the arguments begin at `0`.
-	last: usize,
+	/// The last two slots are reserved to hold the number of keys and highest
+	/// non-trailing-arg index value respectively.
+	keys: [usize; KEY_SIZE],
 	/// Flags.
 	flags: u8,
 }
@@ -134,8 +145,7 @@ impl Default for Argue {
 	fn default() -> Self {
 		Self {
 			args: Vec::with_capacity(16),
-			keys: KeyMaster::default(),
-			last: 0,
+			keys: [0_usize; KEY_SIZE],
 			flags: 0,
 		}
 	}
@@ -159,8 +169,7 @@ where I: Iterator<Item=String> {
 					x.as_bytes().iter().all(u8::is_ascii_whitespace)
 				)
 				.collect(),
-			keys: KeyMaster::default(),
-			last: 0,
+			keys: [0_usize; KEY_SIZE],
 			flags: 0,
 		};
 
@@ -206,8 +215,7 @@ impl Argue {
 					x.as_bytes().iter().all(u8::is_ascii_whitespace)
 				)
 				.collect(),
-			keys: KeyMaster::default(),
-			last: 0,
+			keys: [0_usize; KEY_SIZE],
 			flags,
 		};
 
@@ -222,7 +230,7 @@ impl Argue {
 	/// This method can be used to set additional parsing options in cases
 	/// where the struct was initialized without calling [`Argue::new`].
 	pub fn with_flags(mut self, flags: u8) -> Self {
-		self.flags = flags;
+		self.flags |= flags;
 
 		// Required?
 		if 0 != flags & FLAG_REQUIRED && self.args.is_empty() {
@@ -275,7 +283,7 @@ impl Argue {
 				exit(0);
 			}
 			// Otherwise we need to check for the flags.
-			else if self.keys.contains2("-h", "--help") {
+			else if 0 != self.flags & FLAG_HAS_HELP {
 				if self.args[0].as_bytes()[0] == b'-' { cb(None); }
 				else { cb(Some(&self.args[0])); }
 				exit(0);
@@ -350,7 +358,7 @@ impl Argue {
 	///     .with_version(b"My App", b"1.5");
 	/// ```
 	pub fn with_version(self, name: &[u8], version: &[u8]) -> Self {
-		if self.keys.contains2("-V", "--version") {
+		if 0 != self.flags & FLAG_HAS_VERSION {
 			Msg::from([name, b" v", version]).println();
 			exit(0);
 		}
@@ -448,7 +456,11 @@ impl Argue {
 	/// let mut args = Argue::new(0);
 	/// let switch: bool = args.switch("--my-switch");
 	/// ```
-	pub fn switch(&self, key: &str) -> bool { self.keys.contains(key) }
+	pub fn switch(&self, key: &str) -> bool {
+		self.keys[0..self.keys[KEY_LEN]].iter()
+			.map(|x| &self.args[*x])
+			.any(|x| x == key)
+	}
 
 	#[must_use]
 	#[inline]
@@ -466,7 +478,9 @@ impl Argue {
 	/// let switch: bool = args.switch2("-s", "--my-switch");
 	/// ```
 	pub fn switch2(&self, short: &str, long: &str) -> bool {
-		self.keys.contains2(short, long)
+		self.keys[0..self.keys[KEY_LEN]].iter()
+			.map(|x| &self.args[*x])
+			.any(|x| x == short || x == long)
 	}
 
 	/// # Option.
@@ -489,13 +503,17 @@ impl Argue {
 	/// let opt: Option<&str> = args.option("--my-opt");
 	/// ```
 	pub fn option(&mut self, key: &str) -> Option<&str> {
-		if let Some(mut idx) = self.keys.get(key) {
-			idx += 1;
-			if idx < self.args.len() {
-				// We might need to update the arg boundary since this is +1.
-				self.update_last(idx);
-				return Some(&self.args[idx]);
+		let mut idx: usize = 0;
+		while idx < self.keys[KEY_LEN] {
+			if self.args[self.keys[idx]] == key {
+				idx = self.keys[idx] + 1;
+				if idx < self.args.len() {
+					self.update_last(idx);
+					return Some(&self.args[idx]);
+				}
+				else { return None; }
 			}
+			idx += 1;
 		}
 
 		None
@@ -515,13 +533,17 @@ impl Argue {
 	/// let opt: Option<&str> = args.option2("-o", "--my-opt");
 	/// ```
 	pub fn option2(&mut self, short: &str, long: &str) -> Option<&str> {
-		if let Some(mut idx) = self.keys.get2(short, long) {
-			idx += 1;
-			if idx < self.args.len() {
-				// We might need to update the arg boundary since this is +1.
-				self.update_last(idx);
-				return Some(&self.args[idx]);
+		let mut idx: usize = 0;
+		while idx < self.keys[KEY_LEN] {
+			if self.args[self.keys[idx]] == short || self.args[self.keys[idx]] == long {
+				idx = self.keys[idx] + 1;
+				if idx < self.args.len() {
+					self.update_last(idx);
+					return Some(&self.args[idx]);
+				}
+				else { return None; }
 			}
+			idx += 1;
 		}
 
 		None
@@ -593,8 +615,23 @@ impl Argue {
 	///
 	/// Note: the index may be out of range, but won't be used in that case.
 	const fn arg_idx(&self) -> usize {
-		if 0 == self.flags & FLAG_SUBCOMMAND && self.keys.is_empty() { 0 }
-		else { self.last + 1 }
+		if self.keys[KEY_LEN] == 0 && 0 == self.flags & FLAG_SUBCOMMAND { 0 }
+		else { self.keys[LAST] + 1 }
+	}
+
+	/// # Insert Key.
+	///
+	/// This will record the key index, unless the maximum number of keys
+	/// has been reached, in which case it will print an error and exit with a
+	/// status code of `1` instead.
+	fn insert_key(&mut self, idx: usize) {
+		if self.keys[KEY_LEN] == KEY_LEN {
+			die(b"Too many options.");
+			unreachable!();
+		}
+
+		self.keys[self.keys[KEY_LEN]] = idx;
+		self.keys[KEY_LEN] += 1;
 	}
 
 	/// # Parse Keys.
@@ -609,20 +646,31 @@ impl Argue {
 			match KeyKind::from(self.args[idx].as_bytes()) {
 				// Passthrough.
 				KeyKind::None => {},
-				// Record the keys and passthrough.
-				KeyKind::Short | KeyKind::Long => {
-					self.keys.insert_unique(&self.args[idx], idx);
-					self.last = idx;
+				// Record the key and passthrough.
+				KeyKind::Short => {
+					self.insert_key(idx);
+					self.keys[LAST] = idx;
+
+					if self.args[idx] == "-V" { self.flags |= FLAG_HAS_VERSION; }
+					else if self.args[idx] == "-h" { self.flags |= FLAG_HAS_HELP; }
+				},
+				// Record the key and passthrough.
+				KeyKind::Long => {
+					self.insert_key(idx);
+					self.keys[LAST] = idx;
+
+					if self.args[idx] == "--version" { self.flags |= FLAG_HAS_VERSION; }
+					else if self.args[idx] == "--help" { self.flags |= FLAG_HAS_HELP; }
 				},
 				// Split a short key/value pair.
 				KeyKind::ShortV => {
 					let tmp: String = self.args[idx].split_off(2);
-					self.keys.insert_unique(&self.args[idx], idx);
+					self.insert_key(idx);
+
 					idx += 1;
 					self.args.insert(idx, tmp);
-					self.last = idx;
+					self.keys[LAST] = idx;
 					len += 1;
-
 				},
 				// Split a long key/value pair.
 				KeyKind::LongV(x) => {
@@ -632,11 +680,11 @@ impl Argue {
 
 					// Chop off the "=" sign.
 					self.args[idx].truncate(x);
+					self.insert_key(idx);
 
-					self.keys.insert_unique(&self.args[idx], idx);
 					idx += 1;
 					self.args.insert(idx, tmp);
-					self.last = idx;
+					self.keys[LAST] = idx;
 					len += 1;
 				},
 			}
@@ -670,8 +718,8 @@ impl Argue {
 	/// `idx` is less than the previous value for some reason, no action is
 	/// taken.
 	fn update_last(&mut self, idx: usize) {
-		if idx > self.last {
-			self.last = idx;
+		if idx > self.keys[LAST] {
+			self.keys[LAST] = idx;
 		}
 	}
 }

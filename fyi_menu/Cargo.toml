@@ -21,9 +21,5 @@ name = "fm_keykind"
 harness = false
 
 [[bench]]
-name = "fm_keymaster"
-harness = false
-
-[[bench]]
 name = "fm_utility"
 harness = false

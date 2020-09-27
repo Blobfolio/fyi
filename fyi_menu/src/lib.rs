@@ -58,11 +58,9 @@ and major refactors may be introduced between releases.
 
 mod argue;
 mod keykind;
-mod keymaster;
 pub mod utility;
 
 pub use keykind::KeyKind;
-pub use keymaster::KeyMaster;
 pub use argue::{
 	Argue,
 	FLAG_REQUIRED,
