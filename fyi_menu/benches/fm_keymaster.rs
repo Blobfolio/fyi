@@ -44,7 +44,7 @@ fn insert(c: &mut Criterion) {
 
 fn contains(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_menu::KeyMaster");
-	group.sample_size(50);
+	group.sample_size(30);
 
 	group.bench_function(".contains(5/8)", move |b| {
 		b.iter_with_setup(||
@@ -69,7 +69,7 @@ fn contains(c: &mut Criterion) {
 
 fn get(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_menu::KeyMaster");
-	group.sample_size(50);
+	group.sample_size(30);
 
 	group.bench_function(".get(5/8)", move |b| {
 		b.iter_with_setup(||
