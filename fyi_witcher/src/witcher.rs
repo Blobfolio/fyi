@@ -18,22 +18,6 @@ use std::{
 	},
 };
 
-#[cfg(target_arch = "x86")]
-use std::arch::x86::{
-	_mm_cmpeq_epi8,
-	_mm_loadu_si128,
-	_mm_movemask_epi8,
-	_mm_set1_epi8,
-};
-
-#[cfg(target_arch = "x86_64")]
-use std::arch::x86_64::{
-	_mm_cmpeq_epi8,
-	_mm_loadu_si128,
-	_mm_movemask_epi8,
-	_mm_set1_epi8,
-};
-
 
 
 #[allow(missing_debug_implementations)]
@@ -168,41 +152,18 @@ impl Witcher {
 	///     .with_ext2(b".jpg", b".jpeg")
 	///     .build();
 	/// ```
-	pub fn with_ext2(mut self, ext1: &[u8], ext2: &[u8]) -> Self {
-		let ext1: u64 = hash64(ext1);
-		let ext2: u64 = hash64(ext2);
+	pub fn with_ext2(mut self, ext1: &'static [u8], ext2: &'static [u8]) -> Self {
+		let e1_len: usize = ext1.len();
+		let e2_len: usize = ext2.len();
 
-		if is_x86_feature_detected!("sse2") {
-			unsafe {
-				let needle = _mm_set1_epi8(46);
+		self.cb = Box::new(move |p: &PathBuf| {
+			let p: &[u8] = utility::path_as_bytes(p);
+			let len = p.len();
 
-				self.cb = Box::new(move |p: &PathBuf| {
-					let p: u64 = {
-						let p: &[u8] = utility::path_as_bytes(p);
-						let len = p.len();
-
-						if len > 1 {
-							let haystack = _mm_loadu_si128(p.as_ptr().add(len.saturating_sub(16)) as *const _);
-							let eq = _mm_cmpeq_epi8(haystack, needle);
-							let res = _mm_movemask_epi8(eq).leading_zeros();
-
-							if res < 32 {
-								hash64(&p[len - (16.min(len) - (32 - res) as usize) - 1..].to_ascii_lowercase())
-							}
-							else { 0 }
-						}
-						else { 0 }
-					};
-					p == ext1 || p == ext2
-				});
-			}
-		}
-		else {
-			self.cb = Box::new(move |p: &PathBuf| {
-				let p: u64 = hash_path_ext(utility::path_as_bytes(p));
-				p == ext1 || p == ext2
-			});
-		}
+			// Check the first.
+			with_ext_match(p, len, ext1, e1_len) ||
+			with_ext_match(p, len, ext2, e2_len)
+		});
 
 		self
 	}
@@ -223,42 +184,20 @@ impl Witcher {
 	///     .with_ext3(b".jpg", b".jpeg", b".png")
 	///     .build();
 	/// ```
-	pub fn with_ext3(mut self, ext1: &[u8], ext2: &[u8], ext3: &[u8]) -> Self {
-		let ext1: u64 = hash64(ext1);
-		let ext2: u64 = hash64(ext2);
-		let ext3: u64 = hash64(ext3);
+	pub fn with_ext3(mut self, ext1: &'static [u8], ext2: &'static [u8], ext3: &'static [u8]) -> Self {
+		let e1_len: usize = ext1.len();
+		let e2_len: usize = ext2.len();
+		let e3_len: usize = ext3.len();
 
-		if is_x86_feature_detected!("sse2") {
-			unsafe {
-				let needle = _mm_set1_epi8(46);
+		self.cb = Box::new(move |p: &PathBuf| {
+			let p: &[u8] = utility::path_as_bytes(p);
+			let len = p.len();
 
-				self.cb = Box::new(move |p: &PathBuf| {
-					let p: u64 = {
-						let p: &[u8] = utility::path_as_bytes(p);
-						let len = p.len();
-
-						if len > 1 {
-							let haystack = _mm_loadu_si128(p.as_ptr().add(len.saturating_sub(16)) as *const _);
-							let eq = _mm_cmpeq_epi8(haystack, needle);
-							let res = _mm_movemask_epi8(eq).leading_zeros();
-
-							if res < 32 {
-								hash64(&p[len - (16.min(len) - (32 - res) as usize) - 1..].to_ascii_lowercase())
-							}
-							else { 0 }
-						}
-						else { 0 }
-					};
-					p == ext1 || p == ext2 || p == ext3
-				});
-			}
-		}
-		else {
-			self.cb = Box::new(move |p: &PathBuf| {
-				let p: u64 = hash_path_ext(utility::path_as_bytes(p));
-				p == ext1 || p == ext2 || p == ext3
-			});
-		}
+			// Check the first.
+			with_ext_match(p, len, ext1, e1_len) ||
+			with_ext_match(p, len, ext2, e2_len) ||
+			with_ext_match(p, len, ext3, e3_len)
+		});
 
 		self
 	}
@@ -416,20 +355,15 @@ impl Witcher {
 
 
 
-/// # Hash Path Extension.
-///
-/// This generates a `u64` hash of the extension portion of a path. The hash
-/// can then be checked against the pre-computed target hashes to make a match.
-/// This is used by [`Witcher::with_ext2`] and [`Witcher::with_ext3`] to moot
-/// redundant iterations and case conversions.
-///
-/// For systems with SSE2 capabilities, an alternative SIMD-optimized
-/// implementation is run inline instead.
-fn hash_path_ext(p: &[u8]) -> u64 {
-	if let Some(idx) = p.iter().rposition(|x| *x == b'.') {
-		hash64(&p[idx..].to_ascii_lowercase())
+#[inline]
+fn with_ext_match(h: &[u8], hl: usize, e: &[u8], el: usize) -> bool {
+	if hl >= el && h[hl - el] == b'.' {
+		for idx in 1..el {
+			if h[hl - idx].to_ascii_lowercase() != e[el - idx] { return false; }
+		}
+		true
 	}
-	else { 0 }
+	else { false }
 }
 
 
@@ -502,38 +436,5 @@ mod tests {
 			.build();
 		assert!(! w1.is_empty());
 		assert_eq!(w1.len(), 3);
-	}
-
-	#[test]
-	fn t_sse3() {
-		if is_x86_feature_detected!("sse2") {
-			// This reproduces the indexing logic used by with_ext2 and
-			// with_ext3. Hashes aren't constant, but indexes should be!
-			unsafe fn dot_index(p: &[u8]) -> usize {
-				let len = p.len();
-				if len > 1 {
-					let needle = _mm_set1_epi8(46);
-					let haystack = _mm_loadu_si128(p.as_ptr().add(len.saturating_sub(16)) as *const _);
-					let eq = _mm_cmpeq_epi8(haystack, needle);
-					let res = _mm_movemask_epi8(eq).leading_zeros();
-
-					if res < 32 {
-						len - (16.min(len) - (32 - res) as usize) - 1
-					}
-					else { 0 }
-				}
-				else { 0 }
-			}
-
-			unsafe {
-				assert_eq!(dot_index(b"/path/to/image.jpg"), 14);
-				assert_eq!(dot_index(b"/path/foo.jpg"), 9);
-				assert_eq!(dot_index(b"/path/foo"), 0);
-				assert_eq!(dot_index(b"/path.jpg"), 5);
-				assert_eq!(dot_index(b"/path/foo.tar.gz"), 13);
-				assert_eq!(dot_index(b"/pa.tar.gz"), 7);
-				assert_eq!(dot_index(b"/pa.tar.gz."), 10);
-			}
-		}
 	}
 }
