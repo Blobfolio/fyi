@@ -651,11 +651,13 @@ impl Argue {
 		while idx < len {
 			match KeyKind::from(self.args[idx].as_bytes()) {
 				// Passthrough.
-				KeyKind::None => {},
+				KeyKind::None => {
+					idx += 1;
+					continue;
+				},
 				// Record the key and passthrough.
 				KeyKind::Short => {
 					self.insert_key(idx);
-					self.keys[LAST] = idx;
 
 					if self.args[idx] == "-V" { self.flags |= FLAG_HAS_VERSION; }
 					else if self.args[idx] == "-h" { self.flags |= FLAG_HAS_HELP; }
@@ -663,7 +665,6 @@ impl Argue {
 				// Record the key and passthrough.
 				KeyKind::Long => {
 					self.insert_key(idx);
-					self.keys[LAST] = idx;
 
 					if self.args[idx] == "--version" { self.flags |= FLAG_HAS_VERSION; }
 					else if self.args[idx] == "--help" { self.flags |= FLAG_HAS_HELP; }
@@ -675,7 +676,6 @@ impl Argue {
 
 					idx += 1;
 					self.args.insert(idx, tmp);
-					self.keys[LAST] = idx;
 					len += 1;
 				},
 				// Split a long key/value pair.
@@ -690,11 +690,11 @@ impl Argue {
 
 					idx += 1;
 					self.args.insert(idx, tmp);
-					self.keys[LAST] = idx;
 					len += 1;
 				},
 			}
 
+			self.keys[LAST] = idx;
 			idx += 1;
 		}
 	}
