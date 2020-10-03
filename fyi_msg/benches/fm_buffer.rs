@@ -48,7 +48,7 @@ fn from_raw_parts(c: &mut Criterion) {
 
 fn replace(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::MsgBuffer");
-	group.sample_size(50);
+	group.sample_size(30);
 
 	group.bench_function("replace(bigger)", move |b| {
 		b.iter_with_setup(||

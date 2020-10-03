@@ -11,6 +11,10 @@ place.
 The partitioning may be arbitrary, and does not need to have full coverage
 or be contiguous with itself. That said, all part boundaries must be
 sequential, non-overlapping, and within range.
+
+Partitioned buffers are available for `2..=10` parts. Each is named
+accordingly, like `MsgBuffer2` for a 2-part buffer, `MsgBuffer3` for a 3-part
+buffer, etc.
 */
 
 use std::{
@@ -26,11 +30,16 @@ use std::{
 
 
 
-/// # Break up
+/// # Define by Size.
+///
+/// Every buffer works exactly the same way; there are just a different number
+/// of pieces in the TOC array.
 macro_rules! define_buffer {
-	($name:ident, $size:literal) => {
+	($name:ident, $size:literal, $ssize:expr) => {
 		#[derive(Debug, Clone, Default)]
-		/// # Message Buffer x $size.
+		#[doc = "Message Buffer x `"]
+		#[doc = $ssize]
+		#[doc = "`."]
 		///
 		/// ## Safety
 		///
@@ -86,7 +95,7 @@ macro_rules! define_buffer {
 
 		/// ## Instantiation.
 		///
-		/// This section provides methods for generating new `$name` objects.
+		/// This section provides methods for generating new instances.
 		impl $name {
 			#[must_use]
 			#[inline]
@@ -119,8 +128,8 @@ macro_rules! define_buffer {
 
 		/// ## Casting.
 		///
-		/// This section provides methods for converting `$name` instances into
-		/// other types.
+		/// This section provides methods for converting instances into other
+		/// types.
 		///
 		/// Note: this struct can also be dereferenced to `&[u8]`.
 		impl $name {
@@ -172,7 +181,7 @@ macro_rules! define_buffer {
 
 		/// ## Operations.
 		///
-		/// This section provides methods for working with `$name` instances.
+		/// This section provides methods for working with instances.
 		impl $name {
 			#[must_use]
 			#[inline]
@@ -387,6 +396,10 @@ macro_rules! define_buffer {
 				self.toc.iter_mut().skip((idx << 1) + 1).for_each(|x| *x += adj);
 			}
 		}
+	};
+
+	($name:ident, $size:literal) => {
+		define_buffer!($name, $size, stringify!($size));
 	};
 }
 
