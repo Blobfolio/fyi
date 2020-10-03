@@ -7,7 +7,18 @@ mod kind;
 mod prefix;
 
 // These *are* re-exported and fully reachable. Haha.
-#[allow(unreachable_pub)] pub use buffer::MsgBuffer;
+#[allow(unreachable_pub)]
+pub use buffer::{
+	MsgBuffer2,
+	MsgBuffer3,
+	MsgBuffer4,
+	MsgBuffer5,
+	MsgBuffer6,
+	MsgBuffer7,
+	MsgBuffer8,
+	MsgBuffer9,
+	MsgBuffer10,
+};
 #[allow(unreachable_pub)] pub use kind::MsgKind;
 #[allow(unreachable_pub)] pub use prefix::MsgPrefix;
 
@@ -89,7 +100,7 @@ pub const FLAG_TIMESTAMP: u8 = 0b0010;
 /// // Ask a yes/no question.
 /// let res: bool = MsgKind::Confirm.into_msg("Are you OK?").prompt();
 /// ```
-pub struct Msg(MsgBuffer);
+pub struct Msg(MsgBuffer5);
 
 
 
@@ -141,21 +152,17 @@ macro_rules! from_fast_concat {
 		impl From<[&[u8]; $num]> for Msg {
 			fn from(src: [&[u8]; $num]) -> Self {
 				let src = src.fast_concat();
-				let end = src.len() as u16;
+				let end = src.len();
 
 				unsafe {
-					Self(MsgBuffer::from_raw_parts(
+					Self(MsgBuffer5::from_raw_parts(
 						src,
 						[
-							0_u16, 0_u16, // Indentation.
-							0_u16, 0_u16, // Timestamp.
-							0_u16, 0_u16, // Prefix.
-							0_u16, end,   // Message.
+							0, 0, // Indentation.
+							0, 0, // Timestamp.
+							0, 0, // Prefix.
+							0, end,   // Message.
 							end, end,     // Suffix.
-							// Unused...
-							end, end, end, end, end, end, end, end, end,
-							end, end, end, end, end, end, end, end, end,
-							end, end, end, end
 						]
 					))
 				}
@@ -174,20 +181,16 @@ from_fast_concat!(8);
 
 impl From<Vec<u8>> for Msg {
 	fn from(src: Vec<u8>) -> Self {
-		let end: u16 = src.len() as u16;
+		let end: usize = src.len();
 		unsafe {
-			Self(MsgBuffer::from_raw_parts(
+			Self(MsgBuffer5::from_raw_parts(
 				src,
 				[
-					0_u16, 0_u16, // Indentation.
-					0_u16, 0_u16, // Timestamp.
-					0_u16, 0_u16, // Prefix.
-					0_u16, end,   // Message.
+					0, 0, // Indentation.
+					0, 0, // Timestamp.
+					0, 0, // Prefix.
+					0, end,   // Message.
 					end, end,     // Suffix.
-					// Unused...
-					end, end, end, end, end, end, end, end, end,
-					end, end, end, end, end, end, end, end, end,
-					end, end, end, end
 				]
 			))
 		}
@@ -219,20 +222,15 @@ impl Msg {
 			buf.set_len(m_len + p_len);
 		}
 
-		let p_len: u16 = p_len as u16;
-		let end: u16 = m_len as u16 + p_len;
-		Self(MsgBuffer::from_raw_parts(
+		let end: usize = m_len + p_len;
+		Self(MsgBuffer5::from_raw_parts(
 			buf,
 			[
-				0_u16, 0_u16, // Indentation.
-				0_u16, 0_u16, // Timestamp.
-				0_u16, p_len, // Prefix.
+				0, 0, // Indentation.
+				0, 0, // Timestamp.
+				0, p_len, // Prefix.
 				p_len, end,   // Message.
 				end, end,     // Suffix.
-				// Unused...
-				end, end, end, end, end, end, end, end, end,
-				end, end, end, end, end, end, end, end, end,
-				end, end, end, end
 			]
 		))
 	}

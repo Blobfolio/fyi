@@ -10,7 +10,7 @@ use crate::{
 use fyi_msg::{
 	Msg,
 	MsgKind,
-	MsgBuffer,
+	MsgBuffer9,
 	NiceInt,
 	traits::FastConcat,
 	utility::{
@@ -136,7 +136,7 @@ const MIN_DRAW_WIDTH: usize = 40;
 /// Most of the stateful data for our [`Witching`] struct lives here so that
 /// it can be wrapped up in an `Arc<Mutex>` and passed between threads.
 struct WitchingInner {
-	buf: MsgBuffer,
+	buf: MsgBuffer9,
 	elapsed: u32,
 	last_hash: u64,
 	last_lines: usize,
@@ -155,7 +155,7 @@ impl Default for WitchingInner {
 	fn default() -> Self {
 		Self {
 			buf: unsafe {
-				MsgBuffer::from_raw_parts(
+				MsgBuffer9::from_raw_parts(
 					vec![
 						//  Title would go here.
 
@@ -211,19 +211,15 @@ impl Default for WitchingInner {
 					//  Doing would go here.
 					],
 					[
-						0_u16, 0_u16,     // Title.
-						11_u16, 19_u16,   // Elapsed.
-						46_u16, 46_u16,   // Bar Done.
-						55_u16, 55_u16,   // Bar Doing.
-						64_u16, 64_u16,   // Bar Undone.
-						84_u16, 85_u16,   // Done.
-						101_u16, 102_u16, // Total.
-						110_u16, 115_u16, // Percent.
-						120_u16, 120_u16, // Current Tasks.
-						// Unused...
-						120_u16, 120_u16, 120_u16, 120_u16, 120_u16, 120_u16,
-						120_u16, 120_u16, 120_u16, 120_u16, 120_u16, 120_u16,
-						120_u16, 120_u16,
+						0, 0,     // Title.
+						11, 19,   // Elapsed.
+						46, 46,   // Bar Done.
+						55, 55,   // Bar Doing.
+						64, 64,   // Bar Undone.
+						84, 85,   // Done.
+						101, 102, // Total.
+						110, 115, // Percent.
+						120, 120, // Current Tasks.
 					]
 				)},
 			doing: AHashSet::new(),
@@ -509,12 +505,12 @@ impl WitchingInner {
 		// 2: the braces around the bar itself (should there be one);
 		// 2: the spaces after the bar itself (should there be one);
 		let space: usize = 255_usize.min(self.last_width.saturating_sub(unsafe {
-			11_u16 +
+			11 +
 			self.buf.len_unchecked(PART_ELAPSED) +
 			self.buf.len_unchecked(PART_DONE) +
 			self.buf.len_unchecked(PART_TOTAL) +
 			self.buf.len_unchecked(PART_PERCENT)
-		} as usize));
+		}));
 
 		// Insufficient space!
 		if space < MIN_BARS_WIDTH || 0 == self.total { (0, 0, 0) }
@@ -554,13 +550,13 @@ impl WitchingInner {
 
 			// Update the parts!.
 			unsafe {
-				if self.buf.len_unchecked(PART_BAR_DONE) as usize != w_done {
+				if self.buf.len_unchecked(PART_BAR_DONE) != w_done {
 					self.buf.replace_unchecked(PART_BAR_DONE, &BAR[0..w_done]);
 				}
-				if self.buf.len_unchecked(PART_BAR_DOING) as usize != w_doing {
+				if self.buf.len_unchecked(PART_BAR_DOING) != w_doing {
 					self.buf.replace_unchecked(PART_BAR_DOING, &DASH[0..w_doing]);
 				}
-				if self.buf.len_unchecked(PART_BAR_UNDONE) as usize != w_undone {
+				if self.buf.len_unchecked(PART_BAR_UNDONE) != w_undone {
 					self.buf.replace_unchecked(PART_BAR_UNDONE, &DASH[0..w_undone]);
 				}
 			}
@@ -646,7 +642,7 @@ impl WitchingInner {
 			unsafe {
 				let [h, m, s] = utility::hms_u32(secs);
 				write_time(
-					self.buf.as_mut_ptr().add(self.buf.start_unchecked(PART_ELAPSED) as usize),
+					self.buf.as_mut_ptr().add(self.buf.start_unchecked(PART_ELAPSED)),
 					h,
 					m,
 					s,

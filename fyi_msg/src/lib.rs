@@ -51,7 +51,15 @@ pub mod utility;
 
 pub use msg::{
 	Msg,
-	MsgBuffer,
+	MsgBuffer2,
+	MsgBuffer3,
+	MsgBuffer4,
+	MsgBuffer5,
+	MsgBuffer6,
+	MsgBuffer7,
+	MsgBuffer8,
+	MsgBuffer9,
+	MsgBuffer10,
 	MsgKind,
 	MsgPrefix,
 	FLAG_INDENT,
