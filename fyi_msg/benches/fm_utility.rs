@@ -15,7 +15,7 @@ use fyi_msg::utility;
 fn concat_slice(c: &mut Criterion) {
 	use fyi_msg::traits::FastConcat;
 	let mut group = c.benchmark_group("fyi_msg::utility");
-	group.sample_size(50);
+	group.sample_size(30);
 
 	group.bench_function("[&[u8]; 8].fast_concat()", move |b| {
 		b.iter_with_setup(||
