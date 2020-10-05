@@ -2,6 +2,7 @@
 # FYI Msg Traits: `FastConcat`
 */
 
+use crate::utility;
 use std::ptr;
 
 
@@ -31,52 +32,17 @@ impl FastConcat for [&[u8]; 2] {
 
 	fn fast_concat(&self) -> Vec<u8> {
 		let (a, b) = (self[0].len(), self[1].len());
-		let len: usize = a + b;
-		let mut buf: Vec<u8> = Vec::with_capacity(len);
+		let mut buf: Vec<u8> = Vec::with_capacity(a + b);
 
 		unsafe {
-			let dst = buf.as_mut_ptr();
+			let dst = utility::write_advance(buf.as_mut_ptr(), self[0].as_ptr(), a);
+			ptr::copy_nonoverlapping(self[1].as_ptr(), dst, b);
 
-			ptr::copy_nonoverlapping(self[0].as_ptr(), dst, a);
-			ptr::copy_nonoverlapping(self[1].as_ptr(), dst.add(a), b);
-
-			buf.set_len(len);
+			buf.set_len(a + b);
 		}
 
 		buf
 	}
-}
-
-/// # Helper: Concatenation
-///
-/// The actual concatenation works the same regardless of array size; the loop
-/// just needs a different breakpoint.
-macro_rules! impl_fast_concat {
-	($max:literal) => {
-		fn fast_concat(&self) -> Vec<u8> {
-			let len: usize = self.fast_concat_len();
-			let mut buf: Vec<u8> = Vec::with_capacity(len);
-
-			unsafe {
-				let mut dst = buf.as_mut_ptr();
-				let mut idx: usize = 0;
-
-				loop {
-					let s_len: usize = self[idx].len();
-					ptr::copy_nonoverlapping(self[idx].as_ptr(), dst, s_len);
-					if idx == $max { break; }
-					else {
-						dst = dst.add(s_len);
-						idx += 1;
-					}
-				}
-
-				buf.set_len(len);
-			}
-
-			buf
-		}
-	};
 }
 
 impl FastConcat for [&[u8]; 3] {
@@ -85,7 +51,22 @@ impl FastConcat for [&[u8]; 3] {
 		self[0].len() + self[1].len() + self[2].len()
 	}
 
-	impl_fast_concat!(2);
+	fn fast_concat(&self) -> Vec<u8> {
+		let len: usize = self.fast_concat_len();
+		let mut buf: Vec<u8> = Vec::with_capacity(len);
+
+		unsafe {
+			let mut dst = buf.as_mut_ptr();
+
+			dst = utility::write_advance(dst, self[0].as_ptr(), self[0].len());
+			dst = utility::write_advance(dst, self[1].as_ptr(), self[1].len());
+			ptr::copy_nonoverlapping(self[2].as_ptr(), dst, self[2].len());
+
+			buf.set_len(len);
+		}
+
+		buf
+	}
 }
 
 impl FastConcat for [&[u8]; 4] {
@@ -94,7 +75,23 @@ impl FastConcat for [&[u8]; 4] {
 		self[0].len() + self[1].len() + self[2].len() + self[3].len()
 	}
 
-	impl_fast_concat!(3);
+	fn fast_concat(&self) -> Vec<u8> {
+		let len: usize = self.fast_concat_len();
+		let mut buf: Vec<u8> = Vec::with_capacity(len);
+
+		unsafe {
+			let mut dst = buf.as_mut_ptr();
+
+			dst = utility::write_advance(dst, self[0].as_ptr(), self[0].len());
+			dst = utility::write_advance(dst, self[1].as_ptr(), self[1].len());
+			dst = utility::write_advance(dst, self[2].as_ptr(), self[2].len());
+			ptr::copy_nonoverlapping(self[3].as_ptr(), dst, self[3].len());
+
+			buf.set_len(len);
+		}
+
+		buf
+	}
 }
 
 impl FastConcat for [&[u8]; 5] {
@@ -103,7 +100,24 @@ impl FastConcat for [&[u8]; 5] {
 		self[0].len() + self[1].len() + self[2].len() + self[3].len() + self[4].len()
 	}
 
-	impl_fast_concat!(4);
+	fn fast_concat(&self) -> Vec<u8> {
+		let len: usize = self.fast_concat_len();
+		let mut buf: Vec<u8> = Vec::with_capacity(len);
+
+		unsafe {
+			let mut dst = buf.as_mut_ptr();
+
+			dst = utility::write_advance(dst, self[0].as_ptr(), self[0].len());
+			dst = utility::write_advance(dst, self[1].as_ptr(), self[1].len());
+			dst = utility::write_advance(dst, self[2].as_ptr(), self[2].len());
+			dst = utility::write_advance(dst, self[3].as_ptr(), self[3].len());
+			ptr::copy_nonoverlapping(self[4].as_ptr(), dst, self[4].len());
+
+			buf.set_len(len);
+		}
+
+		buf
+	}
 }
 
 impl FastConcat for [&[u8]; 6] {
@@ -112,7 +126,25 @@ impl FastConcat for [&[u8]; 6] {
 		self[0].len() + self[1].len() + self[2].len() + self[3].len() + self[4].len() + self[5].len()
 	}
 
-	impl_fast_concat!(5);
+	fn fast_concat(&self) -> Vec<u8> {
+		let len: usize = self.fast_concat_len();
+		let mut buf: Vec<u8> = Vec::with_capacity(len);
+
+		unsafe {
+			let mut dst = buf.as_mut_ptr();
+
+			dst = utility::write_advance(dst, self[0].as_ptr(), self[0].len());
+			dst = utility::write_advance(dst, self[1].as_ptr(), self[1].len());
+			dst = utility::write_advance(dst, self[2].as_ptr(), self[2].len());
+			dst = utility::write_advance(dst, self[3].as_ptr(), self[3].len());
+			dst = utility::write_advance(dst, self[4].as_ptr(), self[4].len());
+			ptr::copy_nonoverlapping(self[5].as_ptr(), dst, self[5].len());
+
+			buf.set_len(len);
+		}
+
+		buf
+	}
 }
 
 impl FastConcat for [&[u8]; 7] {
@@ -121,7 +153,26 @@ impl FastConcat for [&[u8]; 7] {
 		self[0].len() + self[1].len() + self[2].len() + self[3].len() + self[4].len() + self[5].len() + self[6].len()
 	}
 
-	impl_fast_concat!(6);
+	fn fast_concat(&self) -> Vec<u8> {
+		let len: usize = self.fast_concat_len();
+		let mut buf: Vec<u8> = Vec::with_capacity(len);
+
+		unsafe {
+			let mut dst = buf.as_mut_ptr();
+
+			dst = utility::write_advance(dst, self[0].as_ptr(), self[0].len());
+			dst = utility::write_advance(dst, self[1].as_ptr(), self[1].len());
+			dst = utility::write_advance(dst, self[2].as_ptr(), self[2].len());
+			dst = utility::write_advance(dst, self[3].as_ptr(), self[3].len());
+			dst = utility::write_advance(dst, self[4].as_ptr(), self[4].len());
+			dst = utility::write_advance(dst, self[5].as_ptr(), self[5].len());
+			ptr::copy_nonoverlapping(self[6].as_ptr(), dst, self[6].len());
+
+			buf.set_len(len);
+		}
+
+		buf
+	}
 }
 
 impl FastConcat for [&[u8]; 8] {
@@ -130,7 +181,27 @@ impl FastConcat for [&[u8]; 8] {
 		self[0].len() + self[1].len() + self[2].len() + self[3].len() + self[4].len() + self[5].len() + self[6].len() + self[7].len()
 	}
 
-	impl_fast_concat!(7);
+	fn fast_concat(&self) -> Vec<u8> {
+		let len: usize = self.fast_concat_len();
+		let mut buf: Vec<u8> = Vec::with_capacity(len);
+
+		unsafe {
+			let mut dst = buf.as_mut_ptr();
+
+			dst = utility::write_advance(dst, self[0].as_ptr(), self[0].len());
+			dst = utility::write_advance(dst, self[1].as_ptr(), self[1].len());
+			dst = utility::write_advance(dst, self[2].as_ptr(), self[2].len());
+			dst = utility::write_advance(dst, self[3].as_ptr(), self[3].len());
+			dst = utility::write_advance(dst, self[4].as_ptr(), self[4].len());
+			dst = utility::write_advance(dst, self[5].as_ptr(), self[5].len());
+			dst = utility::write_advance(dst, self[6].as_ptr(), self[6].len());
+			ptr::copy_nonoverlapping(self[7].as_ptr(), dst, self[7].len());
+
+			buf.set_len(len);
+		}
+
+		buf
+	}
 }
 
 
@@ -187,6 +258,22 @@ mod tests {
 				[&b"one"[..], b"two", b"three", b"four", b"", b"six"].fast_concat_len()
 			),
 			(b"onetwothreefoursix".to_vec(), 18_usize)
+		);
+
+		assert_eq!(
+			(
+				[&b"one"[..], b"two", b"three", b"four", b"", b"six", b"seven"].fast_concat(),
+				[&b"one"[..], b"two", b"three", b"four", b"", b"six", b"seven"].fast_concat_len()
+			),
+			(b"onetwothreefoursixseven".to_vec(), 23_usize)
+		);
+
+		assert_eq!(
+			(
+				[&b"one"[..], b"two", b"three", b"four", b"", b"six", b"seven", b"eight"].fast_concat(),
+				[&b"one"[..], b"two", b"three", b"four", b"", b"six", b"seven", b"eight"].fast_concat_len()
+			),
+			(b"onetwothreefoursixseveneight".to_vec(), 28_usize)
 		);
 	}
 }

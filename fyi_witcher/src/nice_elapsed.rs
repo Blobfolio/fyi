@@ -3,6 +3,7 @@
 */
 
 use crate::utility;
+use fyi_msg::utility::write_advance;
 use std::{
 	fmt,
 	mem::{
@@ -10,7 +11,6 @@ use std::{
 		MaybeUninit,
 	},
 	ops::Deref,
-	ptr,
 };
 
 
@@ -158,21 +158,17 @@ impl NiceElapsed {
 			if h > 0 {
 				dst = dst.add(write_u8(dst, h));
 				if h == 1 {
-					ptr::copy_nonoverlapping(b" hour".as_ptr(), dst, 5);
-					dst = dst.add(5);
+					dst = write_advance(dst, b" hour".as_ptr(), 5);
 				}
 				else {
-					ptr::copy_nonoverlapping(b" hours".as_ptr(), dst, 6);
-					dst = dst.add(6);
+					dst = write_advance(dst, b" hours".as_ptr(), 6);
 				}
 
 				if 3 == count {
-					ptr::copy_nonoverlapping(b", ".as_ptr(), dst, 2);
-					dst = dst.add(2);
+					dst = write_advance(dst, b", ".as_ptr(), 2);
 				}
 				else if 2 == count {
-					ptr::copy_nonoverlapping(b" and ".as_ptr(), dst, 5);
-					dst = dst.add(5);
+					dst = write_advance(dst, b" and ".as_ptr(), 5);
 				}
 			}
 
@@ -180,21 +176,17 @@ impl NiceElapsed {
 			if m > 0 {
 				dst = dst.add(write_u8(dst, m));
 				if m == 1 {
-					ptr::copy_nonoverlapping(b" minute".as_ptr(), dst, 7);
-					dst = dst.add(7);
+					dst = write_advance(dst, b" minute".as_ptr(), 7);
 				}
 				else {
-					ptr::copy_nonoverlapping(b" minutes".as_ptr(), dst, 8);
-					dst = dst.add(8);
+					dst = write_advance(dst, b" minutes".as_ptr(), 8);
 				}
 
 				if 3 == count {
-					ptr::copy_nonoverlapping(b", and ".as_ptr(), dst, 6);
-					dst = dst.add(6);
+					dst = write_advance(dst, b", and ".as_ptr(), 6);
 				}
 				else if 2 == count && h == 0 {
-					ptr::copy_nonoverlapping(b" and ".as_ptr(), dst, 5);
-					dst = dst.add(5);
+					dst = write_advance(dst, b" and ".as_ptr(), 5);
 				}
 			}
 
@@ -202,12 +194,10 @@ impl NiceElapsed {
 			if s > 0 {
 				dst = dst.add(write_u8(dst, s));
 				if s == 1 {
-					ptr::copy_nonoverlapping(b" second".as_ptr(), dst, 7);
-					dst = dst.add(7);
+					dst = write_advance(dst, b" second".as_ptr(), 7);
 				}
 				else {
-					ptr::copy_nonoverlapping(b" seconds".as_ptr(), dst, 8);
-					dst = dst.add(8);
+					dst = write_advance(dst, b" seconds".as_ptr(), 8);
 				}
 			}
 

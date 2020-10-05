@@ -85,6 +85,20 @@ pub fn vec_resize_at(src: &mut Vec<u8>, idx: usize, adj: usize) {
 	}
 }
 
+#[must_use]
+/// # Write and Advance.
+///
+/// Write data to a pointer, then return a new pointer advanced that many
+/// places.
+///
+/// ## Safety
+///
+/// The pointer must have enough room to hold the new data!
+pub unsafe fn write_advance(dst: *mut u8, src: *const u8, len: usize) -> *mut u8 {
+	ptr::copy_nonoverlapping(src, dst, len);
+	dst.add(len)
+}
+
 /// # Write Date or Time.
 ///
 /// This is used to quickly write date/time values to a buffer, each number

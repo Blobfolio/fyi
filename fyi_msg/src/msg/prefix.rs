@@ -159,24 +159,20 @@ impl MsgPrefix {
 
 			// Write the color.
 			if color == 0 {
-				ptr::copy_nonoverlapping(b"\x1b[0m".as_ptr(), dst, 4);
-				dst = dst.add(4);
+				dst = utility::write_advance(dst, b"\x1b[0m".as_ptr(), 4);
 			}
 			else {
-				ptr::copy_nonoverlapping(b"\x1b[1;38;5;".as_ptr(), dst, 9);
-				let tmp: usize = utility::write_u8(dst.add(9), color) + 9;
-				ptr::write(dst.add(tmp), b'm');
-				dst = dst.add(tmp + 1);
+				dst = utility::write_advance(dst, b"\x1b[1;38;5;".as_ptr(), 9);
+				dst = dst.add(utility::write_u8(dst, color));
+				ptr::write(dst, b'm');
+				dst = dst.add(1);
 			}
 
 			// Write the prefix.
-			ptr::copy_nonoverlapping(prefix.as_ptr(), dst, prefix.len());
-			dst = dst.add(prefix.len());
+			dst = utility::write_advance(dst, prefix.as_ptr(), prefix.len());
 
-			// Write the closer.
-			ptr::copy_nonoverlapping(b":\x1b[0m ".as_ptr(), dst, 6);
-
-			dst.add(6) as usize - buf.as_ptr() as *const u8 as usize
+			// Write the closer and report the total length written.
+			utility::write_advance(dst, b":\x1b[0m ".as_ptr(), 6) as usize - buf.as_ptr() as *const u8 as usize
 		};
 
 		// Align and return!
