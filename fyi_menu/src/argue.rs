@@ -167,21 +167,14 @@ impl<I> From<I> for Argue
 where I: Iterator<Item=String> {
 	fn from(src: I) -> Self
 	where I: Iterator<Item=String> {
-		// Collect everything.
-		let mut out = Self {
-			args: src
-				.skip_while(|x|
-					x.is_empty() ||
-					x.as_bytes().iter().all(u8::is_ascii_whitespace)
-				)
-				.collect(),
-			keys: [0_usize; KEY_SIZE],
-			flags: 0,
-		};
-
-		out.parse_keys();
-
-		out
+		src.skip_while(|x|
+			x.is_empty() ||
+			x.as_bytes().iter().all(u8::is_ascii_whitespace)
+		)
+			.fold(
+				Self::default(),
+				Self::push
+			)
 	}
 }
 
@@ -212,22 +205,18 @@ impl Argue {
 	/// let mut args = Argue::new(0);
 	/// ```
 	pub fn new(flags: u8) -> Self {
-		// Collect everything.
-		let mut out = Self {
-			args: env::args()
-				.skip(1)
-				.skip_while(|x|
-					x.is_empty() ||
-					x.as_bytes().iter().all(u8::is_ascii_whitespace)
-				)
-				.collect(),
-			keys: [0_usize; KEY_SIZE],
-			flags,
-		};
-
-		out.parse_keys();
-
-		out
+		env::args().skip(1)
+			.skip_while(|x|
+				x.is_empty() ||
+				x.as_bytes().iter().all(u8::is_ascii_whitespace)
+			)
+			.fold(
+				Self {
+					flags,
+					..Self::default()
+				},
+				Self::push
+			)
 	}
 
 	#[must_use]
@@ -290,7 +279,7 @@ impl Argue {
 			}
 			// Otherwise we need to check for the flags.
 			else if 0 != self.flags & FLAG_HAS_HELP {
-				if self.args[0].as_bytes()[0] == b'-' { cb(None); }
+				if self.keys[0] == 0 && self.keys[KEY_LEN] != 0 { cb(None); }
 				else { cb(Some(&self.args[0])); }
 				exit(0);
 			}
@@ -406,6 +395,7 @@ impl Argue {
 /// These methods allow data to be questioned and extracted.
 impl Argue {
 	#[must_use]
+	#[inline]
 	/// # First Entry.
 	///
 	/// Borrow the first entry, if any.
@@ -419,10 +409,7 @@ impl Argue {
 	///
 	/// if let Some("happy") = args.peek() { ... }
 	/// ```
-	pub fn peek(&self) -> Option<&str> {
-		if self.args.is_empty() { None }
-		else { Some(&self.args[0]) }
-	}
+	pub fn peek(&self) -> Option<&str> { self.args.get(0).map(String::as_str) }
 
 	#[must_use]
 	#[inline]
@@ -463,7 +450,8 @@ impl Argue {
 	/// let switch: bool = args.switch("--my-switch");
 	/// ```
 	pub fn switch(&self, key: &str) -> bool {
-		self.keys[0..self.keys[KEY_LEN]].iter()
+		self.keys.iter()
+			.take(self.keys[KEY_LEN])
 			.map(|x| &self.args[*x])
 			.any(|x| x == key)
 	}
@@ -484,7 +472,8 @@ impl Argue {
 	/// let switch: bool = args.switch2("-s", "--my-switch");
 	/// ```
 	pub fn switch2(&self, short: &str, long: &str) -> bool {
-		self.keys[0..self.keys[KEY_LEN]].iter()
+		self.keys.iter()
+			.take(self.keys[KEY_LEN])
 			.map(|x| &self.args[*x])
 			.any(|x| x == short || x == long)
 	}
@@ -509,20 +498,10 @@ impl Argue {
 	/// let opt: Option<&str> = args.option("--my-opt");
 	/// ```
 	pub fn option(&mut self, key: &str) -> Option<&str> {
-		let mut idx: usize = 0;
-		while idx < self.keys[KEY_LEN] {
-			if self.args[self.keys[idx]] == key {
-				idx = self.keys[idx] + 1;
-				if idx < self.args.len() {
-					self.update_last(idx);
-					return Some(&self.args[idx]);
-				}
-				else { return None; }
-			}
-			idx += 1;
-		}
-
-		None
+		self.keys.iter()
+			.take(self.keys[KEY_LEN])
+			.position(|&x| self.args[x] == key)
+			.and_then(move |idx| self.option_value(self.keys[idx] + 1))
 	}
 
 	/// # Option x2.
@@ -539,20 +518,22 @@ impl Argue {
 	/// let opt: Option<&str> = args.option2("-o", "--my-opt");
 	/// ```
 	pub fn option2(&mut self, short: &str, long: &str) -> Option<&str> {
-		let mut idx: usize = 0;
-		while idx < self.keys[KEY_LEN] {
-			if self.args[self.keys[idx]] == short || self.args[self.keys[idx]] == long {
-				idx = self.keys[idx] + 1;
-				if idx < self.args.len() {
-					self.update_last(idx);
-					return Some(&self.args[idx]);
-				}
-				else { return None; }
-			}
-			idx += 1;
-		}
+		self.keys.iter()
+			.take(self.keys[KEY_LEN])
+			.position(|&x| self.args[x] == short || self.args[x] == long)
+			.and_then(move |idx| self.option_value(self.keys[idx] + 1))
+	}
 
-		None
+	/// # Get Option Value.
+	///
+	/// This retrieves the option value at the specified index, if any, and
+	/// updates the arg boundary if needed.
+	fn option_value(&mut self, idx: usize) -> Option<&str> {
+		let out: Option<&str> = self.args.get(idx).map(String::as_str);
+		if out.is_some() && idx > self.keys[LAST] {
+			self.keys[LAST] = idx;
+		}
+		out
 	}
 
 	#[must_use]
@@ -575,13 +556,7 @@ impl Argue {
 	/// let mut args = Argue::new(0);
 	/// let extras: &[String] = args.args();
 	/// ```
-	pub fn args(&self) -> &[String] {
-		let idx = self.arg_idx();
-		if idx < self.args.len() {
-			&self.args[idx..]
-		}
-		else { &[] }
-	}
+	pub fn args(&self) -> &[String] { &self.args[self.arg_idx()..] }
 
 	#[must_use]
 	/// # Take Next Trailing Argument.
@@ -644,59 +619,60 @@ impl Argue {
 	///
 	/// This indexes the keys and parses out dangling values in cases like
 	/// `-aVal` or `--a=Val`.
-	fn parse_keys(&mut self) {
-		let mut len: usize = self.len();
-		let mut idx: usize = 0;
+	fn push(mut self, mut val: String) -> Self {
+		match KeyKind::from(val.as_bytes()) {
+			// Passthrough.
+			KeyKind::None => {
+				self.args.push(val);
+			},
+			// Record the key and passthrough.
+			KeyKind::Short => {
+				let idx: usize = self.args.len();
+				if val == "-V" { self.flags |= FLAG_HAS_VERSION; }
+				else if val == "-h" { self.flags |= FLAG_HAS_HELP; }
 
-		while idx < len {
-			match KeyKind::from(self.args[idx].as_bytes()) {
-				// Passthrough.
-				KeyKind::None => {
-					idx += 1;
-					continue;
-				},
-				// Record the key and passthrough.
-				KeyKind::Short => {
-					self.insert_key(idx);
+				self.args.push(val);
+				self.insert_key(idx);
+				self.keys[LAST] = idx;
+			},
+			// Record the key and passthrough.
+			KeyKind::Long => {
+				let idx: usize = self.args.len();
+				if val == "--version" { self.flags |= FLAG_HAS_VERSION; }
+				else if val == "--help" { self.flags |= FLAG_HAS_HELP; }
 
-					if self.args[idx] == "-V" { self.flags |= FLAG_HAS_VERSION; }
-					else if self.args[idx] == "-h" { self.flags |= FLAG_HAS_HELP; }
-				},
-				// Record the key and passthrough.
-				KeyKind::Long => {
-					self.insert_key(idx);
+				self.args.push(val);
+				self.insert_key(idx);
+				self.keys[LAST] = idx;
+			},
+			// Split a short key/value pair.
+			KeyKind::ShortV => {
+				let idx: usize = self.args.len();
+				let tmp: String = val.split_off(2);
 
-					if self.args[idx] == "--version" { self.flags |= FLAG_HAS_VERSION; }
-					else if self.args[idx] == "--help" { self.flags |= FLAG_HAS_HELP; }
-				},
-				// Split a short key/value pair.
-				KeyKind::ShortV => {
-					let tmp: String = self.args[idx].split_off(2);
-					self.insert_key(idx);
+				self.args.push(val);
+				self.args.push(tmp);
+				self.insert_key(idx);
+				self.keys[LAST] = idx + 1;
+			},
+			// Split a long key/value pair.
+			KeyKind::LongV(x) => {
+				let idx: usize = self.args.len();
+				let tmp: String =
+					if x + 1 < val.len() { val.split_off(x + 1) }
+					else { String::new() };
 
-					idx += 1;
-					self.args.insert(idx, tmp);
-					len += 1;
-				},
-				// Split a long key/value pair.
-				KeyKind::LongV(x) => {
-					let tmp: String =
-						if x + 1 < self.args[idx].len() { self.args[idx].split_off(x + 1) }
-						else { String::new() };
+				// Chop off the "=" sign.
+				val.truncate(x);
 
-					// Chop off the "=" sign.
-					self.args[idx].truncate(x);
-					self.insert_key(idx);
-
-					idx += 1;
-					self.args.insert(idx, tmp);
-					len += 1;
-				},
-			}
-
-			self.keys[LAST] = idx;
-			idx += 1;
+				self.args.push(val);
+				self.args.push(tmp);
+				self.insert_key(idx);
+				self.keys[LAST] = idx + 1;
+			},
 		}
+
+		self
 	}
 
 	/// # Parse Separator.
@@ -714,18 +690,6 @@ impl Argue {
 			else {
 				self.args.truncate(idx);
 			}
-		}
-	}
-
-	#[inline]
-	/// # Update Last Read.
-	///
-	/// Set the position of the last known key (or key value) to `idx`. If
-	/// `idx` is less than the previous value for some reason, no action is
-	/// taken.
-	fn update_last(&mut self, idx: usize) {
-		if idx > self.keys[LAST] {
-			self.keys[LAST] = idx;
 		}
 	}
 }
@@ -768,7 +732,9 @@ mod tests {
 		assert_eq!(args.peek(), Some("hey"));
 		assert!(args.switch("-k"));
 		assert!(args.switch("--key"));
+		assert!(args.switch2("-k", "--key"));
 		assert_eq!(args.option("--key"), Some("Val"));
+		assert_eq!(args.option2("-k", "--key"), Some("Val"));
 		assert_eq!(args.args(), &[String::from("stuff 'and things'")]);
 
 		// Let's make sure first-position keys are OK.
@@ -794,5 +760,13 @@ mod tests {
 		assert_eq!(args.peek(), Some("--prefix"));
 		assert!(args.switch("--prefix"));
 		assert_eq!(args.option("--prefix"), Some("hey"));
+
+		args = Argue::from_iter(vec!["-k".to_string()]);
+		assert_eq!(args.args(), Vec::<String>::new().as_slice());
+
+		args = Argue::from_iter(vec![]);
+		assert!(! args.switch("--prefix"));
+		assert_eq!(args.option("--prefix"), None);
+		assert_eq!(args.args(), Vec::<String>::new().as_slice());
 	}
 }
