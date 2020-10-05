@@ -261,3 +261,30 @@ impl MsgKind {
 		}
 	}
 }
+
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn t_len() {
+		for p in &[
+			MsgKind::Confirm,
+			MsgKind::Crunched,
+			MsgKind::Debug,
+			MsgKind::Done,
+			MsgKind::Error,
+			MsgKind::Info,
+			MsgKind::None,
+			MsgKind::Notice,
+			MsgKind::Success,
+			MsgKind::Task,
+			MsgKind::Warning,
+		] {
+			assert_eq!(p.len(), p.as_bytes().len());
+			assert_eq!(p.is_empty(), p.as_bytes().is_empty());
+		}
+	}
+}
