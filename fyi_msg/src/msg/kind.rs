@@ -180,7 +180,10 @@ impl MsgKind {
 	/// let msg = kind.into_msg("This is my message!");
 	/// ```
 	pub fn into_msg(self, msg: &str) -> Msg {
-		unsafe { Msg::prefixed_unchecked(self, msg.as_bytes()) }
+		if self.is_empty() { Msg::from(msg) }
+		else {
+			unsafe { Msg::prefixed_unchecked(self, msg.as_bytes()) }
+		}
 	}
 }
 
