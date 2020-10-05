@@ -360,7 +360,9 @@ macro_rules! define_buffer {
 			/// ## Safety
 			///
 			/// Undefined things will happen if `idx` is out of bounds.
-			pub const unsafe fn start_unchecked(&self, idx: usize) -> usize { self.toc[idx * 2] }
+			pub const unsafe fn start_unchecked(&self, idx: usize) -> usize {
+				self.toc[idx * 2]
+			}
 
 			#[must_use]
 			#[inline]
