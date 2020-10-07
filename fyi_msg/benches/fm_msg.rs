@@ -84,6 +84,8 @@ fn with_timestamp(c: &mut Criterion) {
 			|m| m.with_timestamp(true)
 		)
 	});
+
+	group.finish();
 }
 
 fn msgkind(c: &mut Criterion) {
@@ -95,6 +97,8 @@ fn msgkind(c: &mut Criterion) {
 			MsgKind::new("Hello Dolly", 199)
 		)
 	});
+
+	group.finish();
 }
 
 
