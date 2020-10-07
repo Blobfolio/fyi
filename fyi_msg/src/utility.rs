@@ -6,18 +6,6 @@ use std::ptr;
 
 
 
-/// # 48.
-///
-/// This is a simple mask that can be applied against a decimal between `0..10`
-/// to turn it into the equivalent ASCII. This is the same thing as adding `48`
-/// (for this particular range) but is minutely faster because it's bitwise!
-///
-/// ```no_run
-/// let x: u8 = 5;
-/// assert_eq!(x | MASK_U8, x + 48);
-/// ```
-pub const MASK_U8: u8 = 0b11_0000;
-
 #[must_use]
 #[inline]
 /// # `AHash` Byte Hash.
@@ -126,22 +114,28 @@ pub unsafe fn write_time(buf: *mut u8, n1: u8, n2: u8, n3: u8, sep: u8) {
 /// This will write between 1 and 3 bytes to a mutable pointer. That pointer
 /// must be valid and sized correctly or undefined things will happen.
 pub unsafe fn write_u8(buf: *mut u8, num: u8) -> usize {
-	static INTS: [u8; 478] = *b"0123456789\
-		100101102103104105106107108109110111112113114115116117118119120121122123124125126127128129130131132133134135136137138139140141142143144145146147148149\
-		150151152153154155156157158159160161162163164165166167168169170171172173174175176177178179180181182183184185186187188189190191192193194195196197198199\
-		200201202203204205206207208209210211212213214215216217218219220221222223224225226227228229230231232233234235236237238239240241242243244245246247248249\
-		250251252253254255";
-
 	if num < 10 {
-		ptr::copy_nonoverlapping(INTS.as_ptr().add(num as usize), buf, 1);
+		ptr::copy_nonoverlapping(
+			crate::NUMD.as_ptr().add(num as usize),
+			buf,
+			1
+		);
 		1
 	}
 	else if num < 100 {
-		write_u8_2(buf, num);
+		ptr::copy_nonoverlapping(
+			crate::NUMDD.as_ptr().add((num << 1) as usize),
+			buf,
+			2
+		);
 		2
 	}
 	else {
-		ptr::copy_nonoverlapping(INTS.as_ptr().add(10 + (num as usize - 100) * 3), buf, 3);
+		ptr::copy_nonoverlapping(
+			crate::NUMDDD.as_ptr().add((num - 100) as usize * 3),
+			buf,
+			3
+		);
 		3
 	}
 }
@@ -156,15 +150,8 @@ pub unsafe fn write_u8(buf: *mut u8, num: u8) -> usize {
 /// The number must be in `0..=99`, and the pointer must be allocated for two
 /// bytes, or undefined things will happen.
 pub unsafe fn write_u8_2(buf: *mut u8, num: u8) {
-	static INTS: [u8; 200] = *b"\
-		0001020304050607080910111213141516171819\
-		2021222324252627282930313233343536373839\
-		4041424344454647484950515253545556575859\
-		6061626364656667686970717273747576777879\
-		8081828384858687888990919293949596979899";
-
 	ptr::copy_nonoverlapping(
-		INTS.as_ptr().add((num << 1) as usize),
+		crate::NUMDD.as_ptr().add((num << 1) as usize),
 		buf,
 		2
 	);
@@ -182,17 +169,19 @@ pub unsafe fn write_u8_2(buf: *mut u8, num: u8) {
 /// three bytes, or undefined things will happen.
 pub unsafe fn write_u8_3(buf: *mut u8, num: u16) {
 	if num >= 100 {
-		if num <= 255 {
-			write_u8(buf, num as u8);
-		}
-		else {
-			ptr::write(buf, (num / 100) as u8 | MASK_U8);
-			write_u8_2(buf.add(1), (num % 100) as u8);
-		}
+		ptr::copy_nonoverlapping(
+			crate::NUMDDD.as_ptr().add((num - 100) as usize * 3),
+			buf,
+			3
+		);
 	}
 	else {
-		ptr::write(buf, MASK_U8);
-		write_u8_2(buf.add(1), num as u8);
+		ptr::copy_nonoverlapping(
+			crate::NUMD.as_ptr().add((num / 100) as usize),
+			buf,
+			1
+		);
+		write_u8_2(buf.add(1), (num % 100) as u8);
 	}
 }
 

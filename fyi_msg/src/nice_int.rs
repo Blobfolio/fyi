@@ -81,7 +81,7 @@ impl From<u8> for NiceInt {
 			}
 			else {
 				out.from -= 1;
-				ptr::write(ptr.add(out.from), num | utility::MASK_U8);
+				ptr::write(ptr.add(out.from), num | crate::MASK_U8);
 			}
 
 			out
@@ -113,7 +113,7 @@ impl From<u16> for NiceInt {
 			}
 			else {
 				out.from -= 1;
-				ptr::write(ptr.add(out.from), num as u8 | utility::MASK_U8);
+				ptr::write(ptr.add(out.from), num as u8 | crate::MASK_U8);
 			}
 
 			out
@@ -144,7 +144,7 @@ impl From<u32> for NiceInt {
 			}
 			else {
 				out.from -= 1;
-				ptr::write(ptr.add(out.from), num as u8 | utility::MASK_U8);
+				ptr::write(ptr.add(out.from), num as u8 | crate::MASK_U8);
 			}
 
 			out
@@ -185,7 +185,7 @@ macro_rules! nice_int_from_big {
 					}
 					else {
 						out.from -= 1;
-						ptr::write(ptr.add(out.from), num as u8 | utility::MASK_U8);
+						ptr::write(ptr.add(out.from), num as u8 | crate::MASK_U8);
 					}
 
 					out
@@ -218,7 +218,7 @@ impl NiceInt {
 	/// # Is Zero.
 	///
 	/// Returns true if the value is equivalent to "0".
-	pub const fn is_zero(&self) -> bool { self.len() == 1 && self.inner[SIZE - 1] == utility::MASK_U8 }
+	pub const fn is_zero(&self) -> bool { self.len() == 1 && self.inner[SIZE - 1] == crate::MASK_U8 }
 
 	#[must_use]
 	#[inline]
@@ -299,7 +299,7 @@ impl NiceInt {
 		}
 		else {
 			out.from -= 1;
-			ptr::write(ptr.add(out.from), base as u8 | utility::MASK_U8);
+			ptr::write(ptr.add(out.from), base as u8 | crate::MASK_U8);
 		}
 
 		// Write the rest.
