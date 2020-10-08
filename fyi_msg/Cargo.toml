@@ -13,6 +13,7 @@ chrono = "0.4.*"
 [dev-dependencies]
 criterion = "*"
 num-format = "0.4.*"
+rand = "*"
 
 [[bench]]
 name = "fm_msg"

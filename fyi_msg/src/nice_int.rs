@@ -80,7 +80,11 @@ impl From<u8> for NiceInt {
 			}
 			else {
 				out.from -= 1;
-				ptr::write(ptr.add(out.from), num | crate::MASK_U8);
+				ptr::copy_nonoverlapping(
+					crate::NUMD.as_ptr().add(num as usize),
+					ptr.add(out.from),
+					1
+				);
 			}
 
 			out
@@ -112,7 +116,11 @@ impl From<u16> for NiceInt {
 			}
 			else {
 				out.from -= 1;
-				ptr::write(ptr.add(out.from), num as u8 | crate::MASK_U8);
+				ptr::copy_nonoverlapping(
+					crate::NUMD.as_ptr().add(num as usize),
+					ptr.add(out.from),
+					1
+				);
 			}
 
 			out
@@ -143,7 +151,11 @@ impl From<u32> for NiceInt {
 			}
 			else {
 				out.from -= 1;
-				ptr::write(ptr.add(out.from), num as u8 | crate::MASK_U8);
+				ptr::copy_nonoverlapping(
+					crate::NUMD.as_ptr().add(num as usize),
+					ptr.add(out.from),
+					1
+				);
 			}
 
 			out
@@ -151,51 +163,91 @@ impl From<u32> for NiceInt {
 	}
 }
 
-macro_rules! nice_int_from_big {
-	($type:ty) => {
-		impl From<$type> for NiceInt {
-			#[allow(clippy::integer_division)]
-			fn from(mut num: $type) -> Self {
-				// Cap under a trillion.
-				if num >= 999_999_999_999 {
-					return Self {
-						inner: *b"999,999,999,999",
-						from: 0,
-					};
-				}
-
-				unsafe {
-					let mut out = Self::default();
-					let ptr = out.inner.as_mut_ptr();
-
-					while num >= 1000 {
-						utility::write_u8_3(ptr.add(out.from - 3), (num % 1000) as u16);
-						num /= 1000;
-						out.from -= 4;
-					}
-
-					if num >= 100 {
-						out.from -= 3;
-						utility::write_u8_3(ptr.add(out.from), num as u16);
-					}
-					else if num >= 10 {
-						out.from -= 2;
-						utility::write_u8_2(ptr.add(out.from), num as u8);
-					}
-					else {
-						out.from -= 1;
-						ptr::write(ptr.add(out.from), num as u8 | crate::MASK_U8);
-					}
-
-					out
-				}
-			}
+impl From<u64> for NiceInt {
+	#[allow(clippy::integer_division)]
+	fn from(mut num: u64) -> Self {
+		// Cap under a trillion.
+		if num >= 999_999_999_999 {
+			return Self {
+				inner: *b"999,999,999,999",
+				from: 0,
+			};
 		}
-	};
+
+		unsafe {
+			let mut out = Self::default();
+			let ptr = out.inner.as_mut_ptr();
+
+			while num >= 1000 {
+				utility::write_u8_3(ptr.add(out.from - 3), (num % 1000) as u16);
+				num /= 1000;
+				out.from -= 4;
+			}
+
+			if num >= 100 {
+				out.from -= 3;
+				utility::write_u8_3(ptr.add(out.from), num as u16);
+			}
+			else if num >= 10 {
+				out.from -= 2;
+				utility::write_u8_2(ptr.add(out.from), num as u8);
+			}
+			else {
+				out.from -= 1;
+				ptr::copy_nonoverlapping(
+					crate::NUMD.as_ptr().add(num as usize),
+					ptr.add(out.from),
+					1
+				);
+			}
+
+			out
+		}
+	}
 }
 
-nice_int_from_big!(u64);
-nice_int_from_big!(usize);
+impl From<usize> for NiceInt {
+	#[allow(clippy::integer_division)]
+	fn from(mut num: usize) -> Self {
+		// Cap under a trillion.
+		if num >= 999_999_999_999 {
+			return Self {
+				inner: *b"999,999,999,999",
+				from: 0,
+			};
+		}
+
+		unsafe {
+			let mut out = Self::default();
+			let ptr = out.inner.as_mut_ptr();
+
+			while num >= 1000 {
+				utility::write_u8_3(ptr.add(out.from - 3), (num % 1000) as u16);
+				num /= 1000;
+				out.from -= 4;
+			}
+
+			if num >= 100 {
+				out.from -= 3;
+				utility::write_u8_3(ptr.add(out.from), num as u16);
+			}
+			else if num >= 10 {
+				out.from -= 2;
+				utility::write_u8_2(ptr.add(out.from), num as u8);
+			}
+			else {
+				out.from -= 1;
+				ptr::copy_nonoverlapping(
+					crate::NUMD.as_ptr().add(num),
+					ptr.add(out.from),
+					1
+				);
+			}
+
+			out
+		}
+	}
+}
 
 
 
@@ -298,7 +350,11 @@ impl NiceInt {
 		}
 		else {
 			out.from -= 1;
-			ptr::write(ptr.add(out.from), base as u8 | crate::MASK_U8);
+			ptr::copy_nonoverlapping(
+				crate::NUMD.as_ptr().add(num as usize),
+				ptr.add(out.from),
+				1
+			);
 		}
 
 		// Write the rest.
@@ -317,6 +373,7 @@ impl NiceInt {
 mod tests {
 	use super::*;
 	use num_format::{ToFormattedString, Locale};
+	use rand::Rng;
 
 	#[test]
 	fn t_nice_int_u8() {
@@ -340,20 +397,26 @@ mod tests {
 
 	#[test]
 	fn t_nice_int_u32() {
-		for i in (999_999..=u32::MAX).step_by(10_000) {
+		let mut rng = rand::thread_rng();
+
+		for _ in 0..1_000_000 {
+			let num: u32 = rng.gen();
 			assert_eq!(
-				NiceInt::from(i).as_str(),
-				i.to_formatted_string(&Locale::en),
+				NiceInt::from(num).as_str(),
+				num.to_formatted_string(&Locale::en),
 			);
 		}
 	}
 
 	#[test]
 	fn t_nice_int_u64() {
-		for i in (999_999_999..=999_999_999_999_u64).step_by(100_000_000) {
+		let mut rng = rand::thread_rng();
+
+		for _ in 0..1_000_000 {
+			let num: u64 = rng.gen_range(0, 999_999_999_999_u64);
 			assert_eq!(
-				NiceInt::from(i).as_str(),
-				i.to_formatted_string(&Locale::en),
+				NiceInt::from(num).as_str(),
+				num.to_formatted_string(&Locale::en),
 			);
 		}
 	}
