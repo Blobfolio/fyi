@@ -159,7 +159,9 @@ impl MsgPrefix {
 
 			dst = write_ansi(dst, color);
 			dst = utility::write_advance(dst, prefix.as_ptr(), prefix.len());
-			utility::write_advance(dst, b":\x1b[0m ".as_ptr(), 6) as usize - buf.as_ptr() as *const u8 as usize
+			utility::write_advance(
+				dst, b":\x1b[0m ".as_ptr(),
+			6).offset_from(buf.as_ptr() as *const u8) as usize
 		};
 
 		// Align and return!

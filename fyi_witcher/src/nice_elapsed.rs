@@ -201,7 +201,7 @@ impl NiceElapsed {
 				}
 			}
 
-			dst as usize - buf.as_ptr() as *const u8 as usize
+			dst.offset_from(buf.as_ptr() as *const u8) as usize
 		};
 
 		// Put it all together!
