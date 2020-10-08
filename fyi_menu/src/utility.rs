@@ -4,7 +4,6 @@
 
 
 
-#[allow(clippy::match_on_vec_items)] // We already checked the index exists.
 #[allow(clippy::suspicious_else_formatting)] // What does lines have to do with it?
 #[must_use]
 /// # Escape Arg String.

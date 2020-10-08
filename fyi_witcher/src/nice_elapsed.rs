@@ -19,7 +19,6 @@ use std::{
 macro_rules! elapsed_from {
 	($type:ty) => {
 		impl From<$type> for NiceElapsed {
-			#[allow(clippy::integer_division)]
 			fn from(num: $type) -> Self {
 				// Nothing!
 				if 0 == num { Self::min() }
@@ -91,7 +90,6 @@ impl fmt::Display for NiceElapsed {
 }
 
 impl From<u32> for NiceElapsed {
-	#[allow(clippy::integer_division)]
 	fn from(num: u32) -> Self {
 		// Nothing!
 		if 0 == num { Self::min() }

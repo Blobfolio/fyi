@@ -62,7 +62,6 @@ impl fmt::Display for NiceInt {
 }
 
 impl From<u8> for NiceInt {
-	#[allow(clippy::integer_division)]
 	/// # From `u8`.
 	///
 	/// We can just defer to [`utility::write_u8`](super::utility::write_u8) for this.

@@ -136,7 +136,6 @@ impl Witcher {
 		self
 	}
 
-	#[allow(clippy::cast_ptr_alignment)] // It's fine.
 	#[must_use]
 	/// # With Extensions (2) Filter.
 	///
@@ -168,7 +167,6 @@ impl Witcher {
 		self
 	}
 
-	#[allow(clippy::cast_ptr_alignment)] // It's fine.
 	#[must_use]
 	/// # With Extensions (3) Filter.
 	///

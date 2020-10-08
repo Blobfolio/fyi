@@ -195,7 +195,6 @@ macro_rules! define_buffer {
 			/// # TOC Size.
 			pub const fn size() -> usize { $size }
 
-			#[allow(clippy::comparison_chain)] // We're only matching two arms.
 			/// # Replace Part.
 			///
 			/// This method replaces a given part of the buffer with `buf`, which can

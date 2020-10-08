@@ -227,7 +227,6 @@ where P: AsRef<Path> {
 	false
 }
 
-#[allow(clippy::integer_division)]
 #[must_use]
 #[inline]
 /// # Time Chunks.
@@ -236,7 +235,6 @@ where P: AsRef<Path> {
 /// supported; the maximum return value is `(23, 59, 59)`.
 pub const fn hms_u64(num: u64) -> [u8; 3] { hms_u32(num as u32) }
 
-#[allow(clippy::integer_division)]
 #[must_use]
 /// # Time Chunks.
 ///
