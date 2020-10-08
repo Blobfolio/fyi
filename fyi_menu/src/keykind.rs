@@ -59,12 +59,12 @@ impl From<&[u8]> for KeyKind {
 			// Could be long.
 			if txt[1] == b'-' {
 				// Is a long.
-				if len > 2 && is_letter(txt[2]) {
+				if len > 2 && txt[2].is_ascii_alphabetic() {
 					return find_eq(txt);
 				}
 			}
 			// Is short.
-			else if is_letter(txt[1]) {
+			else if txt[1].is_ascii_alphabetic() {
 				if len == 2 { return Self::Short; }
 				else { return Self::ShortV; }
 			}
@@ -72,13 +72,6 @@ impl From<&[u8]> for KeyKind {
 
 		Self::None
 	}
-}
-
-#[must_use]
-#[inline]
-/// # Is Letter.
-const fn is_letter(byte: u8) -> bool {
-	(b'a' <= byte && byte <= b'z') || (b'A' <= byte && byte <= b'Z')
 }
 
 #[must_use]
