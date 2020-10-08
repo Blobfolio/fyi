@@ -63,8 +63,6 @@ impl fmt::Display for NiceInt {
 
 impl From<u8> for NiceInt {
 	/// # From `u8`.
-	///
-	/// We can just defer to [`utility::write_u8`](super::utility::write_u8) for this.
 	fn from(num: u8) -> Self {
 		unsafe {
 			let mut out = Self::default();
