@@ -359,10 +359,13 @@ impl Witcher {
 
 
 #[inline]
-fn with_ext_match(h: &[u8], hl: usize, e: &[u8], el: usize) -> bool {
-	if hl >= el && h[hl - el] == b'.' {
-		for idx in 1..el {
-			if h[hl - idx].to_ascii_lowercase() != e[el - idx] { return false; }
+/// # Match Extension.
+///
+/// Check to see if the haystack (case-insensitive) matches the needle (lower).
+fn with_ext_match(h: &[u8], hl: usize, n: &[u8], nl: usize) -> bool {
+	if hl >= nl && h[hl - nl] == b'.' {
+		for idx in 1..nl {
+			if h[hl - idx].to_ascii_lowercase() != n[nl - idx] { return false; }
 		}
 		true
 	}
