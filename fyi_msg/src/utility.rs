@@ -140,6 +140,7 @@ pub unsafe fn write_u8(buf: *mut u8, num: u8) -> usize {
 	}
 }
 
+#[inline]
 /// # Write 2 Digits.
 ///
 /// This will always write two digits to the pointer, zero-padding on the left
