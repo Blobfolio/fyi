@@ -1129,9 +1129,11 @@ impl Witching {
 			}
 			else {
 				msg.set_suffix_unchecked(&[
-					&b" \x1b[2m("[..],
+					&b" \x1b[2m(Saved "[..],
+					&NiceInt::from(before - after),
+					b" bytes, ",
 					&NiceInt::percent_f64(1.0 - (after as f64 / before as f64)),
-					b"\x1b[0m",
+					b".)\x1b[0m",
 				].fast_concat());
 			}
 		}
