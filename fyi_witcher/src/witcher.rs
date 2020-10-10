@@ -131,7 +131,12 @@ impl Witcher {
 		self.cb = Box::new(move |p: &PathBuf| {
 			let p: &[u8] = utility::path_as_bytes(p);
 			let p_len: usize = p.len();
-			p_len >= e_len && p.iter().skip(p_len - e_len).zip(ext).all(|(a, b)| a.to_ascii_lowercase() == *b)
+
+			p_len >= e_len &&
+			p.iter()
+				.skip(p_len - e_len)
+				.zip(ext)
+				.all(|(a, b)| a.to_ascii_lowercase() == *b)
 		});
 		self
 	}
