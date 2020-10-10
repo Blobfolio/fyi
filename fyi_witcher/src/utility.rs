@@ -128,27 +128,6 @@ unsafe fn count_nl_sse2(src: &[u8]) -> usize {
 }
 
 #[must_use]
-/// # Ends With Ignore ASCII Case.
-///
-/// This combines `ends_with()` and `eq_ignore_ascii_case()`, but skips an
-/// operation by assuming the needle `end` is already in lower case.
-///
-/// ## Examples
-///
-/// ```no_run
-/// assert!(
-///     fyi_witcher::utility::ends_with_ignore_ascii_case(
-///         b"/home/usr/Images/picture.JPG",
-///         b".jpg"
-///     )
-/// );
-/// ```
-pub fn ends_with_ignore_ascii_case(src: &[u8], end: &[u8]) -> bool {
-	let (m, n) = (src.len(), end.len());
-	m >= n && src.iter().skip(m - n).zip(end).all(|(a, b)| a.to_ascii_lowercase() == *b)
-}
-
-#[must_use]
 /// # Fit Length
 ///
 /// This method returns the maximum slice range that will "fit" a given
@@ -295,19 +274,6 @@ mod tests {
 		assert_eq!(count_nl(b"This has no line breaks."), 0);
 		assert_eq!(count_nl(b"This\nhas\ntwo line breaks."), 2);
 		assert_eq!(count_nl(&[10_u8; 63]), 63);
-	}
-
-	#[test]
-	fn t_ends_with_ignore_ascii_case() {
-		assert!(
-			ends_with_ignore_ascii_case(b"/path/to/file.jpg", b".jpg")
-		);
-		assert!(
-			ends_with_ignore_ascii_case(b"/path/to/file.JPG", b".jpg")
-		);
-		assert!(
-			! ends_with_ignore_ascii_case(b"/path/to/file.jpeg", b".jpg")
-		);
 	}
 
 	#[test]
