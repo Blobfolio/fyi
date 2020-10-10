@@ -1,57 +1,30 @@
 /*!
 # FYI Witcher: `Witching`
-
-`Witching` is a progress bar wrapper built around a collection of paths. Each
-(parallel) iteration of the set results in a tick, providing a nice little
-ASCII animation to follow while data is being processed.
-
-Compared with more general-purpose libraries like `indicatif`, `Witching` is
-incredibly lightweight and efficient, but it also lacks much in the way of
-customizability.
-
-All progress bars include an elapsed time and progress shown as a ratio and
-percent. If the window is large enough, an actual "bar" is displayed as well.
-`Witching`s can optionally include a title and a list of active tasks.
-
-That's it! Short and sweet.
 */
 
-
-
-use ahash::{
-	AHasher,
-	AHashSet,
-};
+use ahash::AHashSet;
 use crate::{
 	NiceElapsed,
-	NiceInt,
-	traits::{
-		FittedRange,
-		FittedRangeMut,
-	},
 	utility,
 };
 use fyi_msg::{
-	BufRange,
 	Msg,
 	MsgKind,
-	replace_buf_range,
-	resize_buf_range,
-	utility::time_format_dd,
+	MsgBuffer9,
+	NiceInt,
+	traits::FastConcat,
+	utility::{
+		hash64,
+		write_time,
+	},
 };
 use rayon::prelude::*;
 use std::{
 	cmp::Ordering,
-	ffi::OsStr,
-	hash::{
-		Hash,
-		Hasher,
-	},
 	io::{
 		self,
 		Write,
 	},
-	iter::FromIterator,
 	ops::Deref,
 	path::PathBuf,
 	sync::{
@@ -158,10 +131,12 @@ const MIN_DRAW_WIDTH: usize = 40;
 
 
 #[derive(Debug)]
-/// Inner Witching.
+/// # Inner Witching.
+///
+/// Most of the stateful data for our [`Witching`] struct lives here so that
+/// it can be wrapped up in an `Arc<Mutex>` and passed between threads.
 struct WitchingInner {
-	buf: Vec<u8>,
-	toc: [BufRange; 9],
+	buf: MsgBuffer9,
 	elapsed: u32,
 	last_hash: u64,
 	last_lines: usize,
@@ -179,71 +154,74 @@ struct WitchingInner {
 impl Default for WitchingInner {
 	fn default() -> Self {
 		Self {
-			buf: vec![
-			//  Title would go here.
+			buf: unsafe {
+				MsgBuffer9::from_raw_parts(
+					vec![
+						//  Title would go here.
 
-			//  \e   [   2    m   [   \e  [   0   ;   1    m
-				27, 91, 50, 109, 91, 27, 91, 48, 59, 49, 109,
-			//   0   0   :   0   0   :   0   0
-				48, 48, 58, 48, 48, 58, 48, 48,
-			//  \e   [   0   ;   2    m   ]  \e   [   0    m   •   •
-				27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32,
+						//  \e   [   2    m   [   \e  [   0   ;   1    m
+							27, 91, 50, 109, 91, 27, 91, 48, 59, 49, 109,
+						//   0   0   :   0   0   :   0   0
+							48, 48, 58, 48, 48, 58, 48, 48,
+						//  \e   [   0   ;   2    m   ]  \e   [   0    m   •   •
+							27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32,
 
-			//  \e   [   2    m   [  \e   [   0   ;   1   ;   9   6    m
-				27, 91, 50, 109, 91, 27, 91, 48, 59, 49, 59, 57, 54, 109,
+						//  \e   [   2    m   [  \e   [   0   ;   1   ;   9   6    m
+							27, 91, 50, 109, 91, 27, 91, 48, 59, 49, 59, 57, 54, 109,
 
-			//  Bar Done would go here.
+						//  Bar Done would go here.
 
-			//  \e   [   0   ;   1   ;   9   5    m
-				27, 91, 48, 59, 49, 59, 57, 53, 109,
+						//  \e   [   0   ;   1   ;   9   5    m
+							27, 91, 48, 59, 49, 59, 57, 53, 109,
 
-			//  Bar Doing would go here.
+						//  Bar Doing would go here.
 
-			//  \e   [   0   ;   1   ;   3   4    m
-				27, 91, 48, 59, 49, 59, 51, 52, 109,
+						//  \e   [   0   ;   1   ;   3   4    m
+							27, 91, 48, 59, 49, 59, 51, 52, 109,
 
-			//  Bar Undone would go here.
+						//  Bar Undone would go here.
 
-			//  \e   [   0   ;   2    m   ]  \e   [   0    m   •   •
-				27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32,
+						//  \e   [   0   ;   2    m   ]  \e   [   0    m   •   •
+							27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32,
 
-			//  Done.
-			//  \e   [   1   ;   9   6    m
-				27, 91, 49, 59, 57, 54, 109,
-			//   0
-				48,
+						//  Done.
+						//  \e   [   1   ;   9   6    m
+							27, 91, 49, 59, 57, 54, 109,
+						//   0
+							48,
 
-			//  The slash between Done and Total.
-			//  \e   [   0   ;   2    m   /  \e   [   0   ;   1   ;   3   4    m
-				27, 91, 48, 59, 50, 109, 47, 27, 91, 48, 59, 49, 59, 51, 52, 109,
+						//  The slash between Done and Total.
+						//  \e   [   0   ;   2    m   /  \e   [   0   ;   1   ;   3   4    m
+							27, 91, 48, 59, 50, 109, 47, 27, 91, 48, 59, 49, 59, 51, 52, 109,
 
-			//  Total.
-			//   0
-				48,
+						//  Total.
+						//   0
+							48,
 
-			//  The bit between Total and Percent.
-			//  \e   [   0   ;   1    m   •   •
-				27, 91, 48, 59, 49, 109, 32, 32,
+						//  The bit between Total and Percent.
+						//  \e   [   0   ;   1    m   •   •
+							27, 91, 48, 59, 49, 109, 32, 32,
 
-			//  Percent.
-			//   0   .   0   0   %
-				48, 46, 48, 48, 37,
-			//  \e   [   0    m  \n
-				27, 91, 48, 109, 10,
+						//  Percent.
+						//   0   .   0   0   %
+							48, 46, 48, 48, 37,
+						//  \e   [   0    m  \n
+							27, 91, 48, 109, 10,
 
-			//  Doing would go here.
-			],
-			toc: [
-				BufRange::new(0, 0),   // Title.
-				BufRange::new(11, 19), // Elapsed.
-				BufRange::new(46, 46), // Bar Done.
-				BufRange::new(55, 55), // Bar Doing.
-				BufRange::new(64, 64), // Bar Undone.
-				BufRange::new(84, 85), // Done.
-				BufRange::new(101, 102), // Total.
-				BufRange::new(110, 115), // Percent.
-				BufRange::new(120, 120), // Current Tasks.
-			],
+					//  Doing would go here.
+					],
+					[
+						0, 0,     // Title.
+						11, 19,   // Elapsed.
+						46, 46,   // Bar Done.
+						55, 55,   // Bar Doing.
+						64, 64,   // Bar Undone.
+						84, 85,   // Done.
+						101, 102, // Total.
+						110, 115, // Percent.
+						120, 120, // Current Tasks.
+					]
+				)},
 			doing: AHashSet::new(),
 			done: 0,
 			elapsed: 0,
@@ -264,19 +242,27 @@ impl WitchingInner {
 	// Getters
 	// ------------------------------------------------------------------------
 
-	/// Doing.
-	pub fn doing(&self) -> u32 { self.doing.len() as u32 }
+	/// # Doing.
+	///
+	/// Return the number of active tasks.
+	pub(crate) fn doing(&self) -> u32 { self.doing.len() as u32 }
 
-	/// Done.
-	pub const fn done(&self) -> u32 { self.done }
+	/// # Done.
+	///
+	/// Return the number of completed tasks.
+	pub(crate) const fn done(&self) -> u32 { self.done }
 
-	/// Elapsed (Seconds).
-	pub fn elapsed(&self) -> u32 {
-		86400.min(self.started.elapsed().as_secs() as u32)
+	/// # Elapsed (Seconds).
+	///
+	/// Return the elapsed time in seconds.
+	pub(crate) fn elapsed(&self) -> u32 {
+		86400.min(self.started.elapsed().as_secs()) as u32
 	}
 
-	/// Percent.
-	pub fn percent(&self) -> f64 {
+	/// # Percent.
+	///
+	/// Return the percentage of tasks completed, i.e. `done / total`.
+	pub(crate) fn percent(&self) -> f64 {
 		if self.total == 0 || self.done == 0 { 0.0 }
 		else if self.done == self.total { 1.0 }
 		else {
@@ -284,11 +270,16 @@ impl WitchingInner {
 		}
 	}
 
-	/// Is Running?
-	pub const fn is_running(&self) -> bool { 0 != self.flags & TICKING }
+	/// # Is Running?
+	///
+	/// If the amount completed is less than the total amount, this returns
+	/// `true`, otherwise `false`.
+	pub(crate) const fn is_running(&self) -> bool { 0 != self.flags & TICKING }
 
-	/// Total.
-	pub const fn total(&self) -> u32 { self.total }
+	/// # Total.
+	///
+	/// Return the total number of tasks.
+	pub(crate) const fn total(&self) -> u32 { self.total }
 
 
 
@@ -296,23 +287,22 @@ impl WitchingInner {
 	// Setters
 	// ------------------------------------------------------------------------
 
-	#[allow(trivial_casts)] // We need triviality!
-	/// End Task.
+	/// # End Task.
 	///
 	/// Remove a task from the currently-running list and increment `done` by
 	/// one.
-	pub fn end_task(&mut self, task: &PathBuf) {
-		if self.doing.remove(unsafe { &*(task.as_os_str() as *const OsStr as *const [u8]) }) {
+	pub(crate) fn end_task(&mut self, task: &PathBuf) {
+		if self.doing.remove(utility::path_as_bytes(task)) {
 			self.flags |= TICK_DOING | TICK_BAR;
 			self.increment();
 		}
 	}
 
-	/// Increment.
+	/// # Increment (Completed).
 	///
 	/// Increment `done` by one. If this reaches the total, it will
 	/// automatically trigger a stop.
-	pub fn increment(&mut self) {
+	pub(crate) fn increment(&mut self) {
 		let new_done = self.total.min(self.done + 1);
 		if new_done != self.done {
 			if new_done == self.total { self.stop(); }
@@ -323,10 +313,11 @@ impl WitchingInner {
 		}
 	}
 
-	/// Set Title.
+	/// # Set Title.
 	///
-	/// To remove a title, pass an empty string.
-	pub fn set_title<S> (&mut self, title: S)
+	/// This updates the progress bar's title. If an empty string is passed,
+	/// the title will be removed.
+	pub(crate) fn set_title<S> (&mut self, title: S)
 	where S: AsRef<str> {
 		let title: &[u8] = title.as_ref().as_bytes();
 		if self.title.ne(&title) {
@@ -339,12 +330,11 @@ impl WitchingInner {
 		}
 	}
 
-	#[allow(trivial_casts)] // We need triviality!
-	/// Start Task.
+	/// # Start Task.
 	///
 	/// Add a task to the currently-running list.
-	pub fn start_task(&mut self, task: &PathBuf) {
-		let task: Vec<u8> = unsafe { &*(task.as_os_str() as *const OsStr as *const [u8]) }.to_vec();
+	pub(crate) fn start_task(&mut self, task: &PathBuf) {
+		let task: Vec<u8> = utility::path_as_bytes(task).to_vec();
 		if self.doing.insert(task) {
 			self.flags |= TICK_DOING | TICK_BAR;
 		}
@@ -356,24 +346,20 @@ impl WitchingInner {
 	// Render
 	// ------------------------------------------------------------------------
 
-	/// Preprint.
+	/// # Preprint.
 	///
 	/// This method accepts a completed buffer ready for printing, hashing it
 	/// for comparison with the last job. If unique, the previous output is
 	/// erased and replaced with the new output.
 	fn preprint(&mut self) {
-		if self.buf.is_empty() {
+		if 0 == self.buf.total_len() {
 			self.print_blank();
 			return;
 		}
 
 		// Make sure the content is unique, otherwise we can leave the old bits
 		// up.
-		let hash = {
-			let mut hasher = AHasher::default();
-			self.buf.hash(&mut hasher);
-			hasher.finish()
-		};
+		let hash = hash64(&self.buf);
 		if hash == self.last_hash {
 			return;
 		}
@@ -383,13 +369,13 @@ impl WitchingInner {
 		self.print_cls();
 
 		// Update the line count and print!
-		self.last_lines = bytecount::count(&self.buf, b'\n');
+		self.last_lines = utility::count_nl(&self.buf);
 		Self::print(&self.buf);
 	}
 
-	/// Print Blank.
+	/// # Print Blank.
 	///
-	/// This simply resets the hash and clears any prior output.
+	/// This simply resets the last-print hash and clears any prior output.
 	fn print_blank(&mut self) {
 		if self.last_hash != 0 {
 			self.last_hash = 0;
@@ -398,24 +384,17 @@ impl WitchingInner {
 		self.print_cls();
 	}
 
-	/// Print!
+	/// # Print!
 	///
 	/// Print some arbitrary data to the write place. Haha.
-	///
-	/// `Stderr` is used as the output device in production, but if the
-	/// `bench_sink` feature is enabled, output will be sent to `io::sink()`
-	/// instead. As the feature name suggests, this is only really useful for
-	/// measuring timings.
 	fn print(buf: &[u8]) {
-		#[cfg(not(feature = "bench_sink"))] let writer = io::stderr();
-		#[cfg(not(feature = "bench_sink"))] let mut handle = writer.lock();
-		#[cfg(feature = "bench_sink")] let mut handle = io::sink();
-
+		let writer = io::stderr();
+		let mut handle = writer.lock();
 		handle.write_all(buf).unwrap();
 		handle.flush().unwrap();
 	}
 
-	/// Erase Output.
+	/// # Erase Output.
 	///
 	/// This method "erases" any prior output so that new output can be written
 	/// in the same place. That's animation, folks!
@@ -431,19 +410,16 @@ impl WitchingInner {
 			match self.last_lines.cmp(&10) {
 				Ordering::Equal => { Self::print(&CLS10[..]); },
 				Ordering::Less => {
-					let end: usize = 10 + 14 * self.last_lines;
-					Self::print(&CLS10[0..end]);
+					Self::print(&CLS10[0..10 + 14 * self.last_lines]);
 				},
 				// To clear more lines, print our pre-calculated buffer (which
 				// covers the first 10), and duplicate the line-up chunk (n-10)
 				// times to cover the rest.
 				Ordering::Greater => {
-					Self::print(
-						&CLS10.iter()
-							.chain(&CLS10[14..28].repeat(self.last_lines - 10))
-							.copied()
-							.collect::<Vec<u8>>()
-					);
+					Self::print(&[
+						&CLS10[..],
+						&CLS10[14..28].repeat(self.last_lines - 10),
+					].fast_concat());
 				},
 			}
 
@@ -452,8 +428,11 @@ impl WitchingInner {
 		}
 	}
 
-	/// Stop.
-	pub fn stop(&mut self) {
+	/// # Stop.
+	///
+	/// This method ends all progression, setting `done` to `total` so that
+	/// summaries can be generated.
+	pub(crate) fn stop(&mut self) {
 		self.flags |= TICK_ALL;
 		self.flags &= ! TICKING;
 		self.done = self.total;
@@ -461,11 +440,11 @@ impl WitchingInner {
 		self.print_blank();
 	}
 
-	/// Tick.
+	/// # Tick.
 	///
 	/// Ticking takes all of the changed values (since the last tick), updates
 	/// their corresponding parts in the buffer, and prints the result, if any.
-	pub fn tick(&mut self) -> bool {
+	pub(crate) fn tick(&mut self) -> bool {
 		// We aren't running!
 		if ! self.is_running() {
 			return false;
@@ -510,7 +489,7 @@ impl WitchingInner {
 		true
 	}
 
-	/// Tick Bar Dimensions.
+	/// # Tick Bar Dimensions.
 	///
 	/// This calculates the available widths for each of the three progress
 	/// bars (done, doing, remaining).
@@ -525,13 +504,13 @@ impl WitchingInner {
 		// 2: the spaces after total;
 		// 2: the braces around the bar itself (should there be one);
 		// 2: the spaces after the bar itself (should there be one);
-		let space: usize = 255_usize.min(self.last_width.saturating_sub(
+		let space: usize = 255_usize.min(self.last_width.saturating_sub(unsafe {
 			11 +
-			self.toc[PART_ELAPSED].len() +
-			self.toc[PART_DONE].len() +
-			self.toc[PART_TOTAL].len() +
-			self.toc[PART_PERCENT].len()
-		));
+			self.buf.len_unchecked(PART_ELAPSED) +
+			self.buf.len_unchecked(PART_DONE) +
+			self.buf.len_unchecked(PART_TOTAL) +
+			self.buf.len_unchecked(PART_PERCENT)
+		}));
 
 		// Insufficient space!
 		if space < MIN_BARS_WIDTH || 0 == self.total { (0, 0, 0) }
@@ -553,7 +532,7 @@ impl WitchingInner {
 		}
 	}
 
-	/// Tick Bar.
+	/// # Tick Bar.
 	///
 	/// This redraws the actual progress *bar* portion of the buffer, which is
 	/// actually three different bars squished together: Done, Doing, and
@@ -562,40 +541,29 @@ impl WitchingInner {
 	/// The combined width of the `###` will never exceed 255, and will never
 	/// be less than 10.
 	fn tick_set_bar(&mut self) {
-		static BAR: &[u8; 255] = &[b'#'; 255];
-		static DASH: &[u8; 255] = &[b'-'; 255];
+		static BAR: [u8; 255] = [b'#'; 255];
+		static DASH: [u8; 255] = [b'-'; 255];
 
 		if 0 != self.flags & TICK_BAR {
 			self.flags &= ! TICK_BAR;
 			let (w_done, w_doing, w_undone) = self.tick_bar_widths();
 
-			// Update the done part.
-			if self.toc[PART_BAR_DONE].len() != w_done {
-				replace_buf_range(
-					&mut self.buf,
-					&mut self.toc,
-					PART_BAR_DONE,
-					&BAR[0..w_done],
-				);
+			// Update the parts!.
+			unsafe {
+				if self.buf.len_unchecked(PART_BAR_DONE) != w_done {
+					self.buf.replace_unchecked(PART_BAR_DONE, &BAR[0..w_done]);
+				}
+				if self.buf.len_unchecked(PART_BAR_DOING) != w_doing {
+					self.buf.replace_unchecked(PART_BAR_DOING, &DASH[0..w_doing]);
+				}
+				if self.buf.len_unchecked(PART_BAR_UNDONE) != w_undone {
+					self.buf.replace_unchecked(PART_BAR_UNDONE, &DASH[0..w_undone]);
+				}
 			}
-
-			// Doing and undone use the same character, so we can loop it.
-			[PART_BAR_DOING, PART_BAR_UNDONE].iter()
-				.zip([w_doing, w_undone].iter())
-				.for_each(|(a, b)|
-					if self.toc[*a].len() != *b {
-						replace_buf_range(
-							&mut self.buf,
-							&mut self.toc,
-							*a,
-							&DASH[0..*b],
-						);
-					}
-				);
 		}
 	}
 
-	/// Tick Doing.
+	/// # Tick Doing.
 	///
 	/// Update the task list portion of the buffer. This is triggered both by
 	/// changes to the task list as well as resoluation changes (as long values
@@ -604,12 +572,9 @@ impl WitchingInner {
 		if 0 != self.flags & TICK_DOING {
 			self.flags &= ! TICK_DOING;
 			if self.doing.is_empty() {
-				resize_buf_range(
-					&mut self.buf,
-					&mut self.toc,
-					PART_DOING,
-					0
-				);
+				unsafe {
+					self.buf.zero_unchecked(PART_DOING);
+				}
 			}
 			else {
 				let width: usize = self.last_width.saturating_sub(6);
@@ -619,7 +584,7 @@ impl WitchingInner {
 							.flat_map(|x|
 							//    •   •   •   •   ↳  ---  ---   •
 								[32, 32, 32, 32, 226, 134, 179, 32].iter()
-									.chain(x[x.fitted_range(width)].iter())
+									.chain(x[utility::fitted_range(x, width)].iter())
 									.chain(b"\n".iter())
 							)
 					)
@@ -627,48 +592,38 @@ impl WitchingInner {
 					.copied()
 					.collect();
 
-				replace_buf_range(
-					&mut self.buf,
-					&mut self.toc,
-					PART_DOING,
-					&tasks
-				);
+				unsafe {
+					self.buf.replace_unchecked(PART_DOING, &tasks);
+				}
 			}
 		}
 	}
 
-	/// Tick Done.
+	/// # Tick Done.
 	///
 	/// This updates the "done" portion of the buffer as needed.
 	fn tick_set_done(&mut self) {
 		if 0 != self.flags & TICK_DONE {
 			self.flags &= ! TICK_DONE;
-			replace_buf_range(
-				&mut self.buf,
-				&mut self.toc,
-				PART_DONE,
-				&*NiceInt::from(self.done)
-			);
+			unsafe {
+				self.buf.replace_unchecked(PART_DONE, &NiceInt::from(self.done));
+			}
 		}
 	}
 
-	/// Tick Percent.
+	/// # Tick Percent.
 	///
 	/// This updates the "percent" portion of the buffer as needed.
 	fn tick_set_percent(&mut self) {
 		if 0 != self.flags & TICK_PERCENT {
 			self.flags &= ! TICK_PERCENT;
-			let p: String = format!("{:>3.*}%", 2, self.percent() * 100.0);
-			replace_buf_range(
-				&mut self.buf,
-				&mut self.toc,
-				PART_PERCENT,
-				p.as_bytes(),
-			);
+			unsafe {
+				self.buf.replace_unchecked(PART_PERCENT, &NiceInt::percent_f64(self.percent()));
+			}
 		}
 	}
 
-	/// Tick Elapsed Seconds.
+	/// # Tick Elapsed Seconds.
 	///
 	/// The precision of `Instant` is greater than we need for printing
 	/// purposes; here we're just looking to see if one or more seconds have
@@ -684,74 +639,63 @@ impl WitchingInner {
 		if secs == self.elapsed { false }
 		else {
 			self.elapsed = secs;
-
-			if secs == 86400 {
-				replace_buf_range(
-					&mut self.buf,
-					&mut self.toc,
-					PART_ELAPSED,
-					b"23:59:59"
+			unsafe {
+				let [h, m, s] = utility::hms_u32(secs);
+				write_time(
+					self.buf.as_mut_ptr().add(self.buf.start_unchecked(PART_ELAPSED)),
+					h,
+					m,
+					s,
+					b':',
 				);
-			}
-			else {
-				let c = utility::secs_chunks(secs);
-				let rgs: usize = self.toc[PART_ELAPSED].start();
-				self.buf[rgs..rgs + 2].copy_from_slice(time_format_dd(c[0]));
-				self.buf[rgs + 3..rgs + 5].copy_from_slice(time_format_dd(c[1]));
-				self.buf[rgs + 6..rgs + 8].copy_from_slice(time_format_dd(c[2]));
 			}
 
 			true
 		}
 	}
 
-	/// Tick Title.
+	/// # Tick Title.
 	///
 	/// The title needs to be rewritten both on direct change and resolution
 	/// change. Long titles are lazy-cropped as needed.
 	fn tick_set_title(&mut self) {
 		if 0 != self.flags & TICK_TITLE {
 			self.flags &= ! TICK_TITLE;
-			if self.title.is_empty() {
-				resize_buf_range(
-					&mut self.buf,
-					&mut self.toc,
-					PART_TITLE,
-					0
-				);
-			}
-			else {
-				replace_buf_range(
-					&mut self.buf,
-					&mut self.toc,
-					PART_TITLE,
-					&{
-						let mut m = self.title.clone();
-						m.fit_to_range(self.last_width - 1);
-						m.push(b'\n');
-						m
-					}
-				);
+			unsafe {
+				if self.title.is_empty() {
+					self.buf.zero_unchecked(PART_TITLE);
+				}
+				else {
+					self.buf.replace_unchecked(
+						PART_TITLE,
+						&{
+							let mut m = self.title.clone();
+							let rg = utility::fitted_range(&m, self.last_width - 1);
+							if rg.end > m.len() {
+								m.truncate(rg.end);
+							}
+							m.push(b'\n');
+							m
+						}
+					);
+				}
 			}
 		}
 	}
 
-	/// Tick Total.
+	/// # Tick Total.
 	///
 	/// This updates the "total" portion of the buffer as needed.
 	fn tick_set_total(&mut self) {
 		if 0 != self.flags & TICK_TOTAL {
 			self.flags &= ! TICK_TOTAL;
-			replace_buf_range(
-				&mut self.buf,
-				&mut self.toc,
-				PART_TOTAL,
-				&*NiceInt::from(self.total)
-			);
+			unsafe {
+				self.buf.replace_unchecked(PART_TOTAL, &NiceInt::from(self.total));
+			}
 		}
 	}
 
-	/// Tick Width.
+	/// # Tick Width.
 	///
 	/// Check to see if the terminal width has changed since the last run and
 	/// update values — i.e. the relevant tick flags — as necessary.
@@ -767,10 +711,37 @@ impl WitchingInner {
 
 
 #[derive(Debug)]
-/// Witching Bar.
+/// `Witching` is a progress bar wrapper built around a collection of paths.
+/// Each (parallel) iteration of the set results in a tick, providing a nice
+/// little ASCII animation to follow while data is being processed.
 ///
-/// This is it! The whole point of the crate! See the library documentation for
-/// more information.
+/// Compared with more general-purpose libraries like [`indicatif`](https://crates.io/crates/indicatif), `Witching`
+/// is incredibly lightweight and efficient, but it also lacks much in the way
+/// of customizability.
+///
+/// All progress bars include an elapsed time and progress shown as a ratio and
+/// percent. If the window is large enough, an actual "bar" is displayed as well.
+/// `Witching`s can optionally include a title and a list of active tasks.
+///
+/// That's it! Short and sweet.
+///
+/// ## Examples
+///
+/// `Witching` is instantiated using a builder pattern. Simple chain the desired
+/// `with_*()` methods together along with [`Witching::run`] when you're ready to go!
+///
+/// ```no_run
+/// use fyi_witcher::Witcher;
+/// use fyi_witcher::Witching;
+///
+/// // Find the files you want.
+/// let files = Witcher::default()
+///     .with_path("/my/dir")
+///     .with_ext1(b".jpg")
+///     .into_witching() // Convert it to a Witching instance.
+///     .with_title("My Progress Title") // Set whatever options.
+///     .run(|p| { ... }); // Run your magic!
+/// ```
 pub struct Witching {
 	/// The set to progress through.
 	set: Vec<PathBuf>,
@@ -779,8 +750,11 @@ pub struct Witching {
 	/// Flags.
 	flags: u8,
 	/// Summary labels.
-	one: Vec<u8>,
-	many: Vec<u8>,
+	///
+	/// The first byte stores the boundary between the singular and plural
+	/// labels, such that `label[1..label[0]]` is singular, and `label[label[0]..]`
+	/// is plural.
+	label: Vec<u8>,
 }
 
 impl Default for Witching {
@@ -789,8 +763,8 @@ impl Default for Witching {
 			set: Vec::new(),
 			inner: Arc::new(Mutex::new(WitchingInner::default())),
 			flags: 0,
-			one: vec![102, 105, 108, 101],
-			many: vec![102, 105, 108, 101, 115],
+			// "file" and "files" respectively.
+			label: vec![4, 102, 105, 108, 101, 102, 105, 108, 101, 115],
 		}
 	}
 }
@@ -824,14 +798,53 @@ impl Witching {
 	// ------------------------------------------------------------------------
 
 	#[must_use]
-	/// With Flags.
+	/// # With Flags.
+	///
+	/// Set the desired operational flags.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::{
+	///     Witcher,
+	///     Witching,
+	///     WITCHING_DIFF,
+	///     WITCHING_SUMMARIZE,
+	/// };
+	///
+	/// // Find and run!
+	/// Witcher::default()
+	///     .with_path("/my/dir")
+	///     .with_ext1(b".jpg")
+	///     .into_witching() // Convert it to a Witching instance.
+	///     .with_flags(WITCHING_SUMMARIZE | WITCHING_DIFF)
+	///     .run(|p| { ... }); // Run your magic!
+	/// ```
 	pub fn with_flags(mut self, flags: u8) -> Self {
 		self.set_flags(flags);
 		self
 	}
 
 	#[must_use]
-	/// With Labels.
+	/// # With Labels.
+	///
+	/// The `Witching` summary will report how many "files" were run. Use this
+	/// method to call them "images" or "documents" or whatever else.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witcher;
+	/// use fyi_witcher::Witching;
+	///
+	/// // Find and run!
+	/// Witcher::default()
+	///     .with_path("/my/dir")
+	///     .with_ext1(b".jpg")
+	///     .into_witching() // Convert it to a Witching instance.
+	///     .with_labels("image", "images")
+	///     .run(|p| { ... });
+	/// ```
 	pub fn with_labels<S>(mut self, one: S, many: S) -> Self
 	where S: AsRef<str> {
 		self.set_labels(one, many);
@@ -839,31 +852,124 @@ impl Witching {
 	}
 
 	#[must_use]
-	/// With Title.
+	/// # With Title.
+	///
+	/// Progress bars can optionally start with a title line. This method sets
+	/// that value.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witcher;
+	/// use fyi_witcher::Witching;
+	///
+	/// // Find and run!
+	/// Witcher::default()
+	///     .with_path("/my/dir")
+	///     .with_ext1(b".jpg")
+	///     .into_witching() // Convert it to a Witching instance.
+	///     .with_title("My Title")
+	///     .run(|p| { ... });
+	/// ```
 	pub fn with_title<S> (self, title: S) -> Self
 	where S: AsRef<str> {
 		self.set_title(title);
 		self
 	}
 
-	/// Set Flags.
+	/// # Set Flags.
+	///
+	/// While `Witching` is generally meant to be set up by chaining together
+	/// builder methods, you can use this method to set the flags for an
+	/// object that has been saved to a variable.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witching;
+	///
+	/// let mut witch = Witching::default();
+	/// witch.set_flags(0);
+	/// ```
 	pub fn set_flags(&mut self, flags: u8) { self.flags = flags; }
 
-	/// Set Labels.
+	/// # Set Labels.
+	///
+	/// While `Witching` is generally meant to be set up by chaining together
+	/// builder methods, you can use this method to set the summary labels for
+	/// an object that has been saved to a variable.
+	///
+	/// ## Panics
+	///
+	/// Panics if either label is empty, or if their combined length is greater
+	/// than `255`.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witching;
+	///
+	/// let mut witch = Witching::default();
+	/// witch.set_labels("animal", "animals");
+	/// ```
 	pub fn set_labels<S>(&mut self, one: S, many: S)
 	where S: AsRef<str> {
-		self.one.truncate(0);
-		self.one.extend_from_slice(one.as_ref().as_bytes());
+		let one: &[u8] = one.as_ref().as_bytes();
+		let many: &[u8] = many.as_ref().as_bytes();
 
-		self.many.truncate(0);
-		self.many.extend_from_slice(many.as_ref().as_bytes());
+		assert!(! one.is_empty() && ! many.is_empty() && one.len() + many.len() <= 255);
+
+		unsafe { self.set_labels_unchecked(one, many); }
+	}
+
+	/// # Set Labels (Unchecked).
+	///
+	/// This works just like [`Witching::set_labels`], except it accepts bytes
+	/// directly.
+	///
+	/// ## Safety
+	///
+	/// Both labels must have a length, and their combined length must not
+	/// exceed `255`.
+	pub unsafe fn set_labels_unchecked(&mut self, one: &[u8], many: &[u8]) {
+		// Make sure we start with one spot for the boundary.
+		self.label.truncate(0);
+		self.label.push(one.len() as u8 + 1);
+
+		// Add the singular.
+		self.label.extend_from_slice(one);
+
+		// And add the plural.
+		self.label.extend_from_slice(many);
 	}
 
 	#[must_use]
 	#[allow(clippy::missing_const_for_fn)] // Evidently it can't!
-	/// Into Vec.
+	/// # Into Vec.
 	///
-	/// Consume and return the path collection.
+	/// Consume and return the path collection. This may be useful in cases
+	/// where you've run through the set, but need to perform non-progress-related
+	/// actions afterwards.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witcher;
+	/// use fyi_witcher::Witching;
+	///
+	/// // Set up the instance.
+	/// let mut witch = Witcher::default()
+	///     .with_path("/my/dir")
+	///     .with_ext1(b".jpg")
+	///     .into_witching() // Convert it to a Witching instance.
+	///     .with_title("My Title");
+	///
+	/// // Run your magic.
+	/// witch.run(|p| { ... });
+	///
+	/// // And get the original vector back.
+	/// let files: Vec<PathBuf> = witch.into_vec();
+	/// ```
 	pub fn into_vec(self) -> Vec<PathBuf> { self.set }
 
 
@@ -873,7 +979,7 @@ impl Witching {
 	// ------------------------------------------------------------------------
 
 	#[must_use]
-	/// Total File(s) Size.
+	/// # Total File(s) Size.
 	///
 	/// Add up the size of all files in a set. Calculations are run in parallel so
 	/// should be fairly fast depending on the file system.
@@ -883,15 +989,32 @@ impl Witching {
 			.sum()
 	}
 
-	/// Label.
+	/// # Label.
 	///
 	/// What label should we be using? One or many?
 	fn label(&self) -> &[u8] {
-		if self.set.len() == 1 { &self.one }
-		else { &self.many }
+		if self.set.len() == 1 { &self.label[1..self.label[0] as usize] }
+		else { &self.label[self.label[0] as usize..] }
 	}
 
-	/// Run!
+	/// # Run!
+	///
+	/// This method is used to start the actual progression! This will iterate
+	/// through each path in parallel, sending each to the provided callback.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witcher;
+	/// use fyi_witcher::Witching;
+	///
+	/// // Find and run!
+	/// Witcher::default()
+	///     .with_path("/my/dir")
+	///     .with_ext1(b".jpg")
+	///     .into_witching()   // Convert it to a Witching instance.
+	///     .run(|p| { ... }); // Here's the magic.
+	/// ```
 	pub fn run<F>(&self, cb: F)
 	where F: Fn(&PathBuf) + Copy + Send + Sync + 'static {
 		// Empty set?
@@ -925,7 +1048,9 @@ impl Witching {
 		}
 	}
 
-	/// Run!
+	/// # (Actually) Run!
+	///
+	/// This internal method is used for iterations requiring progress display.
 	fn run_sexy<F>(&self, cb: F)
 	where F: Fn(&PathBuf) + Copy + Send + Sync + 'static {
 		// Track the run independently of `WitchingInner`, just in case a
@@ -955,64 +1080,77 @@ impl Witching {
 		t_handle.join().unwrap();
 	}
 
-	/// Summarize.
-	fn summarize(&self) {
-		Msg::from_iter(
-			NiceInt::from(u64::from(self.total())).iter()
-				.chain(b" ".iter())
-				.chain(self.label().iter())
-				.chain(b" in ".iter())
-				.chain(NiceElapsed::from(self.elapsed()).iter())
-				.chain(b".\n".iter())
-				.copied()
-		)
-			.with_prefix(MsgKind::Done)
-			.eprint();
+	/// # Summary.
+	///
+	/// This is the base summary, no prefix.
+	///
+	///     X files in M minutes and S seconds.
+	fn summary(&self) -> Msg {
+		Msg::from([
+			NiceInt::from(self.total()).as_bytes(),
+			b" ",
+			self.label(),
+			b" in ",
+			&NiceElapsed::from(self.elapsed()),
+			b".",
+		])
 	}
 
-	/// Summarize (with savings).
+	/// # Summarize.
 	///
-	/// This summary compares the before and after bytes.
+	/// This prints a simple summary after iteration has completed. It is
+	/// enabled using the [`WITCHING_SUMMARIZE`] flag and reads something like:
+	///
+	///     Done: 5 files in 3 seconds.
+	fn summarize(&self) {
+		self.summary()
+			.with_prefix(MsgKind::Done)
+			.eprintln();
+	}
+
+	/// # Summarize (with savings).
+	///
+	/// This version of the summary compares the before and after bytes and
+	/// notes how much space has been saved. It is intended for operations that
+	/// minify or compress the file paths in the set.
+	///
+	/// This is engaged when both [`WITCHING_SUMMARIZE`] and [`WITCHING_DIFF`] flags
+	/// are set and will return a message like:
+	///
+	///     Crunched: 5 files in 3 seconds, saving 2 bytes. (1.00%)
+	///     Crunched: 5 files in 3 seconds. (No savings.)
 	fn summarize_diff(&self, before: u64) {
 		let after: u64 = self.du();
+		let mut msg = self.summary().with_prefix(MsgKind::Crunched);
 
-		// No savings. Boo.
-		if 0 == after || before <= after {
-			Msg::from_iter(
-				NiceInt::from(u64::from(self.total())).iter()
-					.chain(b" ".iter())
-					.chain(self.label().iter())
-					.chain(b" in ".iter())
-					.chain(NiceElapsed::from(self.elapsed()).iter())
-					.chain(b", but nothing doing.\n".iter())
-					.copied()
-			)
-				.with_prefix(MsgKind::Crunched)
-				.eprint();
+		unsafe {
+			if 0 == after || before <= after {
+				msg.set_suffix_unchecked(b" \x1b[2m(No savings.)\x1b[0m");
+			}
+			else {
+				msg.set_suffix_unchecked(&[
+					&b" \x1b[2m("[..],
+					&NiceInt::percent_f64(1.0 - (after as f64 / before as f64)),
+					b"\x1b[0m",
+				].fast_concat());
+			}
 		}
-		else {
-			MsgKind::Crunched.into_msg(format!(
-				"{} {} in {}, saving {} bytes ({:3.*}%).\n",
-				NiceInt::from(u64::from(self.total())).as_str(),
-				unsafe { std::str::from_utf8_unchecked(self.label()) },
-				NiceElapsed::from(self.elapsed()).as_str(),
-				NiceInt::from(before - after).as_str(),
-				2,
-				(1.0 - (after as f64 / before as f64)) * 100.0
-			)).eprint();
-		}
+
+		msg.eprintln();
 	}
 
-	/// Summarize empty.
+	/// # Summarize empty.
 	///
-	/// This summary prints when the set is empty.
+	/// This summary prints when the set is empty and the instance has the
+	/// [`WITCHING_SUMMARIZE`] flag set. It simply reads:
+	///
+	///     No files were found.
 	fn summarize_empty(&self) {
-		Msg::from_iter(
-			b"No ".iter()
-				.chain(self.many.iter())
-				.chain(b" were found.\n".iter())
-				.copied()
-		)
+		Msg::from([
+			b"No ",
+			self.label(),
+			b" were found.",
+		])
 			.with_prefix(MsgKind::Warning)
 			.eprint();
 	}
@@ -1031,7 +1169,7 @@ impl Witching {
 	get_inner!(total, u32);
 	get_inner!(is_running, bool);
 
-	/// Stop.
+	/// # Stop.
 	///
 	/// Wrapper for `WitchingInner::stop()`.
 	fn stop(&self) {
@@ -1039,7 +1177,7 @@ impl Witching {
 		ptr.stop();
 	}
 
-	/// Set Title.
+	/// # Set Title.
 	///
 	/// Wrapper for `WitchingInner::set_title()`.
 	pub fn set_title<S> (&self, title: S)
@@ -1049,7 +1187,7 @@ impl Witching {
 	}
 }
 
-/// Tick.
+/// # Tick.
 ///
 /// Wrapper for `WitchingInner::tick()`.
 fn progress_tick(inner: &Arc<Mutex<WitchingInner>>) -> bool {
@@ -1057,7 +1195,7 @@ fn progress_tick(inner: &Arc<Mutex<WitchingInner>>) -> bool {
 	ptr.tick()
 }
 
-/// End Task.
+/// # End Task.
 ///
 /// Wrapper for `WitchingInner::end_task()`.
 fn progress_end(inner: &Arc<Mutex<WitchingInner>>, task: &PathBuf) {
@@ -1065,7 +1203,7 @@ fn progress_end(inner: &Arc<Mutex<WitchingInner>>, task: &PathBuf) {
 	ptr.end_task(task);
 }
 
-/// Start Task.
+/// # Start Task.
 ///
 /// Wrapper for `WitchingInner::start_task()`.
 fn progress_start(inner: &Arc<Mutex<WitchingInner>>, task: &PathBuf) {

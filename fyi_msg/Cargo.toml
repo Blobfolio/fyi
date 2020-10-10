@@ -1,23 +1,30 @@
 [package]
 name = "fyi_msg"
-version = "0.3.3"
+version = "0.3.4"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "FYI is a dead-simple status message printer for CLI use applications."
 publish = false
 
 [dependencies]
+ahash = "0.4.*"
 chrono = "0.4.*"
 
 [dev-dependencies]
 criterion = "*"
-
-[[bench]]
-name = "fm_bufrange"
-harness = false
+num-format = "0.4.*"
+rand = "*"
 
 [[bench]]
 name = "fm_msg"
+harness = false
+
+[[bench]]
+name = "fm_buffer"
+harness = false
+
+[[bench]]
+name = "fm_nice_int"
 harness = false
 
 [[bench]]

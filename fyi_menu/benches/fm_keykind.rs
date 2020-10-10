@@ -14,12 +14,14 @@ use fyi_menu::KeyKind;
 
 fn keykind_from(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_menu::KeyKind");
+	group.sample_size(30);
 
 	for kv in [
-		&b"Hello World"[..],
-		&b"--key"[..],
-		&b"-k"[..],
-		&b"-kValue"[..],
+		//&b"Hello World!"[..],
+		&b"--prefix"[..],
+		&b"--prefix-color=199"[..],
+		//&b"-p"[..],
+		//&b"-c199"[..],
 	].iter() {
 		group.bench_with_input(
 			BenchmarkId::from_parameter(&format!(

@@ -1,65 +1,17 @@
 /*!
 # FYI Witcher: Witcher
-
-This is a very simple recursive file finder. Directories are read in parallel.
-Files are canonicalized and deduped. Symlinks are followed. Hidden files and
-directories are read like any other.
-
-The struct uses a builder pattern.
-
-## Filtering
-
-Results can be filtered prior to being yielded with the use of either
-`with_filter()` — specifying a custom callback method — or `with_regex()` — to
-match against a pattern.
-
-It is important to define the filter *before* adding any paths, because if
-those paths are files, they'll need to be filtered. Right? Right.
-
-Filter callbacks should accept an `&PathBuf` and return `true` to keep it,
-`false` to discard it.
-
-## Examples
-
-```no_run
-use fyi_witcher::Witcher;
-
-// Return all files under "/usr/share/man".
-let res: Vec<PathBuf> = Witcher::default()
-    .with_path("/usr/share/man")
-    .build();
-
-// Return only Gzipped files.
-let res: Vec<PathBuf> = Witcher::default()
-    .with_regex(r"(?i).+\.gz$")
-    .with_path("/usr/share/man")
-    .build();
-
-// If you're just matching one pattern, it can be faster to not use Regex:
-let res: Vec<PathBuf> = Witcher::default()
-    .with_filter(|p: &PathBuf| {
-        let bytes: &[u8] = unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) };
-        bytes.len() > 3 && bytes[bytes.len()-3..].eq_ignore_ascii_case(b".gz")
-    })
-    .with_path("/usr/share/man")
-    .build();
-```
 */
 
-use ahash::{
-	AHasher,
-	AHashSet
-};
+use ahash::AHashSet;
 use crate::{
 	utility,
 	Witching,
 };
+use fyi_msg::utility::hash64;
 use rayon::prelude::*;
 use std::{
 	borrow::Borrow,
-	ffi::OsStr,
 	fs,
-	hash::Hasher,
 	path::{
 		Path,
 		PathBuf,
@@ -69,10 +21,48 @@ use std::{
 
 
 #[allow(missing_debug_implementations)]
-/// Witcher.
+/// `Witcher` is a very simple recursive file finder. Directories are read in
+/// parallel. Files are canonicalized and deduped. Symlinks are followed.
+/// Hidden files and directories are read like any other.
 ///
-/// This is the main file finder struct. See the module reference for more
-/// details.
+/// ## Filtering
+///
+/// Results can be filtered prior to being yielded with the use of either
+/// [`with_filter()`](Witcher::with_filter) — specifying a custom callback method
+/// — or [`with_regex()`](Witcher::with_regex) — to match against a pattern.
+///
+/// It is important to define the filter *before* adding any paths, because if
+/// those paths are files, they'll need to be filtered. Right? Right.
+///
+/// Filter callbacks should accept a `&PathBuf` and return `true` to keep it,
+/// `false` to discard it.
+///
+/// ## Examples
+///
+/// ```no_run
+/// use fyi_witcher::Witcher;
+/// use fyi_witcher::utility;
+///
+/// // Return all files under "/usr/share/man".
+/// let res: Vec<PathBuf> = Witcher::default()
+///     .with_path("/usr/share/man")
+///     .build();
+///
+/// // Return only Gzipped files.
+/// let res: Vec<PathBuf> = Witcher::default()
+///     .with_regex(r"(?i).+\.gz$")
+///     .with_path("/usr/share/man")
+///     .build();
+///
+/// // If you're just matching one pattern, it can be faster to not use Regex:
+/// let res: Vec<PathBuf> = Witcher::default()
+///     .with_filter(|p: &PathBuf| {
+///         let bytes: &[u8] = utility::path_as_bytes(p);
+///         bytes.len() > 3 && bytes[bytes.len()-3..].eq_ignore_ascii_case(b".gz")
+///     })
+///     .with_path("/usr/share/man")
+///     .build();
+/// ```
 pub struct Witcher {
 	/// Directories to scan.
 	dirs: Vec<PathBuf>,
@@ -96,10 +86,21 @@ impl Default for Witcher {
 }
 
 impl Witcher {
-	/// With Callback.
+	/// # With Callback.
 	///
 	/// Define a custom filter callback to determine whether or not a given
 	/// file path should be yielded.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witcher;
+	///
+	/// let files = Witcher::default()
+	///     .with_path("/my/dir")
+	///     .with_filter(|p: &PathBuf| { ... })
+	///     .build();
+	/// ```
 	pub fn with_filter<F>(mut self, cb: F) -> Self
 	where F: Fn(&PathBuf) -> bool + 'static {
 		self.cb = Box::new(cb);
@@ -107,90 +108,166 @@ impl Witcher {
 	}
 
 	#[must_use]
-	#[allow(trivial_casts)] // Triviality is required!
-	/// With Extension Filter.
+	/// # With Extension Filter.
 	///
-	/// This method — and `with_ext2()`, `with_ext3()` — can be faster for
-	/// matching simple file extensions than `with_regex()`.
+	/// This method — and [`with_ext2()`](Witcher::with_ext2), [`with_ext3()`](Witcher::with_ext3) — can be faster for
+	/// matching simple file extensions than [`with_regex()`](Witcher::with_regex),
+	/// particularly if regular expressions are not used anywhere else.
 	///
-	/// Note: The extension should include the period and be in lower case.
+	/// Note: The extension should include the leading period and be in lower case.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witcher;
+	///
+	/// let files = Witcher::default()
+	///     .with_path("/my/dir")
+	///     .with_ext1(b".jpg")
+	///     .build();
+	/// ```
 	pub fn with_ext1(mut self, ext: &'static [u8]) -> Self {
-		self.cb = Box::new(move |p: &PathBuf|
-			utility::ends_with_ignore_ascii_case(
-				unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) },
-				ext
-			)
-		);
+		let e_len: usize = ext.len();
+		self.cb = Box::new(move |p: &PathBuf| {
+			let p: &[u8] = utility::path_as_bytes(p);
+			let p_len: usize = p.len();
+
+			p_len >= e_len &&
+			p.iter()
+				.skip(p_len - e_len)
+				.zip(ext)
+				.all(|(a, b)| a.to_ascii_lowercase() == *b)
+		});
 		self
 	}
 
 	#[must_use]
-	#[allow(trivial_casts)] // Triviality is required!
-	/// With Extensions (2) Filter.
+	/// # With Extensions (2) Filter.
 	///
-	/// Note: The extension should include the period and be in lower case.
+	/// Note: The extension should include the leading period and be in lower case.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witcher;
+	///
+	/// let files = Witcher::default()
+	///     .with_path("/my/dir")
+	///     .with_ext2(b".jpg", b".jpeg")
+	///     .build();
+	/// ```
 	pub fn with_ext2(mut self, ext1: &'static [u8], ext2: &'static [u8]) -> Self {
+		let e1_len: usize = ext1.len();
+		let e2_len: usize = ext2.len();
+
 		self.cb = Box::new(move |p: &PathBuf| {
-			let bytes: &[u8] = unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) };
-			utility::ends_with_ignore_ascii_case(bytes, ext1) ||
-			utility::ends_with_ignore_ascii_case(bytes, ext2)
+			let p: &[u8] = utility::path_as_bytes(p);
+			let len = p.len();
+
+			// Check the first.
+			with_ext_match(p, len, ext1, e1_len) ||
+			with_ext_match(p, len, ext2, e2_len)
 		});
+
 		self
 	}
 
 	#[must_use]
-	#[allow(trivial_casts)] // Triviality is required!
-	/// With Extensions (3) Filter.
+	/// # With Extensions (3) Filter.
 	///
-	/// Note: The extension should include the period and be in lower case.
-	pub fn with_ext3(
-		mut self,
-		ext1: &'static [u8],
-		ext2: &'static [u8],
-		ext3: &'static [u8]
-	) -> Self {
+	/// Note: The extension should include the leading period and be in lower case.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witcher;
+	///
+	/// let files = Witcher::default()
+	///     .with_path("/my/dir")
+	///     .with_ext3(b".jpg", b".jpeg", b".png")
+	///     .build();
+	/// ```
+	pub fn with_ext3(mut self, ext1: &'static [u8], ext2: &'static [u8], ext3: &'static [u8]) -> Self {
+		let e1_len: usize = ext1.len();
+		let e2_len: usize = ext2.len();
+		let e3_len: usize = ext3.len();
+
 		self.cb = Box::new(move |p: &PathBuf| {
-			let bytes: &[u8] = unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) };
-			utility::ends_with_ignore_ascii_case(bytes, ext1) ||
-			utility::ends_with_ignore_ascii_case(bytes, ext2) ||
-			utility::ends_with_ignore_ascii_case(bytes, ext3)
+			let p: &[u8] = utility::path_as_bytes(p);
+			let len = p.len();
+
+			// Check the first.
+			with_ext_match(p, len, ext1, e1_len) ||
+			with_ext_match(p, len, ext2, e2_len) ||
+			with_ext_match(p, len, ext3, e3_len)
 		});
+
 		self
 	}
 
-	#[allow(trivial_casts)] // Triviality is required!
-	/// With a Regex Callback.
+	/// # With a Regex Callback.
 	///
 	/// This is a convenience method for filtering files by regular expression.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witcher;
+	///
+	/// let files = Witcher::default()
+	///     .with_path("/my/dir")
+	///     .with_regex(r"(?i).+\.jpe?g$")
+	///     .build();
+	/// ```
 	pub fn with_regex<R>(mut self, reg: R) -> Self
 	where R: Borrow<str> {
 		use regex::bytes::Regex;
 		let pattern: Regex = Regex::new(reg.borrow()).expect("Invalid Regex.");
-		self.cb = Box::new(move|p: &PathBuf| pattern.is_match(
-			unsafe { &*(p.as_os_str() as *const OsStr as *const [u8]) }
-		));
+		self.cb = Box::new(move|p: &PathBuf| pattern.is_match(utility::path_as_bytes(p)));
 		self
 	}
 
-	/// With Paths.
+	/// # With Paths.
 	///
 	/// Append files and/or directories to the finder. File paths will be
 	/// checked against the filter callback (if any) and added straight to the
 	/// results if they pass. Directories will be queued for later scanning.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witcher;
+	///
+	/// let files = Witcher::default()
+	///     .with_paths(&["/my/dir"])
+	///     .with_ext1(b".jpg")
+	///     .build();
+	/// ```
 	pub fn with_paths<P>(self, paths: &[P]) -> Self
 	where P: AsRef<Path> {
 		paths.iter().fold(self, Self::with_path)
 	}
 
-	/// With Path.
+	/// # With Path.
 	///
 	/// Add a path to the finder. If the path is a file, it will be checked
 	/// against the filter callback (if any) before being added to the results.
 	/// If it is a directory, it will be queued for later scanning.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witcher;
+	///
+	/// let files = Witcher::default()
+	///     .with_path("/my/dir")
+	///     .with_ext1(b".jpg")
+	///     .build();
+	/// ```
 	pub fn with_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
 		if let Ok(path) = fs::canonicalize(path.as_ref()) {
-			if self.seen.insert(hash_path_buf(&path)) {
+			if self.seen.insert(hash64(utility::path_as_bytes(&path))) {
 				if path.is_dir() {
 					self.dirs.push(path);
 				}
@@ -203,23 +280,46 @@ impl Witcher {
 	}
 
 	#[must_use]
-	/// Build!
+	/// # Build!
 	///
 	/// Once everything is set up, call this method to consume the queue and
 	/// collect the files into a `Vec<PathBuf>`.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witcher;
+	///
+	/// let files = Witcher::default()
+	///     .with_path("/my/dir")
+	///     .with_ext1(b".jpg")
+	///     .build();
+	/// ```
 	pub fn build(mut self) -> Vec<PathBuf> {
 		self.digest();
 		self.files
 	}
 
 	#[must_use]
-	/// Build (into Progress)!
+	/// # Build (into Progress)!
 	///
-	/// This is identical to `build()`, except a ready-to-go `Progress` struct
-	/// is returned instead.
+	/// This is identical to [`build()`](Witcher::build), except a ready-to-go
+	/// [`Witching`] struct is returned instead of a vector.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_witcher::Witcher;
+	///
+	/// let files = Witcher::default()
+	///     .with_path("/my/dir")
+	///     .with_ext1(b".jpg")
+	///     .into_witching()
+	///     .run(|p| { ... });
+	/// ```
 	pub fn into_witching(self) -> Witching { Witching::from(self.build()) }
 
-	/// Digest.
+	/// # Digest.
 	///
 	/// This method drains and scans all queued directories, compiling a list
 	/// of files as it goes.
@@ -243,7 +343,7 @@ impl Witcher {
 
 			// Collect the paths found.
 			rx.iter().for_each(|p| {
-				if self.seen.insert(hash_path_buf(&p)) {
+				if self.seen.insert(hash64(utility::path_as_bytes(&p))) {
 					if p.is_dir() {
 						self.dirs.push(p);
 					}
@@ -258,21 +358,18 @@ impl Witcher {
 
 
 
-#[must_use]
-#[allow(trivial_casts)] // Doesn't work without it.
-/// Hash Path.
+#[inline]
+/// # Match Extension.
 ///
-/// This method calculates a unique `u64` hash from a canonical `PathBuf` using
-/// the `AHash` algorithm. It is faster than the default `Hash` implementation
-/// because it works against the full byte string, rather than crunching each
-/// path component individually.
-///
-/// Speed aside, the main reason for this is it allows us to track uniqueness
-/// as simple, `Copy`able `u64`s instead of full-blown `PathBuf`s.
-fn hash_path_buf(path: &PathBuf) -> u64 {
-	let mut hasher = AHasher::default();
-	hasher.write(unsafe { &*(path.as_os_str() as *const OsStr as *const [u8]) });
-	hasher.finish()
+/// Check to see if the haystack (case-insensitive) matches the needle (lower).
+fn with_ext_match(h: &[u8], hl: usize, n: &[u8], nl: usize) -> bool {
+	if hl >= nl && h[hl - nl] == b'.' {
+		for idx in 1..nl {
+			if h[hl - idx].to_ascii_lowercase() != n[nl - idx] { return false; }
+		}
+		true
+	}
+	else { false }
 }
 
 
@@ -280,6 +377,7 @@ fn hash_path_buf(path: &PathBuf) -> u64 {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use criterion as _;
 
 	#[test]
 	fn t_new() {
@@ -294,7 +392,7 @@ mod tests {
 			.with_path(PathBuf::from("tests/"))
 			.build();
 		assert!(! w1.is_empty());
-		assert_eq!(w1.len(), 2);
+		assert_eq!(w1.len(), 3);
 		assert!(w1.contains(&abs_p1));
 		assert!(w1.contains(&abs_p2));
 		assert!(! w1.contains(&abs_perr));
@@ -320,5 +418,29 @@ mod tests {
 		assert!(! w1.contains(&abs_p1));
 		assert!(! w1.contains(&abs_p2));
 		assert!(! w1.contains(&abs_perr));
+
+		// One Extension.
+		w1 = Witcher::default()
+			.with_path(PathBuf::from("tests/"))
+			.with_ext1(b".txt")
+			.build();
+		assert!(! w1.is_empty());
+		assert_eq!(w1.len(), 1);
+
+		// Two Extensions.
+		w1 = Witcher::default()
+			.with_path(PathBuf::from("tests/"))
+			.with_ext2(b".txt", b".sh")
+			.build();
+		assert!(! w1.is_empty());
+		assert_eq!(w1.len(), 2);
+
+		// Three Extensions.
+		w1 = Witcher::default()
+			.with_path(PathBuf::from("tests/"))
+			.with_ext3(b".txt", b".sh", b".jpeg")
+			.build();
+		assert!(! w1.is_empty());
+		assert_eq!(w1.len(), 3);
 	}
 }

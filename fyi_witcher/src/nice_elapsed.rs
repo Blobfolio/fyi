@@ -1,38 +1,35 @@
 /*!
 # FYI Witcher: "Nice" Elapsed
-
-Convert seconds into an oxford-joined byte string like, "3 hours, 2 minutes,
-and 1 second".
-
-Note: days are unsupported, or more specifically, any value over 23:59:59 will
-return ">1 day".
 */
 
+use crate::utility;
+use fyi_msg::utility::write_advance;
 use std::{
 	fmt,
+	mem::{
+		self,
+		MaybeUninit,
+	},
 	ops::Deref,
 };
 
 
 
-/// Helper: Append a number and label to the buffer.
-macro_rules! ne_push {
-	($lhs:ident, $num:expr, $one:expr, $many:expr) => {
-		// Singular shortcut.
-		if 1 == $num {
-			let end: usize = $lhs.len + $one.len();
-			$lhs.inner[$lhs.len..end].copy_from_slice($one);
-			$lhs.len = end;
-		}
-		// The rest!
-		else {
-			// Write the number.
-			$lhs.len += itoa::write(&mut $lhs.inner[$lhs.len..], $num).unwrap();
-
-			// Write the label.
-			let end: usize = $lhs.len + $many.len();
-			$lhs.inner[$lhs.len..end].copy_from_slice($many);
-			$lhs.len = end;
+/// # Helper: Generate Impl
+macro_rules! elapsed_from {
+	($type:ty) => {
+		impl From<$type> for NiceElapsed {
+			fn from(num: $type) -> Self {
+				// Nothing!
+				if 0 == num { Self::min() }
+				// Hours, and maybe minutes and/or seconds.
+				else if num < 86400 {
+					let [h, m, s] = utility::hms_u32(num as u32);
+					unsafe { Self::from_hms(h, m, s) }
+				}
+				// We're into days, which we don't do.
+				else { Self::max() }
+			}
 		}
 	};
 }
@@ -40,15 +37,29 @@ macro_rules! ne_push {
 
 
 #[derive(Clone, Copy)]
-/// Nice Elapsed
+/// This is a very simple struct for efficiently converting a given number of
+/// seconds (`u32`) into a nice, human-readable Oxford-joined byte string, like
+/// `3 hours, 2 minutes, and 1 second`.
+///
+/// Note: days are unsupported, or more specifically, any value over `23:59:59`
+/// (or `86400+` seconds) will return a fixed value of `>1 day`.
+///
+/// ## Examples
+///
+/// ```no_run
+/// use fyi_witcher::NiceElapsed;
+/// assert_eq!(
+///     NiceElapsed::from(61).as_str(),
+///     "1 minute and 1 second"
+/// );
+/// ```
 pub struct NiceElapsed {
 	inner: [u8; 36],
 	len: usize,
 }
 
-
-
 impl Default for NiceElapsed {
+	#[inline]
 	fn default() -> Self {
 		Self {
 			inner: [0; 36],
@@ -59,10 +70,8 @@ impl Default for NiceElapsed {
 
 impl Deref for NiceElapsed {
 	type Target = [u8];
-
-	fn deref(&self) -> &Self::Target {
-		&self.inner[0..self.len]
-	}
+	#[inline]
+	fn deref(&self) -> &Self::Target { &self.inner[0..self.len] }
 }
 
 impl fmt::Debug for NiceElapsed {
@@ -76,7 +85,7 @@ impl fmt::Debug for NiceElapsed {
 
 impl fmt::Display for NiceElapsed {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str(unsafe { std::str::from_utf8_unchecked(&*self) })
+		f.write_str(self.as_str())
 	}
 }
 
@@ -84,52 +93,26 @@ impl From<u32> for NiceElapsed {
 	fn from(num: u32) -> Self {
 		// Nothing!
 		if 0 == num { Self::min() }
-		// Just seconds.
-		else if num < 60 { Self::from_s(num) }
-		// Minutes and maybe seconds.
-		else if num < 3600 {
-			// Break up the parts.
-			let m: u32 = num_integer::div_floor(num, 60);
-			let s: u32 = num - m * 60;
-
-			// Minutes and seconds.
-			if s > 0 { Self::from_ms(m, s) }
-			// Just minutes.
-			else { Self::from_m(m) }
-		}
 		// Hours, and maybe minutes and/or seconds.
 		else if num < 86400 {
-			// Break up the parts.
-			let h: u32 = num_integer::div_floor(num, 3600);
-			let mut s: u32 = num - h * 3600;
-			let mut m: u32 = 0;
-			if s >= 60 {
-				m = num_integer::div_floor(s, 60);
-				s -= m * 60;
-			}
-
-			// Figure out which pieces need adding.
-			match (m == 0, s == 0) {
-				// All three parts.
-				(false, false) => Self::from_hms(h, m, s),
-				// Hours and Minutes.
-				(false, true) => Self::from_hm(h, m),
-				// Hours and Seconds.
-				(true, false) => Self::from_hs(h, s),
-				// Only hours.
-				(true, true) => Self::from_h(h),
-			}
+			let [h, m, s] = utility::hms_u32(num);
+			unsafe { Self::from_hms(h, m, s) }
 		}
 		// We're into days, which we don't do.
 		else { Self::max() }
 	}
 }
 
-
+elapsed_from!(usize);
+elapsed_from!(u64);
+elapsed_from!(u128);
 
 impl NiceElapsed {
 	#[must_use]
-	/// Minimum Value
+	/// # Minimum Value
+	///
+	/// We can save some processing time by hard-coding the value for `0`,
+	/// which comes out to `0 seconds`.
 	pub const fn min() -> Self {
 		Self {
 			//       0   •    s    e   c    o    n    d    s
@@ -139,7 +122,11 @@ impl NiceElapsed {
 	}
 
 	#[must_use]
-	/// Maximum Value
+	/// # Maximum Value
+	///
+	/// We can save some processing time by hard-coding the maximum value.
+	/// Because `NiceInt` does not support days, this is equivalent to `86400`,
+	/// which comes out to `>1 day`.
 	pub const fn max() -> Self {
 		Self {
 			//       >   1   •    d   a    y
@@ -148,167 +135,94 @@ impl NiceElapsed {
 		}
 	}
 
-	/// From Hours, Minutes, Seconds.
-	fn from_hms(h: u32, m: u32, s: u32) -> Self {
-		let mut out = Self::default();
+	/// # From Hours, Minutes, Seconds.
+	///
+	/// Fill the buffer with the appropriate output given all the different bits.
+	///
+	/// ## Safety
+	///
+	/// All numbers must be — but should be — less than 99 or undefined things
+	/// may happen.
+	unsafe fn from_hms(h: u8, m: u8, s: u8) -> Self {
+		use fyi_msg::utility::write_u8;
 
-		// Write hours.
-		ne_push!(
-			out, h,
-			// 1   •    h    o    u    r   ,   •
-			&[49, 32, 104, 111, 117, 114, 44, 32],
-			// •    h    o    u    r    s   ,   •
-			&[32, 104, 111, 117, 114, 115, 44, 32]
-		);
+		let mut buf = [MaybeUninit::<u8>::uninit(); 36];
+		let count: u8 = h.ne(&0) as u8 + m.ne(&0) as u8 + s.ne(&0) as u8;
 
-		// Write minutes.
-		ne_push!(
-			out, m,
-			// 1   •    m    i    n    u    t    e   ,   •   a    n    d   •
-			&[49, 32, 109, 105, 110, 117, 116, 101, 44, 32, 97, 110, 100, 32],
-			// •    m    i    n    u    t    e    s   ,   •   a    n    d   •
-			&[32, 109, 105, 110, 117, 116, 101, 115, 44, 32, 97, 110, 100, 32]
-		);
+		let len: usize = {
+			let mut dst = buf.as_mut_ptr() as *mut u8;
 
-		// Write seconds.
-		ne_push!(
-			out, s,
-			// 1   •    s    e   c    o    n    d
-			&[49, 32, 115, 101, 99, 111, 110, 100],
-			// •    s    e   c    o    n    d    s
-			&[32, 115, 101, 99, 111, 110, 100, 115]
-		);
+			// Hours.
+			if h > 0 {
+				dst = dst.add(write_u8(dst, h));
+				if h == 1 {
+					dst = write_advance(dst, b" hour".as_ptr(), 5);
+				}
+				else {
+					dst = write_advance(dst, b" hours".as_ptr(), 6);
+				}
 
-		out
-	}
+				if 3 == count {
+					dst = write_advance(dst, b", ".as_ptr(), 2);
+				}
+				else if 2 == count {
+					dst = write_advance(dst, b" and ".as_ptr(), 5);
+				}
+			}
 
-	/// From Hours, Minutes.
-	fn from_hm(h: u32, m: u32) -> Self {
-		let mut out = Self::default();
+			// Minutes.
+			if m > 0 {
+				dst = dst.add(write_u8(dst, m));
+				if m == 1 {
+					dst = write_advance(dst, b" minute".as_ptr(), 7);
+				}
+				else {
+					dst = write_advance(dst, b" minutes".as_ptr(), 8);
+				}
 
-		// Write hours.
-		ne_push!(
-			out, h,
-			// 1   •    h    o    u    r   •   a    n    d   •
-			&[49, 32, 104, 111, 117, 114, 32, 97, 110, 100, 32],
-			// •    h    o    u    r    s   •   a    n    d   •
-			&[32, 104, 111, 117, 114, 115, 32, 97, 110, 100, 32]
-		);
+				if 3 == count {
+					dst = write_advance(dst, b", and ".as_ptr(), 6);
+				}
+				else if 2 == count && h == 0 {
+					dst = write_advance(dst, b" and ".as_ptr(), 5);
+				}
+			}
 
-		// Write minutes.
-		ne_push!(
-			out, m,
-			// 1   •    m    i    n    u    t    e
-			&[49, 32, 109, 105, 110, 117, 116, 101],
-			// •    m    i    n    u    t    e    s
-			&[32, 109, 105, 110, 117, 116, 101, 115]
-		);
+			// Seconds.
+			if s > 0 {
+				dst = dst.add(write_u8(dst, s));
+				if s == 1 {
+					dst = write_advance(dst, b" second".as_ptr(), 7);
+				}
+				else {
+					dst = write_advance(dst, b" seconds".as_ptr(), 8);
+				}
+			}
 
-		out
-	}
+			dst.offset_from(buf.as_ptr() as *const u8) as usize
+		};
 
-	/// From Hours, Seconds.
-	fn from_hs(h: u32, s: u32) -> Self {
-		let mut out = Self::default();
-
-		// Write hours.
-		ne_push!(
-			out, h,
-			// 1   •    h    o    u    r   •   a    n    d   •
-			&[49, 32, 104, 111, 117, 114, 32, 97, 110, 100, 32],
-			// •    h    o    u    r    s   •   a    n    d   •
-			&[32, 104, 111, 117, 114, 115, 32, 97, 110, 100, 32]
-		);
-
-		// Write seconds.
-		ne_push!(
-			out, s,
-			// 1   •    s    e   c    o    n    d
-			&[49, 32, 115, 101, 99, 111, 110, 100],
-			// •    s    e   c    o    n    d    s
-			&[32, 115, 101, 99, 111, 110, 100, 115]
-		);
-
-		out
-	}
-
-	/// From Hours.
-	fn from_h(h: u32) -> Self {
-		let mut out = Self::default();
-
-		// Write hours.
-		ne_push!(
-			out, h,
-			// 1   •    h    o    u    r
-			&[49, 32, 104, 111, 117, 114],
-			// •    h    o    u    r    s
-			&[32, 104, 111, 117, 114, 115]
-		);
-
-		out
-	}
-
-	/// From Minutes, Seconds.
-	fn from_ms(m: u32, s: u32) -> Self {
-		let mut out = Self::default();
-
-		// Write minutes.
-		ne_push!(
-			out, m,
-			// 1   •    m    i    n    u    t    e   •   a    n    d   •
-			&[49, 32, 109, 105, 110, 117, 116, 101, 32, 97, 110, 100, 32],
-			// •    m    i    n    u    t    e    s   •   a    n    d   •
-			&[32, 109, 105, 110, 117, 116, 101, 115, 32, 97, 110, 100, 32]
-		);
-
-		// Write seconds.
-		ne_push!(
-			out, s,
-			// 1   •    s    e   c    o    n    d
-			&[49, 32, 115, 101, 99, 111, 110, 100],
-			// •    s    e   c    o    n    d    s
-			&[32, 115, 101, 99, 111, 110, 100, 115]
-		);
-
-		out
-	}
-
-	/// From Minutes.
-	fn from_m(m: u32) -> Self {
-		let mut out = Self::default();
-
-		// Write minutes.
-		ne_push!(
-			out, m,
-			// 1   •    m    i    n    u    t    e
-			&[49, 32, 109, 105, 110, 117, 116, 101],
-			// •    m    i    n    u    t    e    s
-			&[32, 109, 105, 110, 117, 116, 101, 115]
-		);
-
-		out
-	}
-
-	/// From Seconds.
-	fn from_s(s: u32) -> Self {
-		let mut out = Self::default();
-
-		// Write seconds.
-		ne_push!(
-			out, s,
-			// 1   •    s    e   c    o    n    d
-			&[49, 32, 115, 101, 99, 111, 110, 100],
-			// •    s    e   c    o    n    d    s
-			&[32, 115, 101, 99, 111, 110, 100, 115]
-		);
-
-		out
+		// Put it all together!
+		Self {
+			inner: mem::transmute::<_, [u8; 36]>(buf),
+			len
+		}
 	}
 
 	#[must_use]
-	/// As String.
+	#[inline]
+	/// # As Bytes.
+	///
+	/// Return the nice value as a byte string.
+	pub fn as_bytes(&self) -> &[u8] { self }
+
+	#[must_use]
+	#[inline]
+	/// # As Str.
+	///
+	/// Return the nice value as a string slice.
 	pub fn as_str(&self) -> &str {
-		unsafe { std::str::from_utf8_unchecked(&self.inner[0..self.len]) }
+		unsafe { std::str::from_utf8_unchecked(self) }
 	}
 }
 

@@ -18,8 +18,6 @@ cargo_dir   := "/tmp/" + pkg_id + "-cargo"
 cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
 release_dir := justfile_directory() + "/release"
 
-# If we ever want to use Clang native:
-# -Clinker-plugin-lto -Clinker=clang-9 -Clink-args=-fuse-ld=lld-9
 rustflags   := "-C link-arg=-s"
 
 
@@ -66,7 +64,6 @@ bench BENCH="" FILTER="":
 		cargo bench \
 			-q \
 			--workspace \
-			--all-features \
 			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}" -- "{{ FILTER }}"
 	else
@@ -74,7 +71,6 @@ bench BENCH="" FILTER="":
 			-q \
 			--bench "{{ BENCH }}" \
 			--workspace \
-			--all-features \
 			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}" -- "{{ FILTER }}"
 	fi
@@ -128,11 +124,8 @@ bench BENCH="" FILTER="":
 
 # Build Release!
 @build: clean
-	# For perf runs, use RUSTFLAGS="-C force-frame-pointers=y -g", and update
-	# Cargo.toml: no lto, opt-level 1, debug = true
-
 	# First let's build the Rust bit.
-	RUSTFLAGS="{{ rustflags }}" cargo build \
+	RUSTFLAGS="--emit asm {{ rustflags }}" cargo build \
 		--bin "{{ pkg_id }}" \
 		--release \
 		--target x86_64-unknown-linux-gnu \
@@ -182,7 +175,6 @@ bench BENCH="" FILTER="":
 	# First let's build the Rust bit.
 	RUSTFLAGS="{{ rustflags }}" cargo check \
 		--release \
-		--all-features \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
@@ -209,9 +201,28 @@ bench BENCH="" FILTER="":
 	RUSTFLAGS="{{ rustflags }}" cargo clippy \
 		--workspace \
 		--release \
-		--all-features \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
+
+
+# Build Docs.
+doc:
+	#!/usr/bin/env bash
+
+	cargo doc \
+		--workspace \
+		--release \
+		--no-deps \
+		--document-private-items \
+		--target x86_64-unknown-linux-gnu \
+		--target-dir "{{ cargo_dir }}"
+
+	[ ! -d "{{ justfile_directory() }}/doc" ] || rm -rf "{{ justfile_directory() }}/doc"
+	mv "{{ cargo_dir }}/x86_64-unknown-linux-gnu/doc" "{{ justfile_directory() }}"
+
+	just _fix-chown "{{ justfile_directory() }}/doc"
+
+	exit 0
 
 
 # Build and Run Example.
@@ -235,16 +246,20 @@ bench BENCH="" FILTER="":
 
 
 # Unit tests!
-@test:
+test:
+	#!/usr/bin/env bash
+
 	clear
+
 	RUST_TEST_THREADS=1 cargo test \
 		--tests \
-		--all-features \
 		--release \
 		--workspace \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}" -- \
-			--format terse \
+			--format terse
+
+	exit 0
 
 
 # Get/Set version.
@@ -284,6 +299,8 @@ version:
 
 # Init dependencies.
 @_init:
+	#rustup default nightly-2020-09-15
+	#rustup component add clippy --toolchain nightly-2020-09-15
 	[ ! -f "{{ justfile_directory() }}/Cargo.lock" ] || rm "{{ justfile_directory() }}/Cargo.lock"
 	cargo update
 

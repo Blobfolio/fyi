@@ -13,6 +13,7 @@ use criterion::{
 
 fn esc_arg(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_menu::utility");
+	group.sample_size(50);
 
 	for kv in [
 		"",

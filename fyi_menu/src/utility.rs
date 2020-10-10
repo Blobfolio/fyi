@@ -1,26 +1,26 @@
 /*!
-# FYI Menu: Utility Methods
+# FYI Menu: Utility Methods.
 */
 
 
 
-#[allow(clippy::match_on_vec_items)] // We already checked the index exists.
 #[allow(clippy::suspicious_else_formatting)] // What does lines have to do with it?
 #[must_use]
-/// Escape String Value.
+/// # Escape Arg String.
 ///
-/// This is a lightweight — many assumptions made — reverse argument parser.
-/// Its primary purpose is to turn all the separated values after an "--" back
-/// into the sort of string it would have started as.
+/// This is a very *crude* reverse argument parser that 'quotes' values needing
+/// quoting, used by [`Argue::with_separator`](crate::Argue::with_separator) to recombine the arguments
+/// following an "--" entry.
 ///
-/// In practice, values requiring quotes are single-quoted; single quotes
-/// within the value are backslashed; and backslashes within the value are
-/// converted to forward slashes. The latter makes this ill-advised for use
-/// with e.g. Windows paths, but that's pretty much outside our scope anyway.
+/// This method is optimized for speed rather than robustness — hence its
+/// crudeness — so should probably not be used in other contexts unless you're
+/// expecting fairly straight-forward data.
 ///
-/// # Safety
+/// The following adjustments are made:
 ///
-/// This method uses unsafe methods, but in a safe way. It's fine.
+/// * Backslashes are converted to forward slashes.
+/// * Single quotes are escaped with a backslash.
+/// * If the string is empty or contains anything other than `-`, `_`, `=`, `+`, `/`, `,`, `.`, `a-z`, or `0-9`, the value is wrapped in single quotes.
 pub fn esc_arg(mut s: String) -> String {
 	// Strings suck. Let's work from bytes.
 	let v = unsafe { s.as_mut_vec() };
@@ -64,26 +64,6 @@ pub fn esc_arg(mut s: String) -> String {
 	s
 }
 
-#[must_use]
-/// Is A String Only Whitespace?
-///
-/// This will return `true` if the string is empty or only includes ASCII
-/// whitespace. Other characters, including weird Unicode whitespace, result in
-/// a response of `false`.
-pub const fn slice_is_whitespace(data: &[u8]) -> bool {
-	let len: usize = data.len();
-	let mut idx: usize = 0;
-	while idx < len {
-		if ! matches!(data[idx], b'\t' | b'\n' | b'\x0C' | b'\r' | b' ') {
-			return false;
-		}
-
-		idx += 1;
-	}
-
-	true
-}
-
 
 
 #[cfg(test)]
@@ -99,13 +79,5 @@ mod tests {
 		assert_eq!("/path/to/file", esc_arg(r"\path\to\file".into()));
 		assert_eq!(r"'Eat at Joe\'s'", esc_arg("Eat at Joe's".into()));
 		assert_eq!(r"'Björk\'s Vespertine'", esc_arg("Björk's Vespertine".into()));
-	}
-
-	#[test]
-	fn t_slice_is_whitespace() {
-		assert_eq!(true, slice_is_whitespace(b" "));
-		assert_eq!(true, slice_is_whitespace(b""));
-		assert_eq!(true, slice_is_whitespace(b"\t \n"));
-		assert_eq!(false, slice_is_whitespace(b" Hello World "));
 	}
 }
