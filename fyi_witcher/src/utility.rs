@@ -29,14 +29,7 @@ pub fn count_nl(src: &[u8]) -> usize {
 		unsafe { count_nl_sse2(src) }
 	}
 	else {
-		let mut total: usize = 0;
-		let mut offset: usize = 0;
-		while offset < len {
-			if src[offset] == b'\n' { total += 1; }
-			offset += 1;
-		}
-
-		total
+		src.iter().filter(|&&x| x == b'\n').count()
 	}
 }
 
@@ -61,7 +54,7 @@ unsafe fn count_nl_avx2(src: &[u8]) -> usize {
 
 	let mut offset: usize = 0;
 	let mut total = _mm256_setzero_si256();
-	while offset + 32 <= len {
+	for _ in 0..len/32 {
 		total = _mm256_sub_epi8(
 			total,
 			_mm256_cmpeq_epi8(_mm256_loadu_si256(ptr.add(offset) as *const _), needle)
@@ -105,7 +98,7 @@ unsafe fn count_nl_sse2(src: &[u8]) -> usize {
 
 	let mut offset: usize = 0;
 	let mut total = _mm_setzero_si128();
-	while offset + 16 <= len {
+	for _ in 0..len/16 {
 		total = _mm_sub_epi8(
 			total,
 			_mm_cmpeq_epi8(_mm_loadu_si128(ptr.add(offset) as *const _), needle)

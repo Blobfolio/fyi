@@ -105,7 +105,7 @@ unsafe fn find_eq_sse2(txt: &[u8]) -> KeyKind {
 	let mut offset: usize = 3;
 
 	// Check for matches 16 bytes at a time.
-	loop {
+	for _ in 0..(len-offset)/16 {
 		let haystack = _mm_loadu_si128(ptr.add(offset) as *const _);
 		let eq = _mm_cmpeq_epi8(needle, haystack);
 		let res = _mm_movemask_epi8(eq).trailing_zeros();
@@ -114,7 +114,6 @@ unsafe fn find_eq_sse2(txt: &[u8]) -> KeyKind {
 		}
 
 		offset += 16;
-		if len < offset + 16 { break; }
 	}
 
 	// If there's a remainder, recheck from the end (to fill the
