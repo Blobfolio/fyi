@@ -50,11 +50,29 @@ pub unsafe fn write_advance(dst: *mut u8, src: *const u8, len: usize) -> *mut u8
 /// The pointer must have 8 bytes available, and hours, minutes, and seconds
 /// must all be in valid ranges or undefined things will happen.
 pub unsafe fn write_time(buf: *mut u8, n1: u8, n2: u8, n3: u8, sep: u8) {
-	write_u8_2(buf, n1);
+	let src = crate::NUMDD.as_ptr();
+
+	ptr::copy_nonoverlapping(
+		src.add((n1 << 1) as usize),
+		buf,
+		2
+	);
+
 	ptr::write(buf.add(2), sep);
-	write_u8_2(buf.add(3), n2);
+
+	ptr::copy_nonoverlapping(
+		src.add((n2 << 1) as usize),
+		buf.add(3),
+		2
+	);
+
 	ptr::write(buf.add(5), sep);
-	write_u8_2(buf.add(6), n3);
+
+	ptr::copy_nonoverlapping(
+		src.add((n3 << 1) as usize),
+		buf.add(6),
+		2
+	);
 }
 
 /// # Write `u8` as ASCII.
