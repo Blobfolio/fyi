@@ -34,9 +34,9 @@ pub fn count_nl(src: &[u8]) -> usize {
 	}
 }
 
-#[allow(clippy::integer_division)] // It's fine.
 #[allow(clippy::cast_possible_wrap)] // It's fine.
 #[allow(clippy::cast_ptr_alignment)] // It's fine.
+#[allow(clippy::integer_division)] // It's fine.
 #[target_feature(enable = "avx2")]
 /// # Count Line Breaks (AVX2).
 ///
@@ -81,9 +81,9 @@ unsafe fn count_nl_avx2(src: &[u8]) -> usize {
 	) as usize
 }
 
-#[allow(clippy::integer_division)] // It's fine.
 #[allow(clippy::cast_possible_wrap)] // It's fine.
 #[allow(clippy::cast_ptr_alignment)] // It's fine.
+#[allow(clippy::integer_division)] // It's fine.
 #[target_feature(enable = "sse2")]
 /// # Count Line Breaks (SSE2).
 ///
