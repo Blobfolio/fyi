@@ -22,10 +22,7 @@ pub use buffer::{
 #[allow(unreachable_pub)] pub use kind::MsgKind;
 #[allow(unreachable_pub)] pub use prefix::MsgPrefix;
 
-use crate::{
-	traits::FastConcat,
-	utility,
-};
+use crate::traits::FastConcat;
 use std::{
 	fmt,
 	iter::FromIterator,
@@ -38,6 +35,19 @@ use std::{
 	},
 };
 
+#[cfg(all(target_arch = "x86", target_feature = "sse2"))]
+use std::arch::x86::{
+	__m128i,
+	_mm_set_epi16,
+	_mm_slli_epi16,
+};
+
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+use std::arch::x86_64::{
+	__m128i,
+	_mm_set_epi16,
+	_mm_slli_epi16,
+};
 
 
 // Buffer Indexes.
@@ -496,34 +506,65 @@ impl Msg {
 				if on {
 					let mut buf = [mem::MaybeUninit::<u8>::uninit(); 44];
 					let dst = buf.as_mut_ptr() as *mut u8;
+					let dd = crate::NUMDD.as_ptr();
 
-					// Write the opener.
-					ptr::copy_nonoverlapping(b"\x1b[2m[\x1b[0;34m20".as_ptr(), dst, 14);
-					// Write the space.
-					ptr::write(dst.add(22), b' ');
-					// Write the closer.
-					ptr::copy_nonoverlapping(b"\x1b[39;2m]\x1b[0m ".as_ptr(), dst.add(31), 13);
+					// Get it started.
+					ptr::copy_nonoverlapping(b"\x1b[2m[\x1b[0;34m2000-00-00 00:00:00\x1b[39;2m]\x1b[0m ".as_ptr(), dst, 44);
 
-					// Now the time bits.
-					{
+					// Now the time bits (SIMD).
+					#[cfg(target_feature = "sse2")]
+					let indexes: [u16; 8] = {
 						use chrono::{Datelike, Local, Timelike};
 						let now = Local::now();
 
-						utility::write_time(
-							dst.add(14),
-							(now.year() as u16).saturating_sub(2000) as u8,
-							now.month() as u8,
-							now.day() as u8,
-							b'-',
+						let times = _mm_set_epi16(
+							0,
+							0,
+							now.second() as i16,
+							now.minute() as i16,
+							now.hour() as i16,
+							now.day() as i16,
+							now.month() as i16,
+							(now.year() as u32).saturating_sub(2000) as i16,
 						);
-						utility::write_time(
-							dst.add(23),
-							now.hour() as u8,
-							now.minute() as u8,
-							now.second() as u8,
-							b':',
-						);
-					}
+
+						let indexes = _mm_slli_epi16(times, 1);
+						std::mem::transmute::<__m128i, [u16; 8]>(indexes)
+					};
+
+					#[cfg(target_feature = "sse2")]
+					indexes.iter()
+						.take(6)
+						.map(|&x| dd.add(x as usize))
+						.fold(14_usize, |offset, x| {
+							ptr::copy_nonoverlapping(x, dst.add(offset), 2);
+							offset + 3
+						});
+
+					// Now the time bits.
+					#[cfg(not(target_feature = "sse2"))]
+					let indexes: [usize; 6] = {
+						use chrono::{Datelike, Local, Timelike};
+						let now = Local::now();
+
+						[
+							(now.second() as usize) << 1,
+							(now.minute() as usize) << 1,
+							(now.hour() as usize) << 1,
+							(now.day() as usize) << 1,
+							(now.month() as usize) << 1,
+							((now.year() as usize).saturating_sub(2000)) << 1,
+						]
+					};
+
+					#[cfg(not(target_feature = "sse2"))]
+					indexes.iter()
+						.take(6)
+						.map(|&x| dd.add(x))
+						.fold(14_usize, |offset, x| {
+							ptr::copy_nonoverlapping(x, dst.add(offset), 2);
+							offset + 3
+						});
 
 					// Shove the result into the buffer.
 					self.0.replace_unchecked(
