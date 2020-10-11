@@ -61,13 +61,13 @@ bench BENCH="" FILTER="":
 	clear
 
 	if [ -z "{{ BENCH }}" ]; then
-		cargo bench \
+		RUSTFLAGS="{{ rustflags }}" cargo bench \
 			-q \
 			--workspace \
 			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}" -- "{{ FILTER }}"
 	else
-		cargo bench \
+		RUSTFLAGS="{{ rustflags }}" cargo bench \
 			-q \
 			--bench "{{ BENCH }}" \
 			--workspace \
