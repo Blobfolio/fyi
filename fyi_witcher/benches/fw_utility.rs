@@ -14,7 +14,7 @@ use fyi_witcher::utility;
 
 fn count_nl(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::utility");
-	group.sample_size(50);
+	group.sample_size(30);
 
 	fn data() -> &'static [u8] {
 		"Witcher Demo: Gzipped MAN Pages
@@ -41,7 +41,7 @@ fn count_nl(c: &mut Criterion) {
 
 fn fitted_range(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::utility");
-	group.sample_size(50);
+	group.sample_size(30);
 
 	for txt in [
 		"Hello World",
@@ -67,7 +67,7 @@ fn fitted_range(c: &mut Criterion) {
 
 fn hms(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::utility");
-	group.sample_size(50);
+	group.sample_size(30);
 
 	for secs in [10_u32, 113_u32, 10502_u32].iter() {
 		group.bench_with_input(
