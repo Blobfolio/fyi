@@ -53,7 +53,7 @@ pub unsafe fn write_time(buf: *mut u8, n1: u8, n2: u8, n3: u8, sep: u8) {
 	let src = crate::NUMDD.as_ptr();
 
 	ptr::copy_nonoverlapping(
-		src.add((n1 << 1) as usize),
+		src.add(n1 as usize) as *const u8,
 		buf,
 		2
 	);
@@ -61,7 +61,7 @@ pub unsafe fn write_time(buf: *mut u8, n1: u8, n2: u8, n3: u8, sep: u8) {
 	ptr::write(buf.add(2), sep);
 
 	ptr::copy_nonoverlapping(
-		src.add((n2 << 1) as usize),
+		src.add(n2 as usize) as *const u8,
 		buf.add(3),
 		2
 	);
@@ -69,7 +69,7 @@ pub unsafe fn write_time(buf: *mut u8, n1: u8, n2: u8, n3: u8, sep: u8) {
 	ptr::write(buf.add(5), sep);
 
 	ptr::copy_nonoverlapping(
-		src.add((n3 << 1) as usize),
+		src.add(n3 as usize) as *const u8,
 		buf.add(6),
 		2
 	);
@@ -95,7 +95,7 @@ pub unsafe fn write_u8(buf: *mut u8, num: u8) -> usize {
 	}
 	else if num < 100 {
 		ptr::copy_nonoverlapping(
-			crate::NUMDD.as_ptr().add((num << 1) as usize),
+			crate::NUMDD.as_ptr().add(num as usize) as *const u8,
 			buf,
 			2
 		);
@@ -123,7 +123,7 @@ pub unsafe fn write_u8(buf: *mut u8, num: u8) -> usize {
 /// bytes, or undefined things will happen.
 pub unsafe fn write_u8_2(buf: *mut u8, num: u8) {
 	ptr::copy_nonoverlapping(
-		crate::NUMDD.as_ptr().add((num << 1) as usize),
+		crate::NUMDD.as_ptr().add(num as usize) as *const u8,
 		buf,
 		2
 	);

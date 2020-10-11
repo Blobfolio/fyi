@@ -35,19 +35,6 @@ use std::{
 	},
 };
 
-#[cfg(all(target_arch = "x86", target_feature = "sse2"))]
-use std::arch::x86::{
-	__m128i,
-	_mm_set_epi16,
-	_mm_slli_epi16,
-};
-
-#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
-use std::arch::x86_64::{
-	__m128i,
-	_mm_set_epi16,
-	_mm_slli_epi16,
-};
 
 
 // Buffer Indexes.
@@ -511,60 +498,23 @@ impl Msg {
 					// Get it started.
 					ptr::copy_nonoverlapping(b"\x1b[2m[\x1b[0;34m2000-00-00 00:00:00\x1b[39;2m]\x1b[0m ".as_ptr(), dst, 44);
 
-					// Now the time bits (SIMD).
-					#[cfg(target_feature = "sse2")]
-					let indexes: [u16; 8] = {
+					{
 						use chrono::{Datelike, Local, Timelike};
 						let now = Local::now();
-
-						let times = _mm_set_epi16(
-							0,
-							0,
-							now.second() as i16,
-							now.minute() as i16,
-							now.hour() as i16,
-							now.day() as i16,
-							now.month() as i16,
-							(now.year() as u32).saturating_sub(2000) as i16,
-						);
-
-						let indexes = _mm_slli_epi16(times, 1);
-						std::mem::transmute::<__m128i, [u16; 8]>(indexes)
-					};
-
-					#[cfg(target_feature = "sse2")]
-					indexes.iter()
-						.take(6)
-						.map(|&x| dd.add(x as usize))
-						.fold(14_usize, |offset, x| {
-							ptr::copy_nonoverlapping(x, dst.add(offset), 2);
-							offset + 3
-						});
-
-					// Now the time bits.
-					#[cfg(not(target_feature = "sse2"))]
-					let indexes: [usize; 6] = {
-						use chrono::{Datelike, Local, Timelike};
-						let now = Local::now();
-
 						[
-							(now.second() as usize) << 1,
-							(now.minute() as usize) << 1,
-							(now.hour() as usize) << 1,
-							(now.day() as usize) << 1,
-							(now.month() as usize) << 1,
-							((now.year() as usize).saturating_sub(2000)) << 1,
-						]
-					};
-
-					#[cfg(not(target_feature = "sse2"))]
-					indexes.iter()
-						.take(6)
-						.map(|&x| dd.add(x))
-						.fold(14_usize, |offset, x| {
-							ptr::copy_nonoverlapping(x, dst.add(offset), 2);
-							offset + 3
-						});
+							(now.year() as usize).saturating_sub(2000),
+							now.month() as usize,
+							now.day() as usize,
+							now.hour() as usize,
+							now.minute() as usize,
+							now.second() as usize,
+						].iter()
+							.map(|&x| dd.add(x) as *const u8)
+							.fold(14_usize, |offset, x| {
+								ptr::copy_nonoverlapping(x, dst.add(offset), 2);
+								offset + 3
+							});
+					}
 
 					// Shove the result into the buffer.
 					self.0.replace_unchecked(
