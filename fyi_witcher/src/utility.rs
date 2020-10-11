@@ -15,6 +15,7 @@ use unicode_width::UnicodeWidthChar;
 
 
 
+#[allow(clippy::naive_bytecount)] // This is a fallback.
 #[must_use]
 /// # Count Line Breaks.
 ///
@@ -33,6 +34,7 @@ pub fn count_nl(src: &[u8]) -> usize {
 	}
 }
 
+#[allow(clippy::integer_division)] // It's fine.
 #[allow(clippy::cast_possible_wrap)] // It's fine.
 #[allow(clippy::cast_ptr_alignment)] // It's fine.
 #[target_feature(enable = "avx2")]
@@ -79,6 +81,7 @@ unsafe fn count_nl_avx2(src: &[u8]) -> usize {
 	) as usize
 }
 
+#[allow(clippy::integer_division)] // It's fine.
 #[allow(clippy::cast_possible_wrap)] // It's fine.
 #[allow(clippy::cast_ptr_alignment)] // It's fine.
 #[target_feature(enable = "sse2")]
