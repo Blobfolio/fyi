@@ -6,7 +6,7 @@ status-style message, optionally indented, timestamped, and/or prefixed.
 You know, stuff like:
 
 * <strong><span style="color: red;">Error:</span></strong> Something broke!
-* <strong><span style="color: #f5d142;">Warning:</span></strong> I can't keep doing this!
+* <strong><span style="color: gold;">Warning:</span></strong> I can't keep doing this!
 * <strong><span style="color: green;">Success:</span></strong> Life is good!
 
 That's it!
@@ -34,7 +34,7 @@ fyi error "Something broke!"
 
 This application is written in Rust and can be installed using Cargo.
 
-For stable Rust (>= `1.46.0`), run:
+For stable Rust (>= `1.47.0`), run:
 ```bash
 RUSTFLAGS="-C link-arg=-s" cargo install \
     --git https://github.com/Blobfolio/fyi.git \
@@ -48,15 +48,15 @@ RUSTFLAGS="-C link-arg=-s" cargo install \
 
 The primary usage is to generate a message with one of the default prefixes,
 like: `fyi <PREFIX> [flags] [options] <MSG>`, where the prefix is one of:
-* crunched
-* debug
-* done
-* error
-* info
-* notice
-* success
-* task
-* warning
+* <span style="color: green;">crunched</span>
+* <span style="color: darkcyan;">debug</span>
+* <span style="color: green;">done</span>
+* <span style="color: red;">error</span>
+* <span style="color: blueviolet;">info</span>
+* <span style="color: blueviolet;">notice</span>
+* <span style="color: green;">success</span>
+* <span style="color: deeppink;">task</span>
+* <span style="color: gold;">warning</span>
 
 The following flags and options are available.
 ```bash
@@ -83,7 +83,7 @@ Note: to avoid the cost of re-alignment, only values in the range of `1..=255` a
 
 To prompt a user for a Y/N (and exit with a corresponding status code), run
 `fyi confirm [flags] [options] <MSG>`. Confirmation supports the same flags as
-the built-in prefixes.
+the other built-in prefixes.
 
 ### Blank Lines:
 
@@ -163,6 +163,7 @@ use fyi_msg::{
 
 
 
+#[doc(hidden)]
 /// Main.
 fn main() {
 	// Parse CLI arguments.
@@ -192,6 +193,7 @@ fn main() {
 	}
 }
 
+#[doc(hidden)]
 /// Shoot Blanks.
 ///
 /// Print one or more blank lines to `Stdout` or `Stderr`.
@@ -217,6 +219,7 @@ fn blank(args: &mut Argue) {
 }
 
 #[cfg(not(feature = "man"))]
+#[doc(hidden)]
 /// Help Page.
 ///
 /// Print the appropriate help screen given the call details. Most of the sub-
@@ -269,6 +272,7 @@ fn helper(cmd: Option<&str>) {
 }
 
 #[cfg(feature = "man")]
+#[doc(hidden)]
 #[cold]
 /// Help Page.
 ///
@@ -286,6 +290,7 @@ fn helper(_: Option<&str>) {
 		.println();
 }
 
+#[doc(hidden)]
 /// Print Message!
 ///
 /// Almost all roads lead to this method, which crunches the CLI args and
