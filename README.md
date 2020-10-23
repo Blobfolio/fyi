@@ -101,6 +101,24 @@ print a certain number of blank lines for you. Run
 
 
 
+## Credits
+
+| Library | License | Author |
+| ---- | ---- | ---- |
+| [ahash](https://crates.io/crates/ahash) | Apache-2.0 OR MIT | Tom Kaitchuck |
+| [chrono](https://crates.io/crates/chrono) | Apache-2.0 OR MIT | Kang Seonghoon, Brandon W Maister |
+| [criterion](https://crates.io/crates/criterion) | Apache-2.0 OR MIT | Jorge Aparicio, Brook Heisler |
+| [crossbeam-channel](https://crates.io/crates/crossbeam-channel) | Apache-2.0 OR MIT  | The Crossbeam Project Developers |
+| [num-format](https://crates.io/crates/num-format) | Apache-2.0 OR MIT  | The Rust Project Developers |
+| [num-integer](https://crates.io/crates/num-integer) | Apache-2.0 OR MIT  | The Rust Project Developers |
+| [rand](https://crates.io/crates/rand) | Apache-2.0 OR MIT  | The Rand, Rust Project Developers |
+| [rayon](https://crates.io/crates/rayon) | Apache-2.0 OR MIT | Niko Matsakis, Josh Stone |
+| [regex](https://crates.io/crates/regex) | Apache-2.0 OR MIT | The Rust Project Developers |
+| [term_size](https://crates.io/crates/term_size) | Apache-2.0 OR MIT | Kevin K, Benjamin Sago |
+| [unicode-width](https://crates.io/crates/unicode-width) | Apache-2.0 OR MIT | kwantam, Manish Goregaokar |
+
+
+
 ## License
 
 Copyright © 2020 [Blobfolio, LLC](https://blobfolio.com) &lt;hello@blobfolio.com&gt;
