@@ -110,11 +110,12 @@ impl Witcher {
 	#[must_use]
 	/// # With Extension Filter.
 	///
-	/// This method — and [`with_ext2()`](Witcher::with_ext2), [`with_ext3()`](Witcher::with_ext3) — can be faster for
-	/// matching simple file extensions than [`with_regex()`](Witcher::with_regex),
-	/// particularly if regular expressions are not used anywhere else.
+	/// This method can be faster for matching simple file extensions than
+	/// [`with_regex()`](Witcher::with_regex), particularly if regular
+	/// expressions are not used anywhere else.
 	///
-	/// Note: The extension should include the leading period and be in lower case.
+	/// Note: The extension must include the leading period and be in lower
+	/// case or case-insensitive matching will not work correctly.
 	///
 	/// ## Examples
 	///
@@ -123,10 +124,10 @@ impl Witcher {
 	///
 	/// let files = Witcher::default()
 	///     .with_path("/my/dir")
-	///     .with_ext1(b".jpg")
+	///     .with_ext(b".jpg")
 	///     .build();
 	/// ```
-	pub fn with_ext1(mut self, ext: &'static [u8]) -> Self {
+	pub fn with_ext(mut self, ext: &'static [u8]) -> Self {
 		let e_len: usize = ext.len();
 		self.cb = Box::new(move |p: &PathBuf| {
 			let p: &[u8] = utility::path_as_bytes(p);
@@ -138,70 +139,6 @@ impl Witcher {
 				.zip(ext)
 				.all(|(a, b)| a.to_ascii_lowercase() == *b)
 		});
-		self
-	}
-
-	#[must_use]
-	/// # With Extensions (2) Filter.
-	///
-	/// Note: The extension should include the leading period and be in lower case.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_witcher::Witcher;
-	///
-	/// let files = Witcher::default()
-	///     .with_path("/my/dir")
-	///     .with_ext2(b".jpg", b".jpeg")
-	///     .build();
-	/// ```
-	pub fn with_ext2(mut self, ext1: &'static [u8], ext2: &'static [u8]) -> Self {
-		let e1_len: usize = ext1.len();
-		let e2_len: usize = ext2.len();
-
-		self.cb = Box::new(move |p: &PathBuf| {
-			let p: &[u8] = utility::path_as_bytes(p);
-			let len = p.len();
-
-			// Check the first.
-			with_ext_match(p, len, ext1, e1_len) ||
-			with_ext_match(p, len, ext2, e2_len)
-		});
-
-		self
-	}
-
-	#[must_use]
-	/// # With Extensions (3) Filter.
-	///
-	/// Note: The extension should include the leading period and be in lower case.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_witcher::Witcher;
-	///
-	/// let files = Witcher::default()
-	///     .with_path("/my/dir")
-	///     .with_ext3(b".jpg", b".jpeg", b".png")
-	///     .build();
-	/// ```
-	pub fn with_ext3(mut self, ext1: &'static [u8], ext2: &'static [u8], ext3: &'static [u8]) -> Self {
-		let e1_len: usize = ext1.len();
-		let e2_len: usize = ext2.len();
-		let e3_len: usize = ext3.len();
-
-		self.cb = Box::new(move |p: &PathBuf| {
-			let p: &[u8] = utility::path_as_bytes(p);
-			let len = p.len();
-
-			// Check the first.
-			with_ext_match(p, len, ext1, e1_len) ||
-			with_ext_match(p, len, ext2, e2_len) ||
-			with_ext_match(p, len, ext3, e3_len)
-		});
-
 		self
 	}
 
@@ -240,7 +177,7 @@ impl Witcher {
 	///
 	/// let files = Witcher::default()
 	///     .with_paths(&["/my/dir"])
-	///     .with_ext1(b".jpg")
+	///     .with_ext(b".jpg")
 	///     .build();
 	/// ```
 	pub fn with_paths<P>(self, paths: &[P]) -> Self
@@ -261,7 +198,7 @@ impl Witcher {
 	///
 	/// let files = Witcher::default()
 	///     .with_path("/my/dir")
-	///     .with_ext1(b".jpg")
+	///     .with_ext(b".jpg")
 	///     .build();
 	/// ```
 	pub fn with_path<P>(mut self, path: P) -> Self
@@ -292,7 +229,7 @@ impl Witcher {
 	///
 	/// let files = Witcher::default()
 	///     .with_path("/my/dir")
-	///     .with_ext1(b".jpg")
+	///     .with_ext(b".jpg")
 	///     .build();
 	/// ```
 	pub fn build(mut self) -> Vec<PathBuf> {
@@ -313,7 +250,7 @@ impl Witcher {
 	///
 	/// let files = Witcher::default()
 	///     .with_path("/my/dir")
-	///     .with_ext1(b".jpg")
+	///     .with_ext(b".jpg")
 	///     .into_witching()
 	///     .run(|p| { ... });
 	/// ```
@@ -354,22 +291,6 @@ impl Witcher {
 			});
 		}
 	}
-}
-
-
-
-#[inline]
-/// # Match Extension.
-///
-/// Check to see if the haystack (case-insensitive) matches the needle (lower).
-fn with_ext_match(h: &[u8], hl: usize, n: &[u8], nl: usize) -> bool {
-	if hl >= nl && h[hl - nl] == b'.' {
-		for idx in 1..nl {
-			if h[hl - idx].to_ascii_lowercase() != n[nl - idx] { return false; }
-		}
-		true
-	}
-	else { false }
 }
 
 
@@ -422,25 +343,9 @@ mod tests {
 		// One Extension.
 		w1 = Witcher::default()
 			.with_path(PathBuf::from("tests/"))
-			.with_ext1(b".txt")
+			.with_ext(b".txt")
 			.build();
 		assert!(! w1.is_empty());
 		assert_eq!(w1.len(), 1);
-
-		// Two Extensions.
-		w1 = Witcher::default()
-			.with_path(PathBuf::from("tests/"))
-			.with_ext2(b".txt", b".sh")
-			.build();
-		assert!(! w1.is_empty());
-		assert_eq!(w1.len(), 2);
-
-		// Three Extensions.
-		w1 = Witcher::default()
-			.with_path(PathBuf::from("tests/"))
-			.with_ext3(b".txt", b".sh", b".jpeg")
-			.build();
-		assert!(! w1.is_empty());
-		assert_eq!(w1.len(), 3);
 	}
 }

@@ -26,53 +26,6 @@ pub fn hash64(src: &[u8]) -> u64 {
 	hasher.finish()
 }
 
-/// # Grow `Vec<u8>` From Middle.
-///
-/// This works like [`std::vec::Vec::resize`], except it supports expansion from the
-/// middle, like [`std::vec::Vec::insert`]. The expanded indexes will
-/// never be undefined, but may contain copies of data previously occupying
-/// those spots (rather than a bunch of zeroes).
-///
-/// It might seem counter-intuitive to split the resizing and writing
-/// operations, but this approach is generally faster than trying to do both at
-/// once using [`std::vec::Vec::splice`].
-///
-/// ## Examples
-///
-/// ```no_run
-/// let mut test: Vec<u8> = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-/// vec_resize_at(&mut test, 4, 5);
-/// assert_eq!(
-///     test,
-///     vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 4, 5, 6, 7, 8, 9],
-/// );
-/// ```
-pub fn vec_resize_at(src: &mut Vec<u8>, idx: usize, adj: usize) {
-	let old_len: usize = src.len();
-	if idx >= old_len {
-		src.resize(old_len + adj, 0);
-	}
-	else {
-		src.reserve(adj);
-		unsafe {
-			{
-				let ptr = src.as_mut_ptr().add(idx);
-				let after: usize = old_len - idx;
-
-				// Shift the data over.
-				ptr::copy(ptr, ptr.add(adj), after);
-
-				// If we're adding more than we just copied, we'll need to
-				// initialize those values.
-				if adj > after {
-					ptr::write_bytes(ptr.add(after), 0, adj - after);
-				}
-			}
-			src.set_len(old_len + adj);
-		}
-	}
-}
-
 #[must_use]
 /// # Write and Advance.
 ///
@@ -97,11 +50,29 @@ pub unsafe fn write_advance(dst: *mut u8, src: *const u8, len: usize) -> *mut u8
 /// The pointer must have 8 bytes available, and hours, minutes, and seconds
 /// must all be in valid ranges or undefined things will happen.
 pub unsafe fn write_time(buf: *mut u8, n1: u8, n2: u8, n3: u8, sep: u8) {
-	write_u8_2(buf, n1);
+	let src = crate::NUMDD.as_ptr();
+
+	ptr::copy_nonoverlapping(
+		src.add(n1 as usize) as *const u8,
+		buf,
+		2
+	);
+
 	ptr::write(buf.add(2), sep);
-	write_u8_2(buf.add(3), n2);
+
+	ptr::copy_nonoverlapping(
+		src.add(n2 as usize) as *const u8,
+		buf.add(3),
+		2
+	);
+
 	ptr::write(buf.add(5), sep);
-	write_u8_2(buf.add(6), n3);
+
+	ptr::copy_nonoverlapping(
+		src.add(n3 as usize) as *const u8,
+		buf.add(6),
+		2
+	);
 }
 
 /// # Write `u8` as ASCII.
@@ -124,7 +95,7 @@ pub unsafe fn write_u8(buf: *mut u8, num: u8) -> usize {
 	}
 	else if num < 100 {
 		ptr::copy_nonoverlapping(
-			crate::NUMDD.as_ptr().add((num << 1) as usize),
+			crate::NUMDD.as_ptr().add(num as usize) as *const u8,
 			buf,
 			2
 		);
@@ -152,7 +123,7 @@ pub unsafe fn write_u8(buf: *mut u8, num: u8) -> usize {
 /// bytes, or undefined things will happen.
 pub unsafe fn write_u8_2(buf: *mut u8, num: u8) {
 	ptr::copy_nonoverlapping(
-		crate::NUMDD.as_ptr().add((num << 1) as usize),
+		crate::NUMDD.as_ptr().add(num as usize) as *const u8,
 		buf,
 		2
 	);
@@ -201,29 +172,5 @@ mod tests {
 		}
 
 		assert_eq!(buf, *b"2020-09-18 18:37:05");
-	}
-
-	#[test]
-	fn t_vec_resize_at() {
-		let mut test: Vec<u8> = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-		vec_resize_at(&mut test, 4, 5);
-		assert_eq!(
-			test,
-			vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 4, 5, 6, 7, 8, 9],
-		);
-
-		vec_resize_at(&mut test, 15, 5);
-		assert_eq!(
-			test,
-			vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0],
-		);
-
-		// Test possible uninit space.
-		test = vec![1, 2, 3, 4];
-		vec_resize_at(&mut test, 2, 10);
-		assert_eq!(
-			test,
-			vec![1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 3, 4],
-		);
 	}
 }

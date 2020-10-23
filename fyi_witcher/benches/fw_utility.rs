@@ -14,7 +14,7 @@ use fyi_witcher::utility;
 
 fn count_nl(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::utility");
-	group.sample_size(50);
+	group.sample_size(30);
 
 	fn data() -> &'static [u8] {
 		"Witcher Demo: Gzipped MAN Pages
@@ -39,35 +39,9 @@ fn count_nl(c: &mut Criterion) {
 	group.finish();
 }
 
-fn ends_with_ignore_ascii_case(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_witcher::utility");
-	group.sample_size(50);
-
-	for paths in [
-		b"/home/user/Pictures/file01.jpg",
-		b"/home/user/Pictures/file01.JPG",
-		b"/home/user/Pictures/file01.png",
-	].iter() {
-		group.bench_with_input(
-			BenchmarkId::from_parameter(format!(
-				"ends_with_ignore_ascii_case({}, .jpg)",
-				unsafe { std::str::from_utf8_unchecked(&paths[..]) },
-			)),
-			paths,
-			|b, &paths| {
-				b.iter(||
-					utility::ends_with_ignore_ascii_case(paths, b".jpg")
-				);
-			}
-		);
-	}
-
-	group.finish();
-}
-
 fn fitted_range(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::utility");
-	group.sample_size(50);
+	group.sample_size(30);
 
 	for txt in [
 		"Hello World",
@@ -93,7 +67,7 @@ fn fitted_range(c: &mut Criterion) {
 
 fn hms(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::utility");
-	group.sample_size(50);
+	group.sample_size(30);
 
 	for secs in [10_u32, 113_u32, 10502_u32].iter() {
 		group.bench_with_input(
@@ -118,7 +92,6 @@ fn hms(c: &mut Criterion) {
 criterion_group!(
 	benches,
 	count_nl,
-	ends_with_ignore_ascii_case,
 	fitted_range,
 	hms,
 );

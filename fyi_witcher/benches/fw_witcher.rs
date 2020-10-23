@@ -57,39 +57,13 @@ fn filter(c: &mut Criterion) {
 	group.finish();
 }
 
-fn with_ext1(c: &mut Criterion) {
+fn with_ext(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::Witcher");
 	group.sample_size(30);
 
-	group.bench_function(r"with_ext1(.jpg).with_path(/usr/share).build()", move |b| {
+	group.bench_function(r"with_ext(.jpg).with_path(/usr/share).build()", move |b| {
 		b.iter(||
-			Witcher::default().with_ext1(b".jpg").with_path("/usr/share").build()
-		)
-	});
-
-	group.finish();
-}
-
-fn with_ext2(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_witcher::Witcher");
-	group.sample_size(30);
-
-	group.bench_function(r"with_ext2(.jpg, .png).with_path(/usr/share).build()", move |b| {
-		b.iter(||
-			Witcher::default().with_ext2(b".jpg", b".png").with_path("/usr/share").build()
-		)
-	});
-
-	group.finish();
-}
-
-fn with_ext3(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_witcher::Witcher");
-	group.sample_size(30);
-
-	group.bench_function(r"with_ext3(.jpg, .png, .jpeg).with_path(/usr/share).build()", move |b| {
-		b.iter(||
-			Witcher::default().with_ext3(b".jpg", b".png", b".jpeg").with_path("/usr/share").build()
+			Witcher::default().with_ext(b".jpg").with_path("/usr/share").build()
 		)
 	});
 
@@ -102,9 +76,7 @@ criterion_group!(
 	benches,
 	build,
 	regex,
-	with_ext1,
-	with_ext2,
-	with_ext3,
+	with_ext,
 	filter,
 );
 criterion_main!(benches);

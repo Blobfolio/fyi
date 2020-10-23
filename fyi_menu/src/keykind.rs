@@ -4,20 +4,26 @@
 **Note:** This is not intended for external use and is subject to change.
 */
 
-#[cfg(target_arch = "x86")]
+#[cfg(all(target_arch = "x86", target_feature = "sse2"))]
 use std::arch::x86::{
+	_mm_cmpeq_epi16,
 	_mm_cmpeq_epi8,
 	_mm_loadu_si128,
 	_mm_movemask_epi8,
-	_mm_set1_epi8
+	_mm_set1_epi16,
+	_mm_set1_epi8,
+	_mm_set_epi16,
 };
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 use std::arch::x86_64::{
+	_mm_cmpeq_epi16,
 	_mm_cmpeq_epi8,
 	_mm_loadu_si128,
 	_mm_movemask_epi8,
-	_mm_set1_epi8
+	_mm_set1_epi16,
+	_mm_set1_epi8,
+	_mm_set_epi16,
 };
 
 
@@ -53,6 +59,10 @@ impl Default for KeyKind {
 }
 
 impl From<&[u8]> for KeyKind {
+	#[allow(clippy::cast_lossless)] // It's fine.
+	#[allow(clippy::cast_possible_wrap)] // It's fine.
+	#[allow(clippy::cast_ptr_alignment)] // It's fine.
+	#[allow(clippy::integer_division)] // It's fine.
 	fn from(txt: &[u8]) -> Self {
 		let len: usize = txt.len();
 		if len >= 2 && txt[0] == b'-' {
@@ -60,7 +70,75 @@ impl From<&[u8]> for KeyKind {
 			if txt[1] == b'-' {
 				// Is a long.
 				if len > 2 && txt[2].is_ascii_alphabetic() {
-					return find_eq(txt);
+					#[cfg(target_feature = "sse2")]
+					if 16 <= len {
+						unsafe {
+							let ptr = txt.as_ptr();
+							let needle = _mm_set1_epi8(b'=' as i8);
+							let mut offset: usize = 3;
+
+							// Check for matches 16 bytes at a time.
+							for _ in 0..(len-offset)/16 {
+								let haystack = _mm_loadu_si128(ptr.add(offset) as *const _);
+								let eq = _mm_cmpeq_epi8(needle, haystack);
+								let res = _mm_movemask_epi8(eq).trailing_zeros();
+								if res < 16 {
+									return Self::LongV(res as usize + offset);
+								}
+
+								offset += 16;
+							}
+
+							// If there's a remainder, check the last 16 bytes,
+							// understanding that some of them will have been
+							// covered already, but this fills the register and
+							// beats manual iteration.
+							if offset < len {
+								offset = len - 16;
+								let haystack = _mm_loadu_si128(ptr.add(offset) as *const _);
+								let eq = _mm_cmpeq_epi8(needle, haystack);
+								let res = _mm_movemask_epi8(eq).trailing_zeros();
+								if res < 16 {
+									return Self::LongV(res as usize + offset);
+								}
+							}
+
+							return Self::Long;
+						}
+					}
+					else if 8 <= len {
+						unsafe {
+							let needle = _mm_set1_epi16(b'=' as i16);
+
+							// Check the first eight bytes in one go.
+							let haystack = _mm_set_epi16(
+								*txt.get_unchecked(7) as i16,
+								*txt.get_unchecked(6) as i16,
+								*txt.get_unchecked(5) as i16,
+								*txt.get_unchecked(4) as i16,
+								*txt.get_unchecked(3) as i16,
+								*txt.get_unchecked(2) as i16,
+								*txt.get_unchecked(1) as i16,
+								*txt.get_unchecked(0) as i16,
+							);
+							let eq = _mm_cmpeq_epi16(needle, haystack);
+							let res = _mm_movemask_epi8(eq).trailing_zeros() >> 1;
+							if res < 16 {
+								return Self::LongV(res as usize);
+							}
+
+							// Check anything left over.
+							for i in 8..len {
+								if txt.get_unchecked(i) == &b'=' {
+									return Self::LongV(i);
+								}
+							}
+
+							return Self::Long;
+						}
+					}
+
+					return txt.iter().position(|x| x == &b'=').map_or(Self::Long, Self::LongV);
 				}
 			}
 			// Is short.
@@ -72,64 +150,6 @@ impl From<&[u8]> for KeyKind {
 
 		Self::None
 	}
-}
-
-#[must_use]
-/// # Find First `=`
-///
-/// This is used solely for deciding between [`KeyKind::Long`] and
-/// [`KeyKind::LongV`] variants. It will always be one of the two.
-///
-/// This method leverages SIMD to search for that pesky `=` sign in chunks of
-/// up to 16 bytes at a time.
-fn find_eq(txt: &[u8]) -> KeyKind {
-	if 16 <= txt.len() && is_x86_feature_detected!("sse2") {
-		unsafe { find_eq_sse2(txt) }
-	}
-	else {
-		txt.iter().position(|x| *x == b'=').map_or(KeyKind::Long, KeyKind::LongV)
-	}
-}
-
-#[allow(clippy::cast_possible_wrap)] // It's fine.
-#[allow(clippy::cast_ptr_alignment)] // It's fine.
-#[target_feature(enable = "sse2")]
-/// # Find First `=` (SSE2).
-///
-/// This is an SSE2/SIMD-optimized implementation of `find_eq` used for strings
-/// that are at least 16 bytes.
-unsafe fn find_eq_sse2(txt: &[u8]) -> KeyKind {
-	let len: usize = txt.len();
-	let ptr = txt.as_ptr();
-	let needle = _mm_set1_epi8(b'=' as i8);
-	let mut offset: usize = 3;
-
-	// Check for matches 16 bytes at a time.
-	loop {
-		let haystack = _mm_loadu_si128(ptr.add(offset) as *const _);
-		let eq = _mm_cmpeq_epi8(needle, haystack);
-		let res = _mm_movemask_epi8(eq).trailing_zeros();
-		if res < 16 {
-			return KeyKind::LongV(res as usize + offset);
-		}
-
-		offset += 16;
-		if len < offset + 16 { break; }
-	}
-
-	// If there's a remainder, recheck from the end (to fill the
-	// registers).
-	if offset < len {
-		offset = len - 16;
-		let haystack = _mm_loadu_si128(ptr.add(offset) as *const _);
-		let eq = _mm_cmpeq_epi8(needle, haystack);
-		let res = _mm_movemask_epi8(eq).trailing_zeros();
-		if res < 16 {
-			return KeyKind::LongV(res as usize + offset);
-		}
-	}
-
-	KeyKind::Long
 }
 
 
@@ -165,6 +185,9 @@ mod tests {
 		assert_eq!(KeyKind::from(&b"--yes__________="[..]), KeyKind::LongV(15));
 		assert_eq!(KeyKind::from(&b"--yes___________="[..]), KeyKind::LongV(16));
 		assert_eq!(KeyKind::from(&b"--yes____________="[..]), KeyKind::LongV(17));
+		assert_eq!(KeyKind::from(&b"--yes____________-="[..]), KeyKind::LongV(18));
+		assert_eq!(KeyKind::from(&b"--yes_____________-="[..]), KeyKind::LongV(19));
+		assert_eq!(KeyKind::from(&b"--yes______________-="[..]), KeyKind::LongV(20));
 		assert_eq!(KeyKind::from(&b"--yes_____________"[..]), KeyKind::Long);
 
 		// Does this work?

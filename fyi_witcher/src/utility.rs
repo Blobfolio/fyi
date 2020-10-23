@@ -15,6 +15,7 @@ use unicode_width::UnicodeWidthChar;
 
 
 
+#[allow(clippy::naive_bytecount)] // This is a fallback.
 #[must_use]
 /// # Count Line Breaks.
 ///
@@ -29,19 +30,13 @@ pub fn count_nl(src: &[u8]) -> usize {
 		unsafe { count_nl_sse2(src) }
 	}
 	else {
-		let mut total: usize = 0;
-		let mut offset: usize = 0;
-		while offset < len {
-			if src[offset] == b'\n' { total += 1; }
-			offset += 1;
-		}
-
-		total
+		src.iter().filter(|&&x| x == b'\n').count()
 	}
 }
 
 #[allow(clippy::cast_possible_wrap)] // It's fine.
 #[allow(clippy::cast_ptr_alignment)] // It's fine.
+#[allow(clippy::integer_division)] // It's fine.
 #[target_feature(enable = "avx2")]
 /// # Count Line Breaks (AVX2).
 ///
@@ -61,7 +56,7 @@ unsafe fn count_nl_avx2(src: &[u8]) -> usize {
 
 	let mut offset: usize = 0;
 	let mut total = _mm256_setzero_si256();
-	while offset + 32 <= len {
+	for _ in 0..len/32 {
 		total = _mm256_sub_epi8(
 			total,
 			_mm256_cmpeq_epi8(_mm256_loadu_si256(ptr.add(offset) as *const _), needle)
@@ -88,6 +83,7 @@ unsafe fn count_nl_avx2(src: &[u8]) -> usize {
 
 #[allow(clippy::cast_possible_wrap)] // It's fine.
 #[allow(clippy::cast_ptr_alignment)] // It's fine.
+#[allow(clippy::integer_division)] // It's fine.
 #[target_feature(enable = "sse2")]
 /// # Count Line Breaks (SSE2).
 ///
@@ -105,7 +101,7 @@ unsafe fn count_nl_sse2(src: &[u8]) -> usize {
 
 	let mut offset: usize = 0;
 	let mut total = _mm_setzero_si128();
-	while offset + 16 <= len {
+	for _ in 0..len/16 {
 		total = _mm_sub_epi8(
 			total,
 			_mm_cmpeq_epi8(_mm_loadu_si128(ptr.add(offset) as *const _), needle)
@@ -125,27 +121,6 @@ unsafe fn count_nl_sse2(src: &[u8]) -> usize {
 
 	let sums = _mm_sad_epu8(total, _mm_setzero_si128());
 	(_mm_extract_epi32(sums, 0) + _mm_extract_epi32(sums, 2)) as usize
-}
-
-#[must_use]
-/// # Ends With Ignore ASCII Case.
-///
-/// This combines `ends_with()` and `eq_ignore_ascii_case()`, but skips an
-/// operation by assuming the needle `end` is already in lower case.
-///
-/// ## Examples
-///
-/// ```no_run
-/// assert!(
-///     fyi_witcher::utility::ends_with_ignore_ascii_case(
-///         b"/home/usr/Images/picture.JPG",
-///         b".jpg"
-///     )
-/// );
-/// ```
-pub fn ends_with_ignore_ascii_case(src: &[u8], end: &[u8]) -> bool {
-	let (m, n) = (src.len(), end.len());
-	m >= n && src.iter().skip(m - n).zip(end).all(|(a, b)| a.to_ascii_lowercase() == *b)
 }
 
 #[must_use]
@@ -295,19 +270,6 @@ mod tests {
 		assert_eq!(count_nl(b"This has no line breaks."), 0);
 		assert_eq!(count_nl(b"This\nhas\ntwo line breaks."), 2);
 		assert_eq!(count_nl(&[10_u8; 63]), 63);
-	}
-
-	#[test]
-	fn t_ends_with_ignore_ascii_case() {
-		assert!(
-			ends_with_ignore_ascii_case(b"/path/to/file.jpg", b".jpg")
-		);
-		assert!(
-			ends_with_ignore_ascii_case(b"/path/to/file.JPG", b".jpg")
-		);
-		assert!(
-			! ends_with_ignore_ascii_case(b"/path/to/file.jpeg", b".jpg")
-		);
 	}
 
 	#[test]

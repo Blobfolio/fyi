@@ -1,20 +1,5 @@
 /*!
 # FYI Msg: Buffer
-
-"Buffer" isn't the right word. This is more of a contiguous, partitioned
-byte string.
-
-The contiguity(?) allows for fast slice borrows (for e.g. printing), while
-the partitioning makes it easy to update select portions of the buffer in-
-place.
-
-The partitioning may be arbitrary, and does not need to have full coverage
-or be contiguous with itself. That said, all part boundaries must be
-sequential, non-overlapping, and within range.
-
-Partitioned buffers are available for `2..=10` parts. Each is named
-accordingly, like `MsgBuffer2` for a 2-part buffer, `MsgBuffer3` for a 3-part
-buffer, etc.
 */
 
 use std::{
@@ -37,9 +22,24 @@ use std::{
 macro_rules! define_buffer {
 	($name:ident, $size:literal, $ssize:expr) => {
 		#[derive(Debug, Clone, Default)]
-		#[doc = "Message Buffer x `"]
+		#[doc = "Message Buffer with `"]
 		#[doc = $ssize]
-		#[doc = "`."]
+		#[doc = "` parts."]
+		///
+		/// "Buffer" isn't the right word. This is more of a contiguous,
+		/// partitioned	byte string.
+		///
+		/// The contiguity(?) allows for fast slice borrows (for e.g. printing),
+		/// while the partitioning makes it easy to update select portions of
+		/// the buffer in-place.
+		///
+		/// The partitioning may be arbitrary, and does not need to have full
+		/// coverage or be contiguous with itself. That said, all part
+		/// boundaries must be sequential, non-overlapping, and within range.
+		///
+		/// Partitioned buffers are available for `2..=10` parts. Each is named
+		/// accordingly, like [`MsgBuffer2`] for a 2-part buffer, [`MsgBuffer3`] for a 3-part
+		/// buffer, etc.
 		///
 		/// ## Safety
 		///
@@ -101,26 +101,25 @@ macro_rules! define_buffer {
 			#[inline]
 			/// # Instantiate From Raw Parts.
 			///
-			/// This directly sets the struct's fields, exactly like constructing it
-			/// manually would, but since the fields are private, this is how that's
-			/// done.
+			/// This directly sets the struct's fields, exactly like
+			/// constructing it manually would, but since the fields are
+			/// private, this is how that's done.
 			///
-			/// ## Examples
+			/// The `toc` part indexes should alternate between an inclusive
+			/// starting index, and exclusive ending index. For example, if the
+			/// first part is 2 bytes and the second part is 5 bytes, the array
+			/// would begin like `[0, 2, 2, 7, …]`.
 			///
-			/// ```no_run
-			/// use fyi_msg::$name;
-			///
-			/// let buf = unsafe { $name::from_raw_parts(vec![1, 2, 3], [0_usize; $size]) };
-			/// ```
+			/// Parts do not need to be connected to each other, but must be in
+			/// order sequentially. For example, `[0, 2, 10, 15, …]` is fine,
+			/// but `[10, 15, 0, 2, …]` will panic.
 			///
 			/// ## Safety
 			///
 			/// No validation is performed; the data must make sense or undefined
 			/// things will happen.
 			///
-			/// The table of contents must be properly aligned and ordered. Any
-			/// "unused" parts must begin and end at the maximum position of the "used"
-			/// parts, e.g. `[0, 5, 5, 5, 5, 5, 5, 5...]`.
+			/// The table of contents must be properly aligned and ordered.
 			pub unsafe fn from_raw_parts(buf: Vec<u8>, toc: [usize; $size]) -> Self {
 				Self { buf, toc }
 			}
@@ -167,7 +166,7 @@ macro_rules! define_buffer {
 			#[inline]
 			/// # As Bytes.
 			///
-			/// Return as a slice.
+			/// Return as a byte slice.
 			pub fn as_bytes(&self) -> &[u8] { self }
 
 			#[allow(clippy::missing_const_for_fn)] // This doesn't work.
@@ -202,6 +201,10 @@ macro_rules! define_buffer {
 			/// original, the table of contents will be adjusted accordingly.
 			///
 			/// ## Examples
+			///
+			/// Apologies, these documents are generated inside a macro that
+			/// refuse to translate the struct name ($name) and size ($size).
+			/// Use your imagination to substitute those below. :)
 			///
 			/// ```no_run
 			/// use fyi_msg::$name;
@@ -279,13 +282,14 @@ macro_rules! define_buffer {
 
 			/// # Resize: Shrink.
 			///
-			/// This shrinks the buffer in the appropriate place and adjusts the table
-			/// of contents accordingly.
+			/// This shrinks the buffer in the appropriate place and adjusts
+			/// the table of contents accordingly.
 			///
 			/// ## Panics
 			///
-			/// This method may panic if the adjustment is larger than the length of
-			/// the affected parts (i.e. causing their positions to overflow).
+			/// This method may panic if the adjustment is larger than the
+			/// length of the affected parts (i.e. causing their positions to
+			/// overflow).
 			///
 			/// ## Safety
 			///
@@ -307,8 +311,8 @@ macro_rules! define_buffer {
 
 			/// # Zero Part (Unchecked).
 			///
-			/// This method truncates a part to zero-length, shifting all subsequent
-			/// parts to the left as necessary.
+			/// This method truncates a part to zero-length, shifting all
+			/// subsequent parts to the left as necessary.
 			///
 			/// ## Safety
 			///
@@ -341,7 +345,8 @@ macro_rules! define_buffer {
 			#[inline]
 			/// # Part Length (Unchecked).
 			///
-			/// This returns the length of a given part, equivalent to `end-start`.
+			/// This returns the length of a given part, equivalent to
+			/// `end-start`.
 			///
 			/// ## Safety
 			///
@@ -354,7 +359,8 @@ macro_rules! define_buffer {
 			#[inline]
 			/// # Part Start (Unchecked).
 			///
-			/// This returns the inclusive buffer starting index  for a given part.
+			/// This returns the inclusive buffer starting index  for a given
+			/// part.
 			///
 			/// ## Safety
 			///
@@ -378,41 +384,37 @@ macro_rules! define_buffer {
 
 			/// # Decrease Indexing From.
 			///
-			/// This decreases the length of a partition, nudging all subsequent
-			/// partitions to the left.
+			/// This decreases the length of a partition, nudging all
+			/// subsequent partitions to the left.
 			///
 			/// ## Panics
 			///
-			/// This method will panic if the adjustent is larger than any of the
-			/// affected parts.
+			/// This method will panic if the adjustent is larger than any of
+			/// the affected parts.
 			fn decrease(&mut self, idx: usize, adj: usize) {
 				self.toc.iter_mut().skip((idx << 1) + 1).for_each(|x| *x -= adj);
 			}
 
 			/// # Increase Indexing From.
 			///
-			/// This increases the length of a partition, nudging all subsequent
-			/// partitions to the right.
+			/// This increases the length of a partition, nudging all
+			/// subsequent partitions to the right.
 			fn increase(&mut self, idx: usize, adj: usize) {
 				self.toc.iter_mut().skip((idx << 1) + 1).for_each(|x| *x += adj);
 			}
 		}
 	};
-
-	($name:ident, $size:literal) => {
-		define_buffer!($name, $size, stringify!($size));
-	};
 }
 
-define_buffer!(MsgBuffer2, 4);
-define_buffer!(MsgBuffer3, 6);
-define_buffer!(MsgBuffer4, 8);
-define_buffer!(MsgBuffer5, 10);
-define_buffer!(MsgBuffer6, 12);
-define_buffer!(MsgBuffer7, 14);
-define_buffer!(MsgBuffer8, 16);
-define_buffer!(MsgBuffer9, 18);
-define_buffer!(MsgBuffer10, 20);
+define_buffer!(MsgBuffer2, 4, "2");
+define_buffer!(MsgBuffer3, 6, "3");
+define_buffer!(MsgBuffer4, 8, "4");
+define_buffer!(MsgBuffer5, 10, "5");
+define_buffer!(MsgBuffer6, 12, "6");
+define_buffer!(MsgBuffer7, 14, "7");
+define_buffer!(MsgBuffer8, 16, "8");
+define_buffer!(MsgBuffer9, 18, "9");
+define_buffer!(MsgBuffer10, 20, "10");
 
 
 

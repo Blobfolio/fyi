@@ -22,10 +22,7 @@ pub use buffer::{
 #[allow(unreachable_pub)] pub use kind::MsgKind;
 #[allow(unreachable_pub)] pub use prefix::MsgPrefix;
 
-use crate::{
-	traits::FastConcat,
-	utility,
-};
+use crate::traits::FastConcat;
 use std::{
 	fmt,
 	iter::FromIterator,
@@ -496,33 +493,27 @@ impl Msg {
 				if on {
 					let mut buf = [mem::MaybeUninit::<u8>::uninit(); 44];
 					let dst = buf.as_mut_ptr() as *mut u8;
+					let dd = crate::NUMDD.as_ptr();
 
-					// Write the opener.
-					ptr::copy_nonoverlapping(b"\x1b[2m[\x1b[0;34m20".as_ptr(), dst, 14);
-					// Write the space.
-					ptr::write(dst.add(22), b' ');
-					// Write the closer.
-					ptr::copy_nonoverlapping(b"\x1b[39;2m]\x1b[0m ".as_ptr(), dst.add(31), 13);
+					// Get it started.
+					ptr::copy_nonoverlapping(b"\x1b[2m[\x1b[0;34m2000-00-00 00:00:00\x1b[39;2m]\x1b[0m ".as_ptr(), dst, 44);
 
-					// Now the time bits.
 					{
 						use chrono::{Datelike, Local, Timelike};
 						let now = Local::now();
-
-						utility::write_time(
-							dst.add(14),
-							(now.year() as u16).saturating_sub(2000) as u8,
-							now.month() as u8,
-							now.day() as u8,
-							b'-',
-						);
-						utility::write_time(
-							dst.add(23),
-							now.hour() as u8,
-							now.minute() as u8,
-							now.second() as u8,
-							b':',
-						);
+						[
+							(now.year() as usize).saturating_sub(2000),
+							now.month() as usize,
+							now.day() as usize,
+							now.hour() as usize,
+							now.minute() as usize,
+							now.second() as usize,
+						].iter()
+							.map(|&x| dd.add(x) as *const u8)
+							.fold(14_usize, |offset, x| {
+								ptr::copy_nonoverlapping(x, dst.add(offset), 2);
+								offset + 3
+							});
 					}
 
 					// Shove the result into the buffer.
