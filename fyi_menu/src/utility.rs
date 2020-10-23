@@ -9,8 +9,8 @@
 /// # Escape Arg String.
 ///
 /// This is a very *crude* reverse argument parser that 'quotes' values needing
-/// quoting, used by [`Argue::with_separator`](crate::Argue::with_separator) to recombine the arguments
-/// following an "--" entry.
+/// quoting, used by [`Argue`](crate::Argue) to recombine the arguments
+/// following an "--" entry when [`FLAG_SEPARATOR`](crate::FLAG_SEPARATOR) is set.
 ///
 /// This method is optimized for speed rather than robustness — hence its
 /// crudeness — so should probably not be used in other contexts unless you're

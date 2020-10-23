@@ -16,6 +16,7 @@ pkg_dir4    := justfile_directory() + "/fyi_witcher"
 
 cargo_dir   := "/tmp/" + pkg_id + "-cargo"
 cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
+doc_dir     := justfile_directory() + "/doc"
 release_dir := justfile_directory() + "/release"
 
 rustflags   := "-C link-arg=-s"
@@ -209,18 +210,22 @@ bench BENCH="" FILTER="":
 doc:
 	#!/usr/bin/env bash
 
-	cargo doc \
+	# Make sure nightly is installed; this version generates better docs.
+	rustup install nightly
+
+	# Make the docs.
+	cargo +nightly doc \
 		--workspace \
 		--release \
 		--no-deps \
-		--document-private-items \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
+	# --document-private-items \
 
-	[ ! -d "{{ justfile_directory() }}/doc" ] || rm -rf "{{ justfile_directory() }}/doc"
+	# Move the docs and clean up ownership.
+	[ ! -d "{{ doc_dir }}" ] || rm -rf "{{ doc_dir }}"
 	mv "{{ cargo_dir }}/x86_64-unknown-linux-gnu/doc" "{{ justfile_directory() }}"
-
-	just _fix-chown "{{ justfile_directory() }}/doc"
+	just _fix-chown "{{ doc_dir }}"
 
 	exit 0
 
