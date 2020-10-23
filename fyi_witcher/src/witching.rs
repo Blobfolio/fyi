@@ -764,7 +764,7 @@ impl Default for Witching {
 			inner: Arc::new(Mutex::new(WitchingInner::default())),
 			flags: 0,
 			// "file" and "files" respectively.
-			label: vec![4, 102, 105, 108, 101, 102, 105, 108, 101, 115],
+			label: vec![5, 102, 105, 108, 101, 102, 105, 108, 101, 115],
 		}
 	}
 }
