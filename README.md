@@ -43,7 +43,7 @@ RUSTFLAGS="-C link-arg=-s" cargo install \
     --target x86_64-unknown-linux-gnu
 ```
 
-Pre-built `.deb` packages are also added for each [release](https://github.com/Blobfolio/fyi/tags). They should always work for the latest stable Debian and Ubuntu.
+Pre-built `.deb` packages are also added for each [release](https://github.com/Blobfolio/fyi/releases/latest). They should always work for the latest stable Debian and Ubuntu.
 
 
 
