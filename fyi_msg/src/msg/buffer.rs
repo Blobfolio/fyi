@@ -21,6 +21,7 @@ use std::{
 /// of pieces in the TOC array.
 macro_rules! define_buffer {
 	($name:ident, $size:literal, $ssize:expr) => {
+		#[allow(clippy::tabs_in_doc_comments)] // The macro confuses the linter.
 		#[derive(Debug, Clone, Default)]
 		#[doc = "Message Buffer with `"]
 		#[doc = $ssize]
