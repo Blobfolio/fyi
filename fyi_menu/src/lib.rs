@@ -57,9 +57,11 @@ and major refactors may be introduced between releases.
 
 
 mod argue;
+mod basher;
 mod keykind;
 pub mod utility;
 
+pub use basher::Basher;
 pub use keykind::KeyKind;
 pub use argue::{
 	Argue,
