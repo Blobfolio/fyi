@@ -1,0 +1,35 @@
+%FNAME%() {
+	local i cur prev opts
+	COMPREPLY=()
+	cur="${COMP_WORDS[COMP_CWORD]}"
+	prev="${COMP_WORDS[COMP_CWORD-1]}"
+	cmd=""
+	opts=()
+
+	for i in ${COMP_WORDS[@]}; do
+		case "${i}" in
+			%BNAME%)
+				cmd="%BNAME%"
+				;;
+
+			*)
+				;;
+		esac
+	done
+
+	if [ ! -z "${cmd}" ]; then
+		opts=()
+%CONDS%
+		opts=" ${opts[@]} "
+		if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
+			COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+			return 0
+		fi
+
+%PATHS%
+		COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+		return 0
+	fi
+}
+
+complete -F %FNAME% -o bashdefault -o default %BNAME%
