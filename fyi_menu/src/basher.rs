@@ -2,8 +2,10 @@
 # FYI Menu: Basher
 */
 
-use std::fmt;
-use std::path::Path;
+use std::{
+	fmt,
+	path::Path,
+};
 
 
 
@@ -233,7 +235,7 @@ impl Basher {
 	/// // Traditionally, completion scripts end with a `.bash`.
 	/// b.write("/path/to/my_app.bash");
 	/// ```
-	pub fn write<P>(&mut self, out: P) -> Result<(), ()>
+	pub fn write<P>(&self, out: P) -> Result<(), ()>
 	where P: AsRef<Path> {
 		use std::io::Write;
 
