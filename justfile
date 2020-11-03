@@ -159,9 +159,6 @@ bench BENCH="" FILTER="":
 
 # Build Man.
 @build-man:
-	# Pre-clean.
-	find "{{ pkg_dir1 }}/man" -type f -delete
-
 	# Build a quickie version with the unsexy help so help2man can parse it.
 	RUSTFLAGS="{{ rustflags }}" cargo build \
 		--bin "{{ pkg_id }}" \
