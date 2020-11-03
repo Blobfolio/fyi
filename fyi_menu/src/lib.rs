@@ -59,15 +59,21 @@ and major refactors may be introduced between releases.
 mod argue;
 mod basher;
 mod keykind;
+mod man;
 pub mod utility;
 
-pub use basher::Basher;
-pub use keykind::KeyKind;
 pub use argue::{
 	Argue,
 	FLAG_REQUIRED,
 	FLAG_SEPARATOR,
 	FLAG_SUBCOMMAND,
+};
+pub use basher::Basher;
+pub use keykind::KeyKind;
+pub use man::{
+	Man,
+	ManSection,
+	ManSectionItem,
 };
 
 

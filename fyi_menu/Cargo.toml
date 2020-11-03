@@ -6,6 +6,9 @@ edition = "2018"
 description = "FYI is a dead-simple status message printer for CLI use applications."
 publish = false
 
+[dependencies]
+chrono = "0.4.*"
+
 [dependencies.fyi_msg]
 path = "../fyi_msg"
 
@@ -26,3 +29,6 @@ harness = false
 
 [[example]]
 name = "basher"
+
+[[example]]
+name = "man"

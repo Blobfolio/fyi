@@ -7,6 +7,7 @@ edition = "2018"
 description = "A dead-simple CLI status message printer for use in BASH scripts, etc."
 repository = "https://github.com/Blobfolio/fyi"
 publish = false
+build = "build.rs"
 
 [package.metadata.deb]
 maintainer = "Blobfolio, LLC. <hello@blobfolio.com>"
@@ -20,6 +21,9 @@ assets = [
     ["./completions/fyi.bash", "etc/bash_completion.d/", "644"],
     ["./man/fyi.1.gz", "usr/share/man/man1/", "644"],
 ]
+
+[build-dependencies.fyi_menu]
+path = "../fyi_menu"
 
 [dependencies.fyi_menu]
 path = "../fyi_menu"

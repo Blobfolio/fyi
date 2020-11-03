@@ -170,10 +170,6 @@ bench BENCH="" FILTER="":
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
-	# Use help2man to make a crappy MAN page.
-	help2man -o "{{ pkg_dir1 }}/man/{{ pkg_id }}.1" \
-		-N "{{ cargo_bin }}"
-
 	# Gzip it and reset ownership.
 	gzip -k -f -9 "{{ pkg_dir1 }}/man/{{ pkg_id }}.1"
 	just _fix-chown "{{ pkg_dir1 }}/man"

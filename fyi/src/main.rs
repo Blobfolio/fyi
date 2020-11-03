@@ -218,7 +218,6 @@ fn blank(args: &mut Argue) {
 	}
 }
 
-#[cfg(not(feature = "man"))]
 #[doc(hidden)]
 /// Help Page.
 ///
@@ -269,25 +268,6 @@ fn helper(cmd: Option<&str>) {
 			}
 		)
 	).println();
-}
-
-#[cfg(feature = "man")]
-#[doc(hidden)]
-#[cold]
-/// Help Page.
-///
-/// This is a boring version of the help screen used during build to make it
-/// easier for `help2man` to parse.
-fn helper(_: Option<&str>) {
-	Msg::from([
-		b"FYI ",
-		env!("CARGO_PKG_VERSION").as_bytes(),
-		b"\n",
-		env!("CARGO_PKG_DESCRIPTION").as_bytes(),
-		b"\n\n",
-		include_bytes!("../help/generic.txt"),
-	])
-		.println();
 }
 
 #[doc(hidden)]
