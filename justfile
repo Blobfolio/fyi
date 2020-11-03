@@ -159,9 +159,6 @@ bench BENCH="" FILTER="":
 
 # Build Man.
 @build-man:
-	# Pre-clean.
-	find "{{ pkg_dir1 }}/man" -type f -delete
-
 	# Build a quickie version with the unsexy help so help2man can parse it.
 	RUSTFLAGS="{{ rustflags }}" cargo build \
 		--bin "{{ pkg_id }}" \
@@ -169,10 +166,6 @@ bench BENCH="" FILTER="":
 		--all-features \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
-
-	# Use help2man to make a crappy MAN page.
-	help2man -o "{{ pkg_dir1 }}/man/{{ pkg_id }}.1" \
-		-N "{{ cargo_bin }}"
 
 	# Gzip it and reset ownership.
 	gzip -k -f -9 "{{ pkg_dir1 }}/man/{{ pkg_id }}.1"
