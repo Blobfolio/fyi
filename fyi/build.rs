@@ -1,5 +1,8 @@
 #[cfg(not(feature = "man"))]
 /// # Do Nothing.
+///
+/// We only need to rebuild stuff for new releases. The "man" feature is
+/// basically used to figure that out.
 fn main() {}
 
 
