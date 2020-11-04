@@ -1,8 +1,9 @@
 /*!
-# FYI Menu: Man Example
+# FYI Menu: Basher Example
 
-This recreates the MAN page for [`ChannelZ`](https://github.com/blobfolio/channelz).
-The code is printed to the screen.
+This recreates the BASH completions for [`ChannelZ`](https://github.com/blobfolio/channelz).
+The results are printed to the screen as it is rather difficult to convey a "working"
+completion script just by tabbing along. (But this one is good!)
 */
 
 /// Do it.
@@ -10,17 +11,14 @@ fn main() {
 	use fyi_menu::{
 		Agree,
 		AgreeKind,
-		AgreeSection,
-		FLAG_MAN_ALL,
 	};
 
-	let m: Agree = Agree::new(
+	let a: Agree = Agree::new(
 		"ChannelZ",
 		"channelz",
 		"1.2.3",
 		"ChannelZ is a simple, fast, multi-threaded static Gzip/Brotli encoding tool for the CLI."
 	)
-		.with_flags(FLAG_MAN_ALL)
 		.with_arg(
 			AgreeKind::switch("Remove all existing *.gz *.br files before starting.")
 				.with_long("--clean")
@@ -44,17 +42,7 @@ fn main() {
 			AgreeKind::option("<FILE>", "Read file paths from this text file.", true)
 				.with_short("-l")
 				.with_long("--list")
-		)
-		.with_arg(
-			AgreeKind::arg("<PATH(s)…>", "Any number of files and directories to crawl and crunch.")
-		)
-		.with_section(
-			AgreeSection::new("FILE TYPES", false)
-				.with_item(
-					AgreeKind::paragraph("Static copies will only be generated for files with these extensions:")
-						.with_line("css; eot; htm(l); ico; js; json; mjs; otf; rss; svg; ttf; txt; xhtm(l); xml; xsl")
-				)
 		);
 
-	println!("\n\n{}\n", m.man());
+	println!("\n\n{}\n\n", a.bash());
 }
