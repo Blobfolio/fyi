@@ -1,114 +1,86 @@
-#[cfg(feature = "man")]
-/// # Build BASH Completions.
+#[cfg(not(feature = "man"))]
+/// # Do Nothing.
 ///
-/// We can do this in the same run we use for building the MAN pages.
+/// We only need to rebuild stuff for new releases. The "man" feature is
+/// basically used to figure that out.
+fn main() {}
+
+
+
+#[cfg(feature = "man")]
+/// # Build MAN Page.
 fn main() {
 	use fyi_menu::{
-		Man,
-		ManSection,
-		ManSectionItem,
+		Agree,
+		AgreeSection,
+		AgreeKind,
+		FLAG_MAN_NAME,
+		FLAG_MAN_DESCRIPTION,
 	};
 	use std::{
 		env,
 		path::PathBuf,
 	};
 
-	let m: Man = Man::new("FYI", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"))
-		.with_text(
-			"DESCRIPTION",
-			env!("CARGO_PKG_DESCRIPTION"),
-			false
-		)
-		.with_text(
-			"USAGE:",
-			"fyi <SUBCOMMAND>",
-			true
-		)
+	let app: Agree = Agree::new(
+		"FYI",
+		env!("CARGO_PKG_NAME"),
+		env!("CARGO_PKG_VERSION"),
+		env!("CARGO_PKG_DESCRIPTION"),
+	)
+		.with_flags(FLAG_MAN_NAME | FLAG_MAN_DESCRIPTION)
 		.with_section(
-			ManSection::list("FLAGS:")
+			AgreeSection::new("USAGE:", true)
 				.with_item(
-					ManSectionItem::new("Print help information.")
-						.with_key("-h")
-						.with_key("--help")
-				)
-				.with_item(
-					ManSectionItem::new("Print version information.")
-						.with_key("-V")
-						.with_key("--version")
+					AgreeKind::paragraph("fyi <SUBCOMMAND> [FLAGS]")
+						.with_line("fyi <SUBCOMMAND> --help")
 				)
 		)
 		.with_section(
-			ManSection::list("SUBCOMMANDS:")
+			AgreeSection::new("FLAGS:", true)
 				.with_item(
-					ManSectionItem::new("Print this screen.")
-						.with_key("help")
+					AgreeKind::switch("Print help information.")
+						.with_short("-h")
+						.with_long("--help")
 				)
 				.with_item(
-					ManSectionItem::new("Print blank line(s).")
-						.with_key("blank")
+					AgreeKind::switch("Print program version.")
+						.with_short("-V")
+						.with_long("--version")
 				)
-				.with_item(
-					ManSectionItem::new("Ask a Yes/No question, exiting 0 or 1 respectively.")
-						.with_key("confirm")
-				)
-				.with_item(
-					ManSectionItem::new("Print a message without a prefix (or with a custom one).")
-						.with_key("print")
-				)
-				.with_item(
-					ManSectionItem::new("Crunched: Hello World")
-						.with_key("crunched")
-				)
-				.with_item(
-					ManSectionItem::new("Debug: Hello World")
-						.with_key("debug")
-				)
-				.with_item(
-					ManSectionItem::new("Done: Hello World")
-						.with_key("done")
-				)
-				.with_item(
-					ManSectionItem::new("Error: Hello World")
-						.with_key("error")
-				)
-				.with_item(
-					ManSectionItem::new("Info: Hello World")
-						.with_key("info")
-				)
-				.with_item(
-					ManSectionItem::new("Notice: Hello World")
-						.with_key("notice")
-				)
-				.with_item(
-					ManSectionItem::new("Success: Hello World")
-						.with_key("success")
-				)
-				.with_item(
-					ManSectionItem::new("Task: Hello World")
-						.with_key("task")
-				)
-				.with_item(
-					ManSectionItem::new("Warning: Hello World")
-						.with_key("warning")
-				)
+		)
+		.with_section(
+			AgreeSection::new("SUBCOMMANDS:", true)
+				.with_item(AgreeKind::item("help", "Print help information."))
+				.with_item(AgreeKind::item("blank", "Print blank line(s)."))
+				.with_item(AgreeKind::item(
+					"confirm",
+					"Ask a Yes/No question, exiting 0 or 1 respectively."
+				))
+				.with_item(AgreeKind::item(
+					"print",
+					"Print a message without a prefix (or with a custom one)."
+				))
+				.with_item(AgreeKind::item("crunched", "Crunched: Hello World"))
+				.with_item(AgreeKind::item("debug", "Debug: Hello World"))
+				.with_item(AgreeKind::item("done", "Done: Hello World"))
+				.with_item(AgreeKind::item("error", "Error: Hello World"))
+				.with_item(AgreeKind::item("info", "Info: Hello World"))
+				.with_item(AgreeKind::item("notice", "Notice: Hello World"))
+				.with_item(AgreeKind::item("success", "Success: Hello World"))
+				.with_item(AgreeKind::item("task", "Task: Hello World"))
+				.with_item(AgreeKind::item("warning", "Warning: Hello World"))
 		);
 
-	// We're going to shove this in "fyi/help/fyi.1". If we used
-	// `OUT_DIR` like Cargo suggests, we'd never be able to find it to shove
-	// it into the `.deb` package.
-	let mut path: PathBuf = env::var("CARGO_MANIFEST_DIR")
+	// Chuck this in ../man.
+	let mut dir: PathBuf = env::var("CARGO_MANIFEST_DIR")
 		.ok()
 		.and_then(|x| std::fs::canonicalize(x).ok())
-		.expect("Missing MAN directory.");
+		.expect("Missing base directory.");
 
-	path.push("man");
-	path.push("fyi.1");
+	dir.push("man");
 
 	// Write it!
-	m.write(&path)
-		.unwrap_or_else(|_| panic!("Unable to write MAN script: {:?}", path));
+	app.write_man(&dir)
+		.unwrap_or_else(|_| panic!("Unable to write MAN script: {:?}", dir));
 }
-
-#[cfg(not(feature = "man"))]
-/// # Do Nothing.
-fn main() {}

@@ -56,25 +56,34 @@ and major refactors may be introduced between releases.
 
 
 
+mod agree;
 mod argue;
-mod basher;
 mod keykind;
-mod man;
 pub mod utility;
 
+pub use agree::{
+	Agree,
+	AgreeKind,
+	AgreeSwitch,
+	AgreeOption,
+	AgreeItem,
+	AgreeParagraph,
+	AgreeSection,
+	FLAG_MAN_ALL,
+	FLAG_MAN_ARGS,
+	FLAG_MAN_DESCRIPTION,
+	FLAG_MAN_FLAGS,
+	FLAG_MAN_NAME,
+	FLAG_MAN_OPTIONS,
+	FLAG_MAN_USAGE,
+};
 pub use argue::{
 	Argue,
 	FLAG_REQUIRED,
 	FLAG_SEPARATOR,
 	FLAG_SUBCOMMAND,
 };
-pub use basher::Basher;
 pub use keykind::KeyKind;
-pub use man::{
-	Man,
-	ManSection,
-	ManSectionItem,
-};
 
 
 
