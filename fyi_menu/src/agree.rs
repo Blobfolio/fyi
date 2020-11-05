@@ -59,7 +59,22 @@ pub enum AgreeKind {
 
 	/// # Subcommand.
 	///
-	/// Note: This is not yet supported.
+	/// This is a recursive [`Agree`], complete with its own description,
+	/// flags, etc.
+	///
+	/// When constructing MAN pages, you have the option to generate separate
+	/// pages for each subcommand via the [`FLAG_MAN_WRITE_SUBCOMMANDS`] flag.
+	///
+	/// Take a look at the `man` example in this crate, and also the `fyi`
+	/// bin's own `build.rs` for sample construction.
+	///
+	/// ## Safety
+	///
+	/// There is support for ONE LEVEL of subcommands. That is, the main
+	/// [`Agree`] struct can have any number of subcommands among its
+	/// arguments, however those subcommands CANNOT have their own
+	/// sub-subcommands. Undefined things will happen if 2+ levels are
+	/// included.
 	SubCommand(Agree),
 
 	/// # Miscellaneous K/V Item.
@@ -506,8 +521,12 @@ impl AgreeSection {
 /// The main idea is to toss a call to this in `build.rs`, keeping the
 /// overhead out of the runtime application entirely.
 ///
-/// Subcommands are not currently supported, but will be coming eventually so
-/// FYI itself can make use of this. Haha.
+/// ## Safety
+///
+/// There is support for ONE LEVEL of subcommands. That is, the main [`Agree`]
+/// struct can have any number of subcommands among its arguments, however
+/// those subcommands CANNOT have their own sub-subcommands. Undefined things
+/// will happen if 2+ levels are included.
 pub struct Agree {
 	name: String,
 	bin: String,

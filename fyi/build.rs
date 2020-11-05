@@ -20,6 +20,9 @@ fn main() {
 		path::PathBuf,
 	};
 
+	// There are a lot of repeat options between the different subcommands.
+	// For anything used more than once, let's have a function generate it!
+
 	fn exit_arg() -> AgreeKind {
 		AgreeKind::option("<NUM>", "Exit with this status code after printing. [default: 0]", false)
 			.with_short("-e")
@@ -71,6 +74,7 @@ fn main() {
 		)
 	}
 
+	// We're finally ready to build the app!
 	let app: Agree = Agree::new(
 		"FYI",
 		env!("CARGO_PKG_NAME"),
@@ -155,6 +159,8 @@ fn main() {
 					.with_arg(msg_arg())
 			)
 		)
+		// So many subcommands... at least the rest of them all work
+		// identically to one another.
 		.with_arg(builtin("crunched", "Crunched"))
 		.with_arg(builtin("debug", "Debug"))
 		.with_arg(builtin("done", "Done"))
@@ -170,7 +176,6 @@ fn main() {
 		.ok()
 		.and_then(|x| std::fs::canonicalize(x).ok())
 		.expect("Missing base directory.");
-
 
 	// Write MAN pages!
 	dir.push("man");
