@@ -608,76 +608,6 @@ impl Agree {
 	}
 
 	#[must_use]
-	/// # BASH Helper (Completions).
-	fn bash_completions(&self, parent: &str) -> String {
-		// Hold the string we're building.
-		include_str!("../skel/basher.txt")
-			.replace("%FNAME%", &self.bash_fname(parent))
-			.replace(
-				"%CONDS%",
-				&self.args.iter()
-					.filter_map(|x| {
-						let txt: String = x.bash();
-						if txt.is_empty() { None }
-						else { Some(txt) }
-					})
-					.collect::<Vec<String>>()
-					.join("")
-			)
-			.replace("%PATHS%", &self.bash_paths())
-	}
-
-	#[must_use]
-	/// # BASH Helper (Subcommand Chooser).
-	fn bash_subcommands(&self) -> String {
-		let (cmd, chooser): (String, String) = std::iter::once((self.bin.clone(), self.bash_fname("")))
-			.chain(
-				self.args.iter()
-					.filter_map(|x| match x {
-						AgreeKind::SubCommand(y) => Some((y.bin.clone(), y.bash_fname(&self.bin))),
-						_ => None,
-					})
-			)
-			.fold(
-				(String::new(), String::new()),
-				|(mut a, mut b), (c, d)| {
-					a.push_str(
-						&include_str!("../skel/basher.subcmd.1.txt")
-							.replace("%BNAME%", &c)
-					);
-					b.push_str(
-						&include_str!("../skel/basher.subcmd.2.txt")
-							.replace("%BNAME%", &c)
-							.replace("%FNAME%", &d)
-					);
-
-					(a, b)
-				}
-			);
-
-		include_str!("../skel/basher.subcmd.txt")
-			.replace("%BNAME%", &self.bin)
-			.replace("%FNAME%", &self.bash_fname(""))
-			.replace("%SUBCMD1%", &cmd)
-			.replace("%SUBCMD2%", &chooser)
-	}
-
-	/// # BASH Helper (Function Name).
-	fn bash_fname(&self, parent: &str) -> String {
-		[
-			"_basher__",
-			parent,
-			"_",
-			&self.bin,
-		].concat()
-			.replace('-', "_")
-			.to_lowercase()
-			.chars()
-			.filter(|&x| x.is_alphanumeric() || x == '_')
-			.collect::<String>()
-	}
-
-	#[must_use]
 	/// # MAN Page.
 	///
 	/// Generate and return the code for a MAN page as a string. You can
@@ -755,6 +685,40 @@ impl Agree {
 		Ok(())
 	}
 
+	/// # BASH Helper (Function Name).
+	fn bash_fname(&self, parent: &str) -> String {
+		[
+			"_basher__",
+			parent,
+			"_",
+			&self.bin,
+		].concat()
+			.replace('-', "_")
+			.to_lowercase()
+			.chars()
+			.filter(|&x| x.is_alphanumeric() || x == '_')
+			.collect::<String>()
+	}
+
+	/// # BASH Helper (Completions).
+	fn bash_completions(&self, parent: &str) -> String {
+		// Hold the string we're building.
+		include_str!("../skel/basher.txt")
+			.replace("%FNAME%", &self.bash_fname(parent))
+			.replace(
+				"%CONDS%",
+				&self.args.iter()
+					.filter_map(|x| {
+						let txt: String = x.bash();
+						if txt.is_empty() { None }
+						else { Some(txt) }
+					})
+					.collect::<Vec<String>>()
+					.join("")
+			)
+			.replace("%PATHS%", &self.bash_paths())
+	}
+
 	/// # BASH Helper (Path Options).
 	///
 	/// This produces the file/directory-listing portion of the BASH completion
@@ -771,6 +735,40 @@ impl Agree {
 			include_str!("../skel/basher.paths.txt")
 				.replace("%KEYS%", &keys.join("|"))
 		}
+	}
+
+	/// # BASH Helper (Subcommand Chooser).
+	fn bash_subcommands(&self) -> String {
+		let (cmd, chooser): (String, String) = std::iter::once((self.bin.clone(), self.bash_fname("")))
+			.chain(
+				self.args.iter()
+					.filter_map(|x| match x {
+						AgreeKind::SubCommand(y) => Some((y.bin.clone(), y.bash_fname(&self.bin))),
+						_ => None,
+					})
+			)
+			.fold(
+				(String::new(), String::new()),
+				|(mut a, mut b), (c, d)| {
+					a.push_str(
+						&include_str!("../skel/basher.subcmd.1.txt")
+							.replace("%BNAME%", &c)
+					);
+					b.push_str(
+						&include_str!("../skel/basher.subcmd.2.txt")
+							.replace("%BNAME%", &c)
+							.replace("%FNAME%", &d)
+					);
+
+					(a, b)
+				}
+			);
+
+		include_str!("../skel/basher.subcmd.txt")
+			.replace("%BNAME%", &self.bin)
+			.replace("%FNAME%", &self.bash_fname(""))
+			.replace("%SUBCMD1%", &cmd)
+			.replace("%SUBCMD2%", &chooser)
 	}
 
 	/// # MAN Helper (Usage).
@@ -801,12 +799,11 @@ impl Agree {
 		out
 	}
 
-	#[must_use]
 	/// # MAN Helper (Subcommands)
 	fn subman(&self, parent: &str) -> String {
 		// Start with the header.
 		let mut out: String = format!(
-			r#".TH {} "1" "{}" "{} v{}" "User Commands""#,
+			r#".TH "{}" "1" "{}" "{} v{}" "User Commands""#,
 			format!("{} {}", parent.to_uppercase(), self.name.to_uppercase()).trim(),
 			chrono::Local::now().format("%B %Y"),
 			&self.name,
