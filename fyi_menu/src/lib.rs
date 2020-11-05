@@ -69,15 +69,6 @@ pub use agree::{
 	AgreeItem,
 	AgreeParagraph,
 	AgreeSection,
-	FLAG_MAN_ALL,
-	FLAG_MAN_ARGS,
-	FLAG_MAN_DESCRIPTION,
-	FLAG_MAN_FLAGS,
-	FLAG_MAN_NAME,
-	FLAG_MAN_OPTIONS,
-	FLAG_MAN_USAGE,
-	FLAG_MAN_SUBCOMMANDS,
-	FLAG_MAN_WRITE_SUBCOMMANDS,
 };
 pub use argue::{
 	Argue,

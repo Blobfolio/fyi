@@ -8,6 +8,7 @@ publish = false
 
 [dependencies]
 chrono = "0.4.*"
+libdeflater = "0.5.*"
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"

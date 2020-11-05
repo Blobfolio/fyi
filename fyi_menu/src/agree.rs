@@ -7,36 +7,6 @@ use std::path::PathBuf;
 
 
 
-/// # Man Flag: Generate All Auto Sections.
-pub const FLAG_MAN_ALL: u8 =               0b1111_1111;
-
-/// # Man Flag: Generate DESCRIPTION Section.
-pub const FLAG_MAN_DESCRIPTION: u8 =       0b0000_0001;
-
-/// # Man Flag: Generate NAME Section.
-pub const FLAG_MAN_NAME: u8 =              0b0000_0010;
-
-/// # Man Flag: Generate USAGE Section.
-pub const FLAG_MAN_USAGE: u8 =             0b0000_0100;
-
-/// # Man Flag: Generate FLAGS Section.
-pub const FLAG_MAN_FLAGS: u8 =             0b0000_1000;
-
-/// # Man Flag: Generate OPTIONS Section.
-pub const FLAG_MAN_OPTIONS: u8 =           0b0001_0000;
-
-/// # Man Flag: Generate ARGS Section.
-pub const FLAG_MAN_ARGS: u8 =              0b0010_0000;
-
-/// # Man Flag: Generate SUBCOMMANDS Section.
-pub const FLAG_MAN_SUBCOMMANDS: u8 =       0b0100_0000;
-
-/// # Man Flag: Write Subcommand Documents.
-pub const FLAG_MAN_WRITE_SUBCOMMANDS: u8 = 0b1000_0000;
-
-
-
-
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 /// # Agreement Kind.
 pub enum AgreeKind {
@@ -532,7 +502,6 @@ pub struct Agree {
 	bin: String,
 	version: String,
 	description: String,
-	flags: u8,
 	args: Vec<AgreeKind>,
 	other: Vec<AgreeSection>,
 }
@@ -546,20 +515,9 @@ impl Agree {
 			bin: bin.into(),
 			version: version.into(),
 			description: description.into(),
-			flags: 0,
 			args: Vec::new(),
 			other: Vec::new(),
 		}
-	}
-
-	#[must_use]
-	/// # With Flags.
-	///
-	/// Flags control which (if any) common sections to automatically generate
-	/// for you. See the module-level documentation for more information.
-	pub const fn with_flags(mut self, flags: u8) -> Self {
-		self.flags |= flags;
-		self
 	}
 
 	#[must_use]
@@ -648,7 +606,7 @@ impl Agree {
 
 		if path.is_dir() {
 			path.push(&format!("{}.bash", &self.bin));
-			write_to(&path, self.bash().as_bytes())
+			write_to(&path, self.bash().as_bytes(), false)
 				.map_err(|_| format!(
 					"Unable to write BASH completions: {:?}",
 					path
@@ -673,7 +631,7 @@ impl Agree {
 		// The main file.
 		if path.is_dir() {
 			path.push(&format!("{}.1", &self.bin));
-			write_to(&path, self.man().as_bytes())
+			write_to(&path, self.man().as_bytes(), true)
 				.map_err(|_| format!(
 					"Unable to write MAN page: {:?}",
 					path
@@ -684,21 +642,19 @@ impl Agree {
 		}
 
 		// Write subcommand pages.
-		if 0 != self.flags & FLAG_MAN_WRITE_SUBCOMMANDS {
-			for (bin, man) in self.args.iter()
-				.filter_map(|x| match x {
-					AgreeKind::SubCommand(s) => Some((s.bin.clone(), s.subman(&self.bin))),
-					_ => None,
-				})
-			{
-				path.pop();
-				path.push(&format!("{}-{}.1", &self.bin, bin));
-				write_to(&path, man.as_bytes())
-					.map_err(|_| format!(
-						"Unable to write MAN page: {:?}",
-						path
-					))?;
-			}
+		for (bin, man) in self.args.iter()
+			.filter_map(|x| match x {
+				AgreeKind::SubCommand(s) => Some((s.bin.clone(), s.subman(&self.bin))),
+				_ => None,
+			})
+		{
+			path.pop();
+			path.push(&format!("{}-{}.1", &self.bin, bin));
+			write_to(&path, man.as_bytes(), true)
+				.map_err(|_| format!(
+					"Unable to write MAN page: {:?}",
+					path
+				))?;
 		}
 
 		Ok(())
@@ -830,39 +786,22 @@ impl Agree {
 		);
 
 		// Add each section.
-		let mut pre: Vec<AgreeSection> = Vec::new();
-
-		// Generated Name Section.
-		if 0 != self.flags & FLAG_MAN_NAME {
-			pre.push(
-				AgreeSection::new("NAME", false)
-					.with_item(AgreeKind::paragraph(format!(
-						"{} - Manual page for {} v{}.",
-						&self.name,
-						&self.bin,
-						&self.version
-					)))
-			);
-		}
-
-		// Generated Description Section.
-		if 0 != self.flags & FLAG_MAN_DESCRIPTION {
-			pre.push(
+		let mut pre: Vec<AgreeSection> = vec![
+			AgreeSection::new("NAME", false)
+				.with_item(AgreeKind::paragraph(format!(
+					"{} - Manual page for {} v{}.",
+					&self.name,
+					&self.bin,
+					&self.version
+				))),
 				AgreeSection::new("DESCRIPTION", false)
-					.with_item(AgreeKind::paragraph(&self.description))
-			);
-		}
-
-		// Generated Usage Section.
-		if 0 != self.flags & FLAG_MAN_USAGE {
-			pre.push(
+					.with_item(AgreeKind::paragraph(&self.description)),
 				AgreeSection::new("USAGE:", true)
 					.with_item(AgreeKind::paragraph(self.man_usage(parent)))
-			);
-		}
+		];
 
 		// Generated FLAGS Section.
-		if 0 != self.flags & FLAG_MAN_FLAGS {
+		{
 			let section = self.args.iter()
 				.filter(|s| matches!(s, AgreeKind::Switch(_)))
 				.cloned()
@@ -876,7 +815,7 @@ impl Agree {
 		}
 
 		// Generated OPTIONS Section.
-		if 0 != self.flags & FLAG_MAN_OPTIONS {
+		{
 			let section = self.args.iter()
 				.filter(|s| matches!(s, AgreeKind::Option(_)))
 				.cloned()
@@ -890,7 +829,7 @@ impl Agree {
 		}
 
 		// Generated ARGUMENTS Section.
-		if 0 != self.flags & FLAG_MAN_ARGS {
+		{
 			self.args.iter()
 				.filter_map(|s| match s {
 					AgreeKind::Arg(s) => Some(s.clone()),
@@ -905,7 +844,7 @@ impl Agree {
 		}
 
 		// Generated SUBCOMMANDS Section.
-		if 0 != self.flags & FLAG_MAN_SUBCOMMANDS {
+		{
 			let section = self.args.iter()
 				.filter(|s| matches!(s, AgreeKind::SubCommand(_)))
 				.cloned()
@@ -960,12 +899,43 @@ fn man_tagline(short: Option<&str>, long: Option<&str>, value: Option<&str>) -> 
 	}
 }
 
+#[allow(trivial_casts)] // Triviality is required.
 /// # Write File.
-fn write_to(file: &PathBuf, data: &[u8]) -> Result<(), ()> {
-	use std::io::Write;
+fn write_to(file: &PathBuf, data: &[u8], compress: bool) -> Result<(), ()> {
+	use libdeflater::{
+		CompressionLvl,
+		Compressor,
+	};
+	use std::{
+		ffi::OsStr,
+		os::unix::ffi::OsStrExt,
+		io::Write,
+	};
 
 	let mut out = std::fs::File::create(file).map_err(|_| ())?;
 	out.write_all(data).map_err(|_| ())?;
 	out.flush().map_err(|_| ())?;
+
+	// Save a compressed copy?
+	if compress {
+		let mut writer = Compressor::new(CompressionLvl::best());
+		let mut buf: Vec<u8> = Vec::with_capacity(data.len());
+		buf.resize(writer.gzip_compress_bound(data.len()), 0);
+
+		if let Ok(len) = writer.gzip_compress(data, &mut buf) {
+			// Trim any excess now that we know the final length.
+			buf.truncate(len);
+
+			// Toss ".gz" onto the original file path.
+			let filegz: PathBuf = PathBuf::from(OsStr::from_bytes(&[
+				unsafe { &*(file.as_os_str() as *const OsStr as *const [u8]) },
+				b".gz",
+			].concat()));
+
+			// Recurse to write it!
+			return write_to(&filegz, &buf, false);
+		}
+	}
+
 	Ok(())
 }
