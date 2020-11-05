@@ -20,6 +20,19 @@ assets = [
     ["../target/x86_64-unknown-linux-gnu/release/fyi", "usr/bin/", "755"],
     ["./completions/fyi.bash", "etc/bash_completion.d/", "644"],
     ["./man/fyi.1.gz", "usr/share/man/man1/", "644"],
+    ["./man/fyi-confirm.1.gz", "usr/share/man/man1/", "644"],
+    ["./man/fyi-debug.1.gz", "usr/share/man/man1/", "644"],
+    ["./man/fyi-error.1.gz", "usr/share/man/man1/", "644"],
+    ["./man/fyi-info.1.gz", "usr/share/man/man1/", "644"],
+    ["./man/fyi-print.1.gz", "usr/share/man/man1/", "644"],
+    ["./man/fyi-task.1.gz", "usr/share/man/man1/", "644"],
+    ["./man/fyi-blank.1.gz", "usr/share/man/man1/", "644"],
+    ["./man/fyi-crunched.1.gz", "usr/share/man/man1/", "644"],
+    ["./man/fyi-done.1.gz", "usr/share/man/man1/", "644"],
+    ["./man/fyi-help.1.gz", "usr/share/man/man1/", "644"],
+    ["./man/fyi-notice.1.gz", "usr/share/man/man1/", "644"],
+    ["./man/fyi-success.1.gz", "usr/share/man/man1/", "644"],
+    ["./man/fyi-warning.1.gz", "usr/share/man/man1/", "644"],
 ]
 
 [build-dependencies.fyi_menu]
