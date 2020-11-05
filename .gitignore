@@ -1,6 +1,6 @@
 /Cargo.lock
 /doc/
-/fyi/man/fyi.1.gz
+/fyi/man/*.1.gz
 /fyi/target/
 /fyi_menu/target/
 /fyi_msg/target/

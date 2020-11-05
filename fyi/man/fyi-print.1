@@ -1,0 +1,34 @@
+.TH FYI PRINT "1" "November 2020" "print v1.2.3" "User Commands"
+.SH NAME
+print \- Manual page for print v1.2.3.
+.SH DESCRIPTION
+Print a message without a prefix (or with a custom one).
+.SS USAGE:
+.TP
+fyi print [FLAGS] [OPTIONS] <MSG>
+.SS FLAGS:
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help information.
+.TP
+\fB\-i\fR, \fB\-\-indent\fR
+Indent the line.
+.TP
+\fB\-\-stderr\fR
+Print to STDERR instead of STDOUT.
+.TP
+\fB\-t\fR, \fB\-\-timestamp\fR
+Include a timestamp.
+.SS OPTIONS:
+.TP
+\fB\-e\fR, \fB\-\-exit\fR <NUM>
+Exit with this status code after printing. [default: 0]
+.TP
+\fB\-c\fR, \fB\-\-prefix\-color\fR <NUM>
+Use this color for the prefix. [default: 199]
+.TP
+\fB\-p\fR, \fB\-\-prefix\fR <PREFIX>
+Set a custom prefix. [default: ]
+.SS <MSG>:
+.TP
+The message!

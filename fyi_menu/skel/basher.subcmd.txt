@@ -1,0 +1,29 @@
+subcmd_%FNAME%() {
+	local i cmd
+	COMPREPLY=()
+	cmd=""
+
+	for i in ${COMP_WORDS[@]}; do
+		case "${i}" in
+%SUBCMD1%
+			*)
+				;;
+		esac
+	done
+
+	echo "$cmd"
+}
+
+chooser_%FNAME%() {
+	local i cmd
+	COMPREPLY=()
+	cmd="$( subcmd_%FNAME% )"
+
+	case "${cmd}" in
+%SUBCMD2%
+		*)
+			;;
+	esac
+}
+
+complete -F chooser_%FNAME% -o bashdefault -o default %BNAME%

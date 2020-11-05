@@ -1,0 +1,3 @@
+			%BNAME%)
+				cmd="%BNAME%"
+				;;

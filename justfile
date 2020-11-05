@@ -169,7 +169,22 @@ bench BENCH="" FILTER="":
 
 	# Gzip it and reset ownership.
 	gzip -k -f -9 "{{ pkg_dir1 }}/man/{{ pkg_id }}.1"
+	gzip -k -f -9 "{{ pkg_dir1 }}/man/{{ pkg_id }}-confirm.1"
+	gzip -k -f -9 "{{ pkg_dir1 }}/man/{{ pkg_id }}-debug.1"
+	gzip -k -f -9 "{{ pkg_dir1 }}/man/{{ pkg_id }}-error.1"
+	gzip -k -f -9 "{{ pkg_dir1 }}/man/{{ pkg_id }}-info.1"
+	gzip -k -f -9 "{{ pkg_dir1 }}/man/{{ pkg_id }}-print.1"
+	gzip -k -f -9 "{{ pkg_dir1 }}/man/{{ pkg_id }}-task.1"
+	gzip -k -f -9 "{{ pkg_dir1 }}/man/{{ pkg_id }}-blank.1"
+	gzip -k -f -9 "{{ pkg_dir1 }}/man/{{ pkg_id }}-crunched.1"
+	gzip -k -f -9 "{{ pkg_dir1 }}/man/{{ pkg_id }}-done.1"
+	gzip -k -f -9 "{{ pkg_dir1 }}/man/{{ pkg_id }}-help.1"
+	gzip -k -f -9 "{{ pkg_dir1 }}/man/{{ pkg_id }}-notice.1"
+	gzip -k -f -9 "{{ pkg_dir1 }}/man/{{ pkg_id }}-success.1"
+	gzip -k -f -9 "{{ pkg_dir1 }}/man/{{ pkg_id }}-warning.1"
+
 	just _fix-chown "{{ pkg_dir1 }}/man"
+	just _fix-chown "{{ pkg_dir1 }}/completions"
 
 
 # Check Release!
