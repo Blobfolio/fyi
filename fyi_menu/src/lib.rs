@@ -17,6 +17,11 @@ overhead of processing CLI arguments, but because handling is left to the
 implementing library, it might be too tedious or limiting for more complex use
 cases.
 
+This crate also contains a build tool called [`Agree`] that allows you to
+configure all the ins and outs of your app to generate BASH completions and/or
+MAN page(s). This is meant to be run from `build.rs` and as such has no impact
+on the runtime performance of the application.
+
 
 
 ## Stability: Alpha
