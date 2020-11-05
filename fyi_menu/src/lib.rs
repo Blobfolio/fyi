@@ -76,6 +76,8 @@ pub use agree::{
 	FLAG_MAN_NAME,
 	FLAG_MAN_OPTIONS,
 	FLAG_MAN_USAGE,
+	FLAG_MAN_SUBCOMMANDS,
+	FLAG_MAN_WRITE_SUBCOMMANDS,
 };
 pub use argue::{
 	Argue,

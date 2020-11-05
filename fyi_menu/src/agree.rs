@@ -8,25 +8,31 @@ use std::path::PathBuf;
 
 
 /// # Man Flag: Generate All Auto Sections.
-pub const FLAG_MAN_ALL: u8 =         0b0011_1111;
+pub const FLAG_MAN_ALL: u8 =               0b1111_1111;
 
 /// # Man Flag: Generate DESCRIPTION Section.
-pub const FLAG_MAN_DESCRIPTION: u8 = 0b0000_0001;
+pub const FLAG_MAN_DESCRIPTION: u8 =       0b0000_0001;
 
 /// # Man Flag: Generate NAME Section.
-pub const FLAG_MAN_NAME: u8 =        0b0000_0010;
+pub const FLAG_MAN_NAME: u8 =              0b0000_0010;
 
 /// # Man Flag: Generate USAGE Section.
-pub const FLAG_MAN_USAGE: u8 =       0b0000_0100;
+pub const FLAG_MAN_USAGE: u8 =             0b0000_0100;
 
 /// # Man Flag: Generate FLAGS Section.
-pub const FLAG_MAN_FLAGS: u8 =       0b0000_1000;
+pub const FLAG_MAN_FLAGS: u8 =             0b0000_1000;
 
 /// # Man Flag: Generate OPTIONS Section.
-pub const FLAG_MAN_OPTIONS: u8 =     0b0001_0000;
+pub const FLAG_MAN_OPTIONS: u8 =           0b0001_0000;
 
 /// # Man Flag: Generate ARGS Section.
-pub const FLAG_MAN_ARGS: u8 =        0b0010_0000;
+pub const FLAG_MAN_ARGS: u8 =              0b0010_0000;
+
+/// # Man Flag: Generate SUBCOMMANDS Section.
+pub const FLAG_MAN_SUBCOMMANDS: u8 =       0b0100_0000;
+
+/// # Man Flag: Write Subcommand Documents.
+pub const FLAG_MAN_WRITE_SUBCOMMANDS: u8 = 0b1000_0000;
 
 
 
@@ -53,7 +59,22 @@ pub enum AgreeKind {
 
 	/// # Subcommand.
 	///
-	/// Note: This is not yet supported.
+	/// This is a recursive [`Agree`], complete with its own description,
+	/// flags, etc.
+	///
+	/// When constructing MAN pages, you have the option to generate separate
+	/// pages for each subcommand via the [`FLAG_MAN_WRITE_SUBCOMMANDS`] flag.
+	///
+	/// Take a look at the `man` example in this crate, and also the `fyi`
+	/// bin's own `build.rs` for sample construction.
+	///
+	/// ## Safety
+	///
+	/// There is support for ONE LEVEL of subcommands. That is, the main
+	/// [`Agree`] struct can have any number of subcommands among its
+	/// arguments, however those subcommands CANNOT have their own
+	/// sub-subcommands. Undefined things will happen if 2+ levels are
+	/// included.
 	SubCommand(Agree),
 
 	/// # Miscellaneous K/V Item.
@@ -170,7 +191,7 @@ impl AgreeKind {
 					.replace("%KEY%", k),
 				(None, None) => String::new(),
 			},
-			// TODO: Handle Subcommands.
+			Self::SubCommand(s) => format!("\topts+=(\"{}\")\n", &s.bin),
 			_ => String::new(),
 		}
 	}
@@ -222,7 +243,11 @@ impl AgreeKind {
 					i.p.join("\n.RE\n")
 				}
 			},
-			_ => String::new(),
+			Self::SubCommand(s) => format!(
+				"{}\n{}",
+				self.man_tagline(),
+				&s.description,
+			),
 		}
 	}
 
@@ -236,7 +261,7 @@ impl AgreeKind {
 			Self::Switch(s) => man_tagline(s.short.as_deref(), s.long.as_deref(), None),
 			Self::Option(o) => man_tagline(o.short.as_deref(), o.long.as_deref(), Some(&o.value)),
 			Self::Arg(k) | Self::Item(k) => man_tagline(None, None, Some(&k.name)),
-			// TODO: Handle Subcommands.
+			Self::SubCommand(s) => man_tagline(None, None, Some(&s.bin)),
 			_ => String::new(),
 		}
 	}
@@ -496,8 +521,12 @@ impl AgreeSection {
 /// The main idea is to toss a call to this in `build.rs`, keeping the
 /// overhead out of the runtime application entirely.
 ///
-/// Subcommands are not currently supported, but will be coming eventually so
-/// FYI itself can make use of this. Haha.
+/// ## Safety
+///
+/// There is support for ONE LEVEL of subcommands. That is, the main [`Agree`]
+/// struct can have any number of subcommands among its arguments, however
+/// those subcommands CANNOT have their own sub-subcommands. Undefined things
+/// will happen if 2+ levels are included.
 pub struct Agree {
 	name: String,
 	bin: String,
@@ -563,16 +592,138 @@ impl Agree {
 	/// You can alternatively use [`Agree::write_bash`] to save this to a file
 	/// instead.
 	pub fn bash(&self) -> String {
+		// Start by building all the subcommand code. We'll handle things
+		// differently depending on whether or not the resulting string is
+		// empty.
+		let mut out: String = self.args.iter()
+			.filter_map(|x| match x {
+				AgreeKind::SubCommand(y) => {
+					let tmp = y.bash_completions(&self.bin);
+					if tmp.is_empty() { None }
+					else { Some(tmp) }
+				},
+				_ => None,
+			})
+			.collect();
+
+		// If this is empty, just add our app and call it quits.
+		if out.is_empty() {
+			return [
+				self.bash_completions(""),
+				include_str!("../skel/basher.end.txt")
+					.replace("%BNAME%", &self.bin)
+					.replace("%FNAME%", &self.bash_fname("")),
+			].concat();
+		}
+
+		// Add the app method.
+		out.push_str(&self.bash_completions(""));
+
+		// Add the function chooser.
+		out.push_str(&self.bash_subcommands());
+
+		// Done!
+		out
+	}
+
+	#[must_use]
+	/// # MAN Page.
+	///
+	/// Generate and return the code for a MAN page as a string. You can
+	/// alternatively use [`Agree::write_man`] to save this to a file instead.
+	pub fn man(&self) -> String {
+		self.subman("")
+	}
+
+	/// # Write BASH Completions!
+	///
+	/// This will write the BASH completion script to the directory of your
+	/// choosing. The filename will simply be `your-bin.bash`.
+	pub fn write_bash<P>(&self, dir: P) -> Result<(), String>
+	where P: AsRef<Path> {
+		let mut path = std::fs::canonicalize(dir.as_ref()).map_err(|_| format!(
+			"Missing BASH completion directory: {:?}",
+			dir.as_ref()
+		))?;
+
+		if path.is_dir() {
+			path.push(&format!("{}.bash", &self.bin));
+			write_to(&path, self.bash().as_bytes())
+				.map_err(|_| format!(
+					"Unable to write BASH completions: {:?}",
+					path
+				))
+		}
+		else {
+			Err(format!("Invalid BASH completion directory: {:?}", dir.as_ref()))
+		}
+	}
+
+	/// # Write MAN Page!
+	///
+	/// This will write the MAN page to the directory of your choosing. The
+	/// filename will simply be `your-bin.1`.
+	pub fn write_man<P>(&self, dir: P) -> Result<(), String>
+	where P: AsRef<Path> {
+		let mut path = std::fs::canonicalize(dir.as_ref()).map_err(|_| format!(
+			"Missing MAN directory: {:?}",
+			dir.as_ref()
+		))?;
+
+		// The main file.
+		if path.is_dir() {
+			path.push(&format!("{}.1", &self.bin));
+			write_to(&path, self.man().as_bytes())
+				.map_err(|_| format!(
+					"Unable to write MAN page: {:?}",
+					path
+				))?;
+		}
+		else {
+			return Err(format!("Invalid MAN directory: {:?}", dir.as_ref()))
+		}
+
+		// Write subcommand pages.
+		if 0 != self.flags & FLAG_MAN_WRITE_SUBCOMMANDS {
+			for (bin, man) in self.args.iter()
+				.filter_map(|x| match x {
+					AgreeKind::SubCommand(s) => Some((s.bin.clone(), s.subman(&self.bin))),
+					_ => None,
+				})
+			{
+				path.pop();
+				path.push(&format!("{}-{}.1", &self.bin, bin));
+				write_to(&path, man.as_bytes())
+					.map_err(|_| format!(
+						"Unable to write MAN page: {:?}",
+						path
+					))?;
+			}
+		}
+
+		Ok(())
+	}
+
+	/// # BASH Helper (Function Name).
+	fn bash_fname(&self, parent: &str) -> String {
+		[
+			"_basher__",
+			parent,
+			"_",
+			&self.bin,
+		].concat()
+			.replace('-', "_")
+			.to_lowercase()
+			.chars()
+			.filter(|&x| x.is_alphanumeric() || x == '_')
+			.collect::<String>()
+	}
+
+	/// # BASH Helper (Completions).
+	fn bash_completions(&self, parent: &str) -> String {
 		// Hold the string we're building.
 		include_str!("../skel/basher.txt")
-			.replace("%BNAME%", &self.bin)
-			.replace(
-				"%FNAME%",
-				&"_basher__".chars()
-					.chain(self.bin.trim().replace('-', "_").to_lowercase().chars())
-					.filter(|&x| x.is_alphanumeric() || x == '_')
-					.collect::<String>()
-			)
+			.replace("%FNAME%", &self.bash_fname(parent))
 			.replace(
 				"%CONDS%",
 				&self.args.iter()
@@ -587,16 +738,92 @@ impl Agree {
 			.replace("%PATHS%", &self.bash_paths())
 	}
 
-	#[must_use]
-	/// # MAN Page.
+	/// # BASH Helper (Path Options).
 	///
-	/// Generate and return the code for a MAN page as a string. You can
-	/// alternatively use [`Agree::write_man`] to save this to a file instead.
-	pub fn man(&self) -> String {
+	/// This produces the file/directory-listing portion of the BASH completion
+	/// script for cases where the last option entered expects a path. It is
+	/// integrated into the main [`Agree::bash`] output.
+	fn bash_paths(&self) -> String {
+		let keys: Vec<&str> = self.args.iter()
+			.filter_map(AgreeKind::short_path_option)
+			.chain(self.args.iter().filter_map(AgreeKind::long_path_option))
+			.collect();
+
+		if keys.is_empty() { String::new() }
+		else {
+			include_str!("../skel/basher.paths.txt")
+				.replace("%KEYS%", &keys.join("|"))
+		}
+	}
+
+	/// # BASH Helper (Subcommand Chooser).
+	fn bash_subcommands(&self) -> String {
+		let (cmd, chooser): (String, String) = std::iter::once((self.bin.clone(), self.bash_fname("")))
+			.chain(
+				self.args.iter()
+					.filter_map(|x| match x {
+						AgreeKind::SubCommand(y) => Some((y.bin.clone(), y.bash_fname(&self.bin))),
+						_ => None,
+					})
+			)
+			.fold(
+				(String::new(), String::new()),
+				|(mut a, mut b), (c, d)| {
+					a.push_str(
+						&include_str!("../skel/basher.subcmd.1.txt")
+							.replace("%BNAME%", &c)
+					);
+					b.push_str(
+						&include_str!("../skel/basher.subcmd.2.txt")
+							.replace("%BNAME%", &c)
+							.replace("%FNAME%", &d)
+					);
+
+					(a, b)
+				}
+			);
+
+		include_str!("../skel/basher.subcmd.txt")
+			.replace("%BNAME%", &self.bin)
+			.replace("%FNAME%", &self.bash_fname(""))
+			.replace("%SUBCMD1%", &cmd)
+			.replace("%SUBCMD2%", &chooser)
+	}
+
+	/// # MAN Helper (Usage).
+	///
+	/// This generates an example command for the usage section, if any.
+	fn man_usage(&self, parent: &str) -> String {
+		let mut out: String = format!("{} {}", parent, &self.bin)
+			.trim()
+			.to_string();
+
+		if self.args.iter().any(|x| matches!(x, AgreeKind::SubCommand(_))) {
+			out.push_str(" [SUBCOMMAND]");
+		}
+
+		if self.args.iter().any(|x| matches!(x, AgreeKind::Switch(_))) {
+			out.push_str(" [FLAGS]");
+		}
+
+		if self.args.iter().any(|x| matches!(x, AgreeKind::Option(_))) {
+			out.push_str(" [OPTIONS]");
+		}
+
+		if let Some(idx) = self.args.iter().position(|x| matches!(x, AgreeKind::Arg(_))) {
+			out.push(' ');
+			out.push_str(self.args[idx].name().unwrap());
+		}
+
+		out
+	}
+
+	/// # MAN Helper (Subcommands)
+	fn subman(&self, parent: &str) -> String {
 		// Start with the header.
 		let mut out: String = format!(
-			r#".TH {} "1" "{}" "{} v{}" "User Commands""#,
-			self.name.to_uppercase(),
+			r#".TH "{}" "1" "{}" "{} v{}" "User Commands""#,
+			format!("{} {}", parent.to_uppercase(), self.name.to_uppercase()).trim(),
 			chrono::Local::now().format("%B %Y"),
 			&self.name,
 			&self.version,
@@ -630,7 +857,7 @@ impl Agree {
 		if 0 != self.flags & FLAG_MAN_USAGE {
 			pre.push(
 				AgreeSection::new("USAGE:", true)
-					.with_item(AgreeKind::paragraph(self.man_usage()))
+					.with_item(AgreeKind::paragraph(self.man_usage(parent)))
 			);
 		}
 
@@ -677,6 +904,20 @@ impl Agree {
 				});
 		}
 
+		// Generated SUBCOMMANDS Section.
+		if 0 != self.flags & FLAG_MAN_SUBCOMMANDS {
+			let section = self.args.iter()
+				.filter(|s| matches!(s, AgreeKind::SubCommand(_)))
+				.cloned()
+				.fold(
+					AgreeSection::new("SUBCOMMANDS:", true),
+					AgreeSection::with_item
+				);
+			if ! section.is_empty() {
+				pre.push(section);
+			}
+		}
+
 		pre.iter()
 			.chain(self.other.iter())
 			.for_each(|x| {
@@ -686,94 +927,6 @@ impl Agree {
 
 		out.push('\n');
 		out.replace('-', r"\-")
-	}
-
-	/// # Write BASH Completions!
-	///
-	/// This will write the BASH completion script to the directory of your
-	/// choosing. The filename will simply be `your-bin.bash`.
-	pub fn write_bash<P>(&self, dir: P) -> Result<(), String>
-	where P: AsRef<Path> {
-		let mut path = std::fs::canonicalize(dir.as_ref()).map_err(|_| format!(
-			"Missing BASH completion directory: {:?}",
-			dir.as_ref()
-		))?;
-
-		if path.is_dir() {
-			path.push(&format!("{}.bash", &self.bin));
-			write_to(&path, self.bash().as_bytes())
-				.map_err(|_| format!(
-					"Unable to write BASH completions: {:?}",
-					path
-				))
-		}
-		else {
-			Err(format!("Invalid BASH completion directory: {:?}", dir.as_ref()))
-		}
-	}
-
-	/// # Write MAN Page!
-	///
-	/// This will write the MAN page to the directory of your choosing. The
-	/// filename will simply be `your-bin.1`.
-	pub fn write_man<P>(&self, dir: P) -> Result<(), String>
-	where P: AsRef<Path> {
-		let mut path = std::fs::canonicalize(dir.as_ref()).map_err(|_| format!(
-			"Missing MAN directory: {:?}",
-			dir.as_ref()
-		))?;
-
-		if path.is_dir() {
-			path.push(&format!("{}.1", &self.bin));
-			write_to(&path, self.man().as_bytes())
-				.map_err(|_| format!(
-					"Unable to write MAN page: {:?}",
-					path
-				))
-		}
-		else {
-			Err(format!("Invalid MAN directory: {:?}", dir.as_ref()))
-		}
-	}
-
-	/// # BASH Helper (Path Options).
-	///
-	/// This produces the file/directory-listing portion of the BASH completion
-	/// script for cases where the last option entered expects a path. It is
-	/// integrated into the main [`Agree::bash`] output.
-	fn bash_paths(&self) -> String {
-		let keys: Vec<&str> = self.args.iter()
-			.filter_map(AgreeKind::short_path_option)
-			.chain(self.args.iter().filter_map(AgreeKind::long_path_option))
-			.collect();
-
-		if keys.is_empty() { String::new() }
-		else {
-			include_str!("../skel/basher.paths.txt")
-				.replace("%KEYS%", &keys.join("|"))
-		}
-	}
-
-	/// # MAN Helper (Usage).
-	///
-	/// This generates an example command for the usage section, if any.
-	fn man_usage(&self) -> String {
-		let mut out: String = self.bin.clone();
-
-		if self.args.iter().any(|x| matches!(x, AgreeKind::Switch(_))) {
-			out.push_str(" [FLAGS]");
-		}
-
-		if self.args.iter().any(|x| matches!(x, AgreeKind::Option(_))) {
-			out.push_str(" [OPTIONS]");
-		}
-
-		if let Some(idx) = self.args.iter().position(|x| matches!(x, AgreeKind::Arg(_))) {
-			out.push(' ');
-			out.push_str(self.args[idx].name().unwrap());
-		}
-
-		out
 	}
 }
 

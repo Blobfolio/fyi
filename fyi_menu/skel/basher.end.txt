@@ -1,0 +1,1 @@
+complete -F %FNAME% -o bashdefault -o default %BNAME%

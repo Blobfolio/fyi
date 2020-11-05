@@ -9,7 +9,7 @@ fn main() {
 		MsgKind,
 	};
 
-	Msg::new("This message has no prefix.").println();
+	Msg::from("This message has no prefix.").println();
 
 	println!();
 
@@ -68,10 +68,10 @@ fn main() {
 	println!();
 
 	if MsgKind::Confirm.into_msg("Was this example useful?").prompt() {
-		Msg::new("Great!").println();
+		Msg::from("Great!").println();
 	}
 	else {
-		Msg::new("Oh well. Can't please 'em all!").println();
+		Msg::from("Oh well. Can't please 'em all!").println();
 	}
 
 	println!();
