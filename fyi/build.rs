@@ -13,7 +13,6 @@ fn main() {
 	use fyi_menu::{
 		Agree,
 		AgreeKind,
-		FLAG_MAN_ALL,
 	};
 	use std::{
 		env,
@@ -64,7 +63,6 @@ fn main() {
 				"1.2.3",
 				&format!("{}: Hello World", prefix),
 			)
-				.with_flags(FLAG_MAN_ALL)
 				.with_arg(help_arg())
 				.with_arg(indent_arg())
 				.with_arg(stderr_arg())
@@ -81,7 +79,6 @@ fn main() {
 		env!("CARGO_PKG_VERSION"),
 		env!("CARGO_PKG_DESCRIPTION"),
 	)
-		.with_flags(FLAG_MAN_ALL)
 		.with_arg(help_arg())
 		.with_arg(
 			AgreeKind::switch("Print program version.")
@@ -96,7 +93,6 @@ fn main() {
 					"1.2.3",
 					"Print this screen.",
 				)
-					.with_flags(FLAG_MAN_ALL)
 			)
 		)
 		.with_arg(
@@ -107,7 +103,6 @@ fn main() {
 					"1.2.3",
 					"Print blank line(s).",
 				)
-					.with_flags(FLAG_MAN_ALL)
 					.with_arg(help_arg())
 					.with_arg(stderr_arg())
 					.with_arg(
@@ -125,7 +120,6 @@ fn main() {
 					"1.2.3",
 					"Ask a Yes/No question using the built-in prefix \"confirm\".",
 				)
-					.with_flags(FLAG_MAN_ALL)
 					.with_arg(help_arg())
 					.with_arg(indent_arg())
 					.with_arg(timestamp_arg())
@@ -140,7 +134,6 @@ fn main() {
 					"1.2.3",
 					"Print a message without a prefix (or with a custom one).",
 				)
-					.with_flags(FLAG_MAN_ALL)
 					.with_arg(help_arg())
 					.with_arg(indent_arg())
 					.with_arg(stderr_arg())

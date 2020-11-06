@@ -22,11 +22,9 @@ pub use buffer::{
 #[allow(unreachable_pub)] pub use kind::MsgKind;
 #[allow(unreachable_pub)] pub use prefix::MsgPrefix;
 
-use crate::traits::FastConcat;
 use std::{
 	fmt,
 	iter::FromIterator,
-	mem,
 	ops::Deref,
 	ptr,
 	io::{
@@ -133,48 +131,35 @@ impl From<&[u8]> for Msg {
 	fn from(src: &[u8]) -> Self { Self::from(src.to_vec()) }
 }
 
+/// # Helper: From Concatable.
+///
+/// This lets messages be built from a slice of slices. It just concatenates
+/// them into a single byte stream that [`Msg`] can use, saving the
+/// implementing library from running `.concat()` themselves.
+macro_rules! from_concat_slice {
+	($size:literal) => {
+		impl From<[&[u8]; $size]> for Msg {
+			#[inline]
+			fn from(src: [&[u8]; $size]) -> Self { Self::from(src.concat()) }
+		}
+	};
+}
+
+from_concat_slice!(1);
+from_concat_slice!(2);
+from_concat_slice!(3);
+from_concat_slice!(4);
+from_concat_slice!(5);
+from_concat_slice!(6);
+from_concat_slice!(7);
+from_concat_slice!(8);
+
 impl FromIterator<u8> for Msg {
 	#[inline]
 	fn from_iter<I: IntoIterator<Item=u8>>(iter: I) -> Self {
 		Self::from(iter.into_iter().collect::<Vec<u8>>())
 	}
 }
-
-/// # Helper: From (Fixed) Slice.
-///
-/// This leverages specialized concatenation methods for byte slices of fixed
-/// length, avoiding the need to `[].concat()` or `iter().collect()`.
-macro_rules! from_fast_concat {
-	($num:literal) => {
-		impl From<[&[u8]; $num]> for Msg {
-			fn from(src: [&[u8]; $num]) -> Self {
-				let src = src.fast_concat();
-				let end = src.len();
-
-				unsafe {
-					Self(MsgBuffer5::from_raw_parts(
-						src,
-						[
-							0, 0, // Indentation.
-							0, 0, // Timestamp.
-							0, 0, // Prefix.
-							0, end,   // Message.
-							end, end,     // Suffix.
-						]
-					))
-				}
-			}
-		}
-	};
-}
-
-from_fast_concat!(2);
-from_fast_concat!(3);
-from_fast_concat!(4);
-from_fast_concat!(5);
-from_fast_concat!(6);
-from_fast_concat!(7);
-from_fast_concat!(8);
 
 impl From<Vec<u8>> for Msg {
 	fn from(src: Vec<u8>) -> Self {
@@ -183,11 +168,11 @@ impl From<Vec<u8>> for Msg {
 			Self(MsgBuffer5::from_raw_parts(
 				src,
 				[
-					0, 0, // Indentation.
-					0, 0, // Timestamp.
-					0, 0, // Prefix.
+					0, 0,     // Indentation.
+					0, 0,     // Timestamp.
+					0, 0,     // Prefix.
 					0, end,   // Message.
-					end, end,     // Suffix.
+					end, end, // Suffix.
 				]
 			))
 		}
@@ -223,11 +208,11 @@ impl Msg {
 		Self(MsgBuffer5::from_raw_parts(
 			buf,
 			[
-				0, 0, // Indentation.
-				0, 0, // Timestamp.
-				0, p_len, // Prefix.
-				p_len, end,   // Message.
-				end, end,     // Suffix.
+				0, 0,       // Indentation.
+				0, 0,       // Timestamp.
+				0, p_len,   // Prefix.
+				p_len, end, // Message.
+				end, end,   // Suffix.
 			]
 		))
 	}
@@ -387,18 +372,10 @@ impl Msg {
 	/// msg.set_indent(2); // "        Hello World."
 	/// ```
 	pub fn set_indent(&mut self, indent: u8) {
-		static INDENT: [u8; 16] = *b"                ";
-
 		unsafe {
 			self.0.replace_unchecked(
 				PART_INDENT,
-				match indent {
-					0 => b"",
-					1 => &INDENT[0..4],
-					2 => &INDENT[0..8],
-					3 => &INDENT[0..12],
-					_ => &INDENT,
-				}
+				&b" ".repeat(4.min(indent as usize) * 4),
 			);
 		}
 	}
@@ -491,35 +468,13 @@ impl Msg {
 		unsafe {
 			if on == self.0.is_empty_unchecked(PART_TIMESTAMP) {
 				if on {
-					let mut buf = [mem::MaybeUninit::<u8>::uninit(); 44];
-					let dst = buf.as_mut_ptr() as *mut u8;
-					let dd = crate::NUMDD.as_ptr();
-
-					// Get it started.
-					ptr::copy_nonoverlapping(b"\x1b[2m[\x1b[0;34m2000-00-00 00:00:00\x1b[39;2m]\x1b[0m ".as_ptr(), dst, 44);
-
-					{
-						use chrono::{Datelike, Local, Timelike};
-						let now = Local::now();
-						[
-							(now.year() as usize).saturating_sub(2000),
-							now.month() as usize,
-							now.day() as usize,
-							now.hour() as usize,
-							now.minute() as usize,
-							now.second() as usize,
-						].iter()
-							.map(|&x| dd.add(x) as *const u8)
-							.fold(14_usize, |offset, x| {
-								ptr::copy_nonoverlapping(x, dst.add(offset), 2);
-								offset + 3
-							});
-					}
-
 					// Shove the result into the buffer.
 					self.0.replace_unchecked(
 						PART_TIMESTAMP,
-						&mem::transmute::<_, [u8; 44]>(buf),
+						format!(
+							"\x1b[2m[\x1b[0;34m{}\x1b[39;2m]\x1b[0m ",
+							chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+						).as_bytes()
 					);
 				}
 				else {

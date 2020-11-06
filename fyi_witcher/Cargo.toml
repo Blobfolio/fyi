@@ -8,6 +8,7 @@ publish = false
 
 [dependencies]
 ahash = "0.5.*"
+bytecount = "0.6.*"
 crossbeam-channel = "0.5.*"
 num-integer = "0.1.*"
 rayon = "1.5.*"

@@ -12,46 +12,6 @@ use fyi_msg::utility;
 
 
 
-fn concat_slice(c: &mut Criterion) {
-	use fyi_msg::traits::FastConcat;
-	let mut group = c.benchmark_group("fyi_msg::utility");
-	group.sample_size(30);
-
-	group.bench_function("[&[u8]; 8].fast_concat()", move |b| {
-		b.iter_with_setup(||
-			[
-				&b"Most platforms"[..],
-				b" fundamentally",
-				b" can't",
-				b" even",
-				b" construct",
-				b" such",
-				b" an",
-				b" allocation.",
-			], |buf: [&[u8]; 8]|
-			buf.fast_concat()
-		)
-	});
-
-	group.bench_function("[&[u8]; 8].fast_concat_len()", move |b| {
-		b.iter_with_setup(||
-			[
-				&b"Most platforms"[..],
-				b" fundamentally",
-				b" can't",
-				b" even",
-				b" construct",
-				b" such",
-				b" an",
-				b" allocation.",
-			], |buf: [&[u8]; 8]|
-			buf.fast_concat_len()
-		)
-	});
-
-	group.finish();
-}
-
 fn hash64(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::utility");
 	group.sample_size(50);
@@ -94,7 +54,6 @@ fn write_time(c: &mut Criterion) {
 
 criterion_group!(
 	benches,
-	concat_slice,
 	hash64,
 	write_time,
 );

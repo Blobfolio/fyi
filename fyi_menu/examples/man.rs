@@ -9,7 +9,6 @@ it would work!
 use fyi_menu::{
 	Agree,
 	AgreeKind,
-	FLAG_MAN_ALL,
 };
 
 /// Do it.
@@ -20,7 +19,6 @@ fn main() {
 		"1.2.3",
 		"A dead-simple CLI status message printer for use in BASH scripts, etc.",
 	)
-		.with_flags(FLAG_MAN_ALL)
 		.with_arg(help_arg())
 		.with_arg(
 			AgreeKind::switch("Print program version.")

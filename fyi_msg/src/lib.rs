@@ -46,7 +46,6 @@ and major refactors may be introduced between releases.
 
 mod msg;
 mod nice_int;
-pub mod traits;
 pub mod utility;
 
 pub use msg::{

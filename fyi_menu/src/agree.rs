@@ -2,43 +2,30 @@
 # FYI Menu: Agree
 */
 
-use std::path::Path;
-use std::path::PathBuf;
-
-
-
-/// # Man Flag: Generate All Auto Sections.
-pub const FLAG_MAN_ALL: u8 =               0b1111_1111;
-
-/// # Man Flag: Generate DESCRIPTION Section.
-pub const FLAG_MAN_DESCRIPTION: u8 =       0b0000_0001;
-
-/// # Man Flag: Generate NAME Section.
-pub const FLAG_MAN_NAME: u8 =              0b0000_0010;
-
-/// # Man Flag: Generate USAGE Section.
-pub const FLAG_MAN_USAGE: u8 =             0b0000_0100;
-
-/// # Man Flag: Generate FLAGS Section.
-pub const FLAG_MAN_FLAGS: u8 =             0b0000_1000;
-
-/// # Man Flag: Generate OPTIONS Section.
-pub const FLAG_MAN_OPTIONS: u8 =           0b0001_0000;
-
-/// # Man Flag: Generate ARGS Section.
-pub const FLAG_MAN_ARGS: u8 =              0b0010_0000;
-
-/// # Man Flag: Generate SUBCOMMANDS Section.
-pub const FLAG_MAN_SUBCOMMANDS: u8 =       0b0100_0000;
-
-/// # Man Flag: Write Subcommand Documents.
-pub const FLAG_MAN_WRITE_SUBCOMMANDS: u8 = 0b1000_0000;
-
+use std::path::{
+	Path,
+	PathBuf,
+};
 
 
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 /// # Agreement Kind.
+///
+/// This enum provides a more or less consistent interface for dealing with the
+/// disparate argument/item types making up an application.
+///
+/// With the exception of [`AgreeKind::SubCommand`], each type has a
+/// corresponding initialization method. The intention is you should never have
+/// to import the underlying struct directly.
+///
+/// For example, to register a new [`AgreeKind::Switch`], just call
+/// [`AgreeKind::switch`].
+///
+/// The enum additionally passes through the underyling structs' builder
+/// methods. For example, you can add keys to options and switches using
+/// [`AgreeKind::with_short`] or [`AgreeKind::with_long`], and for paragraphs,
+/// you can add additional lines using [`AgreeKind::with_line`].
 pub enum AgreeKind {
 	/// # Switch.
 	///
@@ -62,8 +49,8 @@ pub enum AgreeKind {
 	/// This is a recursive [`Agree`], complete with its own description,
 	/// flags, etc.
 	///
-	/// When constructing MAN pages, you have the option to generate separate
-	/// pages for each subcommand via the [`FLAG_MAN_WRITE_SUBCOMMANDS`] flag.
+	/// When calling [`Agree::write_man`], separate manuals will be written for
+	/// each subcommand, following a "{bin}-{subcommand}.1" naming scheme.
 	///
 	/// Take a look at the `man` example in this crate, and also the `fyi`
 	/// bin's own `build.rs` for sample construction.
@@ -79,8 +66,8 @@ pub enum AgreeKind {
 
 	/// # Miscellaneous K/V Item.
 	///
-	/// This is a miscellaneous key/value pair that can be used for MAN lists
-	/// of non-usage topics.
+	/// This is a miscellaneous key/value pair that can be used for custom MAN
+	/// sections. See also [`AgreeSection`].
 	Item(AgreeItem),
 
 	/// # Paragraph.
@@ -134,18 +121,28 @@ impl AgreeKind {
 	///
 	/// This is a convenience method that passes through to the underlying
 	/// data's `with_line()` method, if any.
+	///
+	/// This can be used to force a line break between bits of text. Otherwise
+	/// if you jam everything into one "line", it will just wrap as needed.
+	///
+	/// This has no effect unless the type is [`AgreeKind::Paragraph`].
 	pub fn with_line<S>(self, line: S) -> Self
 	where S: Into<String> {
-		match self {
-			Self::Paragraph(s) => Self::Paragraph(s.with_line(line)),
-			_ => self,
+		if let Self::Paragraph(s) = self {
+			Self::Paragraph(s.with_line(line))
 		}
+		else { self }
 	}
 
 	/// # With Long.
 	///
 	/// This is a convenience method that passes through to the underlying
 	/// data's `with_long()` method, if any.
+	///
+	/// Specify a long key, e.g. `--help`.
+	///
+	/// This has no effect unless the type is [`AgreeKind::Switch`] or
+	/// [`AgreeKind::Option`].
 	pub fn with_long<S>(self, key: S) -> Self
 	where S: Into<String> {
 		match self {
@@ -159,6 +156,11 @@ impl AgreeKind {
 	///
 	/// This is a convenience method that passes through to the underlying
 	/// data's `with_short()` method, if any.
+	///
+	/// Specify a short key, e.g. `-h`.
+	///
+	/// This has no effect unless the type is [`AgreeKind::Switch`] or
+	/// [`AgreeKind::Option`].
 	pub fn with_short<S>(self, key: S) -> Self
 	where S: Into<String> {
 		match self {
@@ -194,6 +196,27 @@ impl AgreeKind {
 			Self::SubCommand(s) => format!("\topts+=(\"{}\")\n", &s.bin),
 			_ => String::new(),
 		}
+	}
+
+	/// # Return if Arg.
+	const fn if_arg(&self) -> Option<&AgreeItem> {
+		if let Self::Arg(s) = self { Some(s) }
+		else { None }
+	}
+
+	/// # Return if (Path) Option.
+	const fn if_path_option(&self) -> Option<&AgreeOption> {
+		if let Self::Option(s) = self {
+			if s.path { Some(s) }
+			else { None }
+		}
+		else { None }
+	}
+
+	/// # Return if Subcommand.
+	const fn if_subcommand(&self) -> Option<&Agree> {
+		if let Self::SubCommand(s) = self { Some(s) }
+		else { None }
 	}
 
 	/// # MAN Helper.
@@ -265,41 +288,9 @@ impl AgreeKind {
 			_ => String::new(),
 		}
 	}
-
-	/// # Get Long (Path) Option.
-	///
-	/// This is a convenience filter applied during BASH completion
-	/// construction to resolve the long option key *if* the option accepts
-	/// paths for its value.
-	fn long_path_option(&self) -> Option<&str> {
-		match self {
-			Self::Option(s) if s.path => s.long.as_deref(),
-			_ => None,
-		}
-	}
-
-	/// # Name.
-	///
-	/// This returns the underlying data's name, if any.
-	fn name(&self) -> Option<&str> {
-		match self {
-			Self::Arg(k) | Self::Item(k) => Some(&k.name),
-			_ => None,
-		}
-	}
-
-	/// # Get Short (Path) Option.
-	///
-	/// This is a convenience filter applied during BASH completion
-	/// construction to resolve the short option key *if* the option accepts
-	/// paths for its value.
-	fn short_path_option(&self) -> Option<&str> {
-		match self {
-			Self::Option(s) if s.path => s.short.as_deref(),
-			_ => None,
-		}
-	}
 }
+
+
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 /// # Switch.
@@ -326,6 +317,8 @@ impl AgreeSwitch {
 	}
 
 	/// # With Long.
+	///
+	/// Specify a long key, e.g. `--help`.
 	pub fn with_long<S>(mut self, key: S) -> Self
 	where S: Into<String> {
 		self.long = Some(key.into());
@@ -333,6 +326,8 @@ impl AgreeSwitch {
 	}
 
 	/// # With Short.
+	///
+	/// Specify a short key, e.g. `-h`.
 	pub fn with_short<S>(mut self, key: S) -> Self
 	where S: Into<String> {
 		self.short = Some(key.into());
@@ -359,6 +354,10 @@ pub struct AgreeOption {
 
 impl AgreeOption {
 	/// # New.
+	///
+	/// The `path` flag indicates whether or not this option expects some sort
+	/// of file system path for its value. If `true`, the BASH completion will
+	/// reveal files and folders in the current directory.
 	pub fn new<S>(value: S, description: S, path: bool) -> Self
 	where S: Into<String> {
 		Self {
@@ -372,6 +371,8 @@ impl AgreeOption {
 
 	#[must_use]
 	/// # With Long.
+	///
+	/// Specify a long key, e.g. `--help`.
 	pub fn with_long<S>(mut self, key: S) -> Self
 	where S: Into<String> {
 		self.long = Some(key.into());
@@ -380,6 +381,8 @@ impl AgreeOption {
 
 	#[must_use]
 	/// # With Short.
+	///
+	/// Specify a short key, e.g. `-h`.
 	pub fn with_short<S>(mut self, key: S) -> Self
 	where S: Into<String> {
 		self.short = Some(key.into());
@@ -435,6 +438,9 @@ impl AgreeParagraph {
 	}
 
 	/// # With Line.
+	///
+	/// This can be used to force a line break between bits of text. Otherwise
+	/// if you jam everything into one "line", it will just wrap as needed.
 	pub fn with_line<S>(mut self, line: S) -> Self
 	where S: Into<String> {
 		self.p.push(line.into());
@@ -447,8 +453,9 @@ impl AgreeParagraph {
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 /// # Section.
 ///
-/// This struct represents a section of the MAN page. If not using any of the
-/// auto-section flags with [`Agree`], you can use it to make your own.
+/// This struct represents a section of the MAN page. It can be used to add any
+/// arbitrary content you want (on top of the default NAME/DESCRIPTION/USAGE
+/// bits.)
 pub struct AgreeSection {
 	name: String,
 	indent: bool,
@@ -468,6 +475,9 @@ impl AgreeSection {
 
 	#[must_use]
 	/// # With Item.
+	///
+	/// Attach any sort of [`AgreeKind`] data to the list. Mixing and matching
+	/// might look weird in a single section, but any type will do.
 	pub fn with_item(mut self, item: AgreeKind) -> Self {
 		self.items.push(item);
 		self
@@ -500,9 +510,9 @@ impl AgreeSection {
 		// Add the items one at a time.
 		self.items.iter()
 			.map(|i| i.man(self.indent))
-			.for_each(|s| {
+			.for_each(|x| {
 				out.push('\n');
-				out.push_str(&s);
+				out.push_str(&x);
 			});
 
 		// Done!
@@ -521,6 +531,17 @@ impl AgreeSection {
 /// The main idea is to toss a call to this in `build.rs`, keeping the
 /// overhead out of the runtime application entirely.
 ///
+/// It is constructed using builder patterns ([`Agree::with_arg`],
+/// [`Agree::with_section`], etc.). Once set up, you can either obtain the
+/// BASH completions and MAN page as a string ([`Agree::bash`] and
+/// [`Agree::man`] respectively), or write them straight to files ([`Agree::write_bash`]
+/// and [`Agree::write_man`] respectively).
+///
+/// The write methods are probably what you want.
+///
+/// Take a look at the crate examples or FYI's own `build.rs` for construction
+/// and usage samples.
+///
 /// ## Safety
 ///
 /// There is support for ONE LEVEL of subcommands. That is, the main [`Agree`]
@@ -532,7 +553,6 @@ pub struct Agree {
 	bin: String,
 	version: String,
 	description: String,
-	flags: u8,
 	args: Vec<AgreeKind>,
 	other: Vec<AgreeSection>,
 }
@@ -546,30 +566,19 @@ impl Agree {
 			bin: bin.into(),
 			version: version.into(),
 			description: description.into(),
-			flags: 0,
 			args: Vec::new(),
 			other: Vec::new(),
 		}
 	}
 
 	#[must_use]
-	/// # With Flags.
-	///
-	/// Flags control which (if any) common sections to automatically generate
-	/// for you. See the module-level documentation for more information.
-	pub const fn with_flags(mut self, flags: u8) -> Self {
-		self.flags |= flags;
-		self
-	}
-
-	#[must_use]
 	/// # With Arg.
 	///
-	/// Use this builder pattern method to attach every flag, option, and
-	/// trailing arg supported by your program.
+	/// Use this builder pattern method to attach every flag, option,
+	/// trailing arg, and subcommand supported by your program.
 	///
-	/// If you set the corresponding flags, `Agree` will generate `FLAGS:`,
-	/// `OPTIONS:`, and `<ARGS>:` sections using this data automatically.
+	/// When building manuals, these will automatically be separated out into
+	/// appropriate sections for you.
 	pub fn with_arg(mut self, arg: AgreeKind) -> Self {
 		self.args.push(arg);
 		self
@@ -579,7 +588,7 @@ impl Agree {
 	/// # With Section.
 	///
 	/// Use this builder pattern method to attach arbitrary MAN sections to
-	/// the app.
+	/// the app. Any sections you add here will appear after the default ones.
 	pub fn with_section(mut self, section: AgreeSection) -> Self {
 		self.other.push(section);
 		self
@@ -591,19 +600,24 @@ impl Agree {
 	/// Generate and return the code for a BASH completion script as a string.
 	/// You can alternatively use [`Agree::write_bash`] to save this to a file
 	/// instead.
+	///
+	/// The completions are set up such that suggestions will only appear once.
+	/// That is, if you have a help flag and the line already includes `-h`, it
+	/// will not suggest you add `--help`.
+	///
+	/// Completions are subcommand-aware. You can have different options for
+	/// different subcommands, and/or options available only to the top-level
+	/// bin.
 	pub fn bash(&self) -> String {
 		// Start by building all the subcommand code. We'll handle things
 		// differently depending on whether or not the resulting string is
 		// empty.
 		let mut out: String = self.args.iter()
-			.filter_map(|x| match x {
-				AgreeKind::SubCommand(y) => {
-					let tmp = y.bash_completions(&self.bin);
-					if tmp.is_empty() { None }
-					else { Some(tmp) }
-				},
-				_ => None,
-			})
+			.filter_map(|x| x.if_subcommand().and_then(|y| {
+				let tmp = y.bash_completions(&self.bin);
+				if tmp.is_empty() { None }
+				else { Some(tmp) }
+			}))
 			.collect();
 
 		// If this is empty, just add our app and call it quits.
@@ -631,6 +645,17 @@ impl Agree {
 	///
 	/// Generate and return the code for a MAN page as a string. You can
 	/// alternatively use [`Agree::write_man`] to save this to a file instead.
+	///
+	/// This automatically generates sections for `NAME`, `DESCRIPTION`, and
+	/// `USAGE`, and if applicable, `FLAGS`, `OPTIONS`, trailing args, and
+	/// `SUBCOMMANDS`.
+	///
+	/// If custom sections have been added, those will be printed after the
+	/// above default sections.
+	///
+	/// Note: this will only return the manual for the top-level app. If there
+	/// are subcommands, those pages will be ignored. To obtain those, call
+	/// [`Agree::write_man`] instead.
 	pub fn man(&self) -> String {
 		self.subman("")
 	}
@@ -638,7 +663,7 @@ impl Agree {
 	/// # Write BASH Completions!
 	///
 	/// This will write the BASH completion script to the directory of your
-	/// choosing. The filename will simply be `your-bin.bash`.
+	/// choosing, using the file name "{bin}.bash".
 	pub fn write_bash<P>(&self, dir: P) -> Result<(), String>
 	where P: AsRef<Path> {
 		let mut path = std::fs::canonicalize(dir.as_ref()).map_err(|_| format!(
@@ -648,7 +673,7 @@ impl Agree {
 
 		if path.is_dir() {
 			path.push(&format!("{}.bash", &self.bin));
-			write_to(&path, self.bash().as_bytes())
+			write_to(&path, self.bash().as_bytes(), false)
 				.map_err(|_| format!(
 					"Unable to write BASH completions: {:?}",
 					path
@@ -661,8 +686,16 @@ impl Agree {
 
 	/// # Write MAN Page!
 	///
-	/// This will write the MAN page to the directory of your choosing. The
-	/// filename will simply be `your-bin.1`.
+	/// This will write the MAN page(s) to the directory of your choosing,
+	/// using the file name "{bin}.1" for the top-level app, and
+	/// "{bin}-{subcommand}.1" for any specified subcommands.
+	///
+	/// This method will also write Gzipped copies of any manuals produced in
+	/// case you want to use them for distribution (reducing the file size a
+	/// bit).
+	///
+	/// You should only push one copy of each manual to `/usr/share/man/man1`,
+	/// either the "{bin}.1" or "{bin}.1.gz" version, not both. ;)
 	pub fn write_man<P>(&self, dir: P) -> Result<(), String>
 	where P: AsRef<Path> {
 		let mut path = std::fs::canonicalize(dir.as_ref()).map_err(|_| format!(
@@ -673,7 +706,7 @@ impl Agree {
 		// The main file.
 		if path.is_dir() {
 			path.push(&format!("{}.1", &self.bin));
-			write_to(&path, self.man().as_bytes())
+			write_to(&path, self.man().as_bytes(), true)
 				.map_err(|_| format!(
 					"Unable to write MAN page: {:?}",
 					path
@@ -684,27 +717,27 @@ impl Agree {
 		}
 
 		// Write subcommand pages.
-		if 0 != self.flags & FLAG_MAN_WRITE_SUBCOMMANDS {
-			for (bin, man) in self.args.iter()
-				.filter_map(|x| match x {
-					AgreeKind::SubCommand(s) => Some((s.bin.clone(), s.subman(&self.bin))),
-					_ => None,
-				})
-			{
-				path.pop();
-				path.push(&format!("{}-{}.1", &self.bin, bin));
-				write_to(&path, man.as_bytes())
-					.map_err(|_| format!(
-						"Unable to write MAN page: {:?}",
-						path
-					))?;
-			}
+		for (bin, man) in self.args.iter()
+			.filter_map(|x| x.if_subcommand()
+				.map(|x| (x.bin.clone(), x.subman(&self.bin)))
+			)
+		{
+			path.pop();
+			path.push(&format!("{}-{}.1", &self.bin, bin));
+			write_to(&path, man.as_bytes(), true)
+				.map_err(|_| format!(
+					"Unable to write MAN page: {:?}",
+					path
+				))?;
 		}
 
 		Ok(())
 	}
 
 	/// # BASH Helper (Function Name).
+	///
+	/// This generates a unique-ish function name for use in the BASH
+	/// completion script.
 	fn bash_fname(&self, parent: &str) -> String {
 		[
 			"_basher__",
@@ -720,6 +753,10 @@ impl Agree {
 	}
 
 	/// # BASH Helper (Completions).
+	///
+	/// This generates the completions for a given app or subcommand. The
+	/// output is combined with other code to produce the final script returned
+	/// by the main [`Agree::bash`] method.
 	fn bash_completions(&self, parent: &str) -> String {
 		// Hold the string we're building.
 		include_str!("../skel/basher.txt")
@@ -745,8 +782,11 @@ impl Agree {
 	/// integrated into the main [`Agree::bash`] output.
 	fn bash_paths(&self) -> String {
 		let keys: Vec<&str> = self.args.iter()
-			.filter_map(AgreeKind::short_path_option)
-			.chain(self.args.iter().filter_map(AgreeKind::long_path_option))
+			.filter_map(|o| o.if_path_option().and_then(|x| x.short.as_deref()))
+			.chain(
+				self.args.iter()
+					.filter_map(|o| o.if_path_option().and_then(|x| x.long.as_deref()))
+			)
 			.collect();
 
 		if keys.is_empty() { String::new() }
@@ -757,14 +797,17 @@ impl Agree {
 	}
 
 	/// # BASH Helper (Subcommand Chooser).
+	///
+	/// This generates an additional method for applications with subcommands
+	/// to allow per-command suggestions. The output is incorporated into the
+	/// value returned by [`Agree::bash`].
 	fn bash_subcommands(&self) -> String {
 		let (cmd, chooser): (String, String) = std::iter::once((self.bin.clone(), self.bash_fname("")))
 			.chain(
 				self.args.iter()
-					.filter_map(|x| match x {
-						AgreeKind::SubCommand(y) => Some((y.bin.clone(), y.bash_fname(&self.bin))),
-						_ => None,
-					})
+					.filter_map(|x| x.if_subcommand()
+						.map(|y| (y.bin.clone(), y.bash_fname(&self.bin)))
+					)
 			)
 			.fold(
 				(String::new(), String::new()),
@@ -792,7 +835,7 @@ impl Agree {
 
 	/// # MAN Helper (Usage).
 	///
-	/// This generates an example command for the usage section, if any.
+	/// This generates an example command for the `USAGE` section, if any.
 	fn man_usage(&self, parent: &str) -> String {
 		let mut out: String = format!("{} {}", parent, &self.bin)
 			.trim()
@@ -810,15 +853,19 @@ impl Agree {
 			out.push_str(" [OPTIONS]");
 		}
 
-		if let Some(idx) = self.args.iter().position(|x| matches!(x, AgreeKind::Arg(_))) {
+		if let Some(s) = self.args.iter().find_map(AgreeKind::if_arg) {
 			out.push(' ');
-			out.push_str(self.args[idx].name().unwrap());
+			out.push_str(&s.name);
 		}
 
 		out
 	}
 
 	/// # MAN Helper (Subcommands)
+	///
+	/// This produces the main manual content, varying based on whether or not
+	/// this is for a subcommand. Its output is incorporated into the main
+	/// [`Agree::man`] result.
 	fn subman(&self, parent: &str) -> String {
 		// Start with the header.
 		let mut out: String = format!(
@@ -830,41 +877,24 @@ impl Agree {
 		);
 
 		// Add each section.
-		let mut pre: Vec<AgreeSection> = Vec::new();
-
-		// Generated Name Section.
-		if 0 != self.flags & FLAG_MAN_NAME {
-			pre.push(
-				AgreeSection::new("NAME", false)
-					.with_item(AgreeKind::paragraph(format!(
-						"{} - Manual page for {} v{}.",
-						&self.name,
-						&self.bin,
-						&self.version
-					)))
-			);
-		}
-
-		// Generated Description Section.
-		if 0 != self.flags & FLAG_MAN_DESCRIPTION {
-			pre.push(
+		let mut pre: Vec<AgreeSection> = vec![
+			AgreeSection::new("NAME", false)
+				.with_item(AgreeKind::paragraph(format!(
+					"{} - Manual page for {} v{}.",
+					&self.name,
+					&self.bin,
+					&self.version
+				))),
 				AgreeSection::new("DESCRIPTION", false)
-					.with_item(AgreeKind::paragraph(&self.description))
-			);
-		}
-
-		// Generated Usage Section.
-		if 0 != self.flags & FLAG_MAN_USAGE {
-			pre.push(
+					.with_item(AgreeKind::paragraph(&self.description)),
 				AgreeSection::new("USAGE:", true)
-					.with_item(AgreeKind::paragraph(self.man_usage(parent)))
-			);
-		}
+					.with_item(AgreeKind::paragraph(self.man_usage(parent))),
+		];
 
 		// Generated FLAGS Section.
-		if 0 != self.flags & FLAG_MAN_FLAGS {
+		{
 			let section = self.args.iter()
-				.filter(|s| matches!(s, AgreeKind::Switch(_)))
+				.filter(|x| matches!(x, AgreeKind::Switch(_)))
 				.cloned()
 				.fold(
 					AgreeSection::new("FLAGS:", true),
@@ -876,9 +906,9 @@ impl Agree {
 		}
 
 		// Generated OPTIONS Section.
-		if 0 != self.flags & FLAG_MAN_OPTIONS {
+		{
 			let section = self.args.iter()
-				.filter(|s| matches!(s, AgreeKind::Option(_)))
+				.filter(|x| matches!(x, AgreeKind::Option(_)))
 				.cloned()
 				.fold(
 					AgreeSection::new("OPTIONS:", true),
@@ -890,24 +920,21 @@ impl Agree {
 		}
 
 		// Generated ARGUMENTS Section.
-		if 0 != self.flags & FLAG_MAN_ARGS {
+		{
 			self.args.iter()
-				.filter_map(|s| match s {
-					AgreeKind::Arg(s) => Some(s.clone()),
-					_ => None,
-				})
-				.for_each(|s| {
+				.filter_map(AgreeKind::if_arg)
+				.for_each(|x| {
 					pre.push(
-						AgreeSection::new(&format!("{}:", s.name), true)
-							.with_item(AgreeKind::paragraph(&s.description))
+						AgreeSection::new(&format!("{}:", &x.name), true)
+							.with_item(AgreeKind::paragraph(&x.description))
 					);
 				});
 		}
 
 		// Generated SUBCOMMANDS Section.
-		if 0 != self.flags & FLAG_MAN_SUBCOMMANDS {
+		{
 			let section = self.args.iter()
-				.filter(|s| matches!(s, AgreeKind::SubCommand(_)))
+				.filter(|x| matches!(x, AgreeKind::SubCommand(_)))
 				.cloned()
 				.fold(
 					AgreeSection::new("SUBCOMMANDS:", true),
@@ -933,6 +960,9 @@ impl Agree {
 
 
 /// # Man Tagline.
+///
+/// This helper method generates an appropriate key/value line given what sorts
+/// of keys and values exist for the given [`AgreeKind`] type.
 fn man_tagline(short: Option<&str>, long: Option<&str>, value: Option<&str>) -> String {
 	match (short, long, value) {
 		// Option: long and short.
@@ -960,12 +990,46 @@ fn man_tagline(short: Option<&str>, long: Option<&str>, value: Option<&str>) -> 
 	}
 }
 
+#[allow(trivial_casts)] // Triviality is required.
 /// # Write File.
-fn write_to(file: &PathBuf, data: &[u8]) -> Result<(), ()> {
-	use std::io::Write;
+///
+/// This writes data to a file, optionally recursing to save a `GZipped`
+/// version (for MAN pages).
+fn write_to(file: &PathBuf, data: &[u8], compress: bool) -> Result<(), ()> {
+	use libdeflater::{
+		CompressionLvl,
+		Compressor,
+	};
+	use std::{
+		ffi::OsStr,
+		os::unix::ffi::OsStrExt,
+		io::Write,
+	};
 
 	let mut out = std::fs::File::create(file).map_err(|_| ())?;
 	out.write_all(data).map_err(|_| ())?;
 	out.flush().map_err(|_| ())?;
+
+	// Save a compressed copy?
+	if compress {
+		let mut writer = Compressor::new(CompressionLvl::best());
+		let mut buf: Vec<u8> = Vec::with_capacity(data.len());
+		buf.resize(writer.gzip_compress_bound(data.len()), 0);
+
+		if let Ok(len) = writer.gzip_compress(data, &mut buf) {
+			// Trim any excess now that we know the final length.
+			buf.truncate(len);
+
+			// Toss ".gz" onto the original file path.
+			let filegz: PathBuf = PathBuf::from(OsStr::from_bytes(&[
+				unsafe { &*(file.as_os_str() as *const OsStr as *const [u8]) },
+				b".gz",
+			].concat()));
+
+			// Recurse to write it!
+			return write_to(&filegz, &buf, false);
+		}
+	}
+
 	Ok(())
 }
