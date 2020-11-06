@@ -2,8 +2,10 @@
 # FYI Menu: Agree
 */
 
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{
+	Path,
+	PathBuf,
+};
 
 
 
@@ -904,7 +906,7 @@ impl Agree {
 				AgreeSection::new("DESCRIPTION", false)
 					.with_item(AgreeKind::paragraph(&self.description)),
 				AgreeSection::new("USAGE:", true)
-					.with_item(AgreeKind::paragraph(self.man_usage(parent)))
+					.with_item(AgreeKind::paragraph(self.man_usage(parent))),
 		];
 
 		// Generated FLAGS Section.
