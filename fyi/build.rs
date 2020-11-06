@@ -1,24 +1,16 @@
-#[cfg(not(feature = "man"))]
-/// # Do Nothing.
-///
-/// We only need to rebuild stuff for new releases. The "man" feature is
-/// basically used to figure that out.
-fn main() {}
+use fyi_menu::{
+	Agree,
+	AgreeKind,
+};
+use std::{
+	env,
+	path::PathBuf,
+};
 
 
 
-#[cfg(feature = "man")]
 /// # Build BASH completions and MAN pages.
 fn main() {
-	use fyi_menu::{
-		Agree,
-		AgreeKind,
-	};
-	use std::{
-		env,
-		path::PathBuf,
-	};
-
 	// There are a lot of repeat options between the different subcommands.
 	// For anything used more than once, let's have a function generate it!
 

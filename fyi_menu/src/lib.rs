@@ -17,10 +17,12 @@ overhead of processing CLI arguments, but because handling is left to the
 implementing library, it might be too tedious or limiting for more complex use
 cases.
 
-This crate also contains a build tool called [`Agree`] that allows you to
-configure all the ins and outs of your app to generate BASH completions and/or
-MAN page(s). This is meant to be run from `build.rs` and as such has no impact
-on the runtime performance of the application.
+This crate also contains a build tool called [`Agree`] — hidden behind the
+`bashman` crate feature flag — that allows you to all the ins and outs of your
+app to generate BASH completions and/or MAN page(s).
+
+[`Agree`] is meant to be run from `build.rs`. Done that way, it should not
+have any effect on the binary's runtime performance or size.
 
 
 
@@ -61,11 +63,12 @@ and major refactors may be introduced between releases.
 
 
 
-mod agree;
+#[cfg(feature = "bashman")] mod agree;
 mod argue;
 mod keykind;
 pub mod utility;
 
+#[cfg(feature = "bashman")]
 pub use agree::{
 	Agree,
 	AgreeKind,
@@ -75,12 +78,14 @@ pub use agree::{
 	AgreeParagraph,
 	AgreeSection,
 };
+
 pub use argue::{
 	Argue,
 	FLAG_REQUIRED,
 	FLAG_SEPARATOR,
 	FLAG_SUBCOMMAND,
 };
+
 pub use keykind::KeyKind;
 
 

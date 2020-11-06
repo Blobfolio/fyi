@@ -37,13 +37,12 @@ assets = [
 
 [build-dependencies.fyi_menu]
 path = "../fyi_menu"
+features = [ "bashman" ]
 
 [dependencies.fyi_menu]
 path = "../fyi_menu"
+default-features = false
+features = []
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"
-
-[features]
-default = []
-man = []

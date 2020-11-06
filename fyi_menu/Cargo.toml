@@ -6,9 +6,13 @@ edition = "2018"
 description = "FYI is a dead-simple status message printer for CLI use applications."
 publish = false
 
-[dependencies]
-chrono = "0.4.*"
-libdeflater = "0.5.*"
+[dependencies.chrono]
+version = "0.4.*"
+optional = true
+
+[dependencies.libdeflater]
+version = "0.5.*"
+optional = true
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"
@@ -33,3 +37,7 @@ name = "bash"
 
 [[example]]
 name = "man"
+
+[features]
+default = []
+bashman = [ "chrono", "libdeflater" ]
