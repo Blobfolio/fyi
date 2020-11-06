@@ -1,6 +1,6 @@
 [package]
 name = "fyi"
-version = "0.3.7"
+version = "0.3.8"
 license = "WTFPL"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
