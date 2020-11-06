@@ -128,10 +128,10 @@ impl AgreeKind {
 	/// This has no effect unless the type is [`AgreeKind::Paragraph`].
 	pub fn with_line<S>(self, line: S) -> Self
 	where S: Into<String> {
-		match self {
-			Self::Paragraph(s) => Self::Paragraph(s.with_line(line)),
-			_ => self,
+		if let Self::Paragraph(s) = self {
+			Self::Paragraph(s.with_line(line))
 		}
+		else { self }
 	}
 
 	/// # With Long.
@@ -198,16 +198,25 @@ impl AgreeKind {
 		}
 	}
 
-	/// # Get Long (Path) Option.
-	///
-	/// This is a convenience filter applied during BASH completion
-	/// construction to resolve the long option key *if* the option accepts
-	/// paths for its value.
-	fn long_path_option(&self) -> Option<&str> {
-		match self {
-			Self::Option(s) if s.path => s.long.as_deref(),
-			_ => None,
+	/// # Return if Arg.
+	const fn if_arg(&self) -> Option<&AgreeItem> {
+		if let Self::Arg(s) = self { Some(s) }
+		else { None }
+	}
+
+	/// # Return if (Path) Option.
+	const fn if_path_option(&self) -> Option<&AgreeOption> {
+		if let Self::Option(s) = self {
+			if s.path { Some(s) }
+			else { None }
 		}
+		else { None }
+	}
+
+	/// # Return if Subcommand.
+	const fn if_subcommand(&self) -> Option<&Agree> {
+		if let Self::SubCommand(s) = self { Some(s) }
+		else { None }
 	}
 
 	/// # MAN Helper.
@@ -277,31 +286,6 @@ impl AgreeKind {
 			Self::Arg(k) | Self::Item(k) => man_tagline(None, None, Some(&k.name)),
 			Self::SubCommand(s) => man_tagline(None, None, Some(&s.bin)),
 			_ => String::new(),
-		}
-	}
-
-	/// # Name.
-	///
-	/// This returns the underlying data's name, if any.
-	///
-	/// This has no effect unless the type is [`AgreeKind::Arg`] or
-	/// [`AgreeKind::Item`].
-	fn name(&self) -> Option<&str> {
-		match self {
-			Self::Arg(k) | Self::Item(k) => Some(&k.name),
-			_ => None,
-		}
-	}
-
-	/// # Get Short (Path) Option.
-	///
-	/// This is a convenience filter applied during BASH completion
-	/// construction to resolve the short option key *if* the option accepts
-	/// paths for its value.
-	fn short_path_option(&self) -> Option<&str> {
-		match self {
-			Self::Option(s) if s.path => s.short.as_deref(),
-			_ => None,
 		}
 	}
 }
@@ -526,9 +510,9 @@ impl AgreeSection {
 		// Add the items one at a time.
 		self.items.iter()
 			.map(|i| i.man(self.indent))
-			.for_each(|s| {
+			.for_each(|x| {
 				out.push('\n');
-				out.push_str(&s);
+				out.push_str(&x);
 			});
 
 		// Done!
@@ -629,14 +613,11 @@ impl Agree {
 		// differently depending on whether or not the resulting string is
 		// empty.
 		let mut out: String = self.args.iter()
-			.filter_map(|x| match x {
-				AgreeKind::SubCommand(y) => {
-					let tmp = y.bash_completions(&self.bin);
-					if tmp.is_empty() { None }
-					else { Some(tmp) }
-				},
-				_ => None,
-			})
+			.filter_map(|x| x.if_subcommand().and_then(|y| {
+				let tmp = y.bash_completions(&self.bin);
+				if tmp.is_empty() { None }
+				else { Some(tmp) }
+			}))
 			.collect();
 
 		// If this is empty, just add our app and call it quits.
@@ -737,10 +718,9 @@ impl Agree {
 
 		// Write subcommand pages.
 		for (bin, man) in self.args.iter()
-			.filter_map(|x| match x {
-				AgreeKind::SubCommand(s) => Some((s.bin.clone(), s.subman(&self.bin))),
-				_ => None,
-			})
+			.filter_map(|x| x.if_subcommand()
+				.map(|x| (x.bin.clone(), x.subman(&self.bin)))
+			)
 		{
 			path.pop();
 			path.push(&format!("{}-{}.1", &self.bin, bin));
@@ -802,8 +782,11 @@ impl Agree {
 	/// integrated into the main [`Agree::bash`] output.
 	fn bash_paths(&self) -> String {
 		let keys: Vec<&str> = self.args.iter()
-			.filter_map(AgreeKind::short_path_option)
-			.chain(self.args.iter().filter_map(AgreeKind::long_path_option))
+			.filter_map(|o| o.if_path_option().and_then(|x| x.short.as_deref()))
+			.chain(
+				self.args.iter()
+					.filter_map(|o| o.if_path_option().and_then(|x| x.long.as_deref()))
+			)
 			.collect();
 
 		if keys.is_empty() { String::new() }
@@ -822,10 +805,9 @@ impl Agree {
 		let (cmd, chooser): (String, String) = std::iter::once((self.bin.clone(), self.bash_fname("")))
 			.chain(
 				self.args.iter()
-					.filter_map(|x| match x {
-						AgreeKind::SubCommand(y) => Some((y.bin.clone(), y.bash_fname(&self.bin))),
-						_ => None,
-					})
+					.filter_map(|x| x.if_subcommand()
+						.map(|y| (y.bin.clone(), y.bash_fname(&self.bin)))
+					)
 			)
 			.fold(
 				(String::new(), String::new()),
@@ -871,9 +853,9 @@ impl Agree {
 			out.push_str(" [OPTIONS]");
 		}
 
-		if let Some(idx) = self.args.iter().position(|x| matches!(x, AgreeKind::Arg(_))) {
+		if let Some(s) = self.args.iter().find_map(AgreeKind::if_arg) {
 			out.push(' ');
-			out.push_str(self.args[idx].name().unwrap());
+			out.push_str(&s.name);
 		}
 
 		out
@@ -912,7 +894,7 @@ impl Agree {
 		// Generated FLAGS Section.
 		{
 			let section = self.args.iter()
-				.filter(|s| matches!(s, AgreeKind::Switch(_)))
+				.filter(|x| matches!(x, AgreeKind::Switch(_)))
 				.cloned()
 				.fold(
 					AgreeSection::new("FLAGS:", true),
@@ -926,7 +908,7 @@ impl Agree {
 		// Generated OPTIONS Section.
 		{
 			let section = self.args.iter()
-				.filter(|s| matches!(s, AgreeKind::Option(_)))
+				.filter(|x| matches!(x, AgreeKind::Option(_)))
 				.cloned()
 				.fold(
 					AgreeSection::new("OPTIONS:", true),
@@ -940,14 +922,11 @@ impl Agree {
 		// Generated ARGUMENTS Section.
 		{
 			self.args.iter()
-				.filter_map(|s| match s {
-					AgreeKind::Arg(s) => Some(s.clone()),
-					_ => None,
-				})
-				.for_each(|s| {
+				.filter_map(AgreeKind::if_arg)
+				.for_each(|x| {
 					pre.push(
-						AgreeSection::new(&format!("{}:", s.name), true)
-							.with_item(AgreeKind::paragraph(&s.description))
+						AgreeSection::new(&format!("{}:", &x.name), true)
+							.with_item(AgreeKind::paragraph(&x.description))
 					);
 				});
 		}
@@ -955,7 +934,7 @@ impl Agree {
 		// Generated SUBCOMMANDS Section.
 		{
 			let section = self.args.iter()
-				.filter(|s| matches!(s, AgreeKind::SubCommand(_)))
+				.filter(|x| matches!(x, AgreeKind::SubCommand(_)))
 				.cloned()
 				.fold(
 					AgreeSection::new("SUBCOMMANDS:", true),

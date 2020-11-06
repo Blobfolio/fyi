@@ -12,7 +12,6 @@ use fyi_msg::{
 	MsgKind,
 	MsgBuffer9,
 	NiceInt,
-	traits::FastConcat,
 	utility::{
 		hash64,
 		write_time,
@@ -369,7 +368,7 @@ impl WitchingInner {
 		self.print_cls();
 
 		// Update the line count and print!
-		self.last_lines = utility::count_nl(&self.buf);
+		self.last_lines = bytecount::count(&self.buf, b'\n');
 		Self::print(&self.buf);
 	}
 
@@ -419,7 +418,7 @@ impl WitchingInner {
 					Self::print(&[
 						&CLS10[..],
 						&CLS10[14..28].repeat(self.last_lines - 10),
-					].fast_concat());
+					].concat());
 				},
 			}
 
@@ -1134,7 +1133,7 @@ impl Witching {
 					b" bytes, ",
 					&NiceInt::percent_f64(1.0 - (after as f64 / before as f64)),
 					b".)\x1b[0m",
-				].fast_concat());
+				].concat());
 			}
 		}
 

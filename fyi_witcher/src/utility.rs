@@ -2,11 +2,6 @@
 # FYI Witcher: Utility Methods.
 */
 
-#![allow(clippy::wildcard_imports)]
-
-#[cfg(target_arch = "x86")]    use std::arch::x86::*;
-#[cfg(target_arch = "x86_64")] use std::arch::x86_64::*;
-
 use std::{
 	ops::Range,
 	path::Path,
@@ -14,114 +9,6 @@ use std::{
 use unicode_width::UnicodeWidthChar;
 
 
-
-#[allow(clippy::naive_bytecount)] // This is a fallback.
-#[must_use]
-/// # Count Line Breaks.
-///
-/// This simply adds up the occurrences of `\n` within a byte string.
-pub fn count_nl(src: &[u8]) -> usize {
-	let len: usize = src.len();
-
-	if 32 <= len && is_x86_feature_detected!("avx2") {
-		unsafe { count_nl_avx2(src) }
-	}
-	else if 16 <= len && is_x86_feature_detected!("sse2") {
-		unsafe { count_nl_sse2(src) }
-	}
-	else {
-		src.iter().filter(|&&x| x == b'\n').count()
-	}
-}
-
-#[allow(clippy::cast_possible_wrap)] // It's fine.
-#[allow(clippy::cast_ptr_alignment)] // It's fine.
-#[allow(clippy::integer_division)] // It's fine.
-#[target_feature(enable = "avx2")]
-/// # Count Line Breaks (AVX2).
-///
-/// This is an AVX2/SIMD-optimized implementation of the line counter. It is
-/// used for strings that are at least 32 bytes.
-unsafe fn count_nl_avx2(src: &[u8]) -> usize {
-	const MASK: [u8; 64] = [
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-		255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-	];
-
-	let len: usize = src.len();
-	let ptr = src.as_ptr();
-	let needle = _mm256_set1_epi8(b'\n' as i8);
-
-	let mut offset: usize = 0;
-	let mut total = _mm256_setzero_si256();
-	for _ in 0..len/32 {
-		total = _mm256_sub_epi8(
-			total,
-			_mm256_cmpeq_epi8(_mm256_loadu_si256(ptr.add(offset) as *const _), needle)
-		);
-		offset += 32;
-	}
-
-	if offset < len {
-		total = _mm256_sub_epi8(
-			total,
-			_mm256_and_si256(
-				_mm256_cmpeq_epi8(_mm256_loadu_si256(ptr.add(len - 32) as *const _), needle),
-				_mm256_loadu_si256(MASK.as_ptr().add(len - offset) as *const _)
-			)
-		);
-	}
-
-	let sums = _mm256_sad_epu8(total, _mm256_setzero_si256());
-	(
-		_mm256_extract_epi64(sums, 0) + _mm256_extract_epi64(sums, 1) +
-		_mm256_extract_epi64(sums, 2) + _mm256_extract_epi64(sums, 3)
-	) as usize
-}
-
-#[allow(clippy::cast_possible_wrap)] // It's fine.
-#[allow(clippy::cast_ptr_alignment)] // It's fine.
-#[allow(clippy::integer_division)] // It's fine.
-#[target_feature(enable = "sse2")]
-/// # Count Line Breaks (SSE2).
-///
-/// This is an SSE2/SIMD-optimized implementation of the line counter. It is
-/// used for strings that are at least 16 bytes.
-unsafe fn count_nl_sse2(src: &[u8]) -> usize {
-	const MASK: [u8; 32] = [
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-	];
-
-	let len: usize = src.len();
-	let ptr = src.as_ptr();
-	let needle = _mm_set1_epi8(b'\n' as i8);
-
-	let mut offset: usize = 0;
-	let mut total = _mm_setzero_si128();
-	for _ in 0..len/16 {
-		total = _mm_sub_epi8(
-			total,
-			_mm_cmpeq_epi8(_mm_loadu_si128(ptr.add(offset) as *const _), needle)
-		);
-		offset += 16;
-	}
-
-	if offset < len {
-		total = _mm_sub_epi8(
-			total,
-			_mm_and_si128(
-				_mm_cmpeq_epi8(_mm_loadu_si128(ptr.add(len - 16) as *const _), needle),
-				_mm_loadu_si128(MASK.as_ptr().add(len - offset) as *const _)
-			)
-		);
-	}
-
-	let sums = _mm_sad_epu8(total, _mm_setzero_si128());
-	(_mm_extract_epi32(sums, 0) + _mm_extract_epi32(sums, 2)) as usize
-}
 
 #[must_use]
 /// # Fit Length
@@ -264,13 +151,6 @@ pub fn term_width() -> usize {
 #[cfg(test)]
 mod tests {
 	use super::*;
-
-	#[test]
-	fn t_count_nl() {
-		assert_eq!(count_nl(b"This has no line breaks."), 0);
-		assert_eq!(count_nl(b"This\nhas\ntwo line breaks."), 2);
-		assert_eq!(count_nl(&[10_u8; 63]), 63);
-	}
 
 	#[test]
 	fn t_fitted_range() {

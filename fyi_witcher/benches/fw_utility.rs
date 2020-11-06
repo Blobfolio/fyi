@@ -12,33 +12,6 @@ use fyi_witcher::utility;
 
 
 
-fn count_nl(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_witcher::utility");
-	group.sample_size(30);
-
-	fn data() -> &'static [u8] {
-		"Witcher Demo: Gzipped MAN Pages
-[00:00:01]  [#######---------------------------------------------------------------------------------------------------------------------------------------------------------------------------]  112/2,822  3.97%
-    ↳ /usr/share/man/it/man8/apt-cache.8.gz
-    ↳ /usr/share/man/man3/HTML::AsSubs.3pm.gz
-    ↳ /usr/share/man/man8/tc-bfifo.8.gz
-    ↳ /usr/share/man/tr/man8/groupmod.8.gz
-    ↳ /usr/share/man/man3/B::Hooks::OP::Check.3pm.gz
-    ↳ /usr/share/man/man1/jpegexiforient.1.gz
-    ↳ /usr/share/man/man1/bzip2.1.gz
-    ↳ /usr/share/man/man8/devlink-region.8.gz\n".as_bytes()
-	}
-
-	group.bench_function(r"count_nl", move |b| {
-		b.iter_with_setup(||
-			data(),
-			|b| utility::count_nl(b)
-		)
-	});
-
-	group.finish();
-}
-
 fn fitted_range(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::utility");
 	group.sample_size(30);
@@ -91,7 +64,6 @@ fn hms(c: &mut Criterion) {
 
 criterion_group!(
 	benches,
-	count_nl,
 	fitted_range,
 	hms,
 );

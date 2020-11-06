@@ -106,6 +106,7 @@ print a certain number of blank lines for you. Run
 | Library | License | Author |
 | ---- | ---- | ---- |
 | [ahash](https://crates.io/crates/ahash) | Apache-2.0 OR MIT | Tom Kaitchuck |
+| [bytecount](https://crates.io/crates/bytecount) | Apache-2.0 OR MIT | Andre Bogus, Joshua Landau |
 | [chrono](https://crates.io/crates/chrono) | Apache-2.0 OR MIT | Kang Seonghoon, Brandon W Maister |
 | [criterion](https://crates.io/crates/criterion) | Apache-2.0 OR MIT | Jorge Aparicio, Brook Heisler |
 | [crossbeam-channel](https://crates.io/crates/crossbeam-channel) | Apache-2.0 OR MIT  | The Crossbeam Project Developers |
