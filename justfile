@@ -197,9 +197,7 @@ bench BENCH="" FILTER="":
 
 
 # Build Docs.
-doc:
-	#!/usr/bin/env bash
-
+@doc:
 	# Make sure nightly is installed; this version generates better docs.
 	rustup install nightly
 
@@ -215,8 +213,6 @@ doc:
 	[ ! -d "{{ doc_dir }}" ] || rm -rf "{{ doc_dir }}"
 	mv "{{ cargo_dir }}/x86_64-unknown-linux-gnu/doc" "{{ justfile_directory() }}"
 	just _fix-chown "{{ doc_dir }}"
-
-	exit 0
 
 
 # Build and Run Example.
