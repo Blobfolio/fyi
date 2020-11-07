@@ -1,3 +1,0 @@
-		%BNAME%)
-			%FNAME%
-			;;
