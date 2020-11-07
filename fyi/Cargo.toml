@@ -28,7 +28,6 @@ assets = [
     ["../release/man/fyi-blank.1.gz", "usr/share/man/man1/", "644"],
     ["../release/man/fyi-crunched.1.gz", "usr/share/man/man1/", "644"],
     ["../release/man/fyi-done.1.gz", "usr/share/man/man1/", "644"],
-    ["../release/man/fyi-help.1.gz", "usr/share/man/man1/", "644"],
     ["../release/man/fyi-notice.1.gz", "usr/share/man/man1/", "644"],
     ["../release/man/fyi-success.1.gz", "usr/share/man/man1/", "644"],
     ["../release/man/fyi-warning.1.gz", "usr/share/man/man1/", "644"],

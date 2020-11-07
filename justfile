@@ -148,7 +148,7 @@ bench BENCH="" FILTER="":
 # Build Debian package!
 @build-deb: build
 	# Do completions/man.
-	cargo bashman -m "{{ pkg_dir1 }}"
+	cargo bashman -m "{{ pkg_dir1 }}/Cargo.toml"
 
 	# cargo-deb doesn't support target_dir flags yet.
 	[ ! -d "{{ justfile_directory() }}/target" ] || rm -rf "{{ justfile_directory() }}/target"
