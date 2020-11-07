@@ -1,21 +1,3 @@
-_basher__fyi_help() {
-	local cur prev opts
-	COMPREPLY=()
-	cur="${COMP_WORDS[COMP_CWORD]}"
-	prev="${COMP_WORDS[COMP_CWORD-1]}"
-	opts=()
-		
-
-	opts=" ${opts[@]} "
-	if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
-		COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-		return 0
-	fi
-
-
-	COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-	return 0
-}
 _basher__fyi_blank() {
 	local cur prev opts
 	COMPREPLY=()
@@ -446,7 +428,6 @@ _basher___fyi() {
 		opts+=("-V")
 		opts+=("--version")
 	fi
-	opts+=("help")
 	opts+=("blank")
 	opts+=("confirm")
 	opts+=("print")
@@ -479,9 +460,6 @@ subcmd__basher___fyi() {
 		case "${i}" in
 			fyi)
 				cmd="fyi"
-				;;
-			help)
-				cmd="help"
 				;;
 			blank)
 				cmd="blank"
@@ -536,9 +514,6 @@ chooser__basher___fyi() {
 	case "${cmd}" in
 		fyi)
 			_basher___fyi
-			;;
-		help)
-			_basher__fyi_help
 			;;
 		blank)
 			_basher__fyi_blank

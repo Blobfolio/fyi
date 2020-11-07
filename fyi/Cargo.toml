@@ -34,10 +34,126 @@ assets = [
     ["../release/man/fyi-warning.1.gz", "usr/share/man/man1/", "644"],
 ]
 
+[package.metadata.bashman]
+name = "FYI"
+bash-dir = "../release/completions"
+man-dir = "../release/man"
+
+[[package.metadata.bashman.subcommands]]
+cmd = "blank"
+description="Print blank line(s)."
+
+[[package.metadata.bashman.subcommands]]
+cmd = "confirm"
+description="Ask a Yes/No question using the built-in prefix \"confirm\"."
+
+[[package.metadata.bashman.subcommands]]
+cmd = "print"
+description="Print a message without a prefix (or with a custom one)."
+
+[[package.metadata.bashman.subcommands]]
+cmd = "crunched"
+description="Crunched: Hello World"
+
+[[package.metadata.bashman.subcommands]]
+cmd = "debug"
+description="Debug: Hello World"
+
+[[package.metadata.bashman.subcommands]]
+cmd = "done"
+description="Done: Hello World"
+
+[[package.metadata.bashman.subcommands]]
+cmd = "error"
+description="Error: Hello World"
+
+[[package.metadata.bashman.subcommands]]
+cmd = "info"
+description="Info: Hello World"
+
+[[package.metadata.bashman.subcommands]]
+cmd = "notice"
+description="Notice: Hello World"
+
+[[package.metadata.bashman.subcommands]]
+cmd = "success"
+description="Success: Hello World"
+
+[[package.metadata.bashman.subcommands]]
+cmd = "task"
+description="Task: Hello World"
+
+[[package.metadata.bashman.subcommands]]
+cmd = "warning"
+description="Warning: Hello World"
+
+[[package.metadata.bashman.switches]]
+short = "-h"
+long = "--help"
+description = "Print help information."
+subcommands = [ "", "blank", "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "success", "task", "warning" ]
+
+[[package.metadata.bashman.switches]]
+short = "-i"
+long = "--indent"
+description = "Indent the line."
+subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "success", "task", "warning" ]
+
+[[package.metadata.bashman.switches]]
+long = "--stderr"
+description = "Print to STDERR instead of STDOUT."
+subcommands = [ "blank", "print", "crunched", "debug", "done", "error", "info", "notice", "success", "task", "warning" ]
+
+[[package.metadata.bashman.switches]]
+short = "-t"
+long = "--timestamp"
+description = "Include a timestamp."
+subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "success", "task", "warning" ]
+
+[[package.metadata.bashman.switches]]
+short = "-V"
+long = "--version"
+description = "Print program version."
+
+[[package.metadata.bashman.options]]
+short = "-c"
+long = "--count"
+description = "Number of empty lines to print. [default: 1]"
+label = "<NUM>"
+path = false
+subcommands = [ "blank" ]
+
+[[package.metadata.bashman.options]]
+short = "-e"
+long = "--exit"
+description = "Exit with this status code after printing. [default: 0]"
+label = "<NUM>"
+path = false
+subcommands = [ "print", "crunched", "debug", "done", "error", "info", "notice", "success", "task", "warning" ]
+
+[[package.metadata.bashman.options]]
+short = "-c"
+long = "--prefix-color"
+description = "Use this color for the prefix. [default: 199]"
+label = "<NUM>"
+path = false
+subcommands = [ "print" ]
+
+[[package.metadata.bashman.options]]
+short = "-p"
+long = "--prefix"
+description = "Set a custom prefix. [default: ]"
+label = "<PREFIX>"
+path = false
+subcommands = [ "print" ]
+
+[[package.metadata.bashman.arguments]]
+label = "<MSG>"
+description = "The message!"
+subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "success", "task", "warning" ]
+
 [dependencies.fyi_menu]
 path = "../fyi_menu"
-default-features = false
-features = []
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"
