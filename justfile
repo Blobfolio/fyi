@@ -140,14 +140,21 @@ bench BENCH="" FILTER="":
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
+	# Fix ownership, etc.
+	just _fix-chmod "{{ pkg_dir1 }}"
+	just _fix-chown "{{ pkg_dir1 }}"
+
 
 # Build Debian package!
-@build-deb: build-man build
+@build-deb: build
+	# Do completions/man.
+	cargo bashman -m "{{ pkg_dir1 }}/Cargo.toml"
+
 	# cargo-deb doesn't support target_dir flags yet.
 	[ ! -d "{{ justfile_directory() }}/target" ] || rm -rf "{{ justfile_directory() }}/target"
 	mv "{{ cargo_dir }}" "{{ justfile_directory() }}/target"
 
-	# First let's build the Rust bit.
+	# Build the deb.
 	cargo-deb \
 		--no-build \
 		-p {{ pkg_id }} \
@@ -155,23 +162,6 @@ bench BENCH="" FILTER="":
 
 	just _fix-chown "{{ release_dir }}"
 	mv "{{ justfile_directory() }}/target" "{{ cargo_dir }}"
-
-
-# Build Man.
-@build-man:
-	# Build a quickie version with the unsexy help so help2man can parse it.
-	RUSTFLAGS="{{ rustflags }}" cargo build \
-		--bin "{{ pkg_id }}" \
-		--release \
-		--all-features \
-		--target x86_64-unknown-linux-gnu \
-		--target-dir "{{ cargo_dir }}"
-
-	# Fix ownership, etc.
-	just _fix-chmod "{{ pkg_dir1 }}/man"
-	just _fix-chown "{{ pkg_dir1 }}/man"
-	just _fix-chmod "{{ pkg_dir1 }}/completions"
-	just _fix-chown "{{ pkg_dir1 }}/completions"
 
 
 # Check Release!
@@ -210,9 +200,7 @@ bench BENCH="" FILTER="":
 
 
 # Build Docs.
-doc:
-	#!/usr/bin/env bash
-
+@doc:
 	# Make sure nightly is installed; this version generates better docs.
 	rustup install nightly
 
@@ -229,14 +217,13 @@ doc:
 	mv "{{ cargo_dir }}/x86_64-unknown-linux-gnu/doc" "{{ justfile_directory() }}"
 	just _fix-chown "{{ doc_dir }}"
 
-	exit 0
-
 
 # Build and Run Example.
 @ex DEMO:
 	clear
 	cargo run \
 		-q \
+		--all-features \
 		--example "{{ DEMO }}" \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"

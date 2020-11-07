@@ -1,11 +1,11 @@
-.TH "FYI DEBUG" "1" "November 2020" "debug v1.2.3" "User Commands"
+.TH "FYI PRINT" "1" "November 2020" "print v0.3.9" "User Commands"
 .SH NAME
-debug \- Manual page for debug v1.2.3.
+print \- Manual page for print v0.3.9.
 .SH DESCRIPTION
-Debug: Hello World
+Print a message without a prefix (or with a custom one).
 .SS USAGE:
 .TP
-fyi debug [FLAGS] [OPTIONS] <MSG>
+fyi print [FLAGS] [OPTIONS] <MSG>
 .SS FLAGS:
 .TP
 \fB\-h\fR, \fB\-\-help\fR
@@ -23,6 +23,12 @@ Include a timestamp.
 .TP
 \fB\-e\fR, \fB\-\-exit\fR <NUM>
 Exit with this status code after printing. [default: 0]
+.TP
+\fB\-c\fR, \fB\-\-prefix\-color\fR <NUM>
+Use this color for the prefix. [default: 199]
+.TP
+\fB\-p\fR, \fB\-\-prefix\fR <PREFIX>
+Set a custom prefix. [default: ]
 .SS <MSG>:
 .TP
 The message!

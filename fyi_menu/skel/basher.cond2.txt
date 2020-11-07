@@ -1,4 +1,0 @@
-	if [[ ! " ${COMP_LINE} " =~ " %SHORT% " ]] && [[ ! " ${COMP_LINE} " =~ " %LONG% " ]]; then
-		opts+=("%SHORT%")
-		opts+=("%LONG%")
-	fi

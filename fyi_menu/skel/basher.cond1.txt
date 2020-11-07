@@ -1,1 +1,0 @@
-	[[ " ${COMP_LINE} " =~ " %KEY% " ]] || opts+=("%KEY%")

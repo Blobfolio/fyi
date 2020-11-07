@@ -1,9 +1,0 @@
-	case "${prev}" in
-		%KEYS%)
-			COMPREPLY=( $( compgen -f "${cur}" ) )
-			return 0
-			;;
-		*)
-			COMPREPLY=()
-			;;
-	esac
