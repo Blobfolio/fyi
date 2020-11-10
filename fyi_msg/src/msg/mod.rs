@@ -492,9 +492,10 @@ macro_rules! locked_print {
 		pub fn $fn(&self) {
 			let writer = io::$writer();
 			let mut handle = writer.lock();
-			handle.write_all(&self.0).unwrap();
-			handle.write_all(b"\n").unwrap();
-			handle.flush().unwrap();
+			let _ = handle.write_all(&self.0)
+				.and_then(|_| handle.write_all(b"\n"))
+				.and_then(|_| handle.flush())
+				.is_ok();
 		}
 	};
 
@@ -503,8 +504,9 @@ macro_rules! locked_print {
 		pub fn $fn(&self) {
 			let writer = io::$writer();
 			let mut handle = writer.lock();
-			handle.write_all(&self.0).unwrap();
-			handle.flush().unwrap();
+			let _ = handle.write_all(&self.0)
+				.and_then(|_| handle.flush())
+				.is_ok();
 		}
 	};
 }
