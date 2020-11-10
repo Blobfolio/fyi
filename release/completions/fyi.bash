@@ -4,7 +4,7 @@ _basher__fyi_blank() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-		
+
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -31,7 +31,7 @@ _basher__fyi_confirm() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-		
+
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -61,7 +61,7 @@ _basher__fyi_print() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-		
+
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -104,7 +104,7 @@ _basher__fyi_crunched() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-		
+
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -139,7 +139,7 @@ _basher__fyi_debug() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-		
+
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -174,7 +174,7 @@ _basher__fyi_done() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-		
+
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -209,7 +209,7 @@ _basher__fyi_error() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-		
+
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -244,7 +244,7 @@ _basher__fyi_info() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-		
+
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -279,7 +279,7 @@ _basher__fyi_notice() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-		
+
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -314,7 +314,7 @@ _basher__fyi_success() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-		
+
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -349,7 +349,7 @@ _basher__fyi_task() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-		
+
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -384,7 +384,7 @@ _basher__fyi_warning() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-		
+
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -419,7 +419,7 @@ _basher___fyi() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-		
+
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
