@@ -297,6 +297,7 @@ version:
 	#rustup component add clippy --toolchain nightly-2020-09-15
 	[ ! -f "{{ justfile_directory() }}/Cargo.lock" ] || rm "{{ justfile_directory() }}/Cargo.lock"
 	cargo update
+	cargo outdated -w
 
 
 # Fix file/directory permissions.
