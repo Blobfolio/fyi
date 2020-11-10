@@ -389,8 +389,9 @@ impl WitchingInner {
 	fn print(buf: &[u8]) {
 		let writer = io::stderr();
 		let mut handle = writer.lock();
-		handle.write_all(buf).unwrap();
-		handle.flush().unwrap();
+		let _ = handle.write_all(buf)
+			.and_then(|_| handle.flush())
+			.is_ok();
 	}
 
 	/// # Erase Output.
