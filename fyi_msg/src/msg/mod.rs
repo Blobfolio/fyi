@@ -111,9 +111,7 @@ impl Deref for Msg {
 }
 
 impl fmt::Display for Msg {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str(self.as_str())
-	}
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.write_str(self.as_str()) }
 }
 
 impl From<&str> for Msg {
@@ -494,8 +492,7 @@ macro_rules! locked_print {
 			let mut handle = writer.lock();
 			let _ = handle.write_all(&self.0)
 				.and_then(|_| handle.write_all(b"\n"))
-				.and_then(|_| handle.flush())
-				.is_ok();
+				.and_then(|_| handle.flush());
 		}
 	};
 
@@ -504,9 +501,7 @@ macro_rules! locked_print {
 		pub fn $fn(&self) {
 			let writer = io::$writer();
 			let mut handle = writer.lock();
-			let _ = handle.write_all(&self.0)
-				.and_then(|_| handle.flush())
-				.is_ok();
+			let _ = handle.write_all(&self.0).and_then(|_| handle.flush());
 		}
 	};
 }

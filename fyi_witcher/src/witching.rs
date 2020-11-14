@@ -46,10 +46,7 @@ use std::{
 /// possible.
 macro_rules! mutex_ptr {
 	($mutex:expr) => (
-		match $mutex.lock() {
-			Ok(guard) => guard,
-			Err(poisoned) => poisoned.into_inner(),
-		}
+		$mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 	);
 }
 
@@ -320,9 +317,9 @@ impl WitchingInner {
 	where S: AsRef<str> {
 		let title: &[u8] = title.as_ref().as_bytes();
 		if self.title.ne(&title) {
-			self.title.truncate(0);
+			self.title.resize(title.len(), 0);
 			if ! title.is_empty() {
-				self.title.extend_from_slice(title);
+				self.title.copy_from_slice(title);
 			}
 
 			self.flags |= TICK_TITLE;
@@ -389,9 +386,7 @@ impl WitchingInner {
 	fn print(buf: &[u8]) {
 		let writer = io::stderr();
 		let mut handle = writer.lock();
-		let _ = handle.write_all(buf)
-			.and_then(|_| handle.flush())
-			.is_ok();
+		let _ = handle.write_all(buf).and_then(|_| handle.flush());
 	}
 
 	/// # Erase Output.
