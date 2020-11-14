@@ -202,20 +202,15 @@ fn blank(args: &mut Argue) {
 
 	// How many lines should we print?
 	let msg = Msg::from_iter([10_u8].repeat(
-		1_usize.max(
-			args.option2("-c", "--count")
-				.map_or(1, |c| c.parse::<usize>().unwrap_or(1))
-		)
+		args.option2("-c", "--count")
+			.and_then(|c| c.parse::<usize>().ok())
+			.map_or(1, |c| 1_usize.max(c))
 	));
 
 	// Print it to `Stderr`.
-	if args.switch("--stderr") {
-		msg.eprint();
-	}
+	if args.switch("--stderr") { msg.eprint(); }
 	// Print it to `Stdout`.
-	else {
-		msg.print();
-	}
+	else { msg.print(); }
 }
 
 #[doc(hidden)]

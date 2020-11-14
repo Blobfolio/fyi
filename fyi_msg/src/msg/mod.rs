@@ -543,7 +543,7 @@ impl Msg {
 
 			if let Some(res) = io::stdin().read_line(&mut result)
 				.ok()
-				.and_then(|_| match result.trim().to_lowercase().as_str() {
+				.and_then(|_| match result.to_lowercase().trim() {
 					"" | "n" | "no" => Some(false),
 					"y" | "yes" => Some(true),
 					_ => None,
