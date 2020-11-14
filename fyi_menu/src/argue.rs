@@ -313,23 +313,24 @@ impl Argue {
 	/// let mut args = Argue::new(0).with_list();
 	/// ```
 	pub fn with_list(mut self) -> Self {
-		if let Some(path) = self.option2("-l", "--list") {
-			use std::{
-				fs::File,
-				io::{
-					BufRead,
-					BufReader,
-				},
-			};
+		use std::{
+			fs::File,
+			io::{
+				BufRead,
+				BufReader,
+			},
+		};
 
-			if let Ok(file) = File::open(path) {
-				BufReader::new(file).lines()
-					.filter_map(|line| match line.unwrap_or_default().trim() {
-						"" => None,
-						x => Some(String::from(x)),
-					})
-					.for_each(|x| self.args.push(x));
-			}
+		if let Some(file) = self.option2("-l", "--list").and_then(|p| File::open(p).ok()) {
+			BufReader::new(file).lines()
+				.filter_map(std::result::Result::ok)
+				.for_each(|line| {
+					let trim = line.trim();
+					if ! trim.is_empty() {
+						if trim == line { self.args.push(line); }
+						else { self.args.push(trim.into()); }
+					}
+				});
 		}
 
 		self
