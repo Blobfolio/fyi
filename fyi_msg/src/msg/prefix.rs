@@ -17,6 +17,11 @@ use std::{
 
 
 
+/// # `MsgPrefix` buffer size.
+const PREFIX_SIZE: usize = 64;
+
+
+
 #[derive(Clone, Copy)]
 /// # Prefix Buffer.
 ///
@@ -40,7 +45,7 @@ use std::{
 /// contain trusted, predictable data. The overflow is transmuted into `u8` from
 /// [`std::mem::MaybeUninit`], so may be zeroes or may be random weirdness.
 pub struct MsgPrefix {
-	buf: [u8; 64],
+	buf: [u8; PREFIX_SIZE],
 	len: usize,
 }
 
@@ -56,7 +61,7 @@ impl Default for MsgPrefix {
 	#[inline]
 	fn default() -> Self {
 		Self {
-			buf: [0; 64],
+			buf: [0; PREFIX_SIZE],
 			len: 0,
 		}
 	}
@@ -152,21 +157,20 @@ impl MsgPrefix {
 	///
 	/// The prefix must be valid UTF-8 and cannot exceed 45 bytes in length.
 	pub unsafe fn new_unchecked(prefix: &[u8], color: u8) -> Self {
-		let mut buf = [mem::MaybeUninit::<u8>::uninit(); 64];
+		let mut buf = [mem::MaybeUninit::<u8>::uninit(); PREFIX_SIZE];
 
 		let len: usize = {
 			let mut dst = buf.as_mut_ptr() as *mut u8;
 
 			dst = write_ansi(dst, color);
 			dst = utility::write_advance(dst, prefix.as_ptr(), prefix.len());
-			utility::write_advance(
-				dst, b":\x1b[0m ".as_ptr(),
-			6).offset_from(buf.as_ptr() as *const u8) as usize
+			utility::write_advance(dst, b":\x1b[0m ".as_ptr(), 6)
+				.offset_from(buf.as_ptr() as *const u8) as usize
 		};
 
 		// Align and return!
 		Self {
-			buf: mem::transmute::<_, [u8; 64]>(buf),
+			buf: mem::transmute::<_, [u8; PREFIX_SIZE]>(buf),
 			len
 		}
 	}
