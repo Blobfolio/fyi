@@ -111,9 +111,7 @@ impl Deref for Msg {
 }
 
 impl fmt::Display for Msg {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str(self.as_str())
-	}
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.write_str(self.as_str()) }
 }
 
 impl From<&str> for Msg {
@@ -494,8 +492,7 @@ macro_rules! locked_print {
 			let mut handle = writer.lock();
 			let _ = handle.write_all(&self.0)
 				.and_then(|_| handle.write_all(b"\n"))
-				.and_then(|_| handle.flush())
-				.is_ok();
+				.and_then(|_| handle.flush());
 		}
 	};
 
@@ -504,9 +501,7 @@ macro_rules! locked_print {
 		pub fn $fn(&self) {
 			let writer = io::$writer();
 			let mut handle = writer.lock();
-			let _ = handle.write_all(&self.0)
-				.and_then(|_| handle.flush())
-				.is_ok();
+			let _ = handle.write_all(&self.0).and_then(|_| handle.flush());
 		}
 	};
 }
@@ -542,18 +537,21 @@ impl Msg {
 		unsafe { q.set_suffix_unchecked(b" \x1b[2m[y/\x1b[4mN\x1b[0;2m]\x1b[0m "); }
 
 		// Ask and collect input, looping until a valid response is typed.
+		let mut result = String::new();
 		loop {
 			q.print();
 
-			if let Ok(s) = read_prompt() {
-				match s.as_str() {
-					"" | "n" | "no" => break false,
-					"y" | "yes" => break true,
-					_ => {},
-				}
-			}
+			if let Some(res) = io::stdin().read_line(&mut result)
+				.ok()
+				.and_then(|_| match result.to_lowercase().trim() {
+					"" | "n" | "no" => Some(false),
+					"y" | "yes" => Some(true),
+					_ => None,
+				})
+			{ break res; }
 
 			// Print an error and do it all over again.
+			result.truncate(0);
 			unsafe {
 				Self::prefixed_unchecked(
 					MsgKind::Error,
@@ -567,18 +565,6 @@ impl Msg {
 	locked_print!(println, stdout, true);
 	locked_print!(eprint, stderr, false);
 	locked_print!(eprintln, stderr, true);
-}
-
-
-
-/// # Input Prompt
-///
-/// This is used by [`Msg::prompt`] to read/normalize the user response to the
-/// question.
-fn read_prompt() -> io::Result<String> {
-	let mut result = String::new();
-	io::stdin().read_line(&mut result)?;
-	Ok(result.trim().to_lowercase())
 }
 
 

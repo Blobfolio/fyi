@@ -143,6 +143,7 @@ This work is free. You can redistribute it and/or modify it under the terms of t
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::cast_sign_loss)]
+#![allow(clippy::map_err_ignore)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::module_name_repetitions)]
 
@@ -202,20 +203,15 @@ fn blank(args: &mut Argue) {
 
 	// How many lines should we print?
 	let msg = Msg::from_iter([10_u8].repeat(
-		1_usize.max(
-			args.option2("-c", "--count")
-				.map_or(1, |c| c.parse::<usize>().unwrap_or(1))
-		)
+		args.option2("-c", "--count")
+			.and_then(|c| c.parse::<usize>().ok())
+			.map_or(1, |c| 1_usize.max(c))
 	));
 
 	// Print it to `Stderr`.
-	if args.switch("--stderr") {
-		msg.eprint();
-	}
+	if args.switch("--stderr") { msg.eprint(); }
 	// Print it to `Stdout`.
-	else {
-		msg.print();
-	}
+	else { msg.print(); }
 }
 
 #[doc(hidden)]

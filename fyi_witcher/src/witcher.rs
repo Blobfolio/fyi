@@ -270,7 +270,7 @@ impl Witcher {
 			self.dirs.par_iter()
 				.filter_map(|p| fs::read_dir(p).ok())
 				.for_each(|paths| {
-					paths.filter_map(|p| p.ok().and_then(|p| fs::canonicalize(p.path()).ok()))
+					paths.filter_map(|p| p.and_then(|p| fs::canonicalize(p.path())).ok())
 						.for_each(|p| tx.send(p).unwrap());
 				});
 
