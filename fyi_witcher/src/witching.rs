@@ -1149,7 +1149,7 @@ impl Witching {
 			b" were found.",
 		])
 			.with_prefix(MsgKind::Warning)
-			.eprint();
+			.eprintln();
 	}
 
 
