@@ -411,7 +411,7 @@ mod tests {
 		let mut rng = rand::thread_rng();
 
 		for _ in 0..1_000_000 {
-			let num: u64 = rng.gen_range(0, 999_999_999_999_u64);
+			let num: u64 = rng.gen_range(0..999_999_999_999_u64);
 			assert_eq!(
 				NiceInt::from(num).as_str(),
 				num.to_formatted_string(&Locale::en),
