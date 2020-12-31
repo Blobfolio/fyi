@@ -1,13 +1,13 @@
 [package]
 name = "fyi_witcher"
-version = "0.4.1"
+version = "0.4.2"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "FYI is a dead-simple status message printer for CLI use applications."
 publish = false
 
 [dependencies]
-ahash = "0.5.*"
+ahash = "0.6.*"
 bytecount = "0.6.*"
 crossbeam-channel = "0.5.*"
 num-integer = "0.1.*"
