@@ -146,17 +146,9 @@ bench BENCH="" FILTER="":
 
 
 # Build Debian package!
-@build-deb: build
+@build-deb: credits build
 	# Do completions/man.
 	cargo bashman -m "{{ pkg_dir1 }}/Cargo.toml"
-
-	cargo about \
-		-m "{{ pkg_dir1 }}/Cargo.toml" \
-		generate \
-		"{{ release_dir }}/credits/about.hbs" > "{{ justfile_directory() }}/CREDITS.html"
-
-	htminl "{{ justfile_directory() }}/CREDITS.html"
-	just _fix-chown "{{ justfile_directory() }}/CREDITS.html"
 
 	# cargo-deb doesn't support target_dir flags yet.
 	[ ! -d "{{ justfile_directory() }}/target" ] || rm -rf "{{ justfile_directory() }}/target"
@@ -205,6 +197,18 @@ bench BENCH="" FILTER="":
 		--release \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
+
+
+# Generate CREDITS.
+@credits:
+	# Update CREDITS.html.
+	cargo about \
+		-m "{{ pkg_dir1 }}/Cargo.toml" \
+		generate \
+		"{{ release_dir }}/credits/about.hbs" > "{{ justfile_directory() }}/CREDITS.html"
+
+	htminl "{{ justfile_directory() }}/CREDITS.html"
+	just _fix-chown "{{ justfile_directory() }}/CREDITS.html"
 
 
 # Build Docs.
