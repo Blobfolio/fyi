@@ -150,6 +150,14 @@ bench BENCH="" FILTER="":
 	# Do completions/man.
 	cargo bashman -m "{{ pkg_dir1 }}/Cargo.toml"
 
+	cargo about \
+		-m "{{ pkg_dir1 }}/Cargo.toml" \
+		generate \
+		"{{ release_dir }}/credits/about.hbs" > "{{ justfile_directory() }}/CREDITS.html"
+
+	htminl "{{ justfile_directory() }}/CREDITS.html"
+	just _fix-chown "{{ justfile_directory() }}/CREDITS.html"
+
 	# cargo-deb doesn't support target_dir flags yet.
 	[ ! -d "{{ justfile_directory() }}/target" ] || rm -rf "{{ justfile_directory() }}/target"
 	mv "{{ cargo_dir }}" "{{ justfile_directory() }}/target"
