@@ -3,8 +3,9 @@ name = "fyi_msg"
 version = "0.4.2"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
-description = "FYI is a dead-simple status message printer for CLI use applications."
+description = "Lib version of FYI."
 license = "WTFPL"
+repository = "https://github.com/Blobfolio/fyi"
 publish = false
 
 [dependencies]
