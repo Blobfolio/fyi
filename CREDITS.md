@@ -17,10 +17,9 @@ License details for project dependencies are listed below.
 * [ahash 0.6.2](https://github.com/tkaitchuck/ahash)
 * [cfg-if 1.0.0](https://github.com/alexcrichton/cfg-if)
 * [lazy_static 1.4.0](https://github.com/rust-lang-nursery/lazy-static.rs)
-* [libc 0.2.81](https://github.com/rust-lang/libc)
+* [libc 0.2.82](https://github.com/rust-lang/libc)
 * [num-integer 0.1.44](https://github.com/rust-num/num-integer)
 * [num-traits 0.2.14](https://github.com/rust-num/num-traits)
-* [time 0.1.44](https://github.com/time-rs/time)
 
 
 ```
@@ -695,9 +694,9 @@ limitations under the License.
 
 **Used By:**
 
-* [fyi 0.4.2](https://github.com/Blobfolio/fyi)
-* [fyi_menu 0.4.2](https://github.com/Blobfolio/fyi)
-* [fyi_msg 0.4.2](https://github.com/Blobfolio/fyi)
+* [fyi 0.4.3](https://github.com/Blobfolio/fyi)
+* [fyi_menu 0.4.3](https://github.com/Blobfolio/fyi)
+* [fyi_msg 0.4.3](https://github.com/Blobfolio/fyi)
 
 
 ```
