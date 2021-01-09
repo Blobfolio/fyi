@@ -6,10 +6,7 @@ use crate::{
 	KeyKind,
 	utility,
 };
-use fyi_msg::{
-	Msg,
-	MsgKind,
-};
+use fyi_msg::Msg;
 use std::{
 	cell::Cell,
 	env,
@@ -232,12 +229,7 @@ impl Argue {
 
 		// Required?
 		if 0 != flags & FLAG_REQUIRED && self.args.is_empty() {
-			Msg::new(
-				MsgKind::Error,
-				"Missing options, flags, arguments, and/or ketchup."
-			)
-				.with_newline(true)
-				.die(1);
+			Msg::error("Missing options, flags, arguments, and/or ketchup.").die(1);
 		}
 
 		// Handle separator.
@@ -602,12 +594,7 @@ impl Argue {
 	pub fn take_arg(&mut self) -> String {
 		let idx = self.arg_idx();
 		if idx >= self.args.len() {
-			Msg::new(
-				MsgKind::Error,
-				"Missing required argument."
-			)
-				.with_newline(true)
-				.die(1);
+			Msg::error("Missing required argument.").die(1);
 		}
 
 		self.args.remove(idx)
@@ -634,9 +621,7 @@ impl Argue {
 	/// status code of `1` instead.
 	fn insert_key(&mut self, idx: usize) {
 		if self.keys[KEY_LEN] == KEY_LEN {
-			Msg::new(MsgKind::Error, "Too many options.")
-				.with_newline(true)
-				.die(1);
+			Msg::error("Too many options.").die(1);
 		}
 
 		self.keys[self.keys[KEY_LEN]] = idx;

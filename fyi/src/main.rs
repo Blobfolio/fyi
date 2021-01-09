@@ -209,9 +209,7 @@ fn main() {
 			}
 			// Missing prefix.
 			else {
-				Msg::new(MsgKind::Error, "Invalid message type.")
-					.with_newline(true)
-					.die(1);
+				Msg::error("Invalid message type.").die(1);
 				unreachable!();
 			}
 		}

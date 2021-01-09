@@ -36,10 +36,14 @@ fn new(c: &mut Criterion) {
 	});
 
 	group.bench_function("error(\"This is an example message!\")", move |b| {
+		b.iter(|| Msg::error(example_str))
+	});
+
+	group.bench_function("MsgKind::Error.into_msg(\"This is an example message!\")", move |b| {
 		b.iter(|| MsgKind::Error.into_msg(example_str))
 	});
 
-	group.bench_function("debug(\"This is an example message!\")", move |b| {
+	group.bench_function("MsgKind::Debug.into_msg(\"This is an example message!\")", move |b| {
 		b.iter(|| MsgKind::Debug.into_msg(example_str))
 	});
 
