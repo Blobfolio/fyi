@@ -61,8 +61,8 @@ pub use msg::{
 	MsgBuffer9,
 	MsgBuffer10,
 	MsgKind,
-	MsgPrefix,
 	FLAG_INDENT,
+	FLAG_NEWLINE,
 	FLAG_TIMESTAMP,
 };
 pub use nice_int::NiceInt;

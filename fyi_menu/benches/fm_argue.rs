@@ -96,14 +96,14 @@ fn option(c: &mut Criterion) {
 	group.bench_function("option()", move |b| {
 		b.iter_with_setup(||
 			test_data(),
-			|mut a| { let _ = a.option("-c"); }
+			|a| { let _ = a.option("-c"); }
 		)
 	});
 
 	group.bench_function("option2()", move |b| {
 		b.iter_with_setup(||
 			test_data(),
-			|mut a| { let _ = a.option2("-c", "--prefix-color"); }
+			|a| { let _ = a.option2("-c", "--prefix-color"); }
 		)
 	});
 

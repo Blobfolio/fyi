@@ -3,16 +3,22 @@
 */
 
 use crate::{
-	die,
 	KeyKind,
 	utility,
 };
-use fyi_msg::Msg;
+use fyi_msg::{
+	Msg,
+	MsgKind,
+};
 use std::{
 	env,
 	iter::FromIterator,
 	ops::Deref,
 	process::exit,
+	sync::atomic::{
+		AtomicUsize,
+		Ordering,
+	},
 };
 
 
@@ -53,9 +59,7 @@ const FLAG_HAS_VERSION: u8 =  0b1_0000;
 /// # The size of our keys array.
 const KEY_SIZE: usize = 16;
 /// # The index noting total key length.
-const KEY_LEN: usize = 14;
-/// # The index noting the last key/value position in `args`.
-const LAST: usize = 15;
+const KEY_LEN: usize = 15;
 
 
 
@@ -101,7 +105,7 @@ const LAST: usize = 15;
 /// ### Restrictions
 ///
 /// 1. Keys are not checked for uniqueness, but only the first occurrence of a given key will match.
-/// 2. A given argument set may only include up to **14** keys. If that number is exceeded, `Argue` will print an error and terminate the thread with a status code of `1`.
+/// 2. A given argument set may only include up to **15** keys. If that number is exceeded, `Argue` will print an error and terminate the thread with a status code of `1`.
 ///
 /// ## Examples
 ///
@@ -139,9 +143,10 @@ pub struct Argue {
 	/// This array holds the indexes (in args) of any keys found so checks can
 	/// iterate over the relevant subset (skipping values, etc.).
 	///
-	/// The last two slots are reserved to hold the number of keys and highest
-	/// non-trailing-arg index value respectively.
+	/// The last slot holds the number of keys.
 	keys: [usize; KEY_SIZE],
+	/// Highest non-arg index.
+	last: AtomicUsize,
 	/// Flags.
 	flags: u8,
 }
@@ -152,6 +157,7 @@ impl Default for Argue {
 		Self {
 			args: Vec::with_capacity(16),
 			keys: [0_usize; KEY_SIZE],
+			last: AtomicUsize::new(0),
 			flags: 0,
 		}
 	}
@@ -229,8 +235,12 @@ impl Argue {
 
 		// Required?
 		if 0 != flags & FLAG_REQUIRED && self.args.is_empty() {
-			die(b"Missing options, flags, arguments, and/or ketchup.");
-			unreachable!();
+			Msg::new(
+				MsgKind::Error,
+				"Missing options, flags, arguments, and/or ketchup."
+			)
+				.with_newline(true)
+				.die(1);
 		}
 
 		// Handle separator.
@@ -353,10 +363,12 @@ impl Argue {
 	/// let mut args = Argue::new(0)
 	///     .with_version(b"My App", b"1.5");
 	/// ```
-	pub fn with_version(self, name: &[u8], version: &[u8]) -> Self {
+	pub fn with_version<S>(self, name: S, version: S) -> Self
+	where S: AsRef<str> {
 		if 0 != self.flags & FLAG_HAS_VERSION {
-			Msg::from([name, b" v", version]).println();
-			exit(0);
+			Msg::plain(format!("{} v{}", name.as_ref(), version.as_ref()))
+				.with_newline(true)
+				.die(1);
 		}
 
 		self
@@ -498,7 +510,7 @@ impl Argue {
 	/// let mut args = Argue::new(0);
 	/// let opt: Option<&str> = args.option("--my-opt");
 	/// ```
-	pub fn option(&mut self, key: &str) -> Option<&str> {
+	pub fn option(&self, key: &str) -> Option<&str> {
 		self.keys.iter()
 			.take(self.keys[KEY_LEN])
 			.position(|&x| self.args[x] == key)
@@ -518,7 +530,7 @@ impl Argue {
 	/// let mut args = Argue::new(0);
 	/// let opt: Option<&str> = args.option2("-o", "--my-opt");
 	/// ```
-	pub fn option2(&mut self, short: &str, long: &str) -> Option<&str> {
+	pub fn option2(&self, short: &str, long: &str) -> Option<&str> {
 		self.keys.iter()
 			.take(self.keys[KEY_LEN])
 			.position(|&x| self.args[x] == short || self.args[x] == long)
@@ -529,10 +541,10 @@ impl Argue {
 	///
 	/// This retrieves the option value at the specified index, if any, and
 	/// updates the arg boundary if needed.
-	fn option_value(&mut self, idx: usize) -> Option<&str> {
+	fn option_value(&self, idx: usize) -> Option<&str> {
 		let out: Option<&str> = self.args.get(idx).map(String::as_str);
-		if out.is_some() && idx > self.keys[LAST] {
-			self.keys[LAST] = idx;
+		if out.is_some() {
+			self.last.fetch_max(idx, Ordering::SeqCst);
 		}
 		out
 	}
@@ -560,6 +572,19 @@ impl Argue {
 	pub fn args(&self) -> &[String] { &self.args[self.arg_idx()..] }
 
 	#[must_use]
+	/// # Arg at Index
+	///
+	/// Pluck the arg at a given index, if any, zero being the first trailing
+	/// argument.
+	pub fn arg(&self, idx: usize) -> Option<&str> {
+		let start_idx = self.arg_idx();
+		if start_idx + idx < self.args.len() {
+			Some(self.args[start_idx + idx].as_str())
+		}
+		else { None }
+	}
+
+	#[must_use]
 	/// # Take Next Trailing Argument.
 	///
 	/// Return an owned copy of the first available argument — removing it from
@@ -580,8 +605,12 @@ impl Argue {
 	pub fn take_arg(&mut self) -> String {
 		let idx = self.arg_idx();
 		if idx >= self.args.len() {
-			die(b"Missing required argument.");
-			unreachable!();
+			Msg::new(
+				MsgKind::Error,
+				"Missing required argument."
+			)
+				.with_newline(true)
+				.die(1);
 		}
 
 		self.args.remove(idx)
@@ -596,9 +625,9 @@ impl Argue {
 	/// unnamed argument may be found.
 	///
 	/// Note: the index may be out of range, but won't be used in that case.
-	const fn arg_idx(&self) -> usize {
+	fn arg_idx(&self) -> usize {
 		if self.keys[KEY_LEN] == 0 && 0 == self.flags & FLAG_SUBCOMMAND { 0 }
-		else { self.keys[LAST] + 1 }
+		else { self.last.load(Ordering::Relaxed) + 1 }
 	}
 
 	/// # Insert Key.
@@ -608,8 +637,9 @@ impl Argue {
 	/// status code of `1` instead.
 	fn insert_key(&mut self, idx: usize) {
 		if self.keys[KEY_LEN] == KEY_LEN {
-			die(b"Too many options.");
-			unreachable!();
+			Msg::new(MsgKind::Error, "Too many options.")
+				.with_newline(true)
+				.die(1);
 		}
 
 		self.keys[self.keys[KEY_LEN]] = idx;
@@ -634,7 +664,7 @@ impl Argue {
 
 				self.args.push(val);
 				self.insert_key(idx);
-				self.keys[LAST] = idx;
+				self.last.store(idx, Ordering::SeqCst);
 			},
 			// Record the key and passthrough.
 			KeyKind::Long => {
@@ -644,7 +674,7 @@ impl Argue {
 
 				self.args.push(val);
 				self.insert_key(idx);
-				self.keys[LAST] = idx;
+				self.last.store(idx, Ordering::SeqCst);
 			},
 			// Split a short key/value pair.
 			KeyKind::ShortV => {
@@ -654,7 +684,7 @@ impl Argue {
 				self.args.push(val);
 				self.args.push(tmp);
 				self.insert_key(idx);
-				self.keys[LAST] = idx + 1;
+				self.last.store(idx + 1, Ordering::SeqCst);
 			},
 			// Split a long key/value pair.
 			KeyKind::LongV(x) => {
@@ -669,7 +699,7 @@ impl Argue {
 				self.args.push(val);
 				self.args.push(tmp);
 				self.insert_key(idx);
-				self.keys[LAST] = idx + 1;
+				self.last.store(idx + 1, Ordering::SeqCst);
 			},
 		}
 

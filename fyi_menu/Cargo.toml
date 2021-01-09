@@ -1,9 +1,11 @@
 [package]
 name = "fyi_menu"
-version = "0.4.2"
+version = "0.4.3"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
-description = "FYI is a dead-simple status message printer for CLI use applications."
+description = "CLI argument parsing helpers."
+license = "WTFPL"
+repository = "https://github.com/Blobfolio/fyi"
 publish = false
 
 [dependencies.fyi_msg]
