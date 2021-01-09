@@ -263,7 +263,7 @@ impl Msg {
 	pub fn set_newline(&mut self, newline: bool) {
 		if newline {
 			if 0 == self.0.len(PART_NEWLINE) {
-				self.0.replace(PART_NEWLINE, b"\n");
+				self.0.extend(PART_NEWLINE, b"\n");
 			}
 		}
 		else if 0 != self.0.len(PART_NEWLINE) {
