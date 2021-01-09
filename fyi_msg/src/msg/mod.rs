@@ -164,6 +164,33 @@ impl Msg {
 			]
 		))
 	}
+
+	/// # Error
+	///
+	/// This is a convenience method for quickly creating a new error with a
+	/// terminating line break.
+	pub fn error<S>(msg: S) -> Self
+	where S: AsRef<str> {
+		let msg = msg.as_ref().as_bytes();
+		let len = msg.len();
+		let mut v = Vec::with_capacity(19 + len);
+		v.extend_from_slice(MsgKind::Error.as_bytes());
+		v.extend_from_slice(msg);
+		v.extend_from_slice(b"\n");
+
+		let m_end = len + 18;
+		Self(MsgBuffer6::from_raw_parts(
+			v,
+			[
+				0, 0,             // Indentation.
+				0, 0,             // Timestamp.
+				0, 18,            // Prefix.
+				18, m_end,        // Message.
+				m_end, m_end,     // Suffix.
+				m_end, m_end + 1, // Newline.
+			]
+		))
+	}
 }
 
 /// ## Builders.
@@ -263,7 +290,7 @@ impl Msg {
 	pub fn set_newline(&mut self, newline: bool) {
 		if newline {
 			if 0 == self.0.len(PART_NEWLINE) {
-				self.0.replace(PART_NEWLINE, b"\n");
+				self.0.extend(PART_NEWLINE, b"\n");
 			}
 		}
 		else if 0 != self.0.len(PART_NEWLINE) {

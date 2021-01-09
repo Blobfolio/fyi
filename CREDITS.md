@@ -694,9 +694,9 @@ limitations under the License.
 
 **Used By:**
 
-* [fyi 0.4.3](https://github.com/Blobfolio/fyi)
-* [fyi_menu 0.4.3](https://github.com/Blobfolio/fyi)
-* [fyi_msg 0.4.3](https://github.com/Blobfolio/fyi)
+* [fyi 0.5.0](https://github.com/Blobfolio/fyi)
+* [fyi_menu 0.5.0](https://github.com/Blobfolio/fyi)
+* [fyi_msg 0.5.0](https://github.com/Blobfolio/fyi)
 
 
 ```
