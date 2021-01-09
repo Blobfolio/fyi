@@ -174,7 +174,8 @@ fn main() {
 		.with_help(helper);
 
 	// Blank is different enough to have its own thing.
-	if "blank" == unsafe { args.peek_unchecked() } {
+	let mode = unsafe { args.peek_unchecked() };
+	if "blank" == mode {
 		return blank(&mut args);
 	}
 
@@ -188,31 +189,33 @@ fn main() {
 	if args.switch2("-t", "--timestamp") { flags |= FLAG_TIMESTAMP; }
 
 	// The message kind.
-	let kind = MsgKind::from(unsafe { args.peek_unchecked() });
+	let kind = MsgKind::from(mode);
 
 	// The main message.
 	let msg =
-		// Custom prefix.
-		if "print" == unsafe { args.peek_unchecked() } {
-			let color: u8 = args.option2("-c", "--prefix-color")
-				.and_then(|x| x.parse::<u8>().ok())
-				.unwrap_or(199);
+		// Not a built-in.
+		if MsgKind::None == kind {
+			// Custom message.
+			if "print" == mode {
+				let color: u8 = args.option2("-c", "--prefix-color")
+					.and_then(|x| x.parse::<u8>().ok())
+					.unwrap_or(199);
 
-			let prefix = args.option2("-p", "--prefix")
-				.map(String::from)
-				.unwrap_or_default();
+				let prefix = args.option2("-p", "--prefix")
+					.unwrap_or_default();
 
-			Msg::custom(prefix, color, args.take_arg())
-				.with_flags(flags)
+				Msg::custom(prefix, color, args.arg(0).unwrap_or_default())
+					.with_flags(flags)
+			}
+			// Missing prefix.
+			else {
+				Msg::new(MsgKind::Error, "Invalid message type.")
+					.with_newline(true)
+					.die(1);
+				unreachable!();
+			}
 		}
-		// Missing the prefix.
-		else if MsgKind::None == kind {
-			Msg::new(MsgKind::Error, "Invalid message type.")
-				.with_newline(true)
-				.die(1);
-			unreachable!();
-		}
-		// Something else.
+		// Built-in.
 		else {
 			Msg::new(kind, args.take_arg())
 				.with_flags(flags)
