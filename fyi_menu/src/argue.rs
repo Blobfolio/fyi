@@ -11,14 +11,11 @@ use fyi_msg::{
 	MsgKind,
 };
 use std::{
+	cell::Cell,
 	env,
 	iter::FromIterator,
 	ops::Deref,
 	process::exit,
-	sync::atomic::{
-		AtomicUsize,
-		Ordering,
-	},
 };
 
 
@@ -146,7 +143,7 @@ pub struct Argue {
 	/// The last slot holds the number of keys.
 	keys: [usize; KEY_SIZE],
 	/// Highest non-arg index.
-	last: AtomicUsize,
+	last: Cell<usize>,
 	/// Flags.
 	flags: u8,
 }
@@ -157,7 +154,7 @@ impl Default for Argue {
 		Self {
 			args: Vec::with_capacity(16),
 			keys: [0_usize; KEY_SIZE],
-			last: AtomicUsize::new(0),
+			last: Cell::new(0),
 			flags: 0,
 		}
 	}
@@ -543,8 +540,8 @@ impl Argue {
 	/// updates the arg boundary if needed.
 	fn option_value(&self, idx: usize) -> Option<&str> {
 		let out: Option<&str> = self.args.get(idx).map(String::as_str);
-		if out.is_some() {
-			self.last.fetch_max(idx, Ordering::SeqCst);
+		if out.is_some() && idx > self.last.get() {
+			self.last.set(idx);
 		}
 		out
 	}
@@ -627,7 +624,7 @@ impl Argue {
 	/// Note: the index may be out of range, but won't be used in that case.
 	fn arg_idx(&self) -> usize {
 		if self.keys[KEY_LEN] == 0 && 0 == self.flags & FLAG_SUBCOMMAND { 0 }
-		else { self.last.load(Ordering::Relaxed) + 1 }
+		else { self.last.get() + 1 }
 	}
 
 	/// # Insert Key.
@@ -664,7 +661,7 @@ impl Argue {
 
 				self.args.push(val);
 				self.insert_key(idx);
-				self.last.store(idx, Ordering::SeqCst);
+				self.last.set(idx);
 			},
 			// Record the key and passthrough.
 			KeyKind::Long => {
@@ -674,7 +671,7 @@ impl Argue {
 
 				self.args.push(val);
 				self.insert_key(idx);
-				self.last.store(idx, Ordering::SeqCst);
+				self.last.set(idx);
 			},
 			// Split a short key/value pair.
 			KeyKind::ShortV => {
@@ -684,7 +681,7 @@ impl Argue {
 				self.args.push(val);
 				self.args.push(tmp);
 				self.insert_key(idx);
-				self.last.store(idx + 1, Ordering::SeqCst);
+				self.last.set(idx + 1);
 			},
 			// Split a long key/value pair.
 			KeyKind::LongV(x) => {
@@ -699,7 +696,7 @@ impl Argue {
 				self.args.push(val);
 				self.args.push(tmp);
 				self.insert_key(idx);
-				self.last.store(idx + 1, Ordering::SeqCst);
+				self.last.set(idx + 1);
 			},
 		}
 
