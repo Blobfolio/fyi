@@ -105,7 +105,7 @@ const KEY_LEN: usize = 15;
 /// ### Restrictions
 ///
 /// 1. Keys are not checked for uniqueness, but only the first occurrence of a given key will match.
-/// 2. A given argument set may only include up to **14** keys. If that number is exceeded, `Argue` will print an error and terminate the thread with a status code of `1`.
+/// 2. A given argument set may only include up to **15** keys. If that number is exceeded, `Argue` will print an error and terminate the thread with a status code of `1`.
 ///
 /// ## Examples
 ///
