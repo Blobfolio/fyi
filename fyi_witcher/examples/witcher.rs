@@ -2,7 +2,7 @@
 # FYI Witcher Example: Find + Progress
 */
 
-use fyi_msg::MsgKind;
+use fyi_msg::Msg;
 use fyi_witcher::{
 	Witcher,
 	WITCHING_SUMMARIZE,
@@ -21,7 +21,7 @@ fn main() {
 		.with_ext(b".gz")
 		.with_path("/usr/share/man")
 		.into_witching()
-		.with_title(MsgKind::new("Witcher Demo", 199).into_msg("Gzipped MAN Pages"))
+		.with_title(Msg::custom("Witcher Demo", 199, "Gzipped MAN Pages"))
 		.with_flags(WITCHING_SUMMARIZE)
 		.with_labels("manual", "manuals")
 		.run(|p| {

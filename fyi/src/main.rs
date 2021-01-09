@@ -151,7 +151,6 @@ This work is free. You can redistribute it and/or modify it under the terms of t
 
 use fyi_menu::{
 	Argue,
-	die,
 	FLAG_REQUIRED,
 	FLAG_SUBCOMMAND,
 };
@@ -159,38 +158,80 @@ use fyi_msg::{
 	Msg,
 	MsgKind,
 	FLAG_INDENT,
+	FLAG_NEWLINE,
 	FLAG_TIMESTAMP,
 };
 
 
 
+#[allow(clippy::suspicious_else_formatting)] // It's fine.
 #[doc(hidden)]
 /// Main.
 fn main() {
 	// Parse CLI arguments.
 	let mut args = Argue::new(FLAG_REQUIRED | FLAG_SUBCOMMAND)
-		.with_version(b"FYI", env!("CARGO_PKG_VERSION").as_bytes())
+		.with_version("FYI", env!("CARGO_PKG_VERSION"))
 		.with_help(helper);
 
-	// Where we going?
-	match unsafe { args.peek_unchecked() } {
-		"blank" => blank(&mut args),
-		"print" => message(
-			{
-				let color = args.option2("-c", "--prefix-color")
-					.map_or(199_u8, |x| x.parse::<u8>().unwrap_or(199));
-				let prefix = args.option2("-p", "--prefix").unwrap_or_default();
-				MsgKind::new(prefix, color)
-			},
-			&mut args
-		),
-		x => match MsgKind::from(x) {
-			MsgKind::None => {
-				die(b"Missing subcommand.");
-				unreachable!();
-			},
-			x => message(x, &mut args),
-		},
+	// Blank is different enough to have its own thing.
+	if "blank" == unsafe { args.peek_unchecked() } {
+		return blank(&mut args);
+	}
+
+	// Exit code.
+	let exit: i32 = args.option2("-e", "--exit")
+		.map_or(0, |x| x.parse::<i32>().unwrap_or(0));
+
+	// Basic flags.
+	let mut flags: u8 = FLAG_NEWLINE;
+	if args.switch2("-i", "--indent") { flags |= FLAG_INDENT; }
+	if args.switch2("-t", "--timestamp") { flags |= FLAG_TIMESTAMP; }
+
+	// The message kind.
+	let kind = MsgKind::from(unsafe { args.peek_unchecked() });
+
+	// The main message.
+	let msg =
+		// Custom prefix.
+		if "print" == unsafe { args.peek_unchecked() } {
+			let color: u8 = args.option2("-c", "--prefix-color")
+				.and_then(|x| x.parse::<u8>().ok())
+				.unwrap_or(199);
+
+			let prefix = args.option2("-p", "--prefix")
+				.map(String::from)
+				.unwrap_or_default();
+
+			Msg::custom(prefix, color, args.take_arg())
+				.with_flags(flags)
+		}
+		// Missing the prefix.
+		else if MsgKind::None == kind {
+			Msg::new(MsgKind::Error, "Invalid message type.")
+				.with_newline(true)
+				.die(1);
+			unreachable!();
+		}
+		// Something else.
+		else {
+			Msg::new(kind, args.take_arg())
+				.with_flags(flags)
+		};
+
+	// It's a prompt!
+	if MsgKind::Confirm == kind {
+		if ! msg.prompt() {
+			std::process::exit(1);
+		}
+	}
+	// Print to `Stderr`.
+	else if args.switch("--stderr") { msg.eprint(); }
+	// Print to `Stdout`.
+	else { msg.print(); }
+
+	// Special exit?
+	if 0 != exit {
+		std::process::exit(exit);
 	}
 }
 
@@ -199,10 +240,8 @@ fn main() {
 ///
 /// Print one or more blank lines to `Stdout` or `Stderr`.
 fn blank(args: &mut Argue) {
-	use std::iter::FromIterator;
-
 	// How many lines should we print?
-	let msg = Msg::from_iter([10_u8].repeat(
+	let msg = Msg::plain("\n".repeat(
 		args.option2("-c", "--count")
 			.and_then(|c| c.parse::<usize>().ok())
 			.map_or(1, |c| 1_usize.max(c))
@@ -220,7 +259,7 @@ fn blank(args: &mut Argue) {
 /// Print the appropriate help screen given the call details. Most of the sub-
 /// commands work the same way, but a few have their own distinct messages.
 fn helper(cmd: Option<&str>) {
-	Msg::from(
+	Msg::plain(
 		format!(
 			r#"
                       ;\
@@ -246,7 +285,8 @@ fn helper(cmd: Option<&str>) {
             '`      ,'
                  ,-'
 
-{}"#,
+{}
+"#,
 			"\x1b[38;5;199mFYI\x1b[0;38;5;69m v",
 			env!("CARGO_PKG_VERSION"),
 			"\x1b[0m",
@@ -257,51 +297,11 @@ fn helper(cmd: Option<&str>) {
 				Some(x) if MsgKind::from(x) != MsgKind::None => format!(
 					include_str!("../help/generic.txt"),
 					x,
-					unsafe { Msg::prefixed_unchecked(MsgKind::from(x), b"Hello World").as_str() },
+					Msg::new(MsgKind::from(x), "Hello World").as_str(),
 					x.to_lowercase(),
 				),
 				_ => include_str!("../help/help.txt").to_string(),
 			}
 		)
-	).println();
-}
-
-#[doc(hidden)]
-/// Print Message!
-///
-/// Almost all roads lead to this method, which crunches the CLI args and
-/// prints an appropriately formatted message.
-fn message(kind: MsgKind, args: &mut Argue) {
-	// Exit code.
-	let exit: i32 = args.option2("-e", "--exit")
-		.map_or(0, |x| x.parse::<i32>().unwrap_or(0));
-
-	// Basic flags.
-	let mut flags: u8 = 0;
-	if args.switch2("-i", "--indent") { flags |= FLAG_INDENT; }
-	if args.switch2("-t", "--timestamp") { flags |= FLAG_TIMESTAMP; }
-
-	// Let's build the message!
-	let msg = unsafe {
-		Msg::prefixed_unchecked(kind, args.take_arg().as_bytes())
-			.with_flags(flags)
-	};
-
-	// It's a prompt!
-	if MsgKind::Confirm == kind {
-		if ! msg.prompt() {
-			std::process::exit(1);
-		}
-
-		return;
-	}
-	// Print to `Stderr`.
-	else if args.switch("--stderr") { msg.eprintln(); }
-	// Print to `Stdout`.
-	else { msg.println(); }
-
-	// Special exit?
-	if 0 != exit {
-		std::process::exit(exit);
-	}
+	).print();
 }

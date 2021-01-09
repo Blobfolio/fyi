@@ -150,74 +150,73 @@ struct WitchingInner {
 impl Default for WitchingInner {
 	fn default() -> Self {
 		Self {
-			buf: unsafe {
-				MsgBuffer9::from_raw_parts(
-					vec![
-						//  Title would go here.
+			buf: MsgBuffer9::from_raw_parts(
+				vec![
+					//  Title would go here.
 
-						//  \e   [   2    m   [   \e  [   0   ;   1    m
-							27, 91, 50, 109, 91, 27, 91, 48, 59, 49, 109,
-						//   0   0   :   0   0   :   0   0
-							48, 48, 58, 48, 48, 58, 48, 48,
-						//  \e   [   0   ;   2    m   ]  \e   [   0    m   •   •
-							27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32,
+					//  \e   [   2    m   [   \e  [   0   ;   1    m
+						27, 91, 50, 109, 91, 27, 91, 48, 59, 49, 109,
+					//   0   0   :   0   0   :   0   0
+						48, 48, 58, 48, 48, 58, 48, 48,
+					//  \e   [   0   ;   2    m   ]  \e   [   0    m   •   •
+						27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32,
 
-						//  \e   [   2    m   [  \e   [   0   ;   1   ;   9   6    m
-							27, 91, 50, 109, 91, 27, 91, 48, 59, 49, 59, 57, 54, 109,
+					//  \e   [   2    m   [  \e   [   0   ;   1   ;   9   6    m
+						27, 91, 50, 109, 91, 27, 91, 48, 59, 49, 59, 57, 54, 109,
 
-						//  Bar Done would go here.
+					//  Bar Done would go here.
 
-						//  \e   [   0   ;   1   ;   9   5    m
-							27, 91, 48, 59, 49, 59, 57, 53, 109,
+					//  \e   [   0   ;   1   ;   9   5    m
+						27, 91, 48, 59, 49, 59, 57, 53, 109,
 
-						//  Bar Doing would go here.
+					//  Bar Doing would go here.
 
-						//  \e   [   0   ;   1   ;   3   4    m
-							27, 91, 48, 59, 49, 59, 51, 52, 109,
+					//  \e   [   0   ;   1   ;   3   4    m
+						27, 91, 48, 59, 49, 59, 51, 52, 109,
 
-						//  Bar Undone would go here.
+					//  Bar Undone would go here.
 
-						//  \e   [   0   ;   2    m   ]  \e   [   0    m   •   •
-							27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32,
+					//  \e   [   0   ;   2    m   ]  \e   [   0    m   •   •
+						27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32,
 
-						//  Done.
-						//  \e   [   1   ;   9   6    m
-							27, 91, 49, 59, 57, 54, 109,
-						//   0
-							48,
+					//  Done.
+					//  \e   [   1   ;   9   6    m
+						27, 91, 49, 59, 57, 54, 109,
+					//   0
+						48,
 
-						//  The slash between Done and Total.
-						//  \e   [   0   ;   2    m   /  \e   [   0   ;   1   ;   3   4    m
-							27, 91, 48, 59, 50, 109, 47, 27, 91, 48, 59, 49, 59, 51, 52, 109,
+					//  The slash between Done and Total.
+					//  \e   [   0   ;   2    m   /  \e   [   0   ;   1   ;   3   4    m
+						27, 91, 48, 59, 50, 109, 47, 27, 91, 48, 59, 49, 59, 51, 52, 109,
 
-						//  Total.
-						//   0
-							48,
+					//  Total.
+					//   0
+						48,
 
-						//  The bit between Total and Percent.
-						//  \e   [   0   ;   1    m   •   •
-							27, 91, 48, 59, 49, 109, 32, 32,
+					//  The bit between Total and Percent.
+					//  \e   [   0   ;   1    m   •   •
+						27, 91, 48, 59, 49, 109, 32, 32,
 
-						//  Percent.
-						//   0   .   0   0   %
-							48, 46, 48, 48, 37,
-						//  \e   [   0    m  \n
-							27, 91, 48, 109, 10,
+					//  Percent.
+					//   0   .   0   0   %
+						48, 46, 48, 48, 37,
+					//  \e   [   0    m  \n
+						27, 91, 48, 109, 10,
 
-					//  Doing would go here.
-					],
-					[
-						0, 0,     // Title.
-						11, 19,   // Elapsed.
-						46, 46,   // Bar Done.
-						55, 55,   // Bar Doing.
-						64, 64,   // Bar Undone.
-						84, 85,   // Done.
-						101, 102, // Total.
-						110, 115, // Percent.
-						120, 120, // Current Tasks.
-					]
-				)},
+				//  Doing would go here.
+				],
+				[
+					0, 0,     // Title.
+					11, 19,   // Elapsed.
+					46, 46,   // Bar Done.
+					55, 55,   // Bar Doing.
+					64, 64,   // Bar Undone.
+					84, 85,   // Done.
+					101, 102, // Total.
+					110, 115, // Percent.
+					120, 120, // Current Tasks.
+				]
+			),
 			doing: AHashSet::new(),
 			done: 0,
 			elapsed: 0,
@@ -499,13 +498,13 @@ impl WitchingInner {
 		// 2: the spaces after total;
 		// 2: the braces around the bar itself (should there be one);
 		// 2: the spaces after the bar itself (should there be one);
-		let space: usize = 255_usize.min(self.last_width.saturating_sub(unsafe {
+		let space: usize = 255_usize.min(self.last_width.saturating_sub(
 			11 +
-			self.buf.len_unchecked(PART_ELAPSED) +
-			self.buf.len_unchecked(PART_DONE) +
-			self.buf.len_unchecked(PART_TOTAL) +
-			self.buf.len_unchecked(PART_PERCENT)
-		}));
+			self.buf.len(PART_ELAPSED) +
+			self.buf.len(PART_DONE) +
+			self.buf.len(PART_TOTAL) +
+			self.buf.len(PART_PERCENT)
+		));
 
 		// Insufficient space!
 		if space < MIN_BARS_WIDTH || 0 == self.total { (0, 0, 0) }
@@ -544,16 +543,14 @@ impl WitchingInner {
 			let (w_done, w_doing, w_undone) = self.tick_bar_widths();
 
 			// Update the parts!.
-			unsafe {
-				if self.buf.len_unchecked(PART_BAR_DONE) != w_done {
-					self.buf.replace_unchecked(PART_BAR_DONE, &BAR[0..w_done]);
-				}
-				if self.buf.len_unchecked(PART_BAR_DOING) != w_doing {
-					self.buf.replace_unchecked(PART_BAR_DOING, &DASH[0..w_doing]);
-				}
-				if self.buf.len_unchecked(PART_BAR_UNDONE) != w_undone {
-					self.buf.replace_unchecked(PART_BAR_UNDONE, &DASH[0..w_undone]);
-				}
+			if self.buf.len(PART_BAR_DONE) != w_done {
+				self.buf.replace(PART_BAR_DONE, &BAR[0..w_done]);
+			}
+			if self.buf.len(PART_BAR_DOING) != w_doing {
+				self.buf.replace(PART_BAR_DOING, &DASH[0..w_doing]);
+			}
+			if self.buf.len(PART_BAR_UNDONE) != w_undone {
+				self.buf.replace(PART_BAR_UNDONE, &DASH[0..w_undone]);
 			}
 		}
 	}
@@ -567,9 +564,7 @@ impl WitchingInner {
 		if 0 != self.flags & TICK_DOING {
 			self.flags &= ! TICK_DOING;
 			if self.doing.is_empty() {
-				unsafe {
-					self.buf.zero_unchecked(PART_DOING);
-				}
+				self.buf.truncate(PART_DOING, 0);
 			}
 			else {
 				let width: usize = self.last_width.saturating_sub(6);
@@ -587,9 +582,7 @@ impl WitchingInner {
 					.copied()
 					.collect();
 
-				unsafe {
-					self.buf.replace_unchecked(PART_DOING, &tasks);
-				}
+				self.buf.replace(PART_DOING, &tasks);
 			}
 		}
 	}
@@ -600,9 +593,7 @@ impl WitchingInner {
 	fn tick_set_done(&mut self) {
 		if 0 != self.flags & TICK_DONE {
 			self.flags &= ! TICK_DONE;
-			unsafe {
-				self.buf.replace_unchecked(PART_DONE, &NiceInt::from(self.done));
-			}
+			self.buf.replace(PART_DONE, &NiceInt::from(self.done));
 		}
 	}
 
@@ -613,7 +604,7 @@ impl WitchingInner {
 		if 0 != self.flags & TICK_PERCENT {
 			self.flags &= ! TICK_PERCENT;
 			unsafe {
-				self.buf.replace_unchecked(PART_PERCENT, &NiceInt::percent_f64(self.percent()));
+				self.buf.replace(PART_PERCENT, &NiceInt::percent_f64(self.percent()));
 			}
 		}
 	}
@@ -637,7 +628,7 @@ impl WitchingInner {
 			unsafe {
 				let [h, m, s] = utility::hms_u32(secs);
 				write_time(
-					self.buf.as_mut_ptr().add(self.buf.start_unchecked(PART_ELAPSED)),
+					self.buf.as_mut_ptr().add(self.buf.start(PART_ELAPSED)),
 					h,
 					m,
 					s,
@@ -656,24 +647,22 @@ impl WitchingInner {
 	fn tick_set_title(&mut self) {
 		if 0 != self.flags & TICK_TITLE {
 			self.flags &= ! TICK_TITLE;
-			unsafe {
-				if self.title.is_empty() {
-					self.buf.zero_unchecked(PART_TITLE);
-				}
-				else {
-					self.buf.replace_unchecked(
-						PART_TITLE,
-						&{
-							let mut m = self.title.clone();
-							let rg = utility::fitted_range(&m, self.last_width - 1);
-							if rg.end > m.len() {
-								m.truncate(rg.end);
-							}
-							m.push(b'\n');
-							m
+			if self.title.is_empty() {
+				self.buf.truncate(PART_TITLE, 0);
+			}
+			else {
+				self.buf.replace(
+					PART_TITLE,
+					&{
+						let mut m = self.title.clone();
+						let rg = utility::fitted_range(&m, self.last_width - 1);
+						if rg.end > m.len() {
+							m.truncate(rg.end);
 						}
-					);
-				}
+						m.push(b'\n');
+						m
+					}
+				);
 			}
 		}
 	}
@@ -684,9 +673,7 @@ impl WitchingInner {
 	fn tick_set_total(&mut self) {
 		if 0 != self.flags & TICK_TOTAL {
 			self.flags &= ! TICK_TOTAL;
-			unsafe {
-				self.buf.replace_unchecked(PART_TOTAL, &NiceInt::from(self.total));
-			}
+			self.buf.replace(PART_TOTAL, &NiceInt::from(self.total));
 		}
 	}
 
@@ -987,9 +974,15 @@ impl Witching {
 	/// # Label.
 	///
 	/// What label should we be using? One or many?
-	fn label(&self) -> &[u8] {
-		if self.set.len() == 1 { &self.label[1..self.label[0] as usize] }
-		else { &self.label[self.label[0] as usize..] }
+	fn label(&self) -> &str {
+		unsafe {
+			if self.set.len() == 1 {
+				std::str::from_utf8_unchecked(&self.label[1..self.label[0] as usize])
+			}
+			else {
+				std::str::from_utf8_unchecked(&self.label[self.label[0] as usize..])
+			}
+		}
 	}
 
 	/// # Run!
@@ -1081,14 +1074,13 @@ impl Witching {
 	///
 	///     X files in M minutes and S seconds.
 	fn summary(&self) -> Msg {
-		Msg::from([
-			NiceInt::from(self.total()).as_bytes(),
-			b" ",
+		Msg::plain(format!(
+			"{} {} in {}.",
+			NiceInt::from(self.total()).as_str(),
 			self.label(),
-			b" in ",
-			&NiceElapsed::from(self.elapsed()),
-			b".",
-		])
+			NiceElapsed::from(self.elapsed()).as_str(),
+		))
+			.with_newline(true)
 	}
 
 	/// # Summarize.
@@ -1100,7 +1092,7 @@ impl Witching {
 	fn summarize(&self) {
 		self.summary()
 			.with_prefix(MsgKind::Done)
-			.eprintln();
+			.eprint();
 	}
 
 	/// # Summarize (with savings).
@@ -1120,20 +1112,18 @@ impl Witching {
 
 		unsafe {
 			if 0 == after || before <= after {
-				msg.set_suffix_unchecked(b" \x1b[2m(No savings.)\x1b[0m");
+				msg.set_suffix(" \x1b[2m(No savings.)\x1b[0m");
 			}
 			else {
-				msg.set_suffix_unchecked(&[
-					&b" \x1b[2m(Saved "[..],
-					&NiceInt::from(before - after),
-					b" bytes, ",
-					&NiceInt::percent_f64(1.0 - (after as f64 / before as f64)),
-					b".)\x1b[0m",
-				].concat());
+				msg.set_suffix(format!(
+					" \x1b[2m(Saved {} bytes, {}.)\x1b[0m",
+					NiceInt::from(before - after).as_str(),
+					NiceInt::percent_f64(1.0 - (after as f64 / before as f64)).as_str(),
+				));
 			}
 		}
 
-		msg.eprintln();
+		msg.eprint();
 	}
 
 	/// # Summarize empty.
@@ -1143,13 +1133,12 @@ impl Witching {
 	///
 	///     No files were found.
 	fn summarize_empty(&self) {
-		Msg::from([
-			b"No ",
-			self.label(),
-			b" were found.",
-		])
-			.with_prefix(MsgKind::Warning)
-			.eprintln();
+		Msg::new(
+			MsgKind::Warning,
+			format!("No {} were found.", self.label())
+		)
+			.with_newline(true)
+			.eprint();
 	}
 
 

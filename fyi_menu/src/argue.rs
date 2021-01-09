@@ -3,11 +3,13 @@
 */
 
 use crate::{
-	die,
 	KeyKind,
 	utility,
 };
-use fyi_msg::Msg;
+use fyi_msg::{
+	Msg,
+	MsgKind,
+};
 use std::{
 	env,
 	iter::FromIterator,
@@ -229,8 +231,12 @@ impl Argue {
 
 		// Required?
 		if 0 != flags & FLAG_REQUIRED && self.args.is_empty() {
-			die(b"Missing options, flags, arguments, and/or ketchup.");
-			unreachable!();
+			Msg::new(
+				MsgKind::Error,
+				"Missing options, flags, arguments, and/or ketchup."
+			)
+				.with_newline(true)
+				.die(1);
 		}
 
 		// Handle separator.
@@ -353,10 +359,12 @@ impl Argue {
 	/// let mut args = Argue::new(0)
 	///     .with_version(b"My App", b"1.5");
 	/// ```
-	pub fn with_version(self, name: &[u8], version: &[u8]) -> Self {
+	pub fn with_version<S>(self, name: S, version: S) -> Self
+	where S: AsRef<str> {
 		if 0 != self.flags & FLAG_HAS_VERSION {
-			Msg::from([name, b" v", version]).println();
-			exit(0);
+			Msg::plain(format!("{} v{}", name.as_ref(), version.as_ref()))
+				.with_newline(true)
+				.die(1);
 		}
 
 		self
@@ -580,8 +588,12 @@ impl Argue {
 	pub fn take_arg(&mut self) -> String {
 		let idx = self.arg_idx();
 		if idx >= self.args.len() {
-			die(b"Missing required argument.");
-			unreachable!();
+			Msg::new(
+				MsgKind::Error,
+				"Missing required argument."
+			)
+				.with_newline(true)
+				.die(1);
 		}
 
 		self.args.remove(idx)
@@ -608,8 +620,9 @@ impl Argue {
 	/// status code of `1` instead.
 	fn insert_key(&mut self, idx: usize) {
 		if self.keys[KEY_LEN] == KEY_LEN {
-			die(b"Too many options.");
-			unreachable!();
+			Msg::new(MsgKind::Error, "Too many options.")
+				.with_newline(true)
+				.die(1);
 		}
 
 		self.keys[self.keys[KEY_LEN]] = idx;

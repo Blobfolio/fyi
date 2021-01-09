@@ -27,12 +27,12 @@ fn new(c: &mut Criterion) {
 		b.iter(|| Msg::default())
 	});
 
-	group.bench_function("new(\"This is an example message!\")", move |b| {
-		b.iter(|| Msg::from(example_str))
+	group.bench_function("plain(\"This is an example message!\")", move |b| {
+		b.iter(|| Msg::plain(example_str))
 	});
 
-	group.bench_function("new(\"Prefix:\", 199, \"This is an example message!\")", move |b| {
-		b.iter(|| MsgKind::new(prefix_str, one99_u8).into_msg(example_str))
+	group.bench_function("custom(\"Prefix:\", 199, \"This is an example message!\")", move |b| {
+		b.iter(|| Msg::custom(prefix_str, one99_u8, example_str))
 	});
 
 	group.bench_function("error(\"This is an example message!\")", move |b| {
@@ -41,34 +41,6 @@ fn new(c: &mut Criterion) {
 
 	group.bench_function("debug(\"This is an example message!\")", move |b| {
 		b.iter(|| MsgKind::Debug.into_msg(example_str))
-	});
-
-	group.finish();
-}
-
-fn from(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_msg::Msg");
-	group.sample_size(30);
-
-	group.bench_function("from::<Vec<u8>>::()", move |b| {
-		b.iter_with_setup(||
-			b"My dear aunt sally eats cake.".to_vec(),
-			|v| Msg::from(v)
-		)
-	});
-
-	group.bench_function("from::<[&[u8]; 3]>::()", move |b| {
-		b.iter_with_setup(||
-			[&b"My "[..], b"dear ", b"aunt."],
-			|v| Msg::from(v)
-		)
-	});
-
-	group.bench_function("from::<[&[u8]; 6]>::()", move |b| {
-		b.iter_with_setup(||
-			[&b"My "[..], b"dear ", b"aunt ", b"sally ", b"eats ", b"cake."],
-			|v| Msg::from(v)
-		)
 	});
 
 	group.finish();
@@ -88,26 +60,11 @@ fn with_timestamp(c: &mut Criterion) {
 	group.finish();
 }
 
-fn msgkind(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_msg::MsgKind");
-	group.sample_size(30);
-
-	group.bench_function("new(Hello Dolly, 199)", move |b| {
-		b.iter(||
-			MsgKind::new("Hello Dolly", 199)
-		)
-	});
-
-	group.finish();
-}
-
 
 
 criterion_group!(
 	benches,
 	new,
-	from,
 	with_timestamp,
-	msgkind,
 );
 criterion_main!(benches);

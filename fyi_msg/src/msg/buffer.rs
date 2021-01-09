@@ -8,48 +8,19 @@ use std::{
 		Hash,
 		Hasher,
 	},
-	ops::Deref,
-	ops::DerefMut,
+	ops::{
+		Deref,
+		Range,
+	},
 	ptr,
 };
 
-
-
-/// # Define by Size.
-///
-/// Every buffer works exactly the same way; there are just a different number
-/// of pieces in the TOC array.
 macro_rules! define_buffer {
-	($name:ident, $size:literal, $ssize:expr) => {
-		#[allow(clippy::tabs_in_doc_comments)] // The macro confuses the linter.
+	($name:ident, $size:literal, $num:expr) => {
 		#[derive(Debug, Clone, Default)]
 		#[doc = "Message Buffer with `"]
-		#[doc = $ssize]
+		#[doc = $num]
 		#[doc = "` parts."]
-		///
-		/// "Buffer" isn't the right word. This is more of a contiguous,
-		/// partitioned	byte string.
-		///
-		/// The contiguity(?) allows for fast slice borrows (for e.g. printing),
-		/// while the partitioning makes it easy to update select portions of
-		/// the buffer in-place.
-		///
-		/// The partitioning may be arbitrary, and does not need to have full
-		/// coverage or be contiguous with itself. That said, all part
-		/// boundaries must be sequential, non-overlapping, and within range.
-		///
-		/// Partitioned buffers are available for `2..=10` parts. Each is named
-		/// accordingly, like [`MsgBuffer2`] for a 2-part buffer, [`MsgBuffer3`] for a 3-part
-		/// buffer, etc.
-		///
-		/// ## Safety
-		///
-		/// This struct is built for performance and largely requires security/sanity
-		/// be handled by the implementing library. As such, most of its methods are
-		/// marked "unsafe".
-		///
-		/// It is not designed for use outside these crates and is subject to change in
-		/// breaking ways.
 		pub struct $name {
 			buf: Vec<u8>,
 			toc: [usize; $size],
@@ -59,11 +30,6 @@ macro_rules! define_buffer {
 			type Target = [u8];
 			#[inline]
 			fn deref(&self) -> &Self::Target { &self.buf }
-		}
-
-		impl DerefMut for $name {
-			#[inline]
-			fn deref_mut(&mut self) -> &mut Self::Target { &mut self.buf }
 		}
 
 		impl fmt::Display for $name {
@@ -95,8 +61,6 @@ macro_rules! define_buffer {
 		}
 
 		/// ## Instantiation.
-		///
-		/// This section provides methods for generating new instances.
 		impl $name {
 			#[must_use]
 			#[inline]
@@ -118,21 +82,23 @@ macro_rules! define_buffer {
 			/// ## Safety
 			///
 			/// No validation is performed; the data must make sense or undefined
-			/// things will happen.
+			/// things will happen down the road.
 			///
 			/// The table of contents must be properly aligned and ordered.
-			pub unsafe fn from_raw_parts(buf: Vec<u8>, toc: [usize; $size]) -> Self {
+			pub fn from_raw_parts(buf: Vec<u8>, toc: [usize; $size]) -> Self {
 				Self { buf, toc }
 			}
 		}
 
 		/// ## Casting.
-		///
-		/// This section provides methods for converting instances into other
-		/// types.
-		///
-		/// Note: this struct can also be dereferenced to `&[u8]`.
 		impl $name {
+			#[must_use]
+			#[inline]
+			/// # As Bytes.
+			///
+			/// Return as a byte slice.
+			pub fn as_bytes(&self) -> &[u8] { self }
+
 			#[must_use]
 			#[inline]
 			/// # As Pointer.
@@ -153,22 +119,30 @@ macro_rules! define_buffer {
 			pub unsafe fn as_mut_ptr(&mut self) -> *mut u8 { self.buf.as_mut_ptr() }
 
 			#[must_use]
-			#[inline]
 			/// # As Str.
 			///
-			/// Return the buffer content as a string slice.
+			/// This method returns the underlying vector as a string slice.
 			///
-			/// ## Safety
+			/// ## Panic
 			///
-			/// The string's UTF-8 is not validated for sanity!
-			pub unsafe fn as_str(&self) -> &str { std::str::from_utf8_unchecked(self) }
+			/// This method will panic if the contents are not valid UTF-8.
+			#[inline]
+			pub fn as_str(&self) -> &str {
+				std::str::from_utf8(self).unwrap()
+			}
 
 			#[must_use]
 			#[inline]
-			/// # As Bytes.
+			/// # Into String.
 			///
-			/// Return as a byte slice.
-			pub fn as_bytes(&self) -> &[u8] { self }
+			/// Consume and return the underlying vector as a `String`.
+			///
+			/// ## Panic
+			///
+			/// This method will panic if the contents are not valid UTF-8.
+			pub fn into_string(self) -> String {
+				String::from_utf8(self.buf).unwrap()
+			}
 
 			#[allow(clippy::missing_const_for_fn)] // This doesn't work.
 			#[must_use]
@@ -179,9 +153,7 @@ macro_rules! define_buffer {
 			pub fn into_vec(self) -> Vec<u8> { self.buf }
 		}
 
-		/// ## Operations.
-		///
-		/// This section provides methods for working with instances.
+		/// ## Whole Buffer Play.
 		impl $name {
 			#[must_use]
 			#[inline]
@@ -195,43 +167,83 @@ macro_rules! define_buffer {
 			/// # TOC Size.
 			pub const fn size() -> usize { $size }
 
+			/// # Clear Buffer.
+			///
+			/// This will empty the buffer and reset the TOC.
+			pub fn clear(&mut self) {
+				self.buf.clear();
+				self.toc.iter_mut().for_each(|x| *x = 0);
+			}
+		}
+
+		/// ## Individual Parts.
+		impl $name {
+			#[must_use]
+			/// # Part Length.
+			pub const fn len(&self, idx: usize) -> usize {
+				self.end(idx) - self.start(idx)
+			}
+
+			#[must_use]
+			/// # Part Start.
+			pub const fn start(&self, idx: usize) -> usize {
+				self.toc[idx << 1]
+			}
+
+			#[must_use]
+			/// # Part End.
+			pub const fn end(&self, idx: usize) -> usize {
+				self.toc[(idx << 1) + 1]
+			}
+
+			#[must_use]
+			/// # Part Range.
+			pub const fn range(&self, idx: usize) -> Range<usize> {
+				self.start(idx)..self.end(idx)
+			}
+
+			#[must_use]
+			/// # Get Part.
+			pub fn get(&self, idx: usize) -> &[u8] {
+				&self.buf[self.range(idx)]
+			}
+
+			#[must_use]
+			/// # Get Mutable Part.
+			pub fn get_mut(&mut self, idx: usize) -> &mut [u8] {
+				let rng = self.range(idx);
+				&mut self.buf[rng]
+			}
+
+			/// # Extend Part.
+			pub fn extend(&mut self, idx: usize, buf: &[u8]) {
+				let len = buf.len();
+				if len != 0 {
+					let end = self.end(idx);
+
+					// End of buffer trick.
+					if end == self.buf.len() {
+						self.buf.extend_from_slice(buf);
+						self.increase(idx, len);
+					}
+					else {
+						self.resize_grow(idx, len);
+						unsafe {
+							std::ptr::copy_nonoverlapping(
+								buf.as_ptr(),
+								self.buf.as_mut_ptr().add(end),
+								len
+							);
+						}
+					}
+				}
+			}
+
 			/// # Replace Part.
-			///
-			/// This method replaces a given part of the buffer with `buf`, which can
-			/// be of any size. If the new content is a different length than the
-			/// original, the table of contents will be adjusted accordingly.
-			///
-			/// ## Examples
-			///
-			/// Apologies, these documents are generated inside a macro that
-			/// refuse to translate the struct name ($name) and size ($size).
-			/// Use your imagination to substitute those below. :)
-			///
-			/// ```no_run
-			/// use fyi_msg::$name;
-			///
-			/// unsafe {
-			///     let mut buf = $name::from_raw_parts(Vec::new(), [0_usize; $size]);
-			///
-			///     assert_eq!(buf.deref(), b"");
-			///     assert_eq!(buf.len_unchecked(0), 0);
-			///
-			///     buf.replace_unchecked(0, b"Hello World");
-			///
-			///     assert_eq!(buf.deref(), b"Hello World");
-			///     assert_eq!(buf.len_unchecked(0), 11);
-			///     assert_eq!(buf.start_unchecked(0), 0);
-			///     assert_eq!(buf.end_unchecked(0), 11);
-			/// }
-			/// ```
-			///
-			/// ## Safety
-			///
-			/// Undefined things will happen if `idx` is out of range, or any of the
-			/// partitions exceed [`usize::MAX`].
-			pub unsafe fn replace_unchecked(&mut self, idx: usize, buf: &[u8]) {
+			pub fn replace(&mut self, idx: usize, buf: &[u8]) {
 				// Get the lengths.
-				let (old_len, new_len) = (self.len_unchecked(idx), buf.len());
+				let old_len = self.len(idx);
+				let new_len = buf.len();
 
 				// Expand it.
 				if old_len < new_len {
@@ -244,59 +256,52 @@ macro_rules! define_buffer {
 
 				// Write it!
 				if 0 != new_len {
-					std::ptr::copy_nonoverlapping(
-						buf.as_ptr(),
-						self.buf.as_mut_ptr().add(self.start_unchecked(idx)),
-						new_len
-					);
+					unsafe {
+						std::ptr::copy_nonoverlapping(
+							buf.as_ptr(),
+							self.buf.as_mut_ptr().add(self.start(idx)),
+							new_len
+						);
+					}
 				}
 			}
 
-			/// # Resize: Grow.
-			///
-			/// This extends the buffer in the appropriate place and adjusts the table
-			/// of contents accordingly.
-			///
-			/// ## Safety
-			///
-			/// Undefined things will happen if `idx` is out of range. Additionally,
-			/// data in the vector may be left uninitialized and will need to be
-			/// written to before being used!
-			unsafe fn resize_grow(&mut self, idx: usize, adj: usize) {
-				let end: usize = self.end_unchecked(idx);
+			/// # Truncate Part.
+			pub fn truncate(&mut self, idx: usize, len: usize) {
+				let old_len = self.len(idx);
+				if old_len > len {
+					self.resize_shrink(idx, old_len - len);
+				}
+			}
+		}
+
+		/// ## Misc.
+		impl $name {
+			/// # Grow.
+			fn resize_grow(&mut self, idx: usize, adj: usize) {
+				let end: usize = self.end(idx);
 				let len: usize = self.buf.len();
 
-				self.buf.reserve(adj);
+				self.buf.resize(len + adj, 0);
 
 				// We need to shift things over.
 				if end < len {
-					ptr::copy(
-						self.buf.as_ptr().add(end),
-						self.buf.as_mut_ptr().add(end + adj),
-						len - end
-					);
+					unsafe {
+						ptr::copy(
+							self.buf.as_ptr().add(end),
+							self.buf.as_mut_ptr().add(end + adj),
+							len - end
+						);
+					}
 				}
 
-				self.buf.set_len(len + adj);
 				self.increase(idx, adj);
 			}
 
-			/// # Resize: Shrink.
-			///
-			/// This shrinks the buffer in the appropriate place and adjusts
-			/// the table of contents accordingly.
-			///
-			/// ## Panics
-			///
-			/// This method may panic if the adjustment is larger than the
-			/// length of the affected parts (i.e. causing their positions to
-			/// overflow).
-			///
-			/// ## Safety
-			///
-			/// Undefined things will happen if `idx` is out of range.
-			unsafe fn resize_shrink(&mut self, idx: usize, adj: usize) {
-				let end: usize = self.end_unchecked(idx);
+			/// # Shrink.
+			fn resize_shrink(&mut self, idx: usize, adj: usize) {
+				assert!(self.len(idx) >= adj);
+				let end = self.end(idx);
 
 				// End-of-buffer shortcut.
 				if end == self.buf.len() {
@@ -308,79 +313,6 @@ macro_rules! define_buffer {
 				}
 
 				self.decrease(idx, adj);
-			}
-
-			/// # Zero Part (Unchecked).
-			///
-			/// This method truncates a part to zero-length, shifting all
-			/// subsequent parts to the left as necessary.
-			///
-			/// ## Safety
-			///
-			/// Undefined things will happen if `idx` is out of range.
-			pub unsafe fn zero_unchecked(&mut self, idx: usize) {
-				self.buf.drain(self.start_unchecked(idx)..self.end_unchecked(idx));
-				self.decrease(idx, self.len_unchecked(idx));
-			}
-		}
-
-		/// ## Part Details.
-		///
-		/// These methods deal with individual parts, things like their lengths,
-		/// ranges, etc.
-		impl $name {
-			#[must_use]
-			#[inline]
-			/// # Part Is Empty (Unchecked).
-			///
-			/// This returns `true` if a given part is empty.
-			///
-			/// ## Safety
-			///
-			/// Undefined things will happen if `idx` is out of bounds.
-			pub const unsafe fn is_empty_unchecked(&self, idx: usize) -> bool {
-				self.start_unchecked(idx) == self.end_unchecked(idx)
-			}
-
-			#[must_use]
-			#[inline]
-			/// # Part Length (Unchecked).
-			///
-			/// This returns the length of a given part, equivalent to
-			/// `end-start`.
-			///
-			/// ## Safety
-			///
-			/// Undefined things will happen if `idx` is out of bounds.
-			pub const unsafe fn len_unchecked(&self, idx: usize) -> usize {
-				self.end_unchecked(idx) - self.start_unchecked(idx)
-			}
-
-			#[must_use]
-			#[inline]
-			/// # Part Start (Unchecked).
-			///
-			/// This returns the inclusive buffer starting index  for a given
-			/// part.
-			///
-			/// ## Safety
-			///
-			/// Undefined things will happen if `idx` is out of bounds.
-			pub const unsafe fn start_unchecked(&self, idx: usize) -> usize {
-				self.toc[idx * 2]
-			}
-
-			#[must_use]
-			#[inline]
-			/// # Part End (Unchecked).
-			///
-			/// This returns the exclusive buffer endind index for a given part.
-			///
-			/// ## Safety
-			///
-			/// Undefined things will happen if `idx` is out of bounds.
-			pub const unsafe fn end_unchecked(&self, idx: usize) -> usize {
-				self.toc[(idx << 1) + 1]
 			}
 
 			/// # Decrease Indexing From.
@@ -424,7 +356,7 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn replace() { unsafe {
+	fn replace() {
 		let mut buf = MsgBuffer3::from_raw_parts(
 			vec![0, 0, 1, 1, 0, 0],
 			[
@@ -435,52 +367,48 @@ mod tests {
 		);
 
 		// Bigger.
-		buf.replace_unchecked(0, &[2, 2, 2]);
+		buf.replace(0, &[2, 2, 2]);
 		assert_eq!(buf, vec![0, 0, 2, 2, 2, 0, 0]);
-		assert_eq!(buf.start_unchecked(0)..buf.end_unchecked(0), 2..5);
-		assert_eq!(buf.len_unchecked(0), 3);
-		assert_eq!(buf.is_empty_unchecked(0), false);
-		assert_eq!(buf.start_unchecked(1)..buf.end_unchecked(1), 5..7);
-		assert_eq!(buf.len_unchecked(1), 2);
-		assert_eq!(buf.is_empty_unchecked(1), false);
+		assert_eq!(buf.start(0)..buf.end(0), 2..5);
+		assert_eq!(buf.len(0), 3);
+		assert_eq!(buf.start(1)..buf.end(1), 5..7);
+		assert_eq!(buf.len(1), 2);
 
 		// Same Size.
-		buf.replace_unchecked(0, &[3, 3, 3]);
+		buf.replace(0, &[3, 3, 3]);
 		assert_eq!(buf, vec![0, 0, 3, 3, 3, 0, 0]);
-		assert_eq!(buf.start_unchecked(0)..buf.end_unchecked(0), 2..5);
-		assert_eq!(buf.start_unchecked(1)..buf.end_unchecked(1), 5..7);
+		assert_eq!(buf.start(0)..buf.end(0), 2..5);
+		assert_eq!(buf.start(1)..buf.end(1), 5..7);
 
 		// Smaller.
-		buf.replace_unchecked(0, &[1]);
+		buf.replace(0, &[1]);
 		assert_eq!(buf, vec![0, 0, 1, 0, 0]);
-		assert_eq!(buf.start_unchecked(0)..buf.end_unchecked(0), 2..3);
-		assert_eq!(buf.start_unchecked(1)..buf.end_unchecked(1), 3..5);
+		assert_eq!(buf.start(0)..buf.end(0), 2..3);
+		assert_eq!(buf.start(1)..buf.end(1), 3..5);
 
 		// Empty.
-		buf.replace_unchecked(0, &[]);
+		buf.replace(0, &[]);
 		assert_eq!(buf, vec![0, 0, 0, 0]);
-		assert_eq!(buf.start_unchecked(0)..buf.end_unchecked(0), 2..2);
-		assert_eq!(buf.len_unchecked(0), 0);
-		assert_eq!(buf.is_empty_unchecked(0), true);
-		assert_eq!(buf.start_unchecked(1)..buf.end_unchecked(1), 2..4);
-		assert_eq!(buf.len_unchecked(1), 2);
-		assert_eq!(buf.is_empty_unchecked(1), false);
+		assert_eq!(buf.start(0)..buf.end(0), 2..2);
+		assert_eq!(buf.len(0), 0);
+		assert_eq!(buf.start(1)..buf.end(1), 2..4);
+		assert_eq!(buf.len(1), 2);
 
 		// Bigger (End).
-		buf.replace_unchecked(1, &[2, 2, 2]);
+		buf.replace(1, &[2, 2, 2]);
 		assert_eq!(buf, vec![0, 0, 2, 2, 2]);
-		assert_eq!(buf.start_unchecked(0)..buf.end_unchecked(0), 2..2);
-		assert_eq!(buf.start_unchecked(1)..buf.end_unchecked(1), 2..5);
+		assert_eq!(buf.start(0)..buf.end(0), 2..2);
+		assert_eq!(buf.start(1)..buf.end(1), 2..5);
 
 		// Smaller (End).
-		buf.replace_unchecked(1, &[3, 3]);
+		buf.replace(1, &[3, 3]);
 		assert_eq!(buf, vec![0, 0, 3, 3]);
-		assert_eq!(buf.start_unchecked(0)..buf.end_unchecked(0), 2..2);
-		assert_eq!(buf.start_unchecked(1)..buf.end_unchecked(1), 2..4);
-	}}
+		assert_eq!(buf.start(0)..buf.end(0), 2..2);
+		assert_eq!(buf.start(1)..buf.end(1), 2..4);
+	}
 
 	#[test]
-	fn zero() { unsafe {
+	fn truncate() {
 		let mut buf = MsgBuffer3::from_raw_parts(
 			vec![0, 0, 1, 1, 0, 0],
 			[
@@ -491,9 +419,9 @@ mod tests {
 		);
 
 		// Empty.
-		buf.zero_unchecked(0);
+		buf.truncate(0, 0);
 		assert_eq!(buf, vec![0, 0, 0, 0]);
-		assert_eq!(buf.start_unchecked(0)..buf.end_unchecked(0), 2..2);
-		assert_eq!(buf.start_unchecked(1)..buf.end_unchecked(1), 2..4);
-	}}
+		assert_eq!(buf.start(0)..buf.end(0), 2..2);
+		assert_eq!(buf.start(1)..buf.end(1), 2..4);
+	}
 }

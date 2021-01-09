@@ -69,21 +69,3 @@ pub use argue::{
 };
 
 pub use keykind::KeyKind;
-
-
-
-/// # Print an Error and Exit.
-///
-/// This method prints an error message to `Stderr` and terminates the thread
-/// with an exit code of `1`.
-///
-/// This is used instead of traditional panics in many places, given the CLI-
-/// based nature of [`Argue`].
-///
-/// ## Safety
-///
-/// The `msg` must be valid UTF-8 or undefined things may happen.
-pub fn die(msg: &[u8]) {
-	unsafe { fyi_msg::Msg::prefixed_unchecked(fyi_msg::MsgKind::Error, msg) }.eprintln();
-	std::process::exit(1);
-}

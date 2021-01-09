@@ -4,9 +4,14 @@
 
 mod buffer;
 mod kind;
-mod prefix;
 
-// These *are* re-exported and fully reachable. Haha.
+use crate::utility;
+use std::{
+	fmt,
+	io,
+	ops::Deref,
+};
+
 #[allow(unreachable_pub)]
 pub use buffer::{
 	MsgBuffer2,
@@ -19,19 +24,8 @@ pub use buffer::{
 	MsgBuffer9,
 	MsgBuffer10,
 };
-#[allow(unreachable_pub)] pub use kind::MsgKind;
-#[allow(unreachable_pub)] pub use prefix::MsgPrefix;
-
-use std::{
-	fmt,
-	iter::FromIterator,
-	ops::Deref,
-	ptr,
-	io::{
-		self,
-		Write,
-	},
-};
+#[allow(unreachable_pub)]
+pub use kind::MsgKind;
 
 
 
@@ -52,6 +46,9 @@ const PART_MSG: usize = 3;
 /// Buffer Index: Suffix.
 const PART_SUFFIX: usize = 4;
 
+/// Buffer Index: Newline.
+const PART_NEWLINE: usize = 5;
+
 // Configuration Flags.
 //
 // These flags are an alternative way to configure indentation and
@@ -63,41 +60,14 @@ pub const FLAG_INDENT: u8 =    0b0001;
 /// Enable Timestamp.
 pub const FLAG_TIMESTAMP: u8 = 0b0010;
 
+/// Enable Trailing Line.
+pub const FLAG_NEWLINE: u8 =   0b0100;
 
 
-#[derive(Debug, Clone, Default, Hash, Eq, PartialEq)]
-/// The `Msg` struct is a fairly straight-forward way of getting a simple ANSI-
-/// formatted message printed to the terminal.
-///
-/// A number of basic prefixes like "Error" and "Success" are built in. Custom
-/// prefixes with arbitrary coloring can be used via [`MsgKind::new`].
-///
-/// The [`with_indent()`](Msg::with_indent) and [`with_timestamp()`](Msg::with_timestamp) build patterns can prepend
-/// indentation or a timestamp to the message, respectively.
-///
-/// That's it. Nice and boring!
-///
-/// ## Example
-///
-/// ```no_run
-/// use fyi_msg::Msg;
-/// use fyi_msg::MsgKind;
-///
-/// // Create a message with a custom prefix and color.
-/// MsgKind::new("Yo", 199)
-///     .into_msg("How are you doing today?")
-///     .println();
-///
-/// // Built-ins work the same way.
-/// MsgKind::Error.into_msg("Well darn.").println();
-/// MsgKind::Success.into_msg("Oh good!").println();
-///
-/// // Ask a yes/no question.
-/// let res: bool = MsgKind::Confirm.into_msg("Are you OK?").prompt();
-/// ```
-pub struct Msg(MsgBuffer5);
 
-
+#[derive(Debug, Default, Clone)]
+/// # Message.
+pub struct Msg(MsgBuffer6);
 
 impl AsRef<str> for Msg {
 	#[inline]
@@ -111,409 +81,274 @@ impl Deref for Msg {
 }
 
 impl fmt::Display for Msg {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.write_str(self.as_str()) }
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.write_str(self.as_str())
+	}
 }
 
 impl From<&str> for Msg {
-	#[inline]
-	fn from(src: &str) -> Self { Self::from(src.as_bytes().to_vec()) }
+	fn from(src: &str) -> Self { Self::plain(src) }
 }
 
 impl From<String> for Msg {
-	#[inline]
-	fn from(src: String) -> Self { Self::from(src.into_bytes()) }
+	fn from(src: String) -> Self { Self::plain(src) }
 }
 
-impl From<&[u8]> for Msg {
-	#[inline]
-	fn from(src: &[u8]) -> Self { Self::from(src.to_vec()) }
-}
-
-/// # Helper: From Concatable.
-///
-/// This lets messages be built from a slice of slices. It just concatenates
-/// them into a single byte stream that [`Msg`] can use, saving the
-/// implementing library from running `.concat()` themselves.
-macro_rules! from_concat_slice {
-	($size:literal) => {
-		impl From<[&[u8]; $size]> for Msg {
-			#[inline]
-			fn from(src: [&[u8]; $size]) -> Self { Self::from(src.concat()) }
-		}
-	};
-}
-
-from_concat_slice!(1);
-from_concat_slice!(2);
-from_concat_slice!(3);
-from_concat_slice!(4);
-from_concat_slice!(5);
-from_concat_slice!(6);
-from_concat_slice!(7);
-from_concat_slice!(8);
-
-impl FromIterator<u8> for Msg {
-	#[inline]
-	fn from_iter<I: IntoIterator<Item=u8>>(iter: I) -> Self {
-		Self::from(iter.into_iter().collect::<Vec<u8>>())
-	}
-}
-
-impl From<Vec<u8>> for Msg {
-	fn from(src: Vec<u8>) -> Self {
-		let end: usize = src.len();
-		unsafe {
-			Self(MsgBuffer5::from_raw_parts(
-				src,
-				[
-					0, 0,     // Indentation.
-					0, 0,     // Timestamp.
-					0, 0,     // Prefix.
-					0, end,   // Message.
-					end, end, // Suffix.
-				]
-			))
-		}
-	}
-}
-
-/// # Instantiation and Builder Bits.
-///
-/// These methods cover instantiation and setup of `Msg` objects.
+/// ## Instantiation.
 impl Msg {
-	#[must_use]
-	/// # Prefixed Message (Unchecked).
-	///
-	/// This method creates a prefixed message without worrying about the
-	/// potential sanity of either component.
-	///
-	/// ## Safety
-	///
-	/// This method accepts raw bytes for the message body; that body should be
-	/// valid UTF-8 or undefined things may happen.
-	pub unsafe fn prefixed_unchecked(prefix: MsgKind, msg: &[u8]) -> Self {
-		let (p_len, m_len) = (prefix.len(), msg.len());
-		let mut buf: Vec<u8> = Vec::with_capacity(p_len + m_len);
-
-		{
-			let ptr = buf.as_mut_ptr();
-			ptr::copy_nonoverlapping(prefix.as_ptr(), ptr, p_len);
-			ptr::copy_nonoverlapping(msg.as_ptr(), ptr.add(p_len), m_len);
-			buf.set_len(m_len + p_len);
-		}
-
-		let end: usize = m_len + p_len;
-		Self(MsgBuffer5::from_raw_parts(
-			buf,
+	/// # New Message.
+	pub fn new<S>(kind: MsgKind, msg: S) -> Self
+	where S: AsRef<str> {
+		let msg = msg.as_ref().as_bytes();
+		let p_end = kind.len();
+		let m_end = p_end + msg.len();
+		Self(MsgBuffer6::from_raw_parts(
+			[kind.as_bytes(), msg].concat(),
 			[
-				0, 0,       // Indentation.
-				0, 0,       // Timestamp.
-				0, p_len,   // Prefix.
-				p_len, end, // Message.
-				end, end,   // Suffix.
+				0, 0,         // Indentation.
+				0, 0,         // Timestamp.
+				0, p_end,     // Prefix.
+				p_end, m_end, // Message.
+				m_end, m_end, // Suffix.
+				m_end, m_end, // Newline.
 			]
 		))
 	}
 
+	/// # Custom Prefix.
+	pub fn custom<S>(prefix: S, color: u8, msg: S) -> Self
+	where S: AsRef<str> {
+		let prefix = prefix.as_ref().as_bytes();
+		if prefix.is_empty() {
+			return Self::plain(msg);
+		}
+
+		// Start a vector with the prefix bits.
+		let mut v = ansi(color);
+		v.extend_from_slice(prefix);
+		v.extend_from_slice(b":\x1b[0m ");
+		let p_end = v.len();
+
+		// Add the message bits.
+		let msg = msg.as_ref().as_bytes();
+		let m_end = p_end + msg.len();
+		v.extend_from_slice(msg);
+
+		Self(MsgBuffer6::from_raw_parts(
+			v,
+			[
+				0, 0,         // Indentation.
+				0, 0,         // Timestamp.
+				0, p_end,     // Prefix.
+				p_end, m_end, // Message.
+				m_end, m_end, // Suffix.
+				m_end, m_end, // Newline.
+			]
+		))
+	}
+
+	/// # New Message Without Prefix.
+	pub fn plain<S>(msg: S) -> Self
+	where S: AsRef<str> {
+		let msg = msg.as_ref().as_bytes();
+		let len = msg.len();
+		Self(MsgBuffer6::from_raw_parts(
+			msg.to_vec(),
+			[
+				0, 0,     // Indentation.
+				0, 0,     // Timestamp.
+				0, 0,     // Prefix.
+				0, len,   // Message.
+				len, len, // Suffix.
+				len, len, // Newline.
+			]
+		))
+	}
+}
+
+/// ## Builders.
+impl Msg {
 	#[must_use]
 	/// # With Flags.
-	///
-	/// Flags can be used to set or unset indentation and timestamping in a
-	/// single call. This is equivalent to but more efficient than chaining
-	/// both [`with_indent()`](Msg::with_indent) and [`with_timestamp()`](Msg::with_timestamp).
-	///
-	/// ## Example
-	///
-	/// ```no_run
-	/// use fyi_msg::{
-	///     FLAG_INDENT,
-	///     FLAG_TIMESTAMP,
-	///     Msg
-	/// };
-	/// let msg = Msg::new("Hello world.")
-	///     .with_flags(FLAG_INDENT | FLAG_TIMESTAMP);
-	/// ```
 	pub fn with_flags(mut self, flags: u8) -> Self {
-		self.set_indent((0 != flags & FLAG_INDENT) as u8);
-		self.set_timestamp(0 != flags & FLAG_TIMESTAMP);
+		if 0 != flags & FLAG_INDENT {
+			self.set_indent(1);
+		}
+		if 0 != flags & FLAG_TIMESTAMP {
+			self.set_timestamp(true);
+		}
+		if 0 != flags & FLAG_NEWLINE {
+			self.set_newline(true);
+		}
 		self
 	}
 
 	#[must_use]
 	/// # With Indent.
-	///
-	/// Use this method to indent the message `indent` number of levels, each
-	/// level being four spaces. Acceptable values fall in the range of `0..=4`.
-	/// Anything greater than that range is simply truncated to 16 spaces.
-	///
-	/// ## Example
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	/// let msg = Msg::new("Hello world.")
-	///     .with_indent(1);
-	/// ```
 	pub fn with_indent(mut self, indent: u8) -> Self {
 		self.set_indent(indent);
 		self
 	}
 
-	#[allow(clippy::missing_const_for_fn)] // Doesn't work.
-	#[must_use]
-	/// # With Prefix.
-	///
-	/// Set the message prefix.
-	///
-	/// ## Example
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	/// use fyi_msg::MsgKind;
-	/// let msg = Msg::new("Hello world.")
-	///     .with_prefix(MsgKind::Success);
-	/// ```
-	pub fn with_prefix(mut self, prefix: MsgKind) -> Self {
-		self.set_prefix(prefix);
-		self
-	}
-
 	#[must_use]
 	/// # With Timestamp.
-	///
-	/// Messages are not timestamped by default, but can be if `true` is passed
-	/// to this method. Timestamps are formatted the Unix way, i.e. the *only*
-	/// way that makes sense: `[YYYY-MM-DD hh:mm:ss]`.
-	///
-	/// ## Example
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	/// let msg = Msg::new("Hello world.")
-	///     .with_timestamp(true);
-	/// ```
-	pub fn with_timestamp(mut self, on: bool) -> Self {
-		self.set_timestamp(on);
+	pub fn with_timestamp(mut self, timestamp: bool) -> Self {
+		self.set_timestamp(timestamp);
 		self
 	}
-}
-
-/// ## Casting.
-///
-/// These methods provide means of converting `Msg` instances into other data
-/// structures.
-///
-/// Note: this struct can also be dereferenced to `&[u8]`.
-impl Msg {
-	#[must_use]
-	#[inline]
-	/// # As Bytes.
-	///
-	/// Return the message as a slice of bytes.
-	///
-	/// ## Example
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	/// let mut msg = Msg::new("Hello world.");
-	/// let bytes: &[u8] = msg.as_bytes();
-	/// ```
-	pub fn as_bytes(&self) -> &[u8] { self }
 
 	#[must_use]
-	#[inline]
-	/// # As Str.
-	///
-	/// Return the message as a string slice.
-	///
-	/// ## Example
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	/// let mut msg = Msg::new("Hello world.");
-	/// let bytes: &str = msg.as_str();
-	/// ```
-	pub fn as_str(&self) -> &str { unsafe { self.0.as_str() } }
+	/// # With Linebreak.
+	pub fn with_newline(mut self, newline: bool) -> Self {
+		self.set_newline(newline);
+		self
+	}
 
-	#[allow(clippy::missing_const_for_fn)] // Doesn't work!
 	#[must_use]
-	#[inline]
-	/// # Into Vec.
-	///
-	/// Consume the message, converting it into an owned byte vector.
-	///
-	/// ## Example
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	/// let mut msg: Vec<u8> = Msg::new("Hello world.").into_vec();
-	/// ```
-	pub fn into_vec(self) -> Vec<u8> { self.0.into_vec() }
+	/// # With Prefix.
+	pub fn with_prefix(mut self, kind: MsgKind) -> Self {
+		self.set_prefix(kind);
+		self
+	}
+
+	#[must_use]
+	/// # With Prefix.
+	pub fn with_custom_prefix<S>(mut self, prefix: S, color: u8) -> Self
+	where S: AsRef<str> {
+		self.set_custom_prefix(prefix, color);
+		self
+	}
+
+	#[must_use]
+	/// # With Message.
+	pub fn with_msg<S>(mut self, msg: S) -> Self
+	where S: AsRef<str> {
+		self.set_msg(msg);
+		self
+	}
+
+	#[must_use]
+	/// # With Suffix.
+	pub fn with_suffix<S>(mut self, suffix: S) -> Self
+	where S: AsRef<str> {
+		self.set_suffix(suffix);
+		self
+	}
 }
 
 /// ## Setters.
-///
-/// While `Msg` is primarily intended to be managed via builder patterns, there
-/// are corresponding `set_*()` methods to work on stored mutable instances.
 impl Msg {
 	/// # Set Indent.
-	///
-	/// Set or reset the level of indentation. See [`Msg::with_indent`] for more
-	/// information.
-	///
-	/// ## Example
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	/// let mut msg = Msg::new("Hello world.");
-	/// msg.set_indent(0); // "Hello World."
-	/// msg.set_indent(1); // "    Hello World."
-	/// msg.set_indent(2); // "        Hello World."
-	/// ```
 	pub fn set_indent(&mut self, indent: u8) {
-		unsafe {
-			self.0.replace_unchecked(
-				PART_INDENT,
-				&b" ".repeat(4.min(indent as usize) * 4),
-			);
-		}
-	}
-
-	#[inline]
-	/// # Set Message.
-	///
-	/// Set or reset the message body.
-	///
-	/// ## Example
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	/// let mut msg = Msg::new("Hello world.");
-	/// msg.set_msg("Goodbye world.");
-	/// ```
-	pub fn set_msg(&mut self, msg: &str) {
-		unsafe { self.set_msg_unchecked(msg.as_bytes()) }
-	}
-
-	#[inline]
-	/// # Set Message (Unchecked).
-	///
-	/// Set or reset the message body.
-	///
-	/// ## Safety
-	///
-	/// The message must be valid UTF-8 or undefined things will happen.
-	pub unsafe fn set_msg_unchecked(&mut self, msg: &[u8]) {
-		self.0.replace_unchecked(PART_MSG, msg);
-	}
-
-	#[inline]
-	/// # Set Prefix.
-	///
-	/// Set or reset the message prefix.
-	///
-	/// ## Example
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	/// use fyi_msg::MsgKind;
-	///
-	/// let mut msg = Msg::new("Hello world.");
-	/// msg.set_prefix(MsgKind::Error);
-	/// ```
-	pub fn set_prefix(&mut self, prefix: MsgKind) {
-		unsafe {
-			self.0.replace_unchecked(PART_PREFIX, &prefix);
-		}
-	}
-
-	/// # Set Suffix (Unchecked)
-	///
-	/// This method sets the suffix exactly as specified. It should have a
-	/// leading space, and should probably reset ANSI formatting at the end.
-	///
-	/// ## Example
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	/// use fyi_msg::MsgKind;
-	///
-	/// let mut msg = Msg::new("Hello world.");
-	/// unsafe { msg.set_suffix_unchecked(b" (100%)"); }
-	/// ```
-	///
-	/// ## Safety
-	///
-	/// This method is "unsafe" insofar as the data is accepted without any
-	/// checks or manipulation.
-	pub unsafe fn set_suffix_unchecked(&mut self, suffix: &[u8]) {
-		self.0.replace_unchecked(PART_SUFFIX, suffix);
+		self.0.replace(PART_INDENT, &b" ".repeat(4.min(indent as usize) * 4));
 	}
 
 	/// # Set Timestamp.
-	///
-	/// Enable or disable the message timestamp. See [`Msg::with_timestamp`] for
-	/// more information.
-	///
-	/// ## Example
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	/// let mut msg = Msg::new("Hello world.");
-	/// msg.set_timestamp(true);  // Turn it on.
-	/// msg.set_timestamp(false); // Turn it off.
-	/// ```
-	pub fn set_timestamp(&mut self, on: bool) {
-		unsafe {
-			if on == self.0.is_empty_unchecked(PART_TIMESTAMP) {
-				if on {
-					// Shove the result into the buffer.
-					self.0.replace_unchecked(
-						PART_TIMESTAMP,
-						format!(
-							"\x1b[2m[\x1b[0;34m{}\x1b[39;2m]\x1b[0m ",
-							chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
-						).as_bytes()
-					);
-				}
-				else {
-					self.0.zero_unchecked(PART_TIMESTAMP);
-				}
+	pub fn set_timestamp(&mut self, timestamp: bool) {
+		if timestamp {
+			self.0.replace(
+				PART_TIMESTAMP,
+				format!(
+					"\x1b[2m[\x1b[0;34m{}\x1b[39;2m]\x1b[0m ",
+					chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+				).as_bytes()
+			);
+		}
+		else if 0 != self.0.len(PART_TIMESTAMP) {
+			self.0.truncate(PART_TIMESTAMP, 0);
+		}
+	}
+
+	/// # Set Linebreak.
+	pub fn set_newline(&mut self, newline: bool) {
+		if newline {
+			if 0 == self.0.len(PART_NEWLINE) {
+				self.0.replace(PART_NEWLINE, b"\n");
 			}
 		}
+		else if 0 != self.0.len(PART_NEWLINE) {
+			self.0.truncate(PART_NEWLINE, 0);
+		}
+	}
+
+	/// # Set Prefix.
+	pub fn set_prefix(&mut self, kind: MsgKind) {
+		self.0.replace(PART_PREFIX, kind.as_bytes());
+	}
+
+	/// # Set Custom Prefix.
+	pub fn set_custom_prefix<S>(&mut self, prefix: S, color: u8)
+	where S: AsRef<str> {
+		let mut v = ansi(color);
+		v.extend_from_slice(prefix.as_ref().as_bytes());
+		v.extend_from_slice(b":\x1b[0m ");
+		self.0.replace(PART_PREFIX, &v);
+	}
+
+	/// # Set Message.
+	pub fn set_msg<S>(&mut self, msg: S)
+	where S: AsRef<str> {
+		self.0.replace(PART_MSG, msg.as_ref().as_bytes());
+	}
+
+	/// # Set Suffix.
+	pub fn set_suffix<S>(&mut self, suffix: S)
+	where S: AsRef<str> {
+		self.0.replace(PART_SUFFIX, suffix.as_ref().as_bytes());
 	}
 }
 
-/// Helper: Printing.
-macro_rules! locked_print {
-	($fn:ident, $writer:ident, true) => {
-		/// # Print Helper (w/ trailing line break).
-		pub fn $fn(&self) {
-			let writer = io::$writer();
-			let mut handle = writer.lock();
-			let _ = handle.write_all(&self.0)
-				.and_then(|_| handle.write_all(b"\n"))
-				.and_then(|_| handle.flush());
-		}
-	};
+/// ## Conversion.
+impl Msg {
+	#[must_use]
+	/// # As Bytes.
+	pub fn as_bytes(&self) -> &[u8] { &self.0 }
 
-	($fn:ident, $writer:ident, false) => {
-		/// # Print Helper.
-		pub fn $fn(&self) {
-			let writer = io::$writer();
-			let mut handle = writer.lock();
-			let _ = handle.write_all(&self.0).and_then(|_| handle.flush());
-		}
-	};
+	#[must_use]
+	/// # As Str.
+	pub fn as_str(&self) -> &str {
+		unsafe { std::str::from_utf8_unchecked(&self.0) }
+	}
+
+	#[must_use]
+	/// # Into Vec.
+	pub fn into_vec(self) -> Vec<u8> { self.0.into_vec() }
+
+	#[must_use]
+	/// # Into String.
+	pub fn into_string(self) -> String {
+		unsafe { String::from_utf8_unchecked(self.0.into_vec()) }
+	}
 }
 
 /// ## Printing.
-///
-/// These methods provide means of kicking `Msg` content to the terminal.
-///
-/// The [`Msg::print`], [`Msg::println`], [`Msg::eprint`], and [`Msg::eprintln`] methods
-/// work more or less like the Rust macros sharing their names, except the
-/// writer is locked and flushed to ensure every byte actually makes it out.
 impl Msg {
+	/// # Print to STDOUT.
+	pub fn print(&self) {
+		use io::Write;
+
+		let writer = io::stdout();
+		let mut handle = writer.lock();
+		let _ = handle.write_all(&self.0)
+			.and_then(|_| handle.flush());
+	}
+
+	/// # Print to STDERR.
+	pub fn eprint(&self) {
+		use io::Write;
+
+		let writer = io::stderr();
+		let mut handle = writer.lock();
+		let _ = handle.write_all(&self.0)
+			.and_then(|_| handle.flush());
+	}
+
+	/// # Print and Die.
+	pub fn die(&self, code: i32) {
+		self.eprint();
+		std::process::exit(code);
+	}
+
 	#[must_use]
 	/// # Prompt.
 	///
@@ -534,7 +369,8 @@ impl Msg {
 		// Clone the message and append a little [y/N] instructional bit to the
 		// end.
 		let mut q = self.clone();
-		unsafe { q.set_suffix_unchecked(b" \x1b[2m[y/\x1b[4mN\x1b[0;2m]\x1b[0m "); }
+		q.set_suffix(" \x1b[2m[y/\x1b[4mN\x1b[0;2m]\x1b[0m ");
+		q.set_newline(false);
 
 		// Ask and collect input, looping until a valid response is typed.
 		let mut result = String::new();
@@ -552,19 +388,45 @@ impl Msg {
 
 			// Print an error and do it all over again.
 			result.truncate(0);
-			unsafe {
-				Self::prefixed_unchecked(
-					MsgKind::Error,
-					b"Invalid input: enter \x1b[91mN\x1b[0m or \x1b[92mY\x1b[0m."
-				).println();
-			}
+			Self::new(
+				MsgKind::Error,
+				"Invalid input: enter \x1b[91mN\x1b[0m or \x1b[92mY\x1b[0m."
+			)
+				.with_flags(FLAG_NEWLINE)
+				.print();
 		}
 	}
+}
 
-	locked_print!(print, stdout, false);
-	locked_print!(println, stdout, true);
-	locked_print!(eprint, stderr, false);
-	locked_print!(eprintln, stderr, true);
+
+
+/// # Ansi Color.
+fn ansi(color: u8) -> Vec<u8> {
+	if color >= 100 {
+		let mut buf: [u8; 13] = *b"\x1b[1;38;5;000m";
+		unsafe {
+			utility::write_u8_3(buf.as_mut_ptr().add(9), u16::from(color));
+		}
+		buf.to_vec()
+	}
+	else if color >= 10 {
+		let mut buf: [u8; 12] = *b"\x1b[1;38;5;00m";
+		unsafe {
+			utility::write_u8_2(buf.as_mut_ptr().add(9), color);
+		}
+		buf.to_vec()
+	}
+	else {
+		let mut buf: [u8; 11] = *b"\x1b[1;38;5;0m";
+		unsafe {
+			std::ptr::copy_nonoverlapping(
+				crate::NUMD.as_ptr().add(color as usize),
+				buf.as_mut_ptr().add(9),
+				1
+			);
+		}
+		buf.to_vec()
+	}
 }
 
 
@@ -576,7 +438,7 @@ mod tests {
 
 	#[test]
 	fn t_msg() {
-		let mut msg = Msg::from("My dear aunt sally.");
+		let mut msg = Msg::plain("My dear aunt sally.");
 		assert_eq!(&*msg, b"My dear aunt sally.");
 
 		msg.set_prefix(MsgKind::Error);
@@ -590,9 +452,9 @@ mod tests {
 		msg.set_indent(0);
 		assert!(msg.starts_with(MsgKind::Error.as_bytes()));
 
-		unsafe { msg.set_suffix_unchecked(b" Heyo"); }
+		msg.set_suffix(" Heyo");
 		assert!(msg.ends_with(b" Heyo"), "{:?}", msg.as_str());
-		unsafe { msg.set_suffix_unchecked(b""); }
+		msg.set_suffix("");
 		assert!(msg.ends_with(b"My dear aunt sally."));
 
 		msg.set_msg("My dear aunt");
