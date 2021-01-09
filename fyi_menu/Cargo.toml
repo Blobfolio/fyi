@@ -1,6 +1,6 @@
 [package]
 name = "fyi_menu"
-version = "0.4.2"
+version = "0.4.3"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "CLI argument parsing helpers."
