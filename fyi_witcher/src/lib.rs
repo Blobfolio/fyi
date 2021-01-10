@@ -51,12 +51,10 @@ and major refactors may be introduced between releases.
 
 
 
-mod nice_elapsed;
 mod witcher;
 mod witching;
 pub mod utility;
 
-pub use nice_elapsed::NiceElapsed;
 pub use witcher::Witcher;
 pub use witching::{
 	Witching,

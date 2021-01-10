@@ -3,19 +3,16 @@
 */
 
 use ahash::AHashSet;
-use crate::{
-	NiceElapsed,
-	utility,
-};
+use crate::utility;
 use fyi_msg::{
 	Msg,
 	MsgKind,
 	MsgBuffer9,
+};
+use fyi_num::{
+	NiceElapsed,
 	NiceInt,
-	utility::{
-		hash64,
-		write_time,
-	},
+	write_time,
 };
 use rayon::prelude::*;
 use std::{
@@ -354,7 +351,7 @@ impl WitchingInner {
 
 		// Make sure the content is unique, otherwise we can leave the old bits
 		// up.
-		let hash = hash64(&self.buf);
+		let hash = utility::hash64(&self.buf);
 		if hash == self.last_hash {
 			return;
 		}
@@ -626,13 +623,12 @@ impl WitchingInner {
 		else {
 			self.elapsed = secs;
 			unsafe {
-				let [h, m, s] = utility::hms_u32(secs);
+				let [h, m, s] = NiceElapsed::hms(secs);
 				write_time(
 					self.buf.as_mut_ptr().add(self.buf.start(PART_ELAPSED)),
 					h,
 					m,
 					s,
-					b':',
 				);
 			}
 

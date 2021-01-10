@@ -21,12 +21,11 @@ unicode-width = "0.1.*"
 [dependencies.fyi_msg]
 path = "../fyi_msg"
 
+[dependencies.fyi_num]
+path = "../fyi_num"
+
 [dev-dependencies]
 criterion = "*"
-
-[[bench]]
-name = "fw_nice_elapsed"
-harness = false
 
 [[bench]]
 name = "fw_utility"

@@ -7,7 +7,6 @@ use crate::{
 	utility,
 	Witching,
 };
-use fyi_msg::utility::hash64;
 use rayon::prelude::*;
 use std::{
 	borrow::Borrow,
@@ -204,7 +203,7 @@ impl Witcher {
 	pub fn with_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
 		if let Ok(path) = fs::canonicalize(path.as_ref()) {
-			if self.seen.insert(hash64(utility::path_as_bytes(&path))) {
+			if self.seen.insert(utility::hash64(utility::path_as_bytes(&path))) {
 				if path.is_dir() {
 					self.dirs.push(path);
 				}
@@ -280,7 +279,7 @@ impl Witcher {
 
 			// Collect the paths found.
 			rx.iter().for_each(|p| {
-				if self.seen.insert(hash64(utility::path_as_bytes(&p))) {
+				if self.seen.insert(utility::hash64(utility::path_as_bytes(&p))) {
 					if p.is_dir() {
 						self.dirs.push(p);
 					}

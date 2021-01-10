@@ -2,8 +2,6 @@
 # FYI Witcher: "Nice" Elapsed
 */
 
-use crate::utility;
-use fyi_msg::utility::write_advance;
 use std::{
 	fmt,
 	mem::{
@@ -24,7 +22,7 @@ macro_rules! elapsed_from {
 				if 0 == num { Self::min() }
 				// Hours, and maybe minutes and/or seconds.
 				else if num < 86400 {
-					let [h, m, s] = utility::hms_u32(num as u32);
+					let [h, m, s] = Self::hms(num as u32);
 					unsafe { Self::from_hms(h, m, s) }
 				}
 				// We're into days, which we don't do.
@@ -47,7 +45,7 @@ macro_rules! elapsed_from {
 /// ## Examples
 ///
 /// ```no_run
-/// use fyi_witcher::NiceElapsed;
+/// use fyi_num::NiceElapsed;
 /// assert_eq!(
 ///     NiceElapsed::from(61).as_str(),
 ///     "1 minute and 1 second"
@@ -75,12 +73,12 @@ impl Deref for NiceElapsed {
 }
 
 impl fmt::Debug for NiceElapsed {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("NiceElapsed")
-         .field("inner", &self.inner.to_vec())
-         .field("len", &self.len)
-         .finish()
-    }
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("NiceElapsed")
+		 .field("inner", &self.inner.to_vec())
+		 .field("len", &self.len)
+		 .finish()
+	}
 }
 
 impl fmt::Display for NiceElapsed {
@@ -95,7 +93,7 @@ impl From<u32> for NiceElapsed {
 		if 0 == num { Self::min() }
 		// Hours, and maybe minutes and/or seconds.
 		else if num < 86400 {
-			let [h, m, s] = utility::hms_u32(num);
+			let [h, m, s] = Self::hms(num);
 			unsafe { Self::from_hms(h, m, s) }
 		}
 		// We're into days, which we don't do.
@@ -144,8 +142,6 @@ impl NiceElapsed {
 	/// All numbers must be — but should be — less than 99 or undefined things
 	/// may happen.
 	unsafe fn from_hms(h: u8, m: u8, s: u8) -> Self {
-		use fyi_msg::utility::write_u8;
-
 		let mut buf = [MaybeUninit::<u8>::uninit(); 36];
 		let count: u8 = h.ne(&0) as u8 + m.ne(&0) as u8 + s.ne(&0) as u8;
 
@@ -154,7 +150,7 @@ impl NiceElapsed {
 
 			// Hours.
 			if h > 0 {
-				dst = dst.add(write_u8(dst, h));
+				dst = write_u8_advance(dst, h);
 				if h == 1 {
 					dst = write_advance(dst, b" hour".as_ptr(), 5);
 				}
@@ -172,7 +168,7 @@ impl NiceElapsed {
 
 			// Minutes.
 			if m > 0 {
-				dst = dst.add(write_u8(dst, m));
+				dst = write_u8_advance(dst, m);
 				if m == 1 {
 					dst = write_advance(dst, b" minute".as_ptr(), 7);
 				}
@@ -190,7 +186,7 @@ impl NiceElapsed {
 
 			// Seconds.
 			if s > 0 {
-				dst = dst.add(write_u8(dst, s));
+				dst = write_u8_advance(dst, s);
 				if s == 1 {
 					dst = write_advance(dst, b" second".as_ptr(), 7);
 				}
@@ -210,6 +206,31 @@ impl NiceElapsed {
 	}
 
 	#[must_use]
+	/// # Time Chunks.
+	///
+	/// This method splits seconds into hours, minutes, and seconds. Days are not
+	/// supported; the maximum return value is `(23, 59, 59)`.
+	pub const fn hms(mut num: u32) -> [u8; 3] {
+		if num < 60 { [0, 0, num as u8] }
+		else if num < 86399 {
+			let mut buf = [0_u8; 3];
+
+			if num >= 3600 {
+				buf[0] = ((num * 0x91A3) >> 27) as u8;
+				num -= buf[0] as u32 * 3600;
+			}
+			if num >= 60 {
+				buf[1] = ((num * 0x889) >> 17) as u8;
+				buf[2] = (num - buf[1] as u32 * 60) as u8;
+			}
+			else if num > 0 { buf[2] = num as u8; }
+
+			buf
+		}
+		else { [23, 59, 59] }
+	}
+
+	#[must_use]
 	#[inline]
 	/// # As Bytes.
 	///
@@ -223,6 +244,47 @@ impl NiceElapsed {
 	/// Return the nice value as a string slice.
 	pub fn as_str(&self) -> &str {
 		unsafe { std::str::from_utf8_unchecked(self) }
+	}
+}
+
+
+
+#[must_use]
+/// # Write and Advance.
+///
+/// Write data to a pointer, then return a new pointer advanced that many
+/// places.
+///
+/// ## Safety
+///
+/// The pointer must have enough room to hold the new data!
+unsafe fn write_advance(dst: *mut u8, src: *const u8, len: usize) -> *mut u8 {
+	std::ptr::copy_nonoverlapping(src, dst, len);
+	dst.add(len)
+}
+
+/// # Write u8.
+///
+/// This will quickly write a `u8` number as a UTF-8 byte slice to the provided
+/// pointer.
+///
+/// ## Safety
+///
+/// The pointer must have enough space for the value, i.e. 1-3 digits.
+unsafe fn write_u8_advance(buf: *mut u8, num: u8) -> *mut u8 {
+	use std::ptr;
+
+	if num > 99 {
+		ptr::copy_nonoverlapping(crate::TRIPLE.as_ptr().add(num as usize * 3), buf, 3);
+		buf.add(3)
+	}
+	else if num > 9 {
+		ptr::copy_nonoverlapping(crate::DOUBLE.as_ptr().add((num as usize) << 1), buf, 2);
+		buf.add(2)
+	}
+	else {
+		ptr::copy_nonoverlapping(crate::SINGLE.as_ptr().add(num as usize), buf, 1);
+		buf.add(1)
 	}
 }
 

@@ -67,6 +67,26 @@ pub fn fitted_range(src: &[u8], width: usize) -> Range<usize> {
 	0..len
 }
 
+#[must_use]
+#[inline]
+/// # `AHash` Byte Hash.
+///
+/// This is a convenience method for quickly hashing bytes using the
+/// [`AHash`](https://crates.io/crates/ahash) crate. Check out that project's
+/// home page for more details. Otherwise, TL;DR it is very fast.
+///
+/// ## Examples
+///
+/// ```no_run
+/// let hash = fyi_msg::utility::hash64(b"Hello World");
+/// ```
+pub fn hash64(src: &[u8]) -> u64 {
+	use std::hash::Hasher;
+	let mut hasher = ahash::AHasher::default();
+	hasher.write(src);
+	hasher.finish()
+}
+
 /// # Is File Executable?
 ///
 /// This method attempts to determine whether or not a file has executable
@@ -84,39 +104,6 @@ where P: AsRef<Path> {
 		.ok()
 		.filter(std::fs::Metadata::is_file)
 		.map_or(false, |m| m.permissions().mode() & 0o111 != 0)
-}
-
-#[must_use]
-#[inline]
-/// # Time Chunks.
-///
-/// This method splits seconds into hours, minutes, and seconds. Days are not
-/// supported; the maximum return value is `(23, 59, 59)`.
-pub const fn hms_u64(num: u64) -> [u8; 3] { hms_u32(num as u32) }
-
-#[must_use]
-/// # Time Chunks.
-///
-/// This method splits seconds into hours, minutes, and seconds. Days are not
-/// supported; the maximum return value is `(23, 59, 59)`.
-pub const fn hms_u32(mut num: u32) -> [u8; 3] {
-	if num < 60 { [0, 0, num as u8] }
-	else if num < 86399 {
-		let mut buf = [0_u8; 3];
-
-		if num >= 3600 {
-			buf[0] = ((num * 0x91A3) >> 27) as u8;
-			num -= buf[0] as u32 * 3600;
-		}
-		if num >= 60 {
-			buf[1] = ((num * 0x889) >> 17) as u8;
-			buf[2] = (num - buf[1] as u32 * 60) as u8;
-		}
-		else if num > 0 { buf[2] = num as u8; }
-
-		buf
-	}
-	else { [23, 59, 59] }
 }
 
 #[allow(trivial_casts)] // We need triviality!
@@ -174,24 +161,5 @@ mod tests {
 			path.as_ref(),
 			expected
 		);
-	}
-
-	#[test]
-	fn t_hms_u64() {
-		assert_eq!(hms_u64(1), [0_u8, 0_u8, 1_u8]);
-		assert_eq!(hms_u64(30), [0_u8, 0_u8, 30_u8]);
-		assert_eq!(hms_u64(90), [0_u8, 1_u8, 30_u8]);
-		assert_eq!(hms_u64(3600), [1_u8, 0_u8, 0_u8]);
-
-		// Make sure the numbers add up.
-		for i in 0..86400_u32 {
-			let test = hms_u32(i);
-			assert_eq!(i, test[0] as u32 * 3600 + test[1] as u32 * 60 + test[2] as u32);
-		}
-
-		for i in 0..86400_u64 {
-			let test = hms_u64(i);
-			assert_eq!(i, test[0] as u64 * 3600 + test[1] as u64 * 60 + test[2] as u64);
-		}
 	}
 }

@@ -5,7 +5,7 @@
 mod buffer;
 mod kind;
 
-use crate::utility;
+use fyi_num::NiceANSI;
 use std::{
 	fmt,
 	io,
@@ -124,15 +124,16 @@ impl Msg {
 		}
 
 		// Start a vector with the prefix bits.
-		let mut v = ansi(color);
-		v.extend_from_slice(prefix);
-		v.extend_from_slice(b":\x1b[0m ");
-		let p_end = v.len();
-
-		// Add the message bits.
 		let msg = msg.as_ref().as_bytes();
-		let m_end = p_end + msg.len();
-		v.extend_from_slice(msg);
+		let v = [
+			NiceANSI::from(color).as_bytes(),
+			prefix,
+			b":\x1b[0m ",
+			msg,
+		].concat();
+
+		let m_end = v.len();
+		let p_end = m_end - msg.len();
 
 		Self(MsgBuffer6::from_raw_parts(
 			v,
@@ -306,10 +307,19 @@ impl Msg {
 	/// # Set Custom Prefix.
 	pub fn set_custom_prefix<S>(&mut self, prefix: S, color: u8)
 	where S: AsRef<str> {
-		let mut v = ansi(color);
-		v.extend_from_slice(prefix.as_ref().as_bytes());
-		v.extend_from_slice(b":\x1b[0m ");
-		self.0.replace(PART_PREFIX, &v);
+		let prefix = prefix.as_ref().as_bytes();
+
+		if prefix.is_empty() { self.0.truncate(PART_PREFIX, 0); }
+		else {
+			self.0.replace(
+				PART_PREFIX,
+				&[
+					NiceANSI::from(color).as_bytes(),
+					prefix,
+					b":\x1b[0m ",
+				].concat(),
+			);
+		}
 	}
 
 	/// # Set Message.
@@ -422,37 +432,6 @@ impl Msg {
 				.with_flags(FLAG_NEWLINE)
 				.print();
 		}
-	}
-}
-
-
-
-/// # Ansi Color.
-fn ansi(color: u8) -> Vec<u8> {
-	if color >= 100 {
-		let mut buf: [u8; 13] = *b"\x1b[1;38;5;000m";
-		unsafe {
-			utility::write_u8_3(buf.as_mut_ptr().add(9), u16::from(color));
-		}
-		buf.to_vec()
-	}
-	else if color >= 10 {
-		let mut buf: [u8; 12] = *b"\x1b[1;38;5;00m";
-		unsafe {
-			utility::write_u8_2(buf.as_mut_ptr().add(9), color);
-		}
-		buf.to_vec()
-	}
-	else {
-		let mut buf: [u8; 11] = *b"\x1b[1;38;5;0m";
-		unsafe {
-			std::ptr::copy_nonoverlapping(
-				crate::NUMD.as_ptr().add(color as usize),
-				buf.as_mut_ptr().add(9),
-				1
-			);
-		}
-		buf.to_vec()
 	}
 }
 

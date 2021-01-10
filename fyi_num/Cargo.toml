@@ -1,31 +1,22 @@
 [package]
-name = "fyi_msg"
+name = "fyi_num"
 version = "0.5.0"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
-description = "Lib version of FYI."
+description = "Number helpers."
 license = "WTFPL"
 repository = "https://github.com/Blobfolio/fyi"
 publish = false
 
-[dependencies.chrono]
-version = "0.4.*"
-default-features = false
-features = [ "clock", "std" ]
-
-[dependencies.fyi_num]
-path = "../fyi_num"
-
 [dev-dependencies]
 criterion = "*"
+num-format = "0.4.*"
+rand = "*"
 
 [[bench]]
-name = "fm_msg"
+name = "fn_nice_elapsed"
 harness = false
 
 [[bench]]
-name = "fm_buffer"
+name = "fn_nice_int"
 harness = false
-
-[[example]]
-name = "msg"
