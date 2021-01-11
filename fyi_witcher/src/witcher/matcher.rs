@@ -61,7 +61,7 @@ impl TryFrom<&[u8; 3]> for WitcherMatcher {
 	fn try_from(src: &[u8; 3]) -> Result<Self, Self::Error> {
 		if src[0] == b'.' {
 			Ok(Self::Ext2(unsafe {
-				*(src.as_ptr().add(1).cast::<u16>())
+				lower_ext2(*(src.as_ptr().add(1).cast::<u16>()))
 			}))
 		}
 		else {
@@ -76,7 +76,7 @@ impl TryFrom<&[u8; 4]> for WitcherMatcher {
 	fn try_from(src: &[u8; 4]) -> Result<Self, Self::Error> {
 		if src[0] == b'.' {
 			Ok(Self::Ext3(unsafe {
-				*(src.as_ptr().cast::<u32>())
+				lower_ext3(*(src.as_ptr().cast::<u32>()))
 			}))
 		}
 		else {
@@ -91,7 +91,7 @@ impl TryFrom<&[u8; 5]> for WitcherMatcher {
 	fn try_from(src: &[u8; 5]) -> Result<Self, Self::Error> {
 		if src[0] == b'.' {
 			Ok(Self::Ext4(unsafe {
-				*(src.as_ptr().add(1).cast::<u32>())
+				lower_ext4(*(src.as_ptr().add(1).cast::<u32>()))
 			}))
 		}
 		else {
@@ -111,15 +111,15 @@ impl TryFrom<&[u8]> for WitcherMatcher {
 		Ok(
 			match src.len() {
 				3 => Self::Ext2(unsafe {
-					*(src.as_ptr().add(1).cast::<u16>())
+					lower_ext2(*(src.as_ptr().add(1).cast::<u16>()))
 				}),
 				4 => Self::Ext3(unsafe {
-					*(src.as_ptr().cast::<u32>())
+					lower_ext3(*(src.as_ptr().cast::<u32>()))
 				}),
 				5 => Self::Ext4(unsafe {
-					*(src.as_ptr().add(1).cast::<u32>())
+					lower_ext4(*(src.as_ptr().add(1).cast::<u32>()))
 				}),
-				_ => Self::Ext(src.into())
+				_ => Self::Ext(src.to_ascii_lowercase().into())
 			}
 		)
 	}
@@ -139,7 +139,7 @@ impl TryFrom<&PathBuf> for WitcherMatcher {
 			let mut idx = len - 2;
 			while idx >= stop {
 				if path[idx] == b'.' {
-					return Self::try_from(path[idx..].to_ascii_lowercase().as_slice());
+					return Self::try_from(&path[idx..]);
 				}
 
 				idx -= 1;
@@ -179,9 +179,48 @@ impl WitcherMatcher {
 		let e_len = self.len();
 
 		p_len > e_len &&
-		Self::try_from(path[p_len - e_len..].to_ascii_lowercase().as_slice())
+		Self::try_from(&path[p_len - e_len..])
 			.map_or(false, |x| x.eq(self))
 	}
+}
+
+
+
+/// # Lowercase Mask.
+///
+/// An uppercase ASCII byte can be made lowercase by BIT-ORing its value
+/// against this, like `b'J' | (1 << 5) == b'j'`.
+///
+/// This has no effect against digits or `-` or `a-z`, so can be used here
+/// without the usual range checking.
+const LOWER: u8 = 1 << 5;
+
+#[allow(clippy::missing_const_for_fn)] // Dereference isn't allowed in const.
+/// # Lowercase Ext2.
+///
+/// This is a cheap and good-enough trick to lowercase the sort of string
+/// expected for a file extension.
+///
+/// It might corrupt UTF-8 or non-alpha ASCII, but as we're only comparing
+/// integers, string-sanity doesn't matter.
+unsafe fn lower_ext2(src: u16) -> u16 {
+	src | *([LOWER, LOWER].as_ptr().cast::<u16>())
+}
+
+#[allow(clippy::missing_const_for_fn)] // Dereference isn't allowed in const.
+/// # Lowercase Ext3.
+///
+/// See notes for [`lower_ext2`] in regards to safety and limitations.
+unsafe fn lower_ext3(src: u32) -> u32 {
+	src | *([0, LOWER, LOWER, LOWER].as_ptr().cast::<u32>())
+}
+
+#[allow(clippy::missing_const_for_fn)] // Dereference isn't allowed in const.
+/// # Lowercase Ext4.
+///
+/// See notes for [`lower_ext2`] in regards to safety and limitations.
+unsafe fn lower_ext4(src: u32) -> u32 {
+	src | *([LOWER, LOWER, LOWER, LOWER].as_ptr().cast::<u32>())
 }
 
 
