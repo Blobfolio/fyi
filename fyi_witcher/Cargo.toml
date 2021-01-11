@@ -16,7 +16,6 @@ num-integer = "0.1.*"
 rayon = "1.5.*"
 regex = "1.4.*"
 term_size = "0.3.*"
-unicode-width = "0.1.*"
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"

@@ -2,70 +2,9 @@
 # FYI Witcher: Utility Methods.
 */
 
-use std::{
-	ops::Range,
-	path::Path,
-};
-use unicode_width::UnicodeWidthChar;
+use std::path::Path;
 
 
-
-#[must_use]
-/// # Fit Length
-///
-/// This method returns the maximum slice range that will "fit" a given
-/// printable "width". It could be the entire thing, or it might be some
-/// smaller chunk.
-///
-/// This is at best an approximation as the concept of "width" is mysterious
-/// and unknowable, apparently. See [`unicode_width`](https://crates.io/crates/unicode-width) for a
-/// list of gotchas.
-pub fn fitted_range(src: &[u8], width: usize) -> Range<usize> {
-	// Width cannot exceed length, so we only need to dig deeper if the length
-	// is bigger.
-	let len: usize = src.len();
-	if len > width {
-		let mut total_len: usize = 0;
-		let mut total_width: usize = 0;
-
-		// For our purposes, basic ANSI markup (of the kind used by `FYI`) is
-		// considered zero-width.
-		let mut in_ansi: bool = false;
-
-		// Convert to a string slice so we can iterate over individual chars.
-		for c in unsafe { std::str::from_utf8_unchecked(src) }.chars() {
-			// Find the "length" of this char.
-			let ch_len: usize = c.len_utf8();
-			total_len += ch_len;
-
-			// If we're in the middle of an ANSI sequence nothing counts, but
-			// we need to watch for the end marker so we can start paying
-			// attention again.
-			if in_ansi {
-				// We're only interested in A/K/m signals.
-				if c == 'A' || c == 'K' || c == 'm' { in_ansi = false; }
-				continue;
-			}
-			// Are we entering an ANSI sequence?
-			else if c == '\x1b' {
-				in_ansi = true;
-				continue;
-			}
-
-			// The width matters!
-			let ch_width: usize = UnicodeWidthChar::width(c).unwrap_or_default();
-			total_width += ch_width;
-
-			// Widths can creep up unevenly. If we've gone over, we need to
-			// back up a step and exit.
-			if total_width > width {
-				return 0..total_len-ch_len
-			}
-		}
-	}
-
-	0..len
-}
 
 #[must_use]
 #[inline]
@@ -135,13 +74,6 @@ pub fn term_width() -> usize {
 #[cfg(test)]
 mod tests {
 	use super::*;
-
-	#[test]
-	fn t_fitted_range() {
-		assert_eq!(fitted_range(b"Hello World", 15), 0..11);
-		assert_eq!(fitted_range(b"Hello \x1b[1mWorld\x1b[0m", 15), 0..19);
-		assert_eq!(fitted_range(b"Hello \x1b[1mWorld\x1b[0m", 7), 0..11);
-	}
 
 	#[test]
 	fn t_is_executable() {
