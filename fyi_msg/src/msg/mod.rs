@@ -432,7 +432,7 @@ impl Msg {
 	pub fn fitted(&self, width: usize) -> Cow<[u8]> {
 		// Quick length bypass; length will only ever be greater or equal-to
 		// width, so if that fits, the message fits.
-		if self.0.total_len() <= width {
+		if self.len() <= width {
 			return Cow::Borrowed(self);
 		}
 
@@ -467,6 +467,21 @@ impl Msg {
 			Cow::Owned(tmp.into_vec())
 		}
 	}
+}
+
+/// ## Details.
+impl Msg {
+	#[must_use]
+	/// # Length.
+	///
+	/// The buffers don't necessarily end on partitioned space, but they do for
+	/// [`Msg`] structs, so we can make this `const` by inferring the length
+	/// from the end of the last part.
+	pub const fn len(&self) -> usize { self.0.end(PART_NEWLINE) }
+
+	#[must_use]
+	/// # Is Empty.
+	pub const fn is_empty(&self) -> bool { self.len() == 0 }
 
 	/// # Message width.
 	///
@@ -481,6 +496,7 @@ impl Msg {
 				self.0.width(PART_SUFFIX) +
 				msg_width;
 
+			// If present, the printable bits are always [YYYY-MM-DD HH:MM:SS].
 			if 0 != self.0.len(PART_TIMESTAMP) {
 				total += 21;
 			}
