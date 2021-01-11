@@ -7,7 +7,9 @@ mod kind;
 
 use fyi_num::NiceANSI;
 use std::{
+	borrow::Cow,
 	fmt,
+	hash,
 	io,
 	ops::Deref,
 };
@@ -94,6 +96,40 @@ impl From<String> for Msg {
 	fn from(src: String) -> Self { Self::plain(src) }
 }
 
+impl Eq for Msg {}
+
+impl hash::Hash for Msg {
+	fn hash<H: hash::Hasher>(&self, state: &mut H) {
+		self.0.hash(state);
+	}
+}
+
+impl PartialEq for Msg {
+	fn eq(&self, other: &Self) -> bool {
+		self.0 == other.0
+	}
+}
+
+impl PartialEq<str> for Msg {
+	#[inline]
+	fn eq(&self, other: &str) -> bool { self.as_str() == other }
+}
+
+impl PartialEq<String> for Msg {
+	#[inline]
+	fn eq(&self, other: &String) -> bool { self.as_str() == other }
+}
+
+impl PartialEq<[u8]> for Msg {
+	#[inline]
+	fn eq(&self, other: &[u8]) -> bool { self.as_bytes() == other }
+}
+
+impl PartialEq<Vec<u8>> for Msg {
+	#[inline]
+	fn eq(&self, other: &Vec<u8>) -> bool { self.0 == *other }
+}
+
 /// ## Instantiation.
 impl Msg {
 	/// # New Message.
@@ -137,6 +173,32 @@ impl Msg {
 
 		Self(MsgBuffer6::from_raw_parts(
 			v,
+			[
+				0, 0,         // Indentation.
+				0, 0,         // Timestamp.
+				0, p_end,     // Prefix.
+				p_end, m_end, // Message.
+				m_end, m_end, // Suffix.
+				m_end, m_end, // Newline.
+			]
+		))
+	}
+
+	/// # Custom Prefix (Unchecked)
+	///
+	/// Same as [`Msg::custom`], except no validation or formatting is applied
+	/// to the provided prefix. This can be useful in cases where the prefix
+	/// requires special spacing or delimiters.
+	pub fn custom_unchecked<S>(prefix: S, msg: S) -> Self
+	where S: AsRef<str> {
+		let prefix = prefix.as_ref().as_bytes();
+		let msg = msg.as_ref().as_bytes();
+
+		let p_end = prefix.len();
+		let m_end = p_end + msg.len();
+
+		Self(MsgBuffer6::from_raw_parts(
+			[prefix, msg].concat(),
 			[
 				0, 0,         // Indentation.
 				0, 0,         // Timestamp.
@@ -356,6 +418,76 @@ impl Msg {
 	pub fn into_string(self) -> String {
 		unsafe { String::from_utf8_unchecked(self.0.into_vec()) }
 	}
+
+	#[must_use]
+	/// # Capped Width.
+	///
+	/// This will return a byte string that should fit a given console width if
+	/// printed.
+	///
+	/// Space will be trimmed from the message portion as needed, leaving
+	/// prefixes, suffixes, and other parts unchanged.
+	///
+	/// If the message cannot be made to fit, an empty byte string is returned.
+	pub fn fitted(&self, width: usize) -> Cow<[u8]> {
+		// Quick length bypass; length will only ever be greater or equal-to
+		// width, so if that fits, the message fits.
+		if self.0.total_len() <= width {
+			return Cow::Borrowed(self);
+		}
+
+		// Count up the actual width to see if it fits.
+		let (total_width, msg_width) = self.width();
+		if total_width <= width {
+			return Cow::Borrowed(self);
+		}
+
+		// Only the `PART_MSG` gets trimmed; it has to be long enough to make
+		// the difference or we'll return an empty slice.
+		let trim = total_width - width;
+		if msg_width < trim {
+			return Cow::Owned(Vec::new());
+		}
+
+		// Find out how much of the string can be made to fit.
+		let keep = unsafe { self.0.fitted(PART_MSG, msg_width - trim) };
+		if keep == 0 {
+			Cow::Owned(Vec::new())
+		}
+		else {
+			// We have to trim the message to fit. Let's do it on a copy.
+			let mut tmp = self.clone();
+			tmp.0.truncate(PART_MSG, keep);
+
+			// We might need to append an ANSI reset to be safe.
+			if tmp.0.get(PART_MSG).contains(&b'\x1b') {
+				tmp.0.extend(PART_MSG, b"\x1b[0m");
+			}
+
+			Cow::Owned(tmp.into_vec())
+		}
+	}
+
+	/// # Message width.
+	///
+	/// This returns a tuple containing the total width as well as the width
+	/// of the message part.
+	fn width(&self) -> (usize, usize) {
+		unsafe {
+			let msg_width = self.0.width(PART_MSG);
+			let mut total =
+				self.0.len(PART_INDENT) +
+				self.0.width(PART_PREFIX) +
+				self.0.width(PART_SUFFIX) +
+				msg_width;
+
+			if 0 != self.0.len(PART_TIMESTAMP) {
+				total += 21;
+			}
+
+			(total, msg_width)
+		}
+	}
 }
 
 /// ## Printing.
@@ -465,5 +597,27 @@ mod tests {
 
 		msg.set_msg("My dear aunt");
 		assert!(msg.ends_with(b"My dear aunt"));
+	}
+
+	#[test]
+	fn t_fitted() {
+		let mut msg = Msg::plain("Hello World");
+
+		assert_eq!(msg.fitted(5), &b"Hello"[..]);
+		assert_eq!(msg.fitted(20), &b"Hello World"[..]);
+
+		// Try it with a new line.
+		msg.set_newline(true);
+		assert_eq!(msg.fitted(5), &b"Hello\n"[..]);
+
+		// Give it a prefix.
+		msg.set_prefix(MsgKind::Error);
+		assert_eq!(msg.fitted(5), Vec::<u8>::new());
+		assert_eq!(msg.fitted(12), &b"\x1b[91;1mError:\x1b[0m Hello\n"[..]);
+
+		// Colorize the message.
+		msg.set_msg("\x1b[1mHello\x1b[0m World");
+		assert_eq!(msg.fitted(12), &b"\x1b[91;1mError:\x1b[0m \x1b[1mHello\x1b[0m\x1b[0m\n"[..]);
+		assert_eq!(msg.fitted(11), &b"\x1b[91;1mError:\x1b[0m \x1b[1mHell\x1b[0m\n"[..]);
 	}
 }
