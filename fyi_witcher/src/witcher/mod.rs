@@ -2,6 +2,14 @@
 # FYI Witcher: Witcher
 */
 
+mod matcher;
+
+#[allow(unreachable_pub)] // It's one or the other.
+pub use matcher::{
+	WitcherMatcher,
+	WitcherMatcherError,
+};
+
 use ahash::AHashSet;
 use crate::{
 	utility,
@@ -126,18 +134,11 @@ impl Witcher {
 	///     .with_ext(b".jpg")
 	///     .build();
 	/// ```
-	pub fn with_ext(mut self, ext: &'static [u8]) -> Self {
-		let e_len: usize = ext.len();
-		self.cb = Box::new(move |p: &PathBuf| {
-			let p: &[u8] = utility::path_as_bytes(p);
-			let p_len: usize = p.len();
+	pub fn with_ext(mut self, ext: &[u8]) -> Self {
+		use std::convert::TryFrom;
 
-			p_len >= e_len &&
-			p.iter()
-				.skip(p_len - e_len)
-				.zip(ext)
-				.all(|(a, b)| a.to_ascii_lowercase() == *b)
-		});
+		let ext = WitcherMatcher::try_from(ext).expect("Invalid extension.");
+		self.cb = Box::new(move |p: &PathBuf| ext.is_match(p));
 		self
 	}
 
