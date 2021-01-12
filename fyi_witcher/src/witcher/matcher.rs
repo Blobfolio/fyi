@@ -130,23 +130,11 @@ impl TryFrom<&PathBuf> for WitcherMatcher {
 
 	fn try_from(src: &PathBuf) -> Result<Self, Self::Error> {
 		let path = utility::path_as_bytes(src);
-		let len = path.len();
 
-		if len > 3 {
-			let stop = len - 8.min(len);
-
-			// Find the dot.
-			let mut idx = len - 2;
-			while idx >= stop {
-				if path[idx] == b'.' {
-					return Self::try_from(&path[idx..]);
-				}
-
-				idx -= 1;
-			}
-		}
-
-		Err(WitcherMatcherError::InvalidExt)
+		path.iter()
+			.rposition(|&x| x == b'.' || x == b'/')
+			.and_then(|idx| Self::try_from(&path[idx..]).ok())
+			.ok_or(WitcherMatcherError::InvalidExt)
 	}
 }
 
