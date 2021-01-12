@@ -91,13 +91,13 @@ pub unsafe fn write_u8(buf: *mut u8, num: u8) {
 	use std::ptr;
 
 	if num > 99 {
-		ptr::copy_nonoverlapping(TRIPLE.as_ptr().add(num as usize * 3), buf, 3);
+		ptr::copy_nonoverlapping(TRIPLE.as_ptr().add(usize::from(num) * 3), buf, 3);
 	}
 	else if num > 9 {
-		ptr::copy_nonoverlapping(DOUBLE.as_ptr().add((num as usize) << 1), buf, 2);
+		ptr::copy_nonoverlapping(DOUBLE.as_ptr().add(usize::from(num) << 1), buf, 2);
 	}
 	else {
-		ptr::copy_nonoverlapping(SINGLE.as_ptr().add(num as usize), buf, 1);
+		ptr::copy_nonoverlapping(SINGLE.as_ptr().add(usize::from(num)), buf, 1);
 	}
 }
 
@@ -113,11 +113,11 @@ pub unsafe fn write_time(buf: *mut u8, h: u8, m: u8, s: u8) {
 
 	assert!(h < 60 && m < 60 && s < 60);
 
-	ptr::copy_nonoverlapping(DOUBLE.as_ptr().add((h as usize) << 1), buf, 2);
+	ptr::copy_nonoverlapping(DOUBLE.as_ptr().add(usize::from(h) << 1), buf, 2);
 	ptr::write(buf.add(2), b':');
-	ptr::copy_nonoverlapping(DOUBLE.as_ptr().add((m as usize) << 1), buf.add(3), 2);
+	ptr::copy_nonoverlapping(DOUBLE.as_ptr().add(usize::from(m) << 1), buf.add(3), 2);
 	ptr::write(buf.add(5), b':');
-	ptr::copy_nonoverlapping(DOUBLE.as_ptr().add((s as usize) << 1), buf.add(6), 2);
+	ptr::copy_nonoverlapping(DOUBLE.as_ptr().add(usize::from(s) << 1), buf.add(6), 2);
 }
 
 

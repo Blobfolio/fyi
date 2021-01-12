@@ -275,15 +275,15 @@ unsafe fn write_u8_advance(buf: *mut u8, num: u8) -> *mut u8 {
 	use std::ptr;
 
 	if num > 99 {
-		ptr::copy_nonoverlapping(crate::TRIPLE.as_ptr().add(num as usize * 3), buf, 3);
+		ptr::copy_nonoverlapping(crate::TRIPLE.as_ptr().add(usize::from(num) * 3), buf, 3);
 		buf.add(3)
 	}
 	else if num > 9 {
-		ptr::copy_nonoverlapping(crate::DOUBLE.as_ptr().add((num as usize) << 1), buf, 2);
+		ptr::copy_nonoverlapping(crate::DOUBLE.as_ptr().add(usize::from(num) << 1), buf, 2);
 		buf.add(2)
 	}
 	else {
-		ptr::copy_nonoverlapping(crate::SINGLE.as_ptr().add(num as usize), buf, 1);
+		ptr::copy_nonoverlapping(crate::SINGLE.as_ptr().add(usize::from(num)), buf, 1);
 		buf.add(1)
 	}
 }

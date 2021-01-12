@@ -64,7 +64,7 @@ impl From<u8> for NiceANSI {
 
 			unsafe {
 				ptr::copy_nonoverlapping(
-					crate::TRIPLE.as_ptr().add(src as usize * 3),
+					crate::TRIPLE.as_ptr().add(usize::from(src) * 3),
 					out.inner.as_mut_ptr().add(9),
 					3
 				);
@@ -80,7 +80,7 @@ impl From<u8> for NiceANSI {
 
 			unsafe {
 				ptr::copy_nonoverlapping(
-					crate::DOUBLE.as_ptr().add((src as usize) << 1),
+					crate::DOUBLE.as_ptr().add((usize::from(src)) << 1),
 					out.inner.as_mut_ptr().add(9),
 					2
 				);
@@ -96,7 +96,7 @@ impl From<u8> for NiceANSI {
 
 			unsafe {
 				ptr::copy_nonoverlapping(
-					crate::SINGLE.as_ptr().add(src as usize),
+					crate::SINGLE.as_ptr().add(usize::from(src)),
 					out.inner.as_mut_ptr().add(9),
 					1
 				);

@@ -954,10 +954,10 @@ impl Witching {
 	fn label(&self) -> &str {
 		unsafe {
 			if self.set.len() == 1 {
-				std::str::from_utf8_unchecked(&self.label[1..self.label[0] as usize])
+				std::str::from_utf8_unchecked(&self.label[1..usize::from(self.label[0])])
 			}
 			else {
-				std::str::from_utf8_unchecked(&self.label[self.label[0] as usize..])
+				std::str::from_utf8_unchecked(&self.label[usize::from(self.label[0])..])
 			}
 		}
 	}

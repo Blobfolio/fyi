@@ -76,15 +76,15 @@ impl From<u8> for NiceInt {
 
 			if num >= 100 {
 				out.from -= 3;
-				write_u8_3(ptr.add(out.from), num as usize);
+				write_u8_3(ptr.add(out.from), usize::from(num));
 			}
 			else if num >= 10 {
 				out.from -= 2;
-				write_u8_2(ptr.add(out.from), num as usize);
+				write_u8_2(ptr.add(out.from), usize::from(num));
 			}
 			else {
 				out.from -= 1;
-				write_u8_1(ptr.add(out.from), num as usize);
+				write_u8_1(ptr.add(out.from), usize::from(num));
 			}
 
 			out
@@ -101,22 +101,22 @@ impl From<u16> for NiceInt {
 
 			// For `u16` this can only trigger once.
 			if num >= 1000 {
-				write_u8_3(ptr.add(out.from - 3), (num % 1000) as usize);
+				write_u8_3(ptr.add(out.from - 3), usize::from(num % 1000));
 				num /= 1000;
 				out.from -= 4;
 			}
 
 			if num >= 100 {
 				out.from -= 3;
-				write_u8_3(ptr.add(out.from), num as usize);
+				write_u8_3(ptr.add(out.from), usize::from(num));
 			}
 			else if num >= 10 {
 				out.from -= 2;
-				write_u8_2(ptr.add(out.from), num as usize);
+				write_u8_2(ptr.add(out.from), usize::from(num));
 			}
 			else {
 				out.from -= 1;
-				write_u8_1(ptr.add(out.from), num as usize);
+				write_u8_1(ptr.add(out.from), usize::from(num));
 			}
 
 			out
