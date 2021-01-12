@@ -267,18 +267,15 @@ impl Witcher {
 		while ! self.dirs.is_empty() {
 			// Read each directory.
 			let (tx, rx) = crossbeam_channel::unbounded();
-			self.dirs.par_iter()
+			self.dirs.par_drain(..)
 				.filter_map(|p| fs::read_dir(p).ok())
 				.for_each(|paths| {
 					paths.filter_map(|p| p.and_then(|p| fs::canonicalize(p.path())).ok())
 						.for_each(|p| tx.send(p).unwrap());
 				});
 
-			// Clear the queue.
-			self.dirs.truncate(0);
-			drop(tx);
-
 			// Collect the paths found.
+			drop(tx);
 			rx.iter().for_each(|p| {
 				if self.seen.insert(utility::hash64(utility::path_as_bytes(&p))) {
 					if p.is_dir() {
