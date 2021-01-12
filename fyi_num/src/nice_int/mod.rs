@@ -76,19 +76,15 @@ impl From<u8> for NiceInt {
 
 			if num >= 100 {
 				out.from -= 3;
-				ptr::copy_nonoverlapping(
-					TRIPLE.as_ptr().add(num as usize * 3),
-					ptr.add(out.from),
-					3
-				);
+				write_u8_3(ptr.add(out.from), num as usize);
 			}
 			else if num >= 10 {
 				out.from -= 2;
-				write_u8_2(ptr.add(out.from), num);
+				write_u8_2(ptr.add(out.from), num as usize);
 			}
 			else {
 				out.from -= 1;
-				write_u8_1(ptr.add(out.from), num);
+				write_u8_1(ptr.add(out.from), num as usize);
 			}
 
 			out
@@ -105,22 +101,22 @@ impl From<u16> for NiceInt {
 
 			// For `u16` this can only trigger once.
 			if num >= 1000 {
-				write_u8_3(ptr.add(out.from - 3), num % 1000);
+				write_u8_3(ptr.add(out.from - 3), (num % 1000) as usize);
 				num /= 1000;
 				out.from -= 4;
 			}
 
 			if num >= 100 {
 				out.from -= 3;
-				write_u8_3(ptr.add(out.from), num);
+				write_u8_3(ptr.add(out.from), num as usize);
 			}
 			else if num >= 10 {
 				out.from -= 2;
-				write_u8_2(ptr.add(out.from), num as u8);
+				write_u8_2(ptr.add(out.from), num as usize);
 			}
 			else {
 				out.from -= 1;
-				write_u8_1(ptr.add(out.from), num as u8);
+				write_u8_1(ptr.add(out.from), num as usize);
 			}
 
 			out
@@ -130,59 +126,43 @@ impl From<u16> for NiceInt {
 
 impl From<u32> for NiceInt {
 	#[allow(clippy::integer_division)]
-	fn from(mut num: u32) -> Self {
-		unsafe {
-			let mut out = Self::default();
-			let ptr = out.inner.as_mut_ptr();
-
-			while num >= 1000 {
-				write_u8_3(ptr.add(out.from - 3), (num % 1000) as u16);
-				num /= 1000;
-				out.from -= 4;
-			}
-
-			if num >= 100 {
-				out.from -= 3;
-				write_u8_3(ptr.add(out.from), num as u16);
-			}
-			else if num >= 10 {
-				out.from -= 2;
-				write_u8_2(ptr.add(out.from), num as u8);
-			}
-			else {
-				out.from -= 1;
-				write_u8_1(ptr.add(out.from), num as u8);
-			}
-
-			out
-		}
+	fn from(num: u32) -> Self {
+		// Skip all the index casts.
+		Self::from(num as usize)
 	}
 }
 
 impl From<u64> for NiceInt {
+	#[cfg(target_pointer_width = "64")]
+	fn from(num: u64) -> Self {
+		// Skip all the index casts.
+		Self::from(num as usize)
+	}
+
 	#[allow(clippy::integer_division)]
+	#[cfg(not(target_pointer_width = "64"))]
 	fn from(mut num: u64) -> Self {
 		unsafe {
 			let mut out = Self::default();
 			let ptr = out.inner.as_mut_ptr();
 
 			while num >= 1000 {
-				write_u8_3(ptr.add(out.from - 3), (num % 1000) as u16);
+				write_u8_3(ptr.add(out.from - 3), (num % 1000) as usize);
 				num /= 1000;
 				out.from -= 4;
 			}
 
 			if num >= 100 {
 				out.from -= 3;
-				write_u8_3(ptr.add(out.from), num as u16);
+				write_u8_3(ptr.add(out.from), num as usize);
 			}
 			else if num >= 10 {
 				out.from -= 2;
-				write_u8_2(ptr.add(out.from), num as u8);
+				write_u8_2(ptr.add(out.from), num as usize);
 			}
 			else {
 				out.from -= 1;
-				write_u8_1(ptr.add(out.from), num as u8);
+				write_u8_1(ptr.add(out.from), num as usize);
 			}
 
 			out
@@ -198,22 +178,22 @@ impl From<usize> for NiceInt {
 			let ptr = out.inner.as_mut_ptr();
 
 			while num >= 1000 {
-				write_u8_3(ptr.add(out.from - 3), (num % 1000) as u16);
+				write_u8_3(ptr.add(out.from - 3), num % 1000);
 				num /= 1000;
 				out.from -= 4;
 			}
 
 			if num >= 100 {
 				out.from -= 3;
-				write_u8_3(ptr.add(out.from), num as u16);
+				write_u8_3(ptr.add(out.from), num);
 			}
 			else if num >= 10 {
 				out.from -= 2;
-				write_u8_2(ptr.add(out.from), num as u8);
+				write_u8_2(ptr.add(out.from), num);
 			}
 			else {
 				out.from -= 1;
-				write_u8_1(ptr.add(out.from), num as u8);
+				write_u8_1(ptr.add(out.from), num);
 			}
 
 			out
@@ -318,17 +298,17 @@ impl NiceInt {
 
 		if base >= 10.0 {
 			out.from -= 2;
-			write_u8_2(ptr.add(out.from), base as u8);
+			write_u8_2(ptr.add(out.from), base as usize);
 		}
 		else {
 			out.from -= 1;
-			write_u8_1(ptr.add(out.from), num as u8);
+			write_u8_1(ptr.add(out.from), num as usize);
 		}
 
 		// Write the rest.
 		write_u8_2(
 			ptr.add(IDX_PERCENT_DECIMAL),
-			f64::floor((num - base) * 100.0) as u8
+			f64::floor((num - base) * 100.0) as usize
 		);
 
 		out
@@ -339,18 +319,18 @@ impl NiceInt {
 
 #[allow(clippy::integer_division)]
 /// # Write `u8` x 3
-unsafe fn write_u8_3(buf: *mut u8, num: u16) {
-	ptr::copy_nonoverlapping(TRIPLE.as_ptr().add(num as usize * 3), buf, 3);
+unsafe fn write_u8_3(buf: *mut u8, num: usize) {
+	ptr::copy_nonoverlapping(TRIPLE.as_ptr().add(num * 3), buf, 3);
 }
 
 /// # Write `u8` x 2
-unsafe fn write_u8_2(buf: *mut u8, num: u8) {
-	ptr::copy_nonoverlapping(DOUBLE.as_ptr().add((num as usize) << 1), buf, 2);
+unsafe fn write_u8_2(buf: *mut u8, num: usize) {
+	ptr::copy_nonoverlapping(DOUBLE.as_ptr().add(num << 1), buf, 2);
 }
 
 /// # Write `u8` x 1
-unsafe fn write_u8_1(buf: *mut u8, num: u8) {
-	ptr::copy_nonoverlapping(SINGLE.as_ptr().add(num as usize), buf, 1);
+unsafe fn write_u8_1(buf: *mut u8, num: usize) {
+	ptr::copy_nonoverlapping(SINGLE.as_ptr().add(num), buf, 1);
 }
 
 
