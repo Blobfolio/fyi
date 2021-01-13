@@ -19,7 +19,7 @@ fn hash64(c: &mut Criterion) {
 	for kv in [
 		&b"--prefix"[..],
 		b"-p",
-		b"--prefix-color",
+		b"/usr/share/man/man1/fyi-confirm.1.gz",
 	].iter() {
 		group.bench_with_input(
 			BenchmarkId::from_parameter(&format!(

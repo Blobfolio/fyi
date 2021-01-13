@@ -164,7 +164,6 @@ use fyi_msg::{
 
 
 
-#[allow(clippy::suspicious_else_formatting)] // It's fine.
 #[doc(hidden)]
 /// Main.
 fn main() {
