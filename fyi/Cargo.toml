@@ -156,3 +156,4 @@ path = "../fyi_menu"
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"
+features = [ "bin_kinds" ]

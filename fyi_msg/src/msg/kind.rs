@@ -31,6 +31,14 @@ pub enum MsgKind {
 	Task,
 	/// Warning.
 	Warning,
+
+	#[cfg(feature = "bin_kinds")]
+	/// Binary-only: Blank.
+	Blank,
+
+	#[cfg(feature = "bin_kinds")]
+	/// Binary-only: Custom.
+	Custom,
 }
 
 impl AsRef<str> for MsgKind {
@@ -67,6 +75,8 @@ impl From<&str> for MsgKind {
 			"success" => Self::Success,
 			"task" => Self::Task,
 			"warning" => Self::Warning,
+			#[cfg(feature = "bin_kinds")] "blank" => Self::Blank,
+			#[cfg(feature = "bin_kinds")] "print" => Self::Custom,
 			_ => Self::None,
 		}
 	}
@@ -84,7 +94,11 @@ impl MsgKind {
 	/// # Length.
 	pub const fn len(self) -> usize {
 		match self {
+			#[cfg(feature = "bin_kinds")]
+			Self::None | Self::Blank | Self::Custom => 0,
+			#[cfg(not(feature = "bin_kinds"))]
 			Self::None => 0,
+
 			Self::Confirm => 26,
 			Self::Crunched => 21,
 			Self::Done | Self::Info => 17,
@@ -102,7 +116,11 @@ impl MsgKind {
 	/// # As Bytes.
 	pub const fn as_bytes(self) -> &'static [u8] {
 		match self {
+			#[cfg(feature = "bin_kinds")]
+			Self::None | Self::Blank | Self::Custom => &[],
+			#[cfg(not(feature = "bin_kinds"))]
 			Self::None => &[],
+
 			Self::Confirm => b"\x1b[1;38;5;208mConfirm:\x1b[0m ",
 			Self::Crunched => b"\x1b[92;1mCrunched:\x1b[0m ",
 			Self::Debug => b"\x1b[96;1mDebug:\x1b[0m ",
@@ -150,6 +168,8 @@ mod tests {
 			MsgKind::Success,
 			MsgKind::Task,
 			MsgKind::Warning,
+			#[cfg(feature = "bin_kinds")] MsgKind::Blank,
+			#[cfg(feature = "bin_kinds")] MsgKind::Custom,
 		] {
 			assert_eq!(p.len(), p.as_bytes().len());
 			assert_eq!(p.is_empty(), p.as_bytes().is_empty());

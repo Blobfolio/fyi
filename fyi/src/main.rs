@@ -172,66 +172,13 @@ fn main() {
 		.with_version("FYI", env!("CARGO_PKG_VERSION"))
 		.with_help(helper);
 
-	// Blank is different enough to have its own thing.
-	let mode = unsafe { args.peek_unchecked() };
-	if "blank" == mode {
-		return blank(&mut args);
-	}
-
-	// Exit code.
-	let exit: i32 = args.option2("-e", "--exit")
-		.map_or(0, |x| x.parse::<i32>().unwrap_or(0));
-
-	// Basic flags.
-	let mut flags: u8 = FLAG_NEWLINE;
-	if args.switch2("-i", "--indent") { flags |= FLAG_INDENT; }
-	if args.switch2("-t", "--timestamp") { flags |= FLAG_TIMESTAMP; }
-
-	// The message kind.
-	let kind = MsgKind::from(mode);
-
-	// The main message.
-	let msg =
-		// Not a built-in.
-		if MsgKind::None == kind {
-			// Custom message.
-			if "print" == mode {
-				let color: u8 = args.option2("-c", "--prefix-color")
-					.and_then(|x| x.parse::<u8>().ok())
-					.unwrap_or(199);
-
-				let prefix = args.option2("-p", "--prefix")
-					.unwrap_or_default();
-
-				Msg::custom(prefix, color, args.arg(0).unwrap_or_default())
-					.with_flags(flags)
-			}
-			// Missing prefix.
-			else {
-				Msg::error("Invalid message type.").die(1);
-				unreachable!();
-			}
-		}
-		// Built-in.
-		else {
-			Msg::new(kind, args.take_arg())
-				.with_flags(flags)
-		};
-
-	// It's a prompt!
-	if MsgKind::Confirm == kind {
-		if ! msg.prompt() {
-			std::process::exit(1);
-		}
-	}
-	// Print to `Stderr`.
-	else if args.switch("--stderr") { msg.eprint(); }
-	// Print to `Stdout`.
-	else { msg.print(); }
-
-	// Special exit?
-	if 0 != exit {
-		std::process::exit(exit);
+	match MsgKind::from(unsafe { args.peek_unchecked() }) {
+		MsgKind::Blank => blank(&mut args),
+		MsgKind::None => {
+			Msg::error("Invalid message type.").die(1);
+			unreachable!();
+		},
+		kind => msg(kind, &mut args),
 	}
 }
 
@@ -251,6 +198,58 @@ fn blank(args: &mut Argue) {
 	if args.switch("--stderr") { msg.eprint(); }
 	// Print it to `Stdout`.
 	else { msg.print(); }
+}
+
+#[doc(hidden)]
+/// Basic Message.
+fn msg(kind: MsgKind, args: &mut Argue) {
+	// Exit code.
+	let exit: i32 = args.option2("-e", "--exit")
+		.map_or(0, |x| x.parse::<i32>().unwrap_or(0));
+
+	// Basic flags.
+	let mut flags: u8 = FLAG_NEWLINE;
+	if args.switch2("-i", "--indent") { flags |= FLAG_INDENT; }
+	if args.switch2("-t", "--timestamp") { flags |= FLAG_TIMESTAMP; }
+
+	// The main message.
+	let msg =
+		// Custom message prefix.
+		if MsgKind::Custom == kind {
+			args.option2("-p", "--prefix")
+				.map_or_else(
+					|| Msg::plain(args.arg(0).unwrap_or_default()),
+					|prefix| {
+						let color: u8 = args.option2("-c", "--prefix-color")
+							.and_then(|x| x.parse::<u8>().ok())
+							.unwrap_or(199);
+						Msg::custom(prefix, color, args.arg(0).unwrap_or_default())
+							.with_flags(flags)
+					}
+				)
+		}
+		// Built-in prefix.
+		else {
+			Msg::new(kind, args.take_arg())
+				.with_flags(flags)
+		};
+
+	// It's a prompt!
+	if MsgKind::Confirm == kind {
+		if ! msg.prompt() {
+			std::process::exit(1);
+		}
+		return;
+	}
+	// Print to `Stderr`.
+	else if args.switch("--stderr") { msg.eprint(); }
+	// Print to `Stdout`.
+	else { msg.print(); }
+
+	// Special exit?
+	if 0 != exit {
+		std::process::exit(exit);
+	}
 }
 
 #[doc(hidden)]

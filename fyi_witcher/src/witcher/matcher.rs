@@ -22,18 +22,13 @@ pub enum WitcherMatcherError {
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 /// # Extension Matcher.
 ///
-/// This is a simple way to compare extensions without having to iterate over
-/// and over again.
+/// As the name implies, `WitcherMatcher` provides a means to compare a path's
+/// file extension against one or more expected extensions. It is optimized for
+/// extensions with typical lengths — a dot plus 2-4 letters — but can handle
+/// longer strings as well.
 ///
-/// Implementing libraries are expected to pre-lowercase extensions, and use
-/// either the string slice or byte slice [`WitcherMatcher::try_from`].
-///
-/// If there is only one desired extension, use that matcher's [`WitcherMatcher::is_match`]
-/// method to see if a given path matches.
-///
-/// If there are multiple possible extensions, it is more efficient to use
-/// [`WitcherMatcher::try_from`] against the `&PathBuf`, and then use basic
-/// equality operators, like:
+/// The ideal use case for this is matching one path against 2-4 possible
+/// extensions, using a setup like:
 ///
 /// ```
 /// use fyi_witcher::WitcherMatcher;
