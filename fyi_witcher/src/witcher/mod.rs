@@ -232,9 +232,47 @@ impl Witcher {
 	///     .with_ext(b".jpg")
 	///     .build();
 	/// ```
-	pub fn build(mut self) -> Vec<PathBuf> {
-		self.digest();
-		self.files
+	pub fn build(self) -> Vec<PathBuf> {
+		use std::sync::{Arc, Mutex};
+
+		// Let's destructure to make life easier.
+		let Self { mut dirs, mut files, seen, cb } = self;
+		let seen = Arc::from(Mutex::new(seen));
+
+		// While there are directories in the queue, scan them!
+		while ! dirs.is_empty() {
+			// Read each directory.
+			let (tx, rx) = crossbeam_channel::unbounded();
+			dirs.par_drain(..)
+				.filter_map(|p| fs::read_dir(p).ok())
+				.for_each(|paths| {
+					let s2 = seen.clone();
+
+					paths.filter_map(|p|
+						p.and_then(|p| fs::canonicalize(p.path()))
+							.ok()
+					)
+						.filter(|p|
+							s2.lock()
+								.unwrap_or_else(std::sync::PoisonError::into_inner)
+								.insert(utility::hash64(utility::path_as_bytes(p)))
+						)
+						.for_each(|p| tx.send(p).unwrap());
+				});
+
+			// Collect the paths found.
+			drop(tx);
+			rx.iter().for_each(|p|
+				if p.is_dir() {
+					dirs.push(p);
+				}
+				else if (cb)(&p) {
+					files.push(p);
+				}
+			);
+		}
+
+		files
 	}
 
 	#[must_use]
@@ -255,39 +293,6 @@ impl Witcher {
 	///     .run(|p| { ... });
 	/// ```
 	pub fn into_witching(self) -> Witching { Witching::from(self.build()) }
-
-	/// # Digest.
-	///
-	/// This method drains and scans all queued directories, compiling a list
-	/// of files as it goes.
-	///
-	/// If additional directories are discovered during a run, the process is
-	/// repeated. Once all directories have been scanned, it's done!
-	fn digest(&mut self) {
-		while ! self.dirs.is_empty() {
-			// Read each directory.
-			let (tx, rx) = crossbeam_channel::unbounded();
-			self.dirs.par_drain(..)
-				.filter_map(|p| fs::read_dir(p).ok())
-				.for_each(|paths| {
-					paths.filter_map(|p| p.and_then(|p| fs::canonicalize(p.path())).ok())
-						.for_each(|p| tx.send(p).unwrap());
-				});
-
-			// Collect the paths found.
-			drop(tx);
-			rx.iter().for_each(|p| {
-				if self.seen.insert(utility::hash64(utility::path_as_bytes(&p))) {
-					if p.is_dir() {
-						self.dirs.push(p);
-					}
-					else if (self.cb)(&p) {
-						self.files.push(p);
-					}
-				}
-			});
-		}
-	}
 }
 
 

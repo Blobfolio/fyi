@@ -116,9 +116,9 @@ fn with_ext(c: &mut Criterion) {
 criterion_group!(
 	benches,
 	build,
+	filter,
 	matcher,
 	regex,
 	with_ext,
-	filter,
 );
 criterion_main!(benches);
