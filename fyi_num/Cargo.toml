@@ -1,27 +1,22 @@
 [package]
-name = "fyi_menu"
+name = "fyi_num"
 version = "0.5.1"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
-description = "CLI argument parsing helpers."
+description = "Number helpers."
 license = "WTFPL"
 repository = "https://github.com/Blobfolio/fyi"
 publish = false
 
-[dependencies.fyi_msg]
-path = "../fyi_msg"
-
 [dev-dependencies]
 criterion = "*"
+num-format = "0.4.*"
+rand = "*"
 
 [[bench]]
-name = "fm_argue"
+name = "fn_nice_elapsed"
 harness = false
 
 [[bench]]
-name = "fm_keykind"
-harness = false
-
-[[bench]]
-name = "fm_utility"
+name = "fn_nice_int"
 harness = false

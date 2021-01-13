@@ -1,6 +1,6 @@
 [package]
 name = "fyi_witcher"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "Path traversal helpers."
@@ -16,17 +16,16 @@ num-integer = "0.1.*"
 rayon = "1.5.*"
 regex = "1.4.*"
 term_size = "0.3.*"
-unicode-width = "0.1.*"
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"
+features = [ "fitted" ]
+
+[dependencies.fyi_num]
+path = "../fyi_num"
 
 [dev-dependencies]
 criterion = "*"
-
-[[bench]]
-name = "fw_nice_elapsed"
-harness = false
 
 [[bench]]
 name = "fw_utility"

@@ -3,6 +3,7 @@
 */
 
 use criterion::{
+	BenchmarkId,
 	black_box,
 	Criterion,
 	criterion_group,
@@ -50,6 +51,32 @@ fn new(c: &mut Criterion) {
 	group.finish();
 }
 
+fn fit_width(c: &mut Criterion) {
+	let mut group = c.benchmark_group("fyi_msg::Msg");
+	group.sample_size(30);
+
+	for ints in [
+		20,
+		40,
+		50,
+	].iter() {
+		group.bench_with_input(
+			BenchmarkId::from_parameter(format!("fitted({})", ints)),
+			ints,
+			|b, &ints| {
+				b.iter_with_setup(||
+					(Msg::error("This is an example message!").with_newline(true), ints),
+					|(msg, w)| {
+						let _ = black_box(msg.fitted(w));
+					}
+				);
+			}
+		);
+	}
+
+	group.finish();
+}
+
 fn with_timestamp(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_msg::Msg");
 	group.sample_size(30);
@@ -69,6 +96,7 @@ fn with_timestamp(c: &mut Criterion) {
 criterion_group!(
 	benches,
 	new,
+	fit_width,
 	with_timestamp,
 );
 criterion_main!(benches);

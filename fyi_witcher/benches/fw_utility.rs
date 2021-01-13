@@ -12,47 +12,23 @@ use fyi_witcher::utility;
 
 
 
-fn fitted_range(c: &mut Criterion) {
+fn hash64(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::utility");
-	group.sample_size(30);
+	group.sample_size(50);
 
-	for txt in [
-		"Hello World",
-		"\x1b[1;31mHello\x1b[0m World",
-		"Björk Guðmundsdóttir",
+	for kv in [
+		&b"--prefix"[..],
+		b"-p",
+		b"/usr/share/man/man1/fyi-confirm.1.gz",
 	].iter() {
 		group.bench_with_input(
-			BenchmarkId::from_parameter(format!(
-				"fitted_range({}, 20)",
-				txt,
+			BenchmarkId::from_parameter(&format!(
+				"hash64({:?})",
+				unsafe { std::str::from_utf8_unchecked(kv) }
 			)),
-			txt.as_bytes(),
-			|b, txt| {
-				b.iter(||
-					utility::fitted_range(txt, 20)
-				);
-			}
-		);
-	}
-
-	group.finish();
-}
-
-fn hms(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_witcher::utility");
-	group.sample_size(30);
-
-	for secs in [10_u32, 113_u32, 10502_u32].iter() {
-		group.bench_with_input(
-			BenchmarkId::from_parameter(format!(
-				"hms_u32({})",
-				secs,
-			)),
-			secs,
-			|b, &secs| {
-				b.iter(||
-					utility::hms_u32(secs)
-				);
+			kv,
+			|b, kv| {
+				b.iter(|| utility::hash64(&kv))
 			}
 		);
 	}
@@ -64,7 +40,6 @@ fn hms(c: &mut Criterion) {
 
 criterion_group!(
 	benches,
-	fitted_range,
-	hms,
+	hash64,
 );
 criterion_main!(benches);

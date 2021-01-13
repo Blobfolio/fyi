@@ -1,6 +1,6 @@
 [package]
 name = "fyi"
-version = "0.5.0"
+version = "0.5.1"
 license = "WTFPL"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
@@ -156,3 +156,4 @@ path = "../fyi_menu"
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"
+features = [ "bin_kinds" ]

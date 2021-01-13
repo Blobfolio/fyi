@@ -3,19 +3,16 @@
 */
 
 use ahash::AHashSet;
-use crate::{
-	NiceElapsed,
-	utility,
-};
+use crate::utility;
 use fyi_msg::{
 	Msg,
 	MsgKind,
 	MsgBuffer9,
+};
+use fyi_num::{
+	NiceElapsed,
 	NiceInt,
-	utility::{
-		hash64,
-		write_time,
-	},
+	write_time,
 };
 use rayon::prelude::*;
 use std::{
@@ -139,11 +136,11 @@ struct WitchingInner {
 	last_time: u128,
 	last_width: usize,
 
-	doing: AHashSet<Vec<u8>>,
+	doing: AHashSet<Msg>,
 	done: u32,
 	flags: u8,
 	started: Instant,
-	title: Vec<u8>,
+	title: Msg,
 	total: u32,
 }
 
@@ -226,7 +223,7 @@ impl Default for WitchingInner {
 			last_time: 0,
 			last_width: 0,
 			started: Instant::now(),
-			title: Vec::new(),
+			title: Msg::default(),
 			total: 0,
 		}
 	}
@@ -287,7 +284,7 @@ impl WitchingInner {
 	/// Remove a task from the currently-running list and increment `done` by
 	/// one.
 	pub(crate) fn end_task(&mut self, task: &PathBuf) {
-		if self.doing.remove(utility::path_as_bytes(task)) {
+		if self.doing.remove(&task_msg(task)) {
 			self.flags |= TICK_DOING | TICK_BAR;
 			self.increment();
 		}
@@ -313,14 +310,10 @@ impl WitchingInner {
 	/// This updates the progress bar's title. If an empty string is passed,
 	/// the title will be removed.
 	pub(crate) fn set_title<S> (&mut self, title: S)
-	where S: AsRef<str> {
-		let title: &[u8] = title.as_ref().as_bytes();
-		if self.title.ne(&title) {
-			self.title.resize(title.len(), 0);
-			if ! title.is_empty() {
-				self.title.copy_from_slice(title);
-			}
-
+	where S: Into<Msg> {
+		let title: Msg = title.into().with_newline(true);
+		if self.title != title {
+			self.title = title;
 			self.flags |= TICK_TITLE;
 		}
 	}
@@ -329,8 +322,7 @@ impl WitchingInner {
 	///
 	/// Add a task to the currently-running list.
 	pub(crate) fn start_task(&mut self, task: &PathBuf) {
-		let task: Vec<u8> = utility::path_as_bytes(task).to_vec();
-		if self.doing.insert(task) {
+		if self.doing.insert(task_msg(task)) {
 			self.flags |= TICK_DOING | TICK_BAR;
 		}
 	}
@@ -354,7 +346,7 @@ impl WitchingInner {
 
 		// Make sure the content is unique, otherwise we can leave the old bits
 		// up.
-		let hash = hash64(&self.buf);
+		let hash = utility::hash64(&self.buf);
 		if hash == self.last_hash {
 			return;
 		}
@@ -568,20 +560,14 @@ impl WitchingInner {
 			}
 			else {
 				let width: usize = self.last_width.saturating_sub(6);
-				let tasks: Vec<u8> = b"\x1b[35m".iter()
-					.chain(
-						self.doing.iter()
-							.flat_map(|x|
-							//    •   •   •   •   ↳  ---  ---   •
-								[32, 32, 32, 32, 226, 134, 179, 32].iter()
-									.chain(x[utility::fitted_range(x, width)].iter())
-									.chain(b"\n".iter())
-							)
-					)
-					.chain(b"\x1b[0m".iter())
-					.copied()
-					.collect();
-
+				let tasks: Vec<u8> = {
+					let mut v = Vec::with_capacity(256);
+					v.extend_from_slice(b"\x1b[35m");
+					self.doing.iter()
+						.for_each(|x| v.extend_from_slice(&x.fitted(width)));
+					v.extend_from_slice(b"\x1b[0m");
+					v
+				};
 				self.buf.replace(PART_DOING, &tasks);
 			}
 		}
@@ -626,13 +612,12 @@ impl WitchingInner {
 		else {
 			self.elapsed = secs;
 			unsafe {
-				let [h, m, s] = utility::hms_u32(secs);
+				let [h, m, s] = NiceElapsed::hms(secs);
 				write_time(
 					self.buf.as_mut_ptr().add(self.buf.start(PART_ELAPSED)),
 					h,
 					m,
 					s,
-					b':',
 				);
 			}
 
@@ -653,15 +638,7 @@ impl WitchingInner {
 			else {
 				self.buf.replace(
 					PART_TITLE,
-					&{
-						let mut m = self.title.clone();
-						let rg = utility::fitted_range(&m, self.last_width - 1);
-						if rg.end > m.len() {
-							m.truncate(rg.end);
-						}
-						m.push(b'\n');
-						m
-					}
+					&self.title.fitted(self.last_width - 1),
 				);
 			}
 		}
@@ -854,7 +831,7 @@ impl Witching {
 	///     .run(|p| { ... });
 	/// ```
 	pub fn with_title<S> (self, title: S) -> Self
-	where S: AsRef<str> {
+	where S: Into<Msg> {
 		self.set_title(title);
 		self
 	}
@@ -977,10 +954,10 @@ impl Witching {
 	fn label(&self) -> &str {
 		unsafe {
 			if self.set.len() == 1 {
-				std::str::from_utf8_unchecked(&self.label[1..self.label[0] as usize])
+				std::str::from_utf8_unchecked(&self.label[1..usize::from(self.label[0])])
 			}
 			else {
-				std::str::from_utf8_unchecked(&self.label[self.label[0] as usize..])
+				std::str::from_utf8_unchecked(&self.label[usize::from(self.label[0])..])
 			}
 		}
 	}
@@ -1167,7 +1144,7 @@ impl Witching {
 	///
 	/// Wrapper for `WitchingInner::set_title()`.
 	pub fn set_title<S> (&self, title: S)
-	where S: AsRef<str> {
+	where S: Into<Msg> {
 		let mut ptr = mutex_ptr!(self.inner);
 		ptr.set_title(title);
 	}
@@ -1195,4 +1172,12 @@ fn progress_end(inner: &Arc<Mutex<WitchingInner>>, task: &PathBuf) {
 fn progress_start(inner: &Arc<Mutex<WitchingInner>>, task: &PathBuf) {
 	let mut ptr = mutex_ptr!(inner);
 	ptr.start_task(task);
+}
+
+#[inline]
+/// # Format Task Into Message.
+fn task_msg(path: &PathBuf) -> Msg {
+	// This starts with a ↳.
+	Msg::custom_unchecked("    \u{21b3} ", path.to_str().unwrap_or_default())
+		.with_newline(true)
 }

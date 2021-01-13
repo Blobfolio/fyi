@@ -3,6 +3,7 @@ members = [
 	"fyi",
 	"fyi_menu",
     "fyi_msg",
+    "fyi_num",
     "fyi_witcher",
 ]
 

@@ -1,6 +1,6 @@
 [package]
 name = "fyi_msg"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "Lib version of FYI."
@@ -8,18 +8,20 @@ license = "WTFPL"
 repository = "https://github.com/Blobfolio/fyi"
 publish = false
 
-[dependencies]
-ahash = "0.6.*"
-
 [dependencies.chrono]
 version = "0.4.*"
 default-features = false
 features = [ "clock", "std" ]
 
+[dependencies.fyi_num]
+path = "../fyi_num"
+
+[dependencies.unicode-width]
+version = "0.1.*"
+optional = true
+
 [dev-dependencies]
 criterion = "*"
-num-format = "0.4.*"
-rand = "*"
 
 [[bench]]
 name = "fm_msg"
@@ -29,13 +31,15 @@ harness = false
 name = "fm_buffer"
 harness = false
 
-[[bench]]
-name = "fm_nice_int"
-harness = false
-
-[[bench]]
-name = "fm_utility"
-harness = false
-
 [[example]]
 name = "msg"
+
+[features]
+default = []
+
+# This adds a few additional MsgKinds relevant only to the main FYI binary.
+# There is no point enabling this in other crates.
+bin_kinds = []
+
+# Add width-capping support to the Msg struct.
+fitted = [ "unicode-width" ]

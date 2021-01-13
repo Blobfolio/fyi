@@ -184,6 +184,95 @@ macro_rules! define_buffer {
 				self.end(idx) - self.start(idx)
 			}
 
+			#[cfg(feature = "fitted")]
+			#[must_use]
+			/// # Fit Width.
+			///
+			/// This returns the length of the slice that fits a given width.
+			///
+			/// ## Safety
+			///
+			/// The string must be valid UTF-8 or undefined things will happen.
+			pub unsafe fn fitted(&self, idx: usize, width: usize) -> usize {
+				use unicode_width::UnicodeWidthChar;
+
+				let len: usize = self.len(idx);
+				if len > width {
+					let mut total_len: usize = 0;
+					let mut total_width: usize = 0;
+
+					// For our purposes, basic ANSI markup (of the kind we use)
+					// is considered 0-width;
+					let mut in_ansi: bool = false;
+
+					// Convert to a string slice so we can iterate over
+					// individual chars.
+					for c in std::str::from_utf8_unchecked(self.get(idx)).chars() {
+						// Find the "length" of this char.
+						let ch_len: usize = c.len_utf8();
+						total_len += ch_len;
+
+						// If we're in the middle of an ANSI sequence nothing
+						// counts, but we need to watch for the end marker so
+						// we can start paying attention again.
+						if in_ansi {
+							// We're only interested in A/K/m signals.
+							if c == 'A' || c == 'K' || c == 'm' { in_ansi = false; }
+							continue;
+						}
+						// Are we entering an ANSI sequence?
+						else if c == '\x1b' {
+							in_ansi = true;
+							continue;
+						}
+
+						// The width matters!
+						let ch_width: usize = UnicodeWidthChar::width(c).unwrap_or_default();
+						total_width += ch_width;
+
+						// Widths can creep up unevenly. If we've gone over, we
+						// need to revert a step and exit.
+						if total_width > width {
+							return total_len - ch_len;
+						}
+					}
+				}
+
+				len
+			}
+
+			#[cfg(feature = "fitted")]
+			#[must_use]
+			/// # Part Width.
+			///
+			/// Return the "display width" of the part.
+			///
+			/// ## Safety
+			///
+			/// The string must be valid UTF-8 or undefined things will happen.
+			pub unsafe fn width(&self, idx: usize) -> usize {
+				use unicode_width::UnicodeWidthChar;
+
+				if self.len(idx) == 0 { 0 }
+				else {
+					let mut width: usize = 0;
+					let mut in_ansi: bool = false;
+					for c in std::str::from_utf8_unchecked(self.get(idx)).chars() {
+						if in_ansi {
+							// We're only interested in A/K/m signals.
+							if c == 'A' || c == 'K' || c == 'm' { in_ansi = false; }
+						}
+						// Are we entering an ANSI sequence?
+						else if c == '\x1b' { in_ansi = true; }
+						else {
+							width += UnicodeWidthChar::width(c).unwrap_or_default();
+						}
+					}
+
+					width
+				}
+			}
+
 			#[must_use]
 			/// # Part Start.
 			pub const fn start(&self, idx: usize) -> usize {
