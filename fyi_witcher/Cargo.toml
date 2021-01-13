@@ -19,6 +19,7 @@ term_size = "0.3.*"
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"
+features = [ "fitted" ]
 
 [dependencies.fyi_num]
 path = "../fyi_num"

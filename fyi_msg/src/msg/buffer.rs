@@ -184,6 +184,7 @@ macro_rules! define_buffer {
 				self.end(idx) - self.start(idx)
 			}
 
+			#[cfg(feature = "fitted")]
 			#[must_use]
 			/// # Fit Width.
 			///
@@ -240,6 +241,7 @@ macro_rules! define_buffer {
 				len
 			}
 
+			#[cfg(feature = "fitted")]
 			#[must_use]
 			/// # Part Width.
 			///

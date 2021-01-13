@@ -8,9 +8,6 @@ license = "WTFPL"
 repository = "https://github.com/Blobfolio/fyi"
 publish = false
 
-[dependencies]
-unicode-width = "0.1.*"
-
 [dependencies.chrono]
 version = "0.4.*"
 default-features = false
@@ -18,6 +15,10 @@ features = [ "clock", "std" ]
 
 [dependencies.fyi_num]
 path = "../fyi_num"
+
+[dependencies.unicode-width]
+version = "0.1.*"
+optional = true
 
 [dev-dependencies]
 criterion = "*"
@@ -39,3 +40,6 @@ default = []
 # This adds a few additional MsgKinds relevant only to the main FYI binary.
 # There is no point enabling this in other crates.
 bin_kinds = []
+
+# Add width-capping support to the Msg struct.
+fitted = [ "unicode-width" ]

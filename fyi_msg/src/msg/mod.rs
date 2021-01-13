@@ -26,6 +26,7 @@ pub use buffer::{
 	MsgBuffer9,
 	MsgBuffer10,
 };
+
 #[allow(unreachable_pub)]
 pub use kind::MsgKind;
 
@@ -419,6 +420,7 @@ impl Msg {
 		unsafe { String::from_utf8_unchecked(self.0.into_vec()) }
 	}
 
+	#[cfg(feature = "fitted")]
 	#[must_use]
 	/// # Capped Width.
 	///
@@ -483,6 +485,7 @@ impl Msg {
 	/// # Is Empty.
 	pub const fn is_empty(&self) -> bool { self.len() == 0 }
 
+	#[cfg(feature = "fitted")]
 	/// # Message width.
 	///
 	/// This returns a tuple containing the total width as well as the width
@@ -615,6 +618,7 @@ mod tests {
 		assert!(msg.ends_with(b"My dear aunt"));
 	}
 
+	#[cfg(feature = "fitted")]
 	#[test]
 	fn t_fitted() {
 		let mut msg = Msg::plain("Hello World");
