@@ -502,8 +502,14 @@ impl Argue {
 	pub fn option(&self, key: &str) -> Option<&str> {
 		self.keys.iter()
 			.take(self.keys[KEY_LEN])
-			.position(|&x| self.args[x] == key)
-			.and_then(move |idx| self.option_value(self.keys[idx] + 1))
+			.position(|&x| self.args.get(x).map_or(false, |x| x == key))
+			.and_then(|idx| {
+				let idx = self.keys[idx] + 1;
+				self.args.get(idx).map(|x| {
+					if idx > self.last.get() { self.last.set(idx); }
+					x.as_str()
+				})
+			})
 	}
 
 	/// # Option x2.
@@ -522,20 +528,14 @@ impl Argue {
 	pub fn option2(&self, short: &str, long: &str) -> Option<&str> {
 		self.keys.iter()
 			.take(self.keys[KEY_LEN])
-			.position(|&x| self.args[x] == short || self.args[x] == long)
-			.and_then(move |idx| self.option_value(self.keys[idx] + 1))
-	}
-
-	/// # Get Option Value.
-	///
-	/// This retrieves the option value at the specified index, if any, and
-	/// updates the arg boundary if needed.
-	fn option_value(&self, idx: usize) -> Option<&str> {
-		let out: Option<&str> = self.args.get(idx).map(String::as_str);
-		if out.is_some() && idx > self.last.get() {
-			self.last.set(idx);
-		}
-		out
+			.position(|&x| self.args.get(x).map_or(false, |x| x == short || x == long))
+			.and_then(|idx| {
+				let idx = self.keys[idx] + 1;
+				self.args.get(idx).map(|x| {
+					if idx > self.last.get() { self.last.set(idx); }
+					x.as_str()
+				})
+			})
 	}
 
 	#[must_use]
