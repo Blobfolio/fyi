@@ -54,10 +54,10 @@ pub use nice_int::NiceInt;
 
 
 /// # Decimals, 0-9.
-pub(crate) const SINGLE: &[u8; 10] = b"0123456789";
+pub(crate) static SINGLE: &[u8; 10] = b"0123456789";
 
 /// # Decimals, 00-99.
-pub(crate) const DOUBLE: &[u8; 200] = b"\
+pub(crate) static DOUBLE: &[u8; 200] = b"\
 	0001020304050607080910111213141516171819\
 	2021222324252627282930313233343536373839\
 	4041424344454647484950515253545556575859\
