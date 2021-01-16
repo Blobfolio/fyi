@@ -2,14 +2,6 @@
 # FYI Witcher: Witcher
 */
 
-mod matcher;
-
-#[allow(unreachable_pub)] // It's one or the other.
-pub use matcher::{
-	WitcherMatcher,
-	WitcherMatcherError,
-};
-
 use ahash::AHashSet;
 use crate::{
 	utility,
@@ -24,6 +16,17 @@ use std::{
 		PathBuf,
 	},
 };
+
+
+
+/// # Lowercase Mask.
+///
+/// An uppercase ASCII byte can be made lowercase by BIT-ORing its value
+/// against this, like `b'J' | (1 << 5) == b'j'`.
+///
+/// This has no effect against digits or `-` or `a-z`, so can be used here
+/// without the usual range checking.
+const LOWER: u8 = 1 << 5;
 
 
 
@@ -121,8 +124,16 @@ impl Witcher {
 	/// [`with_regex()`](Witcher::with_regex), particularly if regular
 	/// expressions are not used anywhere else.
 	///
-	/// Note: The extension must include the leading period and be in lower
-	/// case or case-insensitive matching will not work correctly.
+	/// ## Panics
+	///
+	/// The extension must include the leading period and be at least three
+	/// characters in length.
+	///
+	/// ## Safety
+	///
+	/// This method uses some "unsafe" pointer-casting tricks that would be
+	/// unsuitable in nearly any other context, but as we're comparing bytes
+	/// and numbers, it works A-OK here.
 	///
 	/// ## Examples
 	///
@@ -135,10 +146,88 @@ impl Witcher {
 	///     .build();
 	/// ```
 	pub fn with_ext(mut self, ext: &[u8]) -> Self {
-		use std::convert::TryFrom;
+		let len: usize = ext.len();
+		assert!(len > 2 && ext[0] == b'.', "Invalid extension.");
 
-		let ext = WitcherMatcher::try_from(ext).expect("Invalid extension.");
-		self.cb = Box::new(move |p: &PathBuf| ext.is_match(p));
+		// Specialize the matching given the length of the target extension.
+		// Where possible, we'll manipulate the provided value outside the
+		// closure to avoid loop/callback overhead.
+		match len {
+			// Like: .gz
+			3 => {
+				// Separate the dot and characters, comparing the latter as a
+				// single u16.
+				let (ext, mask) = unsafe {
+					let m: u16 = *([LOWER, LOWER].as_ptr().cast::<u16>());
+					let e: u16 = *(ext.as_ptr().add(1).cast::<u16>()) | m;
+					(e, m)
+				};
+
+				self.cb = Box::new(move |p: &PathBuf| {
+					let path: &[u8] = utility::path_as_bytes(p);
+					let p_len: usize = path.len();
+
+					p_len > 3 &&
+					path[p_len - 3] == b'.' &&
+					ext == unsafe { *(path[p_len - 2..].as_ptr().cast::<u16>()) | mask }
+				});
+			},
+			// Like: .jpg
+			4 => {
+				// Convert the extension, dot and all, to a u32 for comparison.
+				let (ext, mask) = unsafe {
+					let m: u32 = *([0, LOWER, LOWER, LOWER].as_ptr().cast::<u32>());
+					let e: u32 = *(ext.as_ptr().cast::<u32>()) | m;
+					(e, m)
+				};
+
+				self.cb = Box::new(move |p: &PathBuf| {
+					let path: &[u8] = utility::path_as_bytes(p);
+					let p_len: usize = path.len();
+
+					p_len > 4 &&
+					ext == unsafe { *(path[p_len - 4..].as_ptr().cast::<u32>()) | mask }
+				});
+			},
+			// Like: .html
+			5 => {
+				// Separate the dot and characters, comparing the latter as a
+				// single u32.
+				let (ext, mask) = unsafe {
+					let m: u32 = *([LOWER, LOWER, LOWER, LOWER].as_ptr().cast::<u32>());
+					let e: u32 = *(ext.as_ptr().add(1).cast::<u32>()) | m;
+					(e, m)
+				};
+
+				self.cb = Box::new(move |p: &PathBuf| {
+					let path: &[u8] = utility::path_as_bytes(p);
+					let p_len: usize = path.len();
+
+					p_len > 5 &&
+					path[p_len - 5] == b'.' &&
+					ext == unsafe { *(path[p_len - 4..].as_ptr().cast::<u32>()) | mask }
+				});
+			},
+			// Like: .xhtml
+			_ => {
+				// While we could use u64 to specialize larger extensions, they
+				// aren't really common enough to be worth it. Instead, we'll
+				// just merge the strategies of [`slice::ends_with`] and
+				// [`slice::eq_ignore_ascii_case`].
+				let ext: Box<[u8]> = Box::from(ext.to_ascii_lowercase());
+				self.cb = Box::new(move |p: &PathBuf| {
+					let path: &[u8] = utility::path_as_bytes(p);
+					let p_len: usize = path.len();
+
+					p_len > len &&
+					path.iter()
+						.skip(p_len - len)
+						.zip(ext.iter())
+						.all(|(a, b)| a.to_ascii_lowercase() == *b)
+				});
+			}
+		}
+
 		self
 	}
 

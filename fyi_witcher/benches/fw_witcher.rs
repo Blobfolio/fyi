@@ -8,10 +8,7 @@ use criterion::{
 	criterion_group,
 	criterion_main,
 };
-use fyi_witcher::{
-	Witcher,
-	WitcherMatcher,
-};
+use fyi_witcher::Witcher;
 use std::ffi::OsStr;
 use std::path::PathBuf;
 
@@ -75,24 +72,6 @@ fn filter(c: &mut Criterion) {
 	group.finish();
 }
 
-fn matcher(c: &mut Criterion) {
-	use std::convert::TryFrom;
-
-	let mut group = c.benchmark_group("fyi_witcher::WitcherMatcher");
-	group.sample_size(50);
-
-	group.bench_function(r"from(/path/to/some/file.jpg)", move |b| {
-		b.iter_with_setup(||
-			PathBuf::from("/path/to/some/file.jpg"),
-			|p| {
-				let _ = black_box(WitcherMatcher::try_from(&p)).unwrap();
-			}
-		)
-	});
-
-	group.finish();
-}
-
 fn with_ext(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::Witcher");
 	group.sample_size(30);
@@ -117,7 +96,6 @@ criterion_group!(
 	benches,
 	build,
 	filter,
-	matcher,
 	regex,
 	with_ext,
 );
