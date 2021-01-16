@@ -183,6 +183,7 @@ fn main() {
 }
 
 #[doc(hidden)]
+#[cold]
 /// Shoot Blanks.
 ///
 /// Print one or more blank lines to `Stdout` or `Stderr`.
@@ -253,6 +254,7 @@ fn msg(kind: MsgKind, args: &mut Argue) {
 }
 
 #[doc(hidden)]
+#[cold]
 /// Help Page.
 ///
 /// Print the appropriate help screen given the call details. Most of the sub-

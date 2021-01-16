@@ -211,12 +211,10 @@ impl Argue {
 				x.as_bytes().iter().all(u8::is_ascii_whitespace)
 			)
 			.fold(
-				Self {
-					flags,
-					..Self::default()
-				},
+				Self::default(),
 				Self::push
 			)
+			.with_flags(flags)
 	}
 
 	#[must_use]
@@ -339,8 +337,8 @@ impl Argue {
 	/// # Print Name/Version.
 	///
 	/// Similar to `with_help()`, this method can be chained to `new()` to
-	/// print the program name and version, then exit with a status code of
-	/// `0`, if either "-V" or "--version" flags are present.
+	/// print the program name and version or whatever, then exit with a status
+	/// code of `0`, if either "-V" or "--version" flags are present.
 	///
 	/// If no version flags are found, `self` is transparently passed through.
 	///
@@ -350,14 +348,14 @@ impl Argue {
 	/// use fyi_menu::Argue;
 	///
 	/// let mut args = Argue::new(0)
-	///     .with_version(b"My App", b"1.5");
+	///     .with_version("My App", env!("CARGO_PKG_VERSION"));
 	/// ```
 	pub fn with_version<S>(self, name: S, version: S) -> Self
 	where S: AsRef<str> {
 		if 0 != self.flags & FLAG_HAS_VERSION {
-			Msg::plain(format!("{} v{}", name.as_ref(), version.as_ref()))
-				.with_newline(true)
-				.die(1);
+			Msg::plain(format!("{} v{}\n", name.as_ref(), version.as_ref()))
+				.print();
+			exit(0);
 		}
 
 		self

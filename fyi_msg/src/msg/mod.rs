@@ -134,6 +134,9 @@ impl PartialEq<Vec<u8>> for Msg {
 /// ## Instantiation.
 impl Msg {
 	/// # New Message.
+	///
+	/// This creates a new message with a built-in prefix (which can be
+	/// [`MsgKind::None`], though in that case, [`Msg::plain`] is better).
 	pub fn new<S>(kind: MsgKind, msg: S) -> Self
 	where S: AsRef<str> {
 		let msg = msg.as_ref().as_bytes();
@@ -153,6 +156,9 @@ impl Msg {
 	}
 
 	/// # Custom Prefix.
+	///
+	/// This creates a new message with a user-defined prefix and color. See
+	/// [here](https://misc.flogisoft.com/bash/tip_colors_and_formatting) for a BASH color code primer.
 	pub fn custom<S>(prefix: S, color: u8, msg: S) -> Self
 	where S: AsRef<str> {
 		let prefix = prefix.as_ref().as_bytes();
@@ -212,6 +218,9 @@ impl Msg {
 	}
 
 	/// # New Message Without Prefix.
+	///
+	/// This is equivalent to [`Msg::new`] with [`MsgKind::None`], but
+	/// streamlined.
 	pub fn plain<S>(msg: S) -> Self
 	where S: AsRef<str> {
 		let msg = msg.as_ref().as_bytes();
@@ -232,7 +241,8 @@ impl Msg {
 	/// # Error
 	///
 	/// This is a convenience method for quickly creating a new error with a
-	/// terminating line break.
+	/// terminating line break. After creation, it is a normal [`Msg`] that can
+	/// be manipulated in the usual ways.
 	pub fn error<S>(msg: S) -> Self
 	where S: AsRef<str> {
 		let msg = msg.as_ref().as_bytes();
@@ -261,6 +271,10 @@ impl Msg {
 impl Msg {
 	#[must_use]
 	/// # With Flags.
+	///
+	/// This can be used to quickly set indentation, timestamps, and/or a
+	/// trailing line break, but only affirmatively; it will not unset any
+	/// missing value.
 	pub fn with_flags(mut self, flags: u8) -> Self {
 		if 0 != flags & FLAG_INDENT {
 			self.set_indent(1);
@@ -276,6 +290,9 @@ impl Msg {
 
 	#[must_use]
 	/// # With Indent.
+	///
+	/// Indent the message using four spaces per `indent`. To remove
+	/// indentation, pass `0`.
 	pub fn with_indent(mut self, indent: u8) -> Self {
 		self.set_indent(indent);
 		self
@@ -283,6 +300,9 @@ impl Msg {
 
 	#[must_use]
 	/// # With Timestamp.
+	///
+	/// Disable, enable, and/or recalculate the timestamp prefix for the
+	/// message.
 	pub fn with_timestamp(mut self, timestamp: bool) -> Self {
 		self.set_timestamp(timestamp);
 		self
@@ -290,6 +310,9 @@ impl Msg {
 
 	#[must_use]
 	/// # With Linebreak.
+	///
+	/// Add a trailing linebreak to the end of the message. This is either one
+	/// or none; calling it multiple times won't add more lines.
 	pub fn with_newline(mut self, newline: bool) -> Self {
 		self.set_newline(newline);
 		self
@@ -297,6 +320,8 @@ impl Msg {
 
 	#[must_use]
 	/// # With Prefix.
+	///
+	/// Set or reset the message prefix.
 	pub fn with_prefix(mut self, kind: MsgKind) -> Self {
 		self.set_prefix(kind);
 		self
@@ -304,6 +329,8 @@ impl Msg {
 
 	#[must_use]
 	/// # With Prefix.
+	///
+	/// Set or reset the message with a user-defined prefix and color.
 	pub fn with_custom_prefix<S>(mut self, prefix: S, color: u8) -> Self
 	where S: AsRef<str> {
 		self.set_custom_prefix(prefix, color);
@@ -312,6 +339,8 @@ impl Msg {
 
 	#[must_use]
 	/// # With Message.
+	///
+	/// Set or reset the message portion of the message.
 	pub fn with_msg<S>(mut self, msg: S) -> Self
 	where S: AsRef<str> {
 		self.set_msg(msg);
@@ -320,6 +349,11 @@ impl Msg {
 
 	#[must_use]
 	/// # With Suffix.
+	///
+	/// Set or reset the message suffix.
+	///
+	/// Note: suffixes immediately follow the message portion and should
+	/// explicitly include any spaces or separators in their value.
 	pub fn with_suffix<S>(mut self, suffix: S) -> Self
 	where S: AsRef<str> {
 		self.set_suffix(suffix);
@@ -329,7 +363,7 @@ impl Msg {
 
 /// ## Setters.
 impl Msg {
-	/// # Set Indent.
+	/// # Set Indentation.
 	pub fn set_indent(&mut self, indent: u8) {
 		self.0.replace(PART_INDENT, &b" ".repeat(4.min(indent as usize) * 4));
 	}
@@ -422,17 +456,19 @@ impl Msg {
 
 	#[cfg(feature = "fitted")]
 	#[must_use]
-	/// # Capped Width.
+	/// # Capped Width Slice.
 	///
 	/// This will return a byte string that should fit a given console width if
-	/// printed.
+	/// printed. This is subject to the usual disclaimers of "Unicode is
+	/// monstrous and unpredictable", but it does its best, and will be more
+	/// accurate than simply chopping to `len()`.
 	///
 	/// Space will be trimmed from the message portion as needed, leaving
 	/// prefixes, suffixes, and other parts unchanged.
 	///
 	/// If the message cannot be made to fit, an empty byte string is returned.
 	pub fn fitted(&self, width: usize) -> Cow<[u8]> {
-		// Quick length bypass; length will only ever be greater or equal-to
+		// Quick length bypass; length will only ever be greater or equal to
 		// width, so if that fits, the message fits.
 		if self.len() <= width {
 			return Cow::Borrowed(self);
@@ -490,6 +526,11 @@ impl Msg {
 	///
 	/// This returns a tuple containing the total width as well as the width
 	/// of the message part.
+	///
+	/// This implementation takes various shortcuts given the nature of the
+	/// struct that would not necessarily work for all buffers. For example,
+	/// indentation is always ASCII, so length is equivalent to width, and
+	/// timestamps always have 21 printable characters.
 	fn width(&self) -> (usize, usize) {
 		unsafe {
 			let msg_width = self.0.width(PART_MSG);
@@ -511,7 +552,10 @@ impl Msg {
 
 /// ## Printing.
 impl Msg {
-	/// # Print to STDOUT.
+	/// # Locked Print to STDOUT.
+	///
+	/// This is equivalent to calling either `print!()` or `println()`
+	/// depending on whether or not a trailing linebreak has been set.
 	pub fn print(&self) {
 		use io::Write;
 
@@ -521,7 +565,10 @@ impl Msg {
 			.and_then(|_| handle.flush());
 	}
 
-	/// # Print to STDERR.
+	/// # Locked Print to STDERR.
+	///
+	/// This is equivalent to calling either `eprint!()` or `eprintln()`
+	/// depending on whether or not a trailing linebreak has been set.
 	pub fn eprint(&self) {
 		use io::Write;
 
@@ -532,6 +579,13 @@ impl Msg {
 	}
 
 	/// # Print and Die.
+	///
+	/// This is a convenience method for printing a message to STDERR and
+	/// terminating the thread with the provided exit code. Generally you'd
+	/// want to pass a non-zero value here.
+	///
+	/// Be careful calling this method in parallel contexts as it will only
+	/// stop the current thread, not the entire program execution.
 	pub fn die(&self, code: i32) {
 		self.eprint();
 		std::process::exit(code);
@@ -544,21 +598,26 @@ impl Msg {
 	/// "N" to proceed. Positive values return `true`, negative values return
 	/// `false`. The default (if the user just hits <enter>) is "N".
 	///
+	/// Note: the prompt normalizes the suffix and newline parts for display.
+	/// If your message contains these parts, they will be ignored by the
+	/// prompt action, but will be retained in the original struct should you
+	/// wish to use it in some other manner later in your code.
+	///
 	/// ## Example
 	///
 	/// ```no_run
-	/// use fyi_msg::Msg;
-	/// let mut msg = Msg::new("Do you like chickens?");
-	/// if msg.prompt() {
+	/// use fyi_msg::{Msg, MsgKind};
+	///
+	/// if Msg::new(MsgKind::Confirm, "Do you like chickens?").prompt() {
 	///    println!("That's great! They like you too!");
 	/// }
 	/// ```
 	pub fn prompt(&self) -> bool {
 		// Clone the message and append a little [y/N] instructional bit to the
 		// end.
-		let mut q = self.clone();
-		q.set_suffix(" \x1b[2m[y/\x1b[4mN\x1b[0;2m]\x1b[0m ");
-		q.set_newline(false);
+		let q = self.clone()
+			.with_suffix(" \x1b[2m[y/\x1b[4mN\x1b[0;2m]\x1b[0m ")
+			.with_newline(false);
 
 		// Ask and collect input, looping until a valid response is typed.
 		let mut result = String::new();

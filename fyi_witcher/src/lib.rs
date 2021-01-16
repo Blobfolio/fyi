@@ -55,11 +55,7 @@ mod witcher;
 mod witching;
 pub mod utility;
 
-pub use witcher::{
-	Witcher,
-	WitcherMatcher,
-	WitcherMatcherError,
-};
+pub use witcher::Witcher;
 pub use witching::{
 	Witching,
 	WITCHING_DIFF,
