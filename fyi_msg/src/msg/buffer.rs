@@ -367,11 +367,20 @@ macro_rules! define_buffer {
 		/// ## Misc.
 		impl $name {
 			/// # Grow.
+			///
+			/// ## Safety
+			///
+			/// This method leaves data uninitialized! It is the responsibility
+			/// of the callers to ensure data is written before any access is
+			/// attempted. It is private, and the callers do do that, so it
+			/// should be safe in practice. ;)
 			fn resize_grow(&mut self, idx: usize, adj: usize) {
+				// Quick short-circuit.
+				if adj == 0 { return; }
+
 				let end: usize = self.end(idx);
 				let len: usize = self.buf.len();
-
-				self.buf.resize(len + adj, 0);
+				self.buf.reserve(adj);
 
 				// We need to shift things over.
 				if end < len {
@@ -381,7 +390,12 @@ macro_rules! define_buffer {
 							self.buf.as_mut_ptr().add(end + adj),
 							len - end
 						);
+
+						self.buf.set_len(len + adj);
 					}
+				}
+				else {
+					unsafe { self.buf.set_len(len + adj); }
 				}
 
 				self.increase(idx, adj);
