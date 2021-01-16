@@ -357,7 +357,8 @@ impl Argue {
 		if 0 != self.flags & FLAG_HAS_VERSION {
 			Msg::plain(format!("{} v{}", name.as_ref(), version.as_ref()))
 				.with_newline(true)
-				.die(1);
+				.print();
+			exit(0);
 		}
 
 		self
