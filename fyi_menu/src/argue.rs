@@ -211,12 +211,10 @@ impl Argue {
 				x.as_bytes().iter().all(u8::is_ascii_whitespace)
 			)
 			.fold(
-				Self {
-					flags,
-					..Self::default()
-				},
+				Self::default(),
 				Self::push
 			)
+			.with_flags(flags)
 	}
 
 	#[must_use]
