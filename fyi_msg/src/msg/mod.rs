@@ -615,9 +615,9 @@ impl Msg {
 	pub fn prompt(&self) -> bool {
 		// Clone the message and append a little [y/N] instructional bit to the
 		// end.
-		let mut q = self.clone();
-		q.set_suffix(" \x1b[2m[y/\x1b[4mN\x1b[0;2m]\x1b[0m ");
-		q.set_newline(false);
+		let q = self.clone()
+			.with_suffix(" \x1b[2m[y/\x1b[4mN\x1b[0;2m]\x1b[0m ")
+			.with_newline(false);
 
 		// Ask and collect input, looping until a valid response is typed.
 		let mut result = String::new();
