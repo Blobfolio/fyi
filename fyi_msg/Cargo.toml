@@ -1,6 +1,6 @@
 [package]
 name = "fyi_msg"
-version = "0.5.2"
+version = "0.5.3"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "Lib version of FYI."
