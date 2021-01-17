@@ -7,7 +7,6 @@ use crate::{
 	utility,
 	Witching,
 };
-use rayon::prelude::*;
 use std::{
 	borrow::Borrow,
 	fs,
@@ -81,7 +80,7 @@ pub struct Witcher {
 	/// Unique path hashes (to prevent duplicate scans, results).
 	seen: AHashSet<u64>,
 	/// Filter callback.
-	cb: Box<dyn Fn(&PathBuf) -> bool + 'static>,
+	cb: Box<dyn Fn(&PathBuf) -> bool + 'static + Send + Sync>,
 }
 
 impl Default for Witcher {
@@ -112,7 +111,7 @@ impl Witcher {
 	///     .build();
 	/// ```
 	pub fn with_filter<F>(mut self, cb: F) -> Self
-	where F: Fn(&PathBuf) -> bool + 'static {
+	where F: Fn(&PathBuf) -> bool + 'static + Send + Sync {
 		self.cb = Box::new(cb);
 		self
 	}
@@ -322,46 +321,62 @@ impl Witcher {
 	///     .build();
 	/// ```
 	pub fn build(self) -> Vec<PathBuf> {
-		use std::sync::{Arc, Mutex};
+		use rayon::{
+			prelude::*,
+			iter::Either,
+		};
+		use std::sync::{
+			Arc,
+			Mutex,
+			PoisonError,
+		};
+
+		// Short circuit.
+		if self.dirs.is_empty() {
+			return self.files;
+		}
 
 		// Let's destructure to make life easier.
 		let Self { mut dirs, mut files, seen, cb } = self;
+
+		// We'll need to be able to share the path cache between threads.
 		let seen = Arc::from(Mutex::new(seen));
 
-		// While there are directories in the queue, scan them!
-		while ! dirs.is_empty() {
-			// Read each directory.
-			let (tx, rx) = crossbeam_channel::unbounded();
-			dirs.par_drain(..)
+		loop {
+			// Process each directory in the queue, separating its (unique)
+			// results into new collections of directories or files
+			// respectively.
+			let (d2, f2): (Vec<PathBuf>, Vec<PathBuf>) = dirs.par_drain(..)
 				.filter_map(|p| fs::read_dir(p).ok())
-				.for_each(|paths| {
-					let s2 = seen.clone();
+				.flat_map(|paths|
+					paths.filter_map(|p| p.ok().map(|p| p.path()))
+						.collect::<Vec<PathBuf>>()
+				)
+				.filter_map(|p| std::fs::canonicalize(p)
+					.ok()
+					.and_then(|p| {
+						if seen.lock()
+							.unwrap_or_else(PoisonError::into_inner)
+							.insert(utility::hash64(utility::path_as_bytes(&p)))
+						{
+							if p.is_dir() { return Some(Either::Left(p)); }
+							else if cb(&p) { return Some(Either::Right(p)); }
+						}
 
-					paths.filter_map(|p|
-						p.and_then(|p| fs::canonicalize(p.path()))
-							.ok()
-					)
-						.filter(|p|
-							s2.lock()
-								.unwrap_or_else(std::sync::PoisonError::into_inner)
-								.insert(utility::hash64(utility::path_as_bytes(p)))
-						)
-						.for_each(|p| tx.send(p).unwrap());
-				});
+						None
+					})
+				)
+				.partition_map(|p| p);
 
-			// Collect the paths found.
-			drop(tx);
-			rx.iter().for_each(|p|
-				if p.is_dir() {
-					dirs.push(p);
-				}
-				else if (cb)(&p) {
-					files.push(p);
-				}
-			);
+			// Record the matching files.
+			files.par_extend(f2);
+
+			// If there are no new directories, we're done.
+			if d2.is_empty() { return files; }
+
+			// Load the directories back up so we can do it all over again.
+			dirs.par_extend(d2);
 		}
-
-		files
 	}
 
 	#[must_use]
