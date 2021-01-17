@@ -474,21 +474,26 @@ impl Msg {
 			return Cow::Borrowed(self);
 		}
 
-		// Count up the actual width to see if it fits.
-		let (total_width, msg_width) = self.width();
-		if total_width <= width {
-			return Cow::Borrowed(self);
-		}
-
-		// Only the `PART_MSG` gets trimmed; it has to be long enough to make
-		// the difference or we'll return an empty slice.
-		let trim = total_width - width;
-		if msg_width < trim {
+		// If the fixed width bits are themselves too big, we can't fit print.
+		let fixed_width: usize =
+			self.0.len(PART_INDENT) +
+			unsafe { self.0.width(PART_PREFIX) + self.0.width(PART_SUFFIX) } +
+			if 0 == self.0.len(PART_TIMESTAMP) { 0 }
+			else { 21 };
+		if fixed_width > width {
 			return Cow::Owned(Vec::new());
 		}
 
-		// Find out how much of the string can be made to fit.
-		let keep = unsafe { self.0.fitted(PART_MSG, msg_width - trim) };
+		// Check the length again; the fixed bits might just have a lot of
+		// ANSI.
+		let trim = width - fixed_width;
+		let msg_len = self.0.len(PART_MSG);
+		if msg_len <= trim {
+			return Cow::Borrowed(self);
+		}
+
+		// Okay, try to trim it.
+		let keep = unsafe { self.0.fitted(PART_MSG, trim) };
 		if keep == 0 {
 			Cow::Owned(Vec::new())
 		}
@@ -497,7 +502,9 @@ impl Msg {
 			let mut tmp = self.clone();
 			tmp.0.truncate(PART_MSG, keep);
 
-			// We might need to append an ANSI reset to be safe.
+			// We might need to append an ANSI reset to be safe. This might be
+			// unnecessary, but nitpicking is more expensive than redundancy
+			// here.
 			if tmp.0.get(PART_MSG).contains(&b'\x1b') {
 				tmp.0.extend(PART_MSG, b"\x1b[0m");
 			}
@@ -520,34 +527,6 @@ impl Msg {
 	#[must_use]
 	/// # Is Empty.
 	pub const fn is_empty(&self) -> bool { self.len() == 0 }
-
-	#[cfg(feature = "fitted")]
-	/// # Message width.
-	///
-	/// This returns a tuple containing the total width as well as the width
-	/// of the message part.
-	///
-	/// This implementation takes various shortcuts given the nature of the
-	/// struct that would not necessarily work for all buffers. For example,
-	/// indentation is always ASCII, so length is equivalent to width, and
-	/// timestamps always have 21 printable characters.
-	fn width(&self) -> (usize, usize) {
-		unsafe {
-			let msg_width = self.0.width(PART_MSG);
-			let mut total =
-				self.0.len(PART_INDENT) +
-				self.0.width(PART_PREFIX) +
-				self.0.width(PART_SUFFIX) +
-				msg_width;
-
-			// If present, the printable bits are always [YYYY-MM-DD HH:MM:SS].
-			if 0 != self.0.len(PART_TIMESTAMP) {
-				total += 21;
-			}
-
-			(total, msg_width)
-		}
-	}
 }
 
 /// ## Printing.
