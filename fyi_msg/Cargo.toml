@@ -12,6 +12,7 @@ publish = false
 version = "0.4.*"
 default-features = false
 features = [ "clock", "std" ]
+optional = true
 
 [dependencies.fyi_num]
 path = "../fyi_num"
@@ -35,11 +36,12 @@ harness = false
 name = "msg"
 
 [features]
-default = []
-
 # This adds a few additional MsgKinds relevant only to the main FYI binary.
 # There is no point enabling this in other crates.
 bin_kinds = []
 
-# Add width-capping support to the Msg struct.
+# Add width-fitting support to the Msg struct, i.e. Msg.fitted().
 fitted = [ "unicode-width" ]
+
+# Add timestamp support to messages.
+timestamps = [ "chrono" ]

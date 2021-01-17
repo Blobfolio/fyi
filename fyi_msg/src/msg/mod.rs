@@ -37,6 +37,7 @@ pub use kind::MsgKind;
 /// Buffer Index: Indentation.
 const PART_INDENT: usize = 0;
 
+#[cfg(feature = "timestamps")]
 /// Buffer Index: Timestamp.
 const PART_TIMESTAMP: usize = 1;
 
@@ -60,6 +61,7 @@ const PART_NEWLINE: usize = 5;
 /// Enable Indentation (equivalent to 4 spaces).
 pub const FLAG_INDENT: u8 =    0b0001;
 
+#[cfg(feature = "timestamps")]
 /// Enable Timestamp.
 pub const FLAG_TIMESTAMP: u8 = 0b0010;
 
@@ -68,9 +70,15 @@ pub const FLAG_NEWLINE: u8 =   0b0100;
 
 
 
+#[cfg(feature = "timestamps")]
 #[derive(Debug, Default, Clone)]
 /// # Message.
 pub struct Msg(MsgBuffer6);
+
+#[cfg(not(feature = "timestamps"))]
+#[derive(Debug, Default, Clone)]
+/// # Message.
+pub struct Msg(MsgBuffer5);
 
 impl AsRef<str> for Msg {
 	#[inline]
@@ -142,7 +150,9 @@ impl Msg {
 		let msg = msg.as_ref().as_bytes();
 		let p_end = kind.len();
 		let m_end = p_end + msg.len();
-		Self(MsgBuffer6::from_raw_parts(
+
+		#[cfg(feature = "timestamps")]
+		return Self(MsgBuffer6::from_raw_parts(
 			[kind.as_bytes(), msg].concat(),
 			[
 				0, 0,         // Indentation.
@@ -152,7 +162,19 @@ impl Msg {
 				m_end, m_end, // Suffix.
 				m_end, m_end, // Newline.
 			]
-		))
+		));
+
+		#[cfg(not(feature = "timestamps"))]
+		return Self(MsgBuffer5::from_raw_parts(
+			[kind.as_bytes(), msg].concat(),
+			[
+				0, 0,         // Indentation.
+				0, p_end,     // Prefix.
+				p_end, m_end, // Message.
+				m_end, m_end, // Suffix.
+				m_end, m_end, // Newline.
+			]
+		));
 	}
 
 	/// # Custom Prefix.
@@ -178,7 +200,8 @@ impl Msg {
 		let m_end = v.len();
 		let p_end = m_end - msg.len();
 
-		Self(MsgBuffer6::from_raw_parts(
+		#[cfg(feature = "timestamps")]
+		return Self(MsgBuffer6::from_raw_parts(
 			v,
 			[
 				0, 0,         // Indentation.
@@ -188,7 +211,19 @@ impl Msg {
 				m_end, m_end, // Suffix.
 				m_end, m_end, // Newline.
 			]
-		))
+		));
+
+		#[cfg(not(feature = "timestamps"))]
+		return Self(MsgBuffer5::from_raw_parts(
+			v,
+			[
+				0, 0,         // Indentation.
+				0, p_end,     // Prefix.
+				p_end, m_end, // Message.
+				m_end, m_end, // Suffix.
+				m_end, m_end, // Newline.
+			]
+		));
 	}
 
 	/// # Custom Prefix (Unchecked)
@@ -204,7 +239,8 @@ impl Msg {
 		let p_end = prefix.len();
 		let m_end = p_end + msg.len();
 
-		Self(MsgBuffer6::from_raw_parts(
+		#[cfg(feature = "timestamps")]
+		return Self(MsgBuffer6::from_raw_parts(
 			[prefix, msg].concat(),
 			[
 				0, 0,         // Indentation.
@@ -214,7 +250,19 @@ impl Msg {
 				m_end, m_end, // Suffix.
 				m_end, m_end, // Newline.
 			]
-		))
+		));
+
+		#[cfg(not(feature = "timestamps"))]
+		return Self(MsgBuffer5::from_raw_parts(
+			[prefix, msg].concat(),
+			[
+				0, 0,         // Indentation.
+				0, p_end,     // Prefix.
+				p_end, m_end, // Message.
+				m_end, m_end, // Suffix.
+				m_end, m_end, // Newline.
+			]
+		));
 	}
 
 	/// # New Message Without Prefix.
@@ -225,7 +273,9 @@ impl Msg {
 	where S: AsRef<str> {
 		let msg = msg.as_ref().as_bytes();
 		let len = msg.len();
-		Self(MsgBuffer6::from_raw_parts(
+
+		#[cfg(feature = "timestamps")]
+		return Self(MsgBuffer6::from_raw_parts(
 			msg.to_vec(),
 			[
 				0, 0,     // Indentation.
@@ -235,7 +285,19 @@ impl Msg {
 				len, len, // Suffix.
 				len, len, // Newline.
 			]
-		))
+		));
+
+		#[cfg(not(feature = "timestamps"))]
+		return Self(MsgBuffer5::from_raw_parts(
+			msg.to_vec(),
+			[
+				0, 0,     // Indentation.
+				0, 0,     // Prefix.
+				0, len,   // Message.
+				len, len, // Suffix.
+				len, len, // Newline.
+			]
+		));
 	}
 
 	/// # Error
@@ -253,7 +315,9 @@ impl Msg {
 		v.extend_from_slice(b"\n");
 
 		let m_end = len + 18;
-		Self(MsgBuffer6::from_raw_parts(
+
+		#[cfg(feature = "timestamps")]
+		return Self(MsgBuffer6::from_raw_parts(
 			v,
 			[
 				0, 0,             // Indentation.
@@ -263,7 +327,19 @@ impl Msg {
 				m_end, m_end,     // Suffix.
 				m_end, m_end + 1, // Newline.
 			]
-		))
+		));
+
+		#[cfg(not(feature = "timestamps"))]
+		return Self(MsgBuffer6::from_raw_parts(
+			v,
+			[
+				0, 0,             // Indentation.
+				0, 18,            // Prefix.
+				18, m_end,        // Message.
+				m_end, m_end,     // Suffix.
+				m_end, m_end + 1, // Newline.
+			]
+		));
 	}
 }
 
@@ -279,9 +355,12 @@ impl Msg {
 		if 0 != flags & FLAG_INDENT {
 			self.set_indent(1);
 		}
+
+		#[cfg(feature = "timestamps")]
 		if 0 != flags & FLAG_TIMESTAMP {
 			self.set_timestamp(true);
 		}
+
 		if 0 != flags & FLAG_NEWLINE {
 			self.set_newline(true);
 		}
@@ -298,6 +377,7 @@ impl Msg {
 		self
 	}
 
+	#[cfg(feature = "timestamps")]
 	#[must_use]
 	/// # With Timestamp.
 	///
@@ -368,6 +448,7 @@ impl Msg {
 		self.0.replace(PART_INDENT, &b" ".repeat(4.min(indent as usize) * 4));
 	}
 
+	#[cfg(feature = "timestamps")]
 	/// # Set Timestamp.
 	pub fn set_timestamp(&mut self, timestamp: bool) {
 		if timestamp {
@@ -474,12 +555,20 @@ impl Msg {
 			return Cow::Borrowed(self);
 		}
 
+		#[cfg(feature = "timestamps")]
 		// If the fixed width bits are themselves too big, we can't fit print.
 		let fixed_width: usize =
 			self.0.len(PART_INDENT) +
 			unsafe { self.0.width(PART_PREFIX) + self.0.width(PART_SUFFIX) } +
 			if 0 == self.0.len(PART_TIMESTAMP) { 0 }
 			else { 21 };
+
+		#[cfg(not(feature = "timestamps"))]
+		// If the fixed width bits are themselves too big, we can't fit print.
+		let fixed_width: usize =
+			self.0.len(PART_INDENT) +
+			unsafe { self.0.width(PART_PREFIX) + self.0.width(PART_SUFFIX) };
+
 		if fixed_width > width {
 			return Cow::Owned(Vec::new());
 		}
