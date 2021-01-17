@@ -67,7 +67,6 @@ impl fmt::Display for NiceInt {
 }
 
 impl From<u8> for NiceInt {
-	#[allow(clippy::integer_division)]
 	/// # From `u8`.
 	fn from(num: u8) -> Self {
 		unsafe {
@@ -93,7 +92,6 @@ impl From<u8> for NiceInt {
 }
 
 impl From<u16> for NiceInt {
-	#[allow(clippy::integer_division)]
 	fn from(mut num: u16) -> Self {
 		unsafe {
 			let mut out = Self::default();
@@ -101,8 +99,9 @@ impl From<u16> for NiceInt {
 
 			// For `u16` this can only trigger once.
 			if num >= 1000 {
-				write_u8_3(ptr.add(out.from - 3), usize::from(num % 1000));
-				num /= 1000;
+				let (div, rem) = num_integer::div_mod_floor(num, 1000);
+				write_u8_3(ptr.add(out.from - 3), usize::from(rem));
+				num = div;
 				out.from -= 4;
 			}
 
@@ -125,7 +124,6 @@ impl From<u16> for NiceInt {
 }
 
 impl From<u32> for NiceInt {
-	#[allow(clippy::integer_division)]
 	fn from(num: u32) -> Self {
 		// Skip all the index casts.
 		Self::from(num as usize)
@@ -139,7 +137,6 @@ impl From<u64> for NiceInt {
 		Self::from(num as usize)
 	}
 
-	#[allow(clippy::integer_division)]
 	#[cfg(not(target_pointer_width = "64"))]
 	fn from(mut num: u64) -> Self {
 		unsafe {
@@ -147,8 +144,9 @@ impl From<u64> for NiceInt {
 			let ptr = out.inner.as_mut_ptr();
 
 			while num >= 1000 {
-				write_u8_3(ptr.add(out.from - 3), (num % 1000) as usize);
-				num /= 1000;
+				let (div, rem) = num_integer::div_mod_floor(num, 1000);
+				write_u8_3(ptr.add(out.from - 3), usize::from(rem));
+				num = div;
 				out.from -= 4;
 			}
 
@@ -171,15 +169,15 @@ impl From<u64> for NiceInt {
 }
 
 impl From<usize> for NiceInt {
-	#[allow(clippy::integer_division)]
 	fn from(mut num: usize) -> Self {
 		unsafe {
 			let mut out = Self::default();
 			let ptr = out.inner.as_mut_ptr();
 
 			while num >= 1000 {
-				write_u8_3(ptr.add(out.from - 3), num % 1000);
-				num /= 1000;
+				let (div, rem) = num_integer::div_mod_floor(num, 1000);
+				write_u8_3(ptr.add(out.from - 3), rem);
+				num = div;
 				out.from -= 4;
 			}
 
@@ -317,7 +315,6 @@ impl NiceInt {
 
 
 
-#[allow(clippy::integer_division)]
 /// # Write `u8` x 3
 unsafe fn write_u8_3(buf: *mut u8, num: usize) {
 	ptr::copy_nonoverlapping(TRIPLE.as_ptr().add(num * 3), buf, 3);
