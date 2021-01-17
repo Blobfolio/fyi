@@ -677,5 +677,9 @@ mod tests {
 		msg.set_msg("\x1b[1mHello\x1b[0m World");
 		assert_eq!(msg.fitted(12), &b"\x1b[91;1mError:\x1b[0m \x1b[1mHello\x1b[0m\x1b[0m\n"[..]);
 		assert_eq!(msg.fitted(11), &b"\x1b[91;1mError:\x1b[0m \x1b[1mHell\x1b[0m\n"[..]);
+
+		// Try it with Unicode!
+		msg.set_msg("Björk Guðmundsdóttir");
+		assert_eq!(msg.fitted(12), "\x1b[91;1mError:\x1b[0m Björk\n".as_bytes());
 	}
 }
