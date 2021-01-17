@@ -10,11 +10,11 @@ publish = false
 
 [dependencies]
 ahash = "0.6.*"
-bytecount = "0.6.*"
-num-integer = "0.1.*"
 rayon = "1.5.*"
-regex = "1.4.*"
-term_size = "0.3.*"
+
+[dependencies.bytecount]
+version = "0.6.*"
+optional = true
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"
@@ -22,6 +22,18 @@ features = [ "fitted" ]
 
 [dependencies.fyi_num]
 path = "../fyi_num"
+
+[dependencies.num-integer]
+version = "0.1.*"
+optional = true
+
+[dependencies.regex]
+version = "1.4.*"
+optional = true
+
+[dependencies.term_size]
+version = "0.3.*"
+optional = true
 
 [dev-dependencies]
 criterion = "*"
@@ -36,3 +48,12 @@ harness = false
 
 [[example]]
 name = "witcher"
+
+[features]
+default = [ "regexp", "witching" ]
+
+# Enable Regex matching in Witcher.
+regexp = [ "regex" ]
+
+# Enable the Witching progress bar.
+witching = [ "bytecount", "num-integer", "term_size" ]

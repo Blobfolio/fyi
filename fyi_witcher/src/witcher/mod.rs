@@ -3,10 +3,7 @@
 */
 
 use ahash::AHashSet;
-use crate::{
-	utility,
-	Witching,
-};
+use crate::utility;
 use std::{
 	borrow::Borrow,
 	fs,
@@ -230,6 +227,7 @@ impl Witcher {
 		self
 	}
 
+	#[cfg(feature = "regexp")]
 	/// # With a Regex Callback.
 	///
 	/// This is a convenience method for filtering files by regular expression.
@@ -379,6 +377,7 @@ impl Witcher {
 		}
 	}
 
+	#[cfg(feature = "witching")]
 	#[must_use]
 	/// # Build (into Progress)!
 	///
@@ -396,7 +395,7 @@ impl Witcher {
 	///     .into_witching()
 	///     .run(|p| { ... });
 	/// ```
-	pub fn into_witching(self) -> Witching { Witching::from(self.build()) }
+	pub fn into_witching(self) -> crate::Witching { crate::Witching::from(self.build()) }
 }
 
 

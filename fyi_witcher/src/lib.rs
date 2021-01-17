@@ -52,10 +52,12 @@ and major refactors may be introduced between releases.
 
 
 mod witcher;
-mod witching;
+#[cfg(feature = "witching")] mod witching;
 pub mod utility;
 
 pub use witcher::Witcher;
+
+#[cfg(feature = "witching")]
 pub use witching::{
 	Witching,
 	WITCHING_DIFF,

@@ -32,6 +32,7 @@ pub fn path_as_bytes(p: &std::path::PathBuf) -> &[u8] {
 	unsafe { &*(p.as_os_str() as *const std::ffi::OsStr as *const [u8]) }
 }
 
+#[cfg(feature = "witching")]
 #[must_use]
 #[inline]
 /// # Term Width.
