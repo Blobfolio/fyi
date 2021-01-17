@@ -61,5 +61,7 @@ pub use msg::{
 	MsgKind,
 	FLAG_INDENT,
 	FLAG_NEWLINE,
-	FLAG_TIMESTAMP,
 };
+
+#[cfg(feature = "timestamps")]
+pub use msg::FLAG_TIMESTAMP;
