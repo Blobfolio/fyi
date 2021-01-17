@@ -37,21 +37,26 @@ pub use kind::MsgKind;
 /// Buffer Index: Indentation.
 const PART_INDENT: usize = 0;
 
-#[cfg(feature = "timestamps")]
 /// Buffer Index: Timestamp.
-const PART_TIMESTAMP: usize = 1;
+#[cfg(feature = "timestamps")] const PART_TIMESTAMP: usize = 1;
 
 /// Buffer Index: Prefix.
-const PART_PREFIX: usize = 2;
+#[cfg(feature = "timestamps")] const PART_PREFIX: usize = 2;
+#[cfg(not(feature = "timestamps"))] const PART_PREFIX: usize = 1;
 
 /// Buffer Index: Message body.
-const PART_MSG: usize = 3;
+#[cfg(feature = "timestamps")] const PART_MSG: usize = 3;
+#[cfg(not(feature = "timestamps"))] const PART_MSG: usize = 2;
 
 /// Buffer Index: Suffix.
-const PART_SUFFIX: usize = 4;
+#[cfg(feature = "timestamps")] const PART_SUFFIX: usize = 4;
+#[cfg(not(feature = "timestamps"))] const PART_SUFFIX: usize = 3;
 
 /// Buffer Index: Newline.
-const PART_NEWLINE: usize = 5;
+#[cfg(feature = "timestamps")] const PART_NEWLINE: usize = 5;
+#[cfg(not(feature = "timestamps"))] const PART_NEWLINE: usize = 4;
+
+
 
 // Configuration Flags.
 //
