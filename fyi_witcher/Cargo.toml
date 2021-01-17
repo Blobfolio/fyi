@@ -18,10 +18,12 @@ optional = true
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"
+optional = true
 features = [ "fitted" ]
 
 [dependencies.fyi_num]
 path = "../fyi_num"
+optional = true
 
 [dependencies.num-integer]
 version = "0.1.*"
@@ -50,10 +52,8 @@ harness = false
 name = "witcher"
 
 [features]
-default = [ "regexp", "witching" ]
-
 # Enable Regex matching in Witcher.
 regexp = [ "regex" ]
 
 # Enable the Witching progress bar.
-witching = [ "bytecount", "num-integer", "term_size" ]
+witching = [ "bytecount", "fyi_msg", "fyi_num", "num-integer", "term_size" ]
