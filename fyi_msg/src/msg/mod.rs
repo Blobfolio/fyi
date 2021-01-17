@@ -330,7 +330,7 @@ impl Msg {
 		));
 
 		#[cfg(not(feature = "timestamps"))]
-		return Self(MsgBuffer6::from_raw_parts(
+		return Self(MsgBuffer5::from_raw_parts(
 			v,
 			[
 				0, 0,             // Indentation.
