@@ -5,7 +5,6 @@
 use ahash::AHashSet;
 use crate::utility;
 use std::{
-	borrow::Borrow,
 	fs,
 	path::{
 		Path,
@@ -243,7 +242,7 @@ impl Witcher {
 	///     .build();
 	/// ```
 	pub fn with_regex<R>(mut self, reg: R) -> Self
-	where R: Borrow<str> {
+	where R: std::borrow::Borrow<str> {
 		use regex::bytes::Regex;
 		let pattern: Regex = Regex::new(reg.borrow()).expect("Invalid Regex.");
 		self.cb = Box::new(move|p: &PathBuf| pattern.is_match(utility::path_as_bytes(p)));
@@ -423,27 +422,30 @@ mod tests {
 		assert!(w1.contains(&abs_p2));
 		assert!(! w1.contains(&abs_perr));
 
-		// Look only for .txt files.
-		w1 = Witcher::default()
-			.with_regex(r"(?i)\.txt$")
-			.with_paths(&[PathBuf::from("tests/")])
-			.build();
-		assert!(! w1.is_empty());
-		assert_eq!(w1.len(), 1);
-		assert!(w1.contains(&abs_p1));
-		assert!(! w1.contains(&abs_p2));
-		assert!(! w1.contains(&abs_perr));
+		#[cfg(feature = "regexp")]
+		{
+			// Look only for .txt files.
+			w1 = Witcher::default()
+				.with_regex(r"(?i)\.txt$")
+				.with_paths(&[PathBuf::from("tests/")])
+				.build();
+			assert!(! w1.is_empty());
+			assert_eq!(w1.len(), 1);
+			assert!(w1.contains(&abs_p1));
+			assert!(! w1.contains(&abs_p2));
+			assert!(! w1.contains(&abs_perr));
 
-		// Look for something that doesn't exist.
-		w1 = Witcher::default()
-			.with_regex(r"(?i)\.exe$")
-			.with_path(PathBuf::from("tests/"))
-			.build();
-		assert!(w1.is_empty());
-		assert_eq!(w1.len(), 0);
-		assert!(! w1.contains(&abs_p1));
-		assert!(! w1.contains(&abs_p2));
-		assert!(! w1.contains(&abs_perr));
+			// Look for something that doesn't exist.
+			w1 = Witcher::default()
+				.with_regex(r"(?i)\.exe$")
+				.with_path(PathBuf::from("tests/"))
+				.build();
+			assert!(w1.is_empty());
+			assert_eq!(w1.len(), 0);
+			assert!(! w1.contains(&abs_p1));
+			assert!(! w1.contains(&abs_p2));
+			assert!(! w1.contains(&abs_perr));
+		}
 
 		// One Extension.
 		w1 = Witcher::default()
