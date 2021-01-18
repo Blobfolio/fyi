@@ -1,6 +1,6 @@
 [package]
 name = "fyi_witcher"
-version = "0.5.2"
+version = "0.5.4"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "Path traversal helpers."
@@ -10,19 +10,32 @@ publish = false
 
 [dependencies]
 ahash = "0.6.*"
-bytecount = "0.6.*"
-crossbeam-channel = "0.5.*"
-num-integer = "0.1.*"
 rayon = "1.5.*"
-regex = "1.4.*"
-term_size = "0.3.*"
+
+[dependencies.bytecount]
+version = "0.6.*"
+optional = true
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"
+optional = true
 features = [ "fitted" ]
 
 [dependencies.fyi_num]
 path = "../fyi_num"
+optional = true
+
+[dependencies.num-integer]
+version = "0.1.*"
+optional = true
+
+[dependencies.regex]
+version = "1.4.*"
+optional = true
+
+[dependencies.term_size]
+version = "0.3.*"
+optional = true
 
 [dev-dependencies]
 criterion = "*"
@@ -37,3 +50,10 @@ harness = false
 
 [[example]]
 name = "witcher"
+
+[features]
+# Enable Regex matching in Witcher.
+regexp = [ "regex" ]
+
+# Enable the Witching progress bar.
+witching = [ "bytecount", "fyi_msg", "fyi_num", "num-integer", "term_size" ]

@@ -3,13 +3,8 @@
 */
 
 use ahash::AHashSet;
-use crate::{
-	utility,
-	Witching,
-};
-use rayon::prelude::*;
+use crate::utility;
 use std::{
-	borrow::Borrow,
 	fs,
 	path::{
 		Path,
@@ -40,12 +35,18 @@ const LOWER: u8 = 1 << 5;
 /// Results can be filtered prior to being yielded with the use of either
 /// [`with_filter()`](Witcher::with_filter) — specifying a custom callback method
 /// — or [`with_regex()`](Witcher::with_regex) — to match against a pattern.
+/// (The latter requires the `regexp` crate feature be enabled.)
 ///
 /// It is important to define the filter *before* adding any paths, because if
 /// those paths are files, they'll need to be filtered. Right? Right.
 ///
 /// Filter callbacks should accept a `&PathBuf` and return `true` to keep it,
-/// `false` to discard it.
+/// `false` to discard it. Ultimately, they get stored in the struct with the
+/// following type:
+///
+/// ```
+/// Box<dyn Fn(&PathBuf) -> bool + 'static + Send + Sync>
+/// ```
 ///
 /// ## Examples
 ///
@@ -81,7 +82,7 @@ pub struct Witcher {
 	/// Unique path hashes (to prevent duplicate scans, results).
 	seen: AHashSet<u64>,
 	/// Filter callback.
-	cb: Box<dyn Fn(&PathBuf) -> bool + 'static>,
+	cb: Box<dyn Fn(&PathBuf) -> bool + 'static + Send + Sync>,
 }
 
 impl Default for Witcher {
@@ -107,12 +108,12 @@ impl Witcher {
 	/// use fyi_witcher::Witcher;
 	///
 	/// let files = Witcher::default()
-	///     .with_path("/my/dir")
 	///     .with_filter(|p: &PathBuf| { ... })
+	///     .with_path("/my/dir")
 	///     .build();
 	/// ```
 	pub fn with_filter<F>(mut self, cb: F) -> Self
-	where F: Fn(&PathBuf) -> bool + 'static {
+	where F: Fn(&PathBuf) -> bool + 'static + Send + Sync {
 		self.cb = Box::new(cb);
 		self
 	}
@@ -133,7 +134,7 @@ impl Witcher {
 	///
 	/// This method uses some "unsafe" pointer-casting tricks that would be
 	/// unsuitable in nearly any other context, but as we're comparing bytes
-	/// and numbers, it works A-OK here.
+	/// and numbers — rather than strings — it works A-OK here.
 	///
 	/// ## Examples
 	///
@@ -141,8 +142,8 @@ impl Witcher {
 	/// use fyi_witcher::Witcher;
 	///
 	/// let files = Witcher::default()
-	///     .with_path("/my/dir")
 	///     .with_ext(b".jpg")
+	///     .with_path("/my/dir")
 	///     .build();
 	/// ```
 	pub fn with_ext(mut self, ext: &[u8]) -> Self {
@@ -231,9 +232,13 @@ impl Witcher {
 		self
 	}
 
+	#[cfg(feature = "regexp")]
 	/// # With a Regex Callback.
 	///
 	/// This is a convenience method for filtering files by regular expression.
+	///
+	/// This method is only available when the `regexp` crate feature is
+	/// enabled.
 	///
 	/// ## Examples
 	///
@@ -241,12 +246,12 @@ impl Witcher {
 	/// use fyi_witcher::Witcher;
 	///
 	/// let files = Witcher::default()
-	///     .with_path("/my/dir")
 	///     .with_regex(r"(?i).+\.jpe?g$")
+	///     .with_path("/my/dir")
 	///     .build();
 	/// ```
 	pub fn with_regex<R>(mut self, reg: R) -> Self
-	where R: Borrow<str> {
+	where R: std::borrow::Borrow<str> {
 		use regex::bytes::Regex;
 		let pattern: Regex = Regex::new(reg.borrow()).expect("Invalid Regex.");
 		self.cb = Box::new(move|p: &PathBuf| pattern.is_match(utility::path_as_bytes(p)));
@@ -286,8 +291,8 @@ impl Witcher {
 	/// use fyi_witcher::Witcher;
 	///
 	/// let files = Witcher::default()
-	///     .with_path("/my/dir")
 	///     .with_ext(b".jpg")
+	///     .with_path("/my/dir")
 	///     .build();
 	/// ```
 	pub fn with_path<P>(mut self, path: P) -> Self
@@ -309,7 +314,7 @@ impl Witcher {
 	/// # Build!
 	///
 	/// Once everything is set up, call this method to consume the queue and
-	/// collect the files into a `Vec<PathBuf>`.
+	/// collect the files into a `Vec<PathBuf>`, consuming `self`.
 	///
 	/// ## Examples
 	///
@@ -317,71 +322,90 @@ impl Witcher {
 	/// use fyi_witcher::Witcher;
 	///
 	/// let files = Witcher::default()
-	///     .with_path("/my/dir")
 	///     .with_ext(b".jpg")
+	///     .with_path("/my/dir")
 	///     .build();
 	/// ```
 	pub fn build(self) -> Vec<PathBuf> {
-		use std::sync::{Arc, Mutex};
+		use rayon::{
+			prelude::*,
+			iter::Either,
+		};
+		use std::sync::{
+			Arc,
+			Mutex,
+			PoisonError,
+		};
+
+		// Short circuit.
+		if self.dirs.is_empty() {
+			return self.files;
+		}
 
 		// Let's destructure to make life easier.
 		let Self { mut dirs, mut files, seen, cb } = self;
+
+		// We'll need to be able to share the path cache between threads.
 		let seen = Arc::from(Mutex::new(seen));
 
-		// While there are directories in the queue, scan them!
-		while ! dirs.is_empty() {
-			// Read each directory.
-			let (tx, rx) = crossbeam_channel::unbounded();
-			dirs.par_drain(..)
+		loop {
+			// Process each directory in the queue, separating its (unique)
+			// results into new collections of directories or files
+			// respectively.
+			let (d2, f2): (Vec<PathBuf>, Vec<PathBuf>) = dirs.par_drain(..)
 				.filter_map(|p| fs::read_dir(p).ok())
-				.for_each(|paths| {
-					let s2 = seen.clone();
+				.flat_map(|paths|
+					paths.filter_map(|p| p.ok().map(|p| p.path()))
+						.collect::<Vec<PathBuf>>()
+				)
+				.filter_map(|p| std::fs::canonicalize(p)
+					.ok()
+					.and_then(|p| {
+						if seen.lock()
+							.unwrap_or_else(PoisonError::into_inner)
+							.insert(utility::hash64(utility::path_as_bytes(&p)))
+						{
+							if p.is_dir() { return Some(Either::Left(p)); }
+							else if cb(&p) { return Some(Either::Right(p)); }
+						}
 
-					paths.filter_map(|p|
-						p.and_then(|p| fs::canonicalize(p.path()))
-							.ok()
-					)
-						.filter(|p|
-							s2.lock()
-								.unwrap_or_else(std::sync::PoisonError::into_inner)
-								.insert(utility::hash64(utility::path_as_bytes(p)))
-						)
-						.for_each(|p| tx.send(p).unwrap());
-				});
+						None
+					})
+				)
+				.partition_map(|p| p);
 
-			// Collect the paths found.
-			drop(tx);
-			rx.iter().for_each(|p|
-				if p.is_dir() {
-					dirs.push(p);
-				}
-				else if (cb)(&p) {
-					files.push(p);
-				}
-			);
+			// Record the matching files.
+			files.par_extend(f2);
+
+			// If there are no new directories, we're done.
+			if d2.is_empty() { return files; }
+
+			// Load the directories back up so we can do it all over again.
+			dirs.par_extend(d2);
 		}
-
-		files
 	}
 
+	#[cfg(feature = "witching")]
 	#[must_use]
 	/// # Build (into Progress)!
 	///
 	/// This is identical to [`build()`](Witcher::build), except a ready-to-go
 	/// [`Witching`] struct is returned instead of a vector.
 	///
+	/// This method requires the crate feature `witching` be enabled.
+	///
 	/// ## Examples
 	///
 	/// ```no_run
 	/// use fyi_witcher::Witcher;
 	///
 	/// let files = Witcher::default()
-	///     .with_path("/my/dir")
 	///     .with_ext(b".jpg")
+	///     .with_path("/my/dir")
 	///     .into_witching()
 	///     .run(|p| { ... });
 	/// ```
-	pub fn into_witching(self) -> Witching { Witching::from(self.build()) }
+	pub fn into_witching(self) -> crate::Witching { crate::Witching::from(self.build()) }
 }
 
 
@@ -409,27 +433,30 @@ mod tests {
 		assert!(w1.contains(&abs_p2));
 		assert!(! w1.contains(&abs_perr));
 
-		// Look only for .txt files.
-		w1 = Witcher::default()
-			.with_regex(r"(?i)\.txt$")
-			.with_paths(&[PathBuf::from("tests/")])
-			.build();
-		assert!(! w1.is_empty());
-		assert_eq!(w1.len(), 1);
-		assert!(w1.contains(&abs_p1));
-		assert!(! w1.contains(&abs_p2));
-		assert!(! w1.contains(&abs_perr));
+		#[cfg(feature = "regexp")]
+		{
+			// Look only for .txt files.
+			w1 = Witcher::default()
+				.with_regex(r"(?i)\.txt$")
+				.with_paths(&[PathBuf::from("tests/")])
+				.build();
+			assert!(! w1.is_empty());
+			assert_eq!(w1.len(), 1);
+			assert!(w1.contains(&abs_p1));
+			assert!(! w1.contains(&abs_p2));
+			assert!(! w1.contains(&abs_perr));
 
-		// Look for something that doesn't exist.
-		w1 = Witcher::default()
-			.with_regex(r"(?i)\.exe$")
-			.with_path(PathBuf::from("tests/"))
-			.build();
-		assert!(w1.is_empty());
-		assert_eq!(w1.len(), 0);
-		assert!(! w1.contains(&abs_p1));
-		assert!(! w1.contains(&abs_p2));
-		assert!(! w1.contains(&abs_perr));
+			// Look for something that doesn't exist.
+			w1 = Witcher::default()
+				.with_regex(r"(?i)\.exe$")
+				.with_path(PathBuf::from("tests/"))
+				.build();
+			assert!(w1.is_empty());
+			assert_eq!(w1.len(), 0);
+			assert!(! w1.contains(&abs_p1));
+			assert!(! w1.contains(&abs_p2));
+			assert!(! w1.contains(&abs_perr));
+		}
 
 		// One Extension.
 		w1 = Witcher::default()

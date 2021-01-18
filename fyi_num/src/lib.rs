@@ -1,17 +1,20 @@
 /*!
 # FYI Num
 
-This crate contains some numeric helpers.
+This crate contains some numeric helpers, namely around decimal/byte conversion
+and formatting.
+
+The most generally useful member of this library is [`NiceInt`], which converts
+`u8`, `u16`, `u32`, `usize`, and `u64` values into formatted (comma-separated)
+ASCII strings very quickly.
 
 
 
-## Stability: Alpha
+## Stability
 
-This project is under heavy development and subject to change. While the code
-in the `master` branch should always be in a "working" state, breaking changes
-and major refactors may be introduced between releases.
-
-(This should probably *not* be used in production-ready applications.)
+Release versions of this library should be in a working state, but as this
+project is under perpetual development, code might change from version to
+version.
 */
 
 #![warn(clippy::filetype_is_file)]

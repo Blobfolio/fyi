@@ -1,12 +1,15 @@
 [package]
 name = "fyi_num"
-version = "0.5.2"
+version = "0.5.4"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "Number helpers."
 license = "WTFPL"
 repository = "https://github.com/Blobfolio/fyi"
 publish = false
+
+[dependencies]
+num-integer = "0.1.*"
 
 [dev-dependencies]
 criterion = "*"

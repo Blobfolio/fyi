@@ -7,13 +7,20 @@ easily printed to `Stdout` or `Stderr`.
 
 
 
-## Stability: Alpha
+## Optional Features
 
-This project is under heavy development and subject to change. While the code
-in the `master` branch should always be in a "working" state, breaking changes
-and major refactors may be introduced between releases.
+| Feature | Description |
+| ------- | ----------- |
+| fitted | Enables [`Msg::fitted`] for obtaining a slice trimmed to a specific display width. |
+| timestamps | Enables timestamp-related methods and flags like [`Msg::with_timestamp`]. |
 
-(This should probably *not* be used in production-ready applications.)
+
+
+## Stability
+
+Release versions of this library should be in a working state, but as this
+project is under perpetual development, code might change from version to
+version.
 */
 
 #![warn(clippy::filetype_is_file)]
@@ -61,5 +68,7 @@ pub use msg::{
 	MsgKind,
 	FLAG_INDENT,
 	FLAG_NEWLINE,
-	FLAG_TIMESTAMP,
 };
+
+#[cfg(feature = "timestamps")]
+pub use msg::FLAG_TIMESTAMP;

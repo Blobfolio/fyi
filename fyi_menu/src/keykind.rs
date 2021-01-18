@@ -13,9 +13,9 @@
 ///
 /// In keeping with the general ethos of this crate, speed is the name of the game,
 /// which is achieved primarily through simplicity:
-/// * If an entry begins with a single `-`, it is assumed to be a short key.
+/// * If an entry begins with a single `-` and an ASCII letter, it is assumed to be a short key.
 /// * If a short key consists of more than two characters, `2..` is assumed to be a value.
-/// * If an entry begins with two `--`, it is assumed to be a long key.
+/// * If an entry begins with two `--` and an ASCII letter, it is assumed to be a long key.
 /// * If a long key contains an `=`, everything after that is assumed to be a value.
 pub enum KeyKind {
 	/// Not a key.
@@ -26,13 +26,13 @@ pub enum KeyKind {
 	ShortV,
 	/// A long key.
 	Long,
-	/// A long key with a value chunk. The `usize` indicates the position of
-	/// the `=` character, with everything before being the key, and everything
-	/// after being the value.
+	/// A long key with a value. The `usize` indicates the position of the `=`
+	/// character. Everything before is the key; everything after the value.
 	LongV(usize),
 }
 
 impl Default for KeyKind {
+	#[inline]
 	fn default() -> Self { Self::None }
 }
 

@@ -1,5 +1,7 @@
 /*!
 # FYI Msg: Buffer
+
+**Note:** This is not intended for external use and is subject to change.
 */
 
 use std::{
@@ -196,21 +198,17 @@ macro_rules! define_buffer {
 			pub unsafe fn fitted(&self, idx: usize, width: usize) -> usize {
 				use unicode_width::UnicodeWidthChar;
 
-				let len: usize = self.len(idx);
-				if len > width {
-					let mut total_len: usize = 0;
-					let mut total_width: usize = 0;
+				// For our purposes, basic ANSI markup (of the kind we use)
+				// is considered 0-width;
+				let mut in_ansi: bool = false;
 
-					// For our purposes, basic ANSI markup (of the kind we use)
-					// is considered 0-width;
-					let mut in_ansi: bool = false;
-
-					// Convert to a string slice so we can iterate over
-					// individual chars.
-					for c in std::str::from_utf8_unchecked(self.get(idx)).chars() {
+				// Count up the widths and lengths until we reach the end of
+				// the string or hit the ceiling.
+				match std::str::from_utf8_unchecked(self.get(idx))
+					.chars()
+					.try_fold((0, 0), |(w, l), c| {
 						// Find the "length" of this char.
 						let ch_len: usize = c.len_utf8();
-						total_len += ch_len;
 
 						// If we're in the middle of an ANSI sequence nothing
 						// counts, but we need to watch for the end marker so
@@ -218,27 +216,24 @@ macro_rules! define_buffer {
 						if in_ansi {
 							// We're only interested in A/K/m signals.
 							if c == 'A' || c == 'K' || c == 'm' { in_ansi = false; }
-							continue;
+							Ok((w, l + ch_len))
 						}
 						// Are we entering an ANSI sequence?
 						else if c == '\x1b' {
 							in_ansi = true;
-							continue;
+							Ok((w, l + ch_len))
 						}
-
-						// The width matters!
-						let ch_width: usize = UnicodeWidthChar::width(c).unwrap_or_default();
-						total_width += ch_width;
-
-						// Widths can creep up unevenly. If we've gone over, we
-						// need to revert a step and exit.
-						if total_width > width {
-							return total_len - ch_len;
+						else {
+							// Widths can creep up unevenly. If we've gone
+							// over, we need to revert a step and exit.
+							let total_width = w + UnicodeWidthChar::width(c).unwrap_or_default();
+							if total_width > width { Err(l) }
+							else { Ok((total_width, l + ch_len)) }
 						}
+					}) {
+						Ok((_, l)) => l,
+						Err(e) => e,
 					}
-				}
-
-				len
 			}
 
 			#[cfg(feature = "fitted")]
@@ -255,21 +250,22 @@ macro_rules! define_buffer {
 
 				if self.len(idx) == 0 { 0 }
 				else {
-					let mut width: usize = 0;
 					let mut in_ansi: bool = false;
-					for c in std::str::from_utf8_unchecked(self.get(idx)).chars() {
-						if in_ansi {
-							// We're only interested in A/K/m signals.
-							if c == 'A' || c == 'K' || c == 'm' { in_ansi = false; }
-						}
-						// Are we entering an ANSI sequence?
-						else if c == '\x1b' { in_ansi = true; }
-						else {
-							width += UnicodeWidthChar::width(c).unwrap_or_default();
-						}
-					}
-
-					width
+					std::str::from_utf8_unchecked(self.get(idx))
+						.chars()
+						.fold(0, |w, c|
+							if in_ansi {
+								if c == 'A' || c == 'K' || c == 'm' { in_ansi = false; }
+								w
+							}
+							else if c == '\x1b' {
+								in_ansi = true;
+								w
+							}
+							else {
+								w + UnicodeWidthChar::width(c).unwrap_or_default()
+							}
+						)
 				}
 			}
 

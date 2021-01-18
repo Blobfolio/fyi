@@ -9,6 +9,20 @@ use std::{
 #[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, Eq, Hash, PartialEq)]
 /// # Message Kind.
+///
+/// This enum contains built-in prefixes for [`Msg`](crate::Msg). These are
+/// generally only used to initiate a new message with this prefix, like:
+///
+/// ## Examples
+///
+/// ```no_run
+/// use fyi_msg::{Msg, MsgKind};
+///
+/// assert_eq!(
+///     Msg::new(MsgKind::Error, "Oh no!"),
+///     MsgKind::Error.into_msg("Oh no!")
+/// );
+/// ```
 pub enum MsgKind {
 	/// None.
 	None,
@@ -82,9 +96,7 @@ impl From<&str> for MsgKind {
 impl MsgKind {
 	#[must_use]
 	/// # Is Empty?
-	pub const fn is_empty(self) -> bool {
-		matches!(self, Self::None)
-	}
+	pub const fn is_empty(self) -> bool { matches!(self, Self::None) }
 
 	#[must_use]
 	/// # Length.

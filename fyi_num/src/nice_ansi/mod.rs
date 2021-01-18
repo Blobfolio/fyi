@@ -13,7 +13,8 @@ use std::{
 #[derive(Debug, Copy, Clone)]
 /// # Nice ANSI.
 ///
-/// This is a simple enum for generating bold, colored ANSI opening tags.
+/// This is a simple struct for generating bold, colored ANSI opening tags.
+/// This is slightly faster than using `format!()` or the like.
 ///
 /// ## Examples
 ///

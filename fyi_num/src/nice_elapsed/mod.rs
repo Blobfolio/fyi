@@ -101,6 +101,7 @@ impl From<u32> for NiceElapsed {
 	}
 }
 
+// These all work the same way.
 elapsed_from!(usize);
 elapsed_from!(u64);
 elapsed_from!(u128);
@@ -139,7 +140,7 @@ impl NiceElapsed {
 	///
 	/// ## Safety
 	///
-	/// All numbers must be — but should be — less than 99 or undefined things
+	/// All numbers must be — but should be — less than 60 or undefined things
 	/// may happen.
 	unsafe fn from_hms(h: u8, m: u8, s: u8) -> Self {
 		let mut buf = [MaybeUninit::<u8>::uninit(); 36];

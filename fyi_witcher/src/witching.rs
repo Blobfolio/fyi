@@ -1,5 +1,7 @@
 /*!
 # FYI Witcher: `Witching`
+
+This struct is only available when the crate feature `witching` is enabled.
 */
 
 use ahash::AHashSet;
@@ -1050,14 +1052,13 @@ impl Witching {
 	/// This is the base summary, no prefix.
 	///
 	///     X files in M minutes and S seconds.
-	fn summary(&self) -> Msg {
-		Msg::plain(format!(
+	fn summary(&self) -> String {
+		format!(
 			"{} {} in {}.",
 			NiceInt::from(self.total()).as_str(),
 			self.label(),
 			NiceElapsed::from(self.elapsed()).as_str(),
-		))
-			.with_newline(true)
+		)
 	}
 
 	/// # Summarize.
@@ -1067,8 +1068,8 @@ impl Witching {
 	///
 	///     Done: 5 files in 3 seconds.
 	fn summarize(&self) {
-		self.summary()
-			.with_prefix(MsgKind::Done)
+		Msg::new(MsgKind::Done, self.summary())
+			.with_newline(true)
 			.eprint();
 	}
 
@@ -1085,22 +1086,23 @@ impl Witching {
 	///     Crunched: 5 files in 3 seconds. (No savings.)
 	fn summarize_diff(&self, before: u64) {
 		let after: u64 = self.du();
-		let mut msg = self.summary().with_prefix(MsgKind::Crunched);
 
-		unsafe {
-			if 0 == after || before <= after {
-				msg.set_suffix(" \x1b[2m(No savings.)\x1b[0m");
-			}
-			else {
-				msg.set_suffix(format!(
+		if 0 == after || before <= after {
+			Msg::new(MsgKind::Crunched, self.summary())
+				.with_suffix(" \x1b[2m(No savings.)\x1b[0m")
+		}
+		else {
+			Msg::new(MsgKind::Crunched, self.summary())
+				.with_suffix(format!(
 					" \x1b[2m(Saved {} bytes, {}.)\x1b[0m",
 					NiceInt::from(before - after).as_str(),
-					NiceInt::percent_f64(1.0 - (after as f64 / before as f64)).as_str(),
-				));
-			}
+					unsafe {
+						NiceInt::percent_f64(1.0 - (after as f64 / before as f64)).as_str()
+					},
+				))
 		}
-
-		msg.eprint();
+			.with_newline(true)
+			.eprint();
 	}
 
 	/// # Summarize empty.
@@ -1110,10 +1112,7 @@ impl Witching {
 	///
 	///     No files were found.
 	fn summarize_empty(&self) {
-		Msg::new(
-			MsgKind::Warning,
-			format!("No {} were found.", self.label())
-		)
+		Msg::new(MsgKind::Warning, format!("No {} were found.", self.label()))
 			.with_newline(true)
 			.eprint();
 	}
