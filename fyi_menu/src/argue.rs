@@ -262,43 +262,75 @@ impl Argue {
 	#[must_use]
 	/// # Help Helper.
 	///
-	/// Chain this method to `new()` to run the specified callback if the first
+	/// Chain this method to `new()` to print a help screen if the first CLI
 	/// entry is "help" (a subcommand of sorts) or either "-h" or "--help"
-	/// switches are present. The thread will automatically terminate with an
-	/// exit code of `0` after running the callback.
+	/// switches are present.
 	///
-	/// Note: the callback can technically do whatever it wants, but usually it
-	/// would be expected to print some output to the screen.
+	/// To reduce overhead, this method accepts a callback which must return
+	/// a string for printing.
 	///
-	/// In cases where these flags appear in the middle and the first entry in
-	/// the set is not a key (e.g. it is likely a subcommand), that first value
-	/// will be passed to the callback for reference, allowing it to
-	/// potentially adapt the output based on that condition.
-	///
-	/// If no help flags are found, this just transparently returns `self`.
+	/// In non-help contexts, `self` is just transparently returned.
 	///
 	/// ## Examples
 	///
 	/// ```no_run
 	/// use fyi_menu::Argue;
 	///
-	/// let args = Argue::new(0).with_help(|_: Option<&str>| {
-	///     println!("Help-o world!");
+	/// let args = Argue::new(0).with_help(|| "Help-o world!");
+	/// ```
+	pub fn with_help<S, F>(self, cb: F) -> Self
+	where S: AsRef<str>, F: Fn() -> S {
+		// There has to be a first entry...
+		if
+			! self.args.is_empty() &&
+			(
+				self.args[0] == "help" ||
+				0 != self.flags & FLAG_HAS_HELP
+			)
+		{
+			Msg::plain(cb())
+				.with_newline(true)
+				.print();
+			exit(0);
+		}
+
+		self
+	}
+
+	#[must_use]
+	/// # Help Helper (with subcommand support).
+	///
+	/// This method works just like [`Argue::with_help`] except that it will
+	/// pass the subcommand — if any, and if not "help" — to the callback,
+	/// allowing you to potentially supply different help for different
+	/// contexts.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_menu::Argue;
+	///
+	/// let args = Argue::new(0).with_subcommand_help(|_: Option<&str>| {
+	///     "Help-o world!"
 	/// });
 	/// ```
-	pub fn with_help<F>(self, cb: F) -> Self
-	where F: Fn(Option<&str>) {
+	pub fn with_subcommand_help<S, F>(self, cb: F) -> Self
+	where S: AsRef<str>, F: Fn(Option<&str>) -> S {
 		// There has to be a first entry...
 		if ! self.args.is_empty() {
 			// If that entry is "help", we're done!
 			if self.args[0] == "help" {
-				cb(None);
+				Msg::plain(cb(None)).with_newline(true).print();
 				exit(0);
 			}
 			// Otherwise we need to check for the flags.
 			else if 0 != self.flags & FLAG_HAS_HELP {
-				if self.keys[0] == 0 && self.keys[KEY_LEN] != 0 { cb(None); }
-				else { cb(Some(&self.args[0])); }
+				Msg::plain(
+					if self.keys[0] == 0 && self.keys[KEY_LEN] != 0 { cb(None) }
+					else { cb(Some(&self.args[0])) }
+				)
+					.with_newline(true)
+					.print();
 				exit(0);
 			}
 		}

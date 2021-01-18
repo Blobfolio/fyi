@@ -149,7 +149,7 @@ fn main() {
 	// Parse CLI arguments.
 	let mut args = Argue::new(FLAG_REQUIRED | FLAG_SUBCOMMAND)
 		.with_version("FYI", env!("CARGO_PKG_VERSION"))
-		.with_help(helper);
+		.with_subcommand_help(helper);
 
 	match MsgKind::from(unsafe { args.peek_unchecked() }) {
 		MsgKind::Blank => blank(&mut args),
@@ -238,10 +238,9 @@ fn msg(kind: MsgKind, args: &mut Argue) {
 ///
 /// Print the appropriate help screen given the call details. Most of the sub-
 /// commands work the same way, but a few have their own distinct messages.
-fn helper(cmd: Option<&str>) {
-	Msg::plain(
-		format!(
-			r#"
+fn helper(cmd: Option<&str>) -> String {
+	format!(
+		r#"
                       ;\
                      |' \
   _                  ; : ;
@@ -265,23 +264,21 @@ fn helper(cmd: Option<&str>) {
             '`      ,'
                  ,-'
 
-{}
-"#,
-			"\x1b[38;5;199mFYI\x1b[0;38;5;69m v",
-			env!("CARGO_PKG_VERSION"),
-			"\x1b[0m",
-			match cmd {
-				Some("blank") => include_str!("../help/blank.txt").to_string(),
-				Some("print") => include_str!("../help/print.txt").to_string(),
-				Some("confirm") | Some("prompt") => include_str!("../help/confirm.txt").to_string(),
-				Some(x) if MsgKind::from(x) != MsgKind::None => format!(
-					include_str!("../help/generic.txt"),
-					x,
-					Msg::new(MsgKind::from(x), "Hello World").as_str(),
-					x.to_lowercase(),
-				),
-				_ => include_str!("../help/help.txt").to_string(),
-			}
-		)
-	).print();
+{}"#,
+		"\x1b[38;5;199mFYI\x1b[0;38;5;69m v",
+		env!("CARGO_PKG_VERSION"),
+		"\x1b[0m",
+		match cmd {
+			Some("blank") => include_str!("../help/blank.txt").to_string(),
+			Some("print") => include_str!("../help/print.txt").to_string(),
+			Some("confirm") | Some("prompt") => include_str!("../help/confirm.txt").to_string(),
+			Some(x) if MsgKind::from(x) != MsgKind::None => format!(
+				include_str!("../help/generic.txt"),
+				x,
+				Msg::new(MsgKind::from(x), "Hello World").as_str(),
+				x.to_lowercase(),
+			),
+			_ => include_str!("../help/help.txt").to_string(),
+		}
+	)
 }
