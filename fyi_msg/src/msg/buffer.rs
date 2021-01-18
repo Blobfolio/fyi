@@ -1,5 +1,7 @@
 /*!
 # FYI Msg: Buffer
+
+**Note:** This is not intended for external use and is subject to change.
 */
 
 use std::{

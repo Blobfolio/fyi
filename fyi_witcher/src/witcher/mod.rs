@@ -35,12 +35,18 @@ const LOWER: u8 = 1 << 5;
 /// Results can be filtered prior to being yielded with the use of either
 /// [`with_filter()`](Witcher::with_filter) — specifying a custom callback method
 /// — or [`with_regex()`](Witcher::with_regex) — to match against a pattern.
+/// (The latter requires the `regexp` crate feature be enabled.)
 ///
 /// It is important to define the filter *before* adding any paths, because if
 /// those paths are files, they'll need to be filtered. Right? Right.
 ///
 /// Filter callbacks should accept a `&PathBuf` and return `true` to keep it,
-/// `false` to discard it.
+/// `false` to discard it. Ultimately, they get stored in the struct with the
+/// following type:
+///
+/// ```
+/// Box<dyn Fn(&PathBuf) -> bool + 'static + Send + Sync>
+/// ```
 ///
 /// ## Examples
 ///
@@ -102,8 +108,8 @@ impl Witcher {
 	/// use fyi_witcher::Witcher;
 	///
 	/// let files = Witcher::default()
-	///     .with_path("/my/dir")
 	///     .with_filter(|p: &PathBuf| { ... })
+	///     .with_path("/my/dir")
 	///     .build();
 	/// ```
 	pub fn with_filter<F>(mut self, cb: F) -> Self
@@ -128,7 +134,7 @@ impl Witcher {
 	///
 	/// This method uses some "unsafe" pointer-casting tricks that would be
 	/// unsuitable in nearly any other context, but as we're comparing bytes
-	/// and numbers, it works A-OK here.
+	/// and numbers — rather than strings — it works A-OK here.
 	///
 	/// ## Examples
 	///
@@ -136,8 +142,8 @@ impl Witcher {
 	/// use fyi_witcher::Witcher;
 	///
 	/// let files = Witcher::default()
-	///     .with_path("/my/dir")
 	///     .with_ext(b".jpg")
+	///     .with_path("/my/dir")
 	///     .build();
 	/// ```
 	pub fn with_ext(mut self, ext: &[u8]) -> Self {
@@ -231,14 +237,17 @@ impl Witcher {
 	///
 	/// This is a convenience method for filtering files by regular expression.
 	///
+	/// This method is only available when the `regexp` crate feature is
+	/// enabled.
+	///
 	/// ## Examples
 	///
 	/// ```no_run
 	/// use fyi_witcher::Witcher;
 	///
 	/// let files = Witcher::default()
-	///     .with_path("/my/dir")
 	///     .with_regex(r"(?i).+\.jpe?g$")
+	///     .with_path("/my/dir")
 	///     .build();
 	/// ```
 	pub fn with_regex<R>(mut self, reg: R) -> Self
@@ -282,8 +291,8 @@ impl Witcher {
 	/// use fyi_witcher::Witcher;
 	///
 	/// let files = Witcher::default()
-	///     .with_path("/my/dir")
 	///     .with_ext(b".jpg")
+	///     .with_path("/my/dir")
 	///     .build();
 	/// ```
 	pub fn with_path<P>(mut self, path: P) -> Self
@@ -305,7 +314,7 @@ impl Witcher {
 	/// # Build!
 	///
 	/// Once everything is set up, call this method to consume the queue and
-	/// collect the files into a `Vec<PathBuf>`.
+	/// collect the files into a `Vec<PathBuf>`, consuming `self`.
 	///
 	/// ## Examples
 	///
@@ -313,8 +322,8 @@ impl Witcher {
 	/// use fyi_witcher::Witcher;
 	///
 	/// let files = Witcher::default()
-	///     .with_path("/my/dir")
 	///     .with_ext(b".jpg")
+	///     .with_path("/my/dir")
 	///     .build();
 	/// ```
 	pub fn build(self) -> Vec<PathBuf> {
@@ -383,14 +392,16 @@ impl Witcher {
 	/// This is identical to [`build()`](Witcher::build), except a ready-to-go
 	/// [`Witching`] struct is returned instead of a vector.
 	///
+	/// This method requires the crate feature `witching` be enabled.
+	///
 	/// ## Examples
 	///
 	/// ```no_run
 	/// use fyi_witcher::Witcher;
 	///
 	/// let files = Witcher::default()
-	///     .with_path("/my/dir")
 	///     .with_ext(b".jpg")
+	///     .with_path("/my/dir")
 	///     .into_witching()
 	///     .run(|p| { ... });
 	/// ```

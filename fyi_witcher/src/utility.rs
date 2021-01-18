@@ -13,7 +13,7 @@
 /// ## Examples
 ///
 /// ```no_run
-/// let hash = fyi_msg::utility::hash64(b"Hello World");
+/// let hash = fyi_witcher::utility::hash64(b"Hello World");
 /// ```
 pub fn hash64(src: &[u8]) -> u64 {
 	use std::hash::Hasher;
@@ -28,6 +28,12 @@ pub fn hash64(src: &[u8]) -> u64 {
 /// # Path to Bytes.
 ///
 /// This is exactly the way [`std::path::PathBuf`] handles it.
+///
+/// ## Examples
+///
+/// ```no_run
+/// let path = fyi_witcher::utility::path_as_bytes(PathBuf::from("/path/to/file.jpg"));
+/// ```
 pub fn path_as_bytes(p: &std::path::PathBuf) -> &[u8] {
 	unsafe { &*(p.as_os_str() as *const std::ffi::OsStr as *const [u8]) }
 }
@@ -43,6 +49,8 @@ pub fn path_as_bytes(p: &std::path::PathBuf) -> &[u8] {
 ///
 /// Note: The width returned will be `1` less than the actual value to mitigate
 /// any whitespace weirdness that might be lurking at the edge.
+///
+/// This method requires the `witching` crate feature be enabled.
 pub fn term_width() -> usize {
 	term_size::dimensions().map_or(0, |(w, _)| w.saturating_sub(1))
 }

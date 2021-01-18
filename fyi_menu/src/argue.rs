@@ -19,8 +19,9 @@ use std::{
 
 /// # Flag: Argument(s) Required.
 ///
-/// If a program is called with zero arguments, an error will be printed and
-/// the thread will exit with status code `1`.
+/// If a program is called with zero arguments — no flags, options, trailing
+/// args —, an error will be printed and the thread will exit with status code
+/// `1`.
 pub const FLAG_REQUIRED: u8 =   0b0001;
 
 /// # Flag: Merge Separator Args.
@@ -33,7 +34,7 @@ pub const FLAG_SEPARATOR: u8 =  0b0010;
 ///
 /// Set this flag to treat the first value as a subcommand rather than a
 /// trailing argument. (This fixes the edge case where the command has zero
-/// keys.)
+/// dash-prefixed keys.)
 pub const FLAG_SUBCOMMAND: u8 = 0b0100;
 
 /// # Flag: Has Help.
@@ -72,9 +73,9 @@ const KEY_LEN: usize = 15;
 /// ### Keys
 ///
 /// A "key" is an argument entry beginning with one or two dashes `-` and an
-/// ASCII letter. Entries with one dash are "short", and can only consist of
-/// two bytes. Entries with two dashes are "long" and can be however long they
-/// want to be.
+/// ASCII letter (`A..=Z` or `a..=z`). Entries with one dash are "short", and
+/// can only consist of two bytes. Entries with two dashes are "long" and can
+/// be however long they want to be.
 ///
 /// If a short key entry is longer than two bytes, everything in range `2..` is
 /// assumed to be a value and is split off into its own entry. For example,
@@ -98,7 +99,7 @@ const KEY_LEN: usize = 15;
 ///
 /// ### Restrictions
 ///
-/// 1. Keys are not checked for uniqueness, but only the first occurrence of a given key will match.
+/// 1. Keys are not checked for uniqueness, but only the first occurrence of a given key will ever match.
 /// 2. A given argument set may only include up to **15** keys. If that number is exceeded, `Argue` will print an error and terminate the thread with a status code of `1`.
 ///
 /// ## Examples
@@ -110,7 +111,7 @@ const KEY_LEN: usize = 15;
 /// use fyi_menu::{Argue, FLAG_REQUIRED};
 ///
 /// // Parse the env arguments, aborting if the set is empty.
-/// let mut args = Argue::new(FLAG_REQUIRED);
+/// let args = Argue::new(FLAG_REQUIRED);
 ///
 /// // Check to see what's there.
 /// let switch: bool = args.switch("-s");
@@ -134,12 +135,22 @@ pub struct Argue {
 	args: Vec<String>,
 	/// Keys.
 	///
-	/// This array holds the indexes (in args) of any keys found so checks can
-	/// iterate over the relevant subset (skipping values, etc.).
+	/// This array holds the key indexes (from `self.args`) so checks can avoid
+	/// re-evaluation, etc.
 	///
-	/// The last slot holds the number of keys.
+	/// The last slot holds the number of keys, hence only 15 total keys are
+	/// supported.
 	keys: [usize; KEY_SIZE],
 	/// Highest non-arg index.
+	///
+	/// This is used to divide the arguments between named and trailing values.
+	/// This is inferred during instantiation from the last-found dash-prefixed
+	/// key, but could be updated `+1` if that key turns out to be an option
+	/// (its value would then be the last non-trailing argument).
+	///
+	/// The only way `Argue` knows switches from options is by the method
+	/// invoked by the implementing library. Be sure to request all options
+	/// before asking for trailing arguments.
 	last: Cell<usize>,
 	/// Flags.
 	flags: u8,
@@ -202,7 +213,7 @@ impl Argue {
 	/// ```no_run
 	/// use fyi_menu::Argue;
 	///
-	/// let mut args = Argue::new(0);
+	/// let args = Argue::new(0);
 	/// ```
 	pub fn new(flags: u8) -> Self {
 		env::args().skip(1)
@@ -222,6 +233,16 @@ impl Argue {
 	///
 	/// This method can be used to set additional parsing options in cases
 	/// where the struct was initialized without calling [`Argue::new`].
+	///
+	/// This will only ever enable flags; it will not disable existing flags.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_menu::{Argue, FLAG_REQUIRED};
+	///
+	/// let args = Argue::new(0).with_flags(FLAG_REQUIRED);
+	/// ```
 	pub fn with_flags(mut self, flags: u8) -> Self {
 		self.flags |= flags;
 
@@ -261,7 +282,7 @@ impl Argue {
 	/// ```no_run
 	/// use fyi_menu::Argue;
 	///
-	/// let mut args = Argue::new(0).with_help(|_: Option<&str>| {
+	/// let args = Argue::new(0).with_help(|_: Option<&str>| {
 	///     println!("Help-o world!");
 	/// });
 	/// ```
@@ -337,17 +358,20 @@ impl Argue {
 	/// # Print Name/Version.
 	///
 	/// Similar to `with_help()`, this method can be chained to `new()` to
-	/// print the program name and version or whatever, then exit with a status
-	/// code of `0`, if either "-V" or "--version" flags are present.
+	/// print the program name and version, then exit with a status code of
+	/// `0`, if either "-V" or "--version" flags are present.
 	///
 	/// If no version flags are found, `self` is transparently passed through.
+	///
+	/// TODO: if there ever ends up being an env!() macro for the bin, use that
+	/// to bypass the need to collect arguments from the caller.
 	///
 	/// ## Examples
 	///
 	/// ```no_run
 	/// use fyi_menu::Argue;
 	///
-	/// let mut args = Argue::new(0)
+	/// let args = Argue::new(0)
 	///     .with_version("My App", env!("CARGO_PKG_VERSION"));
 	/// ```
 	pub fn with_version<S>(self, name: S, version: S) -> Self
@@ -427,7 +451,7 @@ impl Argue {
 	/// ```no_run
 	/// use fyi_menu::{Argue, FLAG_REQUIRED};
 	///
-	/// let mut args = Argue::new(FLAG_REQUIRED);
+	/// let args = Argue::new(FLAG_REQUIRED);
 	///
 	/// // This is actually safe because FLAG_REQUIRED would have errored out
 	/// // if nothing were present.
@@ -461,7 +485,8 @@ impl Argue {
 	/// # Switch x2.
 	///
 	/// This is a convenience method that checks for the existence of two
-	/// switches at once, returning `true` if either are present.
+	/// switches at once, returning `true` if either are present. Generally
+	/// you would use this for a flag that has both a long and short version.
 	///
 	/// ## Examples
 	///
@@ -484,10 +509,10 @@ impl Argue {
 	/// case means the entry immediately following the key. Multi-value
 	/// options are not supported.
 	///
-	/// Note: this method requires mutable access to `self` because it can
-	/// potentially nudge the option/argument boundary +1 to the right. Because
-	/// of this, you should be sure to query any expected options before
-	/// calling `args()`.
+	/// Note: this method is the only way `Argue` knows whether or not a key
+	/// is an option (with a value) or a switch. Be sure to request all
+	/// possible options *before* requesting the trailing arguments to ensure
+	/// the division between named and trailing is properly set.
 	///
 	/// ## Examples
 	///
@@ -513,7 +538,8 @@ impl Argue {
 	/// # Option x2.
 	///
 	/// This is a convenience method that checks for the existence of two
-	/// options at once, returning the first found value, if any.
+	/// options at once, returning the first found value, if any. Generally
+	/// you would use this for a flag that has both a long and short version.
 	///
 	/// ## Examples
 	///
@@ -556,13 +582,22 @@ impl Argue {
 	/// let mut args = Argue::new(0);
 	/// let extras: &[String] = args.args();
 	/// ```
-	pub fn args(&self) -> &[String] { &self.args[self.arg_idx()..] }
+	pub fn args(&self) -> &[String] {
+		let idx = self.arg_idx();
+		if idx < self.args.len() {
+			&self.args[self.arg_idx()..]
+		}
+		else { &[] }
+	}
 
 	#[must_use]
 	/// # Arg at Index
 	///
-	/// Pluck the arg at a given index, if any, zero being the first trailing
-	/// argument.
+	/// Pluck the nth trailing argument by index (starting from zero).
+	///
+	/// Note, this is different than dereferencing the whole `Argue` struct
+	/// and requesting its zero index; that would refer to the first CLI
+	/// argument of any kind, which could be a subcommand or key.
 	pub fn arg(&self, idx: usize) -> Option<&str> {
 		let start_idx = self.arg_idx();
 		if start_idx + idx < self.args.len() {
@@ -579,7 +614,11 @@ impl Argue {
 	///
 	/// This method is intended for use in cases where exactly one argument is
 	/// expected and required. All other cases should probably just call
-	/// `args()`.
+	/// `args()` and work from that slice.
+	///
+	/// As with other arg-related methods, it is important to query all options
+	/// first, as that helps the struct determine the boundary between named
+	/// and unnamed values.
 	///
 	/// ## Examples
 	///
@@ -690,6 +729,9 @@ impl Argue {
 	///
 	/// This concatenates all arguments trailing a "--" entry into a single
 	/// value, replacing the "--".
+	///
+	/// It is not recursive; if a separator has its own separator, it will
+	/// merely be included in the re-glued string.
 	fn parse_separator(&mut self) {
 		if let Some(idx) = self.args.iter().position(|x| x == "--") {
 			if idx + 1 < self.args.len() {

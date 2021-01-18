@@ -5,9 +5,9 @@ FYI is a simple CLI tool for x86-64 Linux machines that prints an arbitrary
 status-style message, optionally indented, timestamped, and/or prefixed.
 You know, stuff like:
 
-* <strong><span style="color: red;">Error:</span></strong> Something broke!
-* <strong><span style="color: gold;">Warning:</span></strong> I can't keep doing this!
-* <strong><span style="color: green;">Success:</span></strong> Life is good!
+* **Error:** Something broke!
+* **Warning:** I can't keep doing this!
+* **Success:** Life is good!
 
 That's it!
 
@@ -32,7 +32,7 @@ fyi error "Something broke!"
 
 ## Installation
 
-This application is written in Rust and can be installed using Cargo.
+This application is written in [Rust](https://www.rust-lang.org/) and can be installed using [Cargo](https://github.com/rust-lang/cargo).
 
 For stable Rust (>= `1.47.0`), run:
 ```bash
@@ -42,21 +42,23 @@ RUSTFLAGS="-C link-arg=-s" cargo install \
     --target x86_64-unknown-linux-gnu
 ```
 
+Pre-built `.deb` packages are also added for each [release](https://github.com/Blobfolio/fyi/releases/latest). They should always work for the latest stable Debian and Ubuntu.
+
 
 
 ## Usage
 
 The primary usage is to generate a message with one of the default prefixes,
 like: `fyi <PREFIX> [flags] [options] <MSG>`, where the prefix is one of:
-* <span style="color: green;">crunched</span>
-* <span style="color: darkcyan;">debug</span>
-* <span style="color: green;">done</span>
-* <span style="color: red;">error</span>
-* <span style="color: blueviolet;">info</span>
-* <span style="color: blueviolet;">notice</span>
-* <span style="color: green;">success</span>
-* <span style="color: deeppink;">task</span>
-* <span style="color: gold;">warning</span>
+* <span style="color: #27ae60">crunched</span>
+* <span style="color: #5dade2">debug</span>
+* <span style="color: #27ae60">done</span>
+* <span style="color: #ff0000">error</span>
+* <span style="color: #9b59b6">info</span>
+* <span style="color: #9b59b6">notice </span>
+* <span style="color: #27ae60">success</span>
+* <span style="color: #ff1493">task</span>
+* <span style="color: #f1c40f">warning</span>
 
 The following flags and options are available.
 ```bash
@@ -73,7 +75,7 @@ To use a custom prefix (or no prefix), run `fyi print [flags] [options] <MSG>`,
 using the following additional options:
 ```bash
 -p, --prefix <txt>          Set a custom prefix. [default: ]
--c, --prefix-color <num>    Use this color for the prefix. [default: 199]
+-c, --prefix-color <num>    Prefix color. [default: 199]
 ```
 
 The color should be a `u8` corresponding to a [BASH color number](https://misc.flogisoft.com/bash/tip_colors_and_formatting#colors1).
@@ -95,29 +97,6 @@ print a certain number of blank lines for you. Run
     --stderr         Print to STDERR instead of STDOUT.
 -c, --count <num>    Number of empty lines to print. [default: 1]
 ```
-
-
-
-## License
-
-Copyright © 2020 [Blobfolio, LLC](https://blobfolio.com) &lt;hello@blobfolio.com&gt;
-
-This work is free. You can redistribute it and/or modify it under the terms of the Do What The Fuck You Want To Public License, Version 2.
-
-    DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
-    Version 2, December 2004
-
-    Copyright (C) 2004 Sam Hocevar <sam@hocevar.net>
-
-    Everyone is permitted to copy and distribute verbatim or modified
-    copies of this license document, and changing it is allowed as long
-    as the name is changed.
-
-    DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
-    TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
-
-    0. You just DO WHAT THE FUCK YOU WANT TO.
-
 */
 
 #![warn(clippy::filetype_is_file)]

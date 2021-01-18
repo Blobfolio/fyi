@@ -1,5 +1,7 @@
 /*!
 # FYI Witcher: `Witching`
+
+This struct is only available when the crate feature `witching` is enabled.
 */
 
 use ahash::AHashSet;

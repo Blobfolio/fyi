@@ -6,20 +6,22 @@ This crate provides two main components, both of them file-related:
 * [`Witcher`] is a simple, minimally configurable file system traversal library.
 * [`Witching`] is a lightweight, automatic progress bar wrapper that can be used while iterating through/operating on a set of paths.
 
-Out of necessity, this crate also contains a few random odds and ends that
-might be independently useful, namely:
-
-* [`NiceElapsed`] converts a given number of seconds into a human-readable, Oxford-joined list of units, like "1 hour, 2 minutes, and 3 seconds", suitable for summaries and the like.
 
 
+## Optional Features
 
-## Stability: Alpha
+| Feature | Description |
+| ------- | ----------- |
+| regexp | Enables the [`Witcher::with_regex`] path filter. |
+| witching | Enables the [`Witching`] progress struct. |
 
-This project is under heavy development and subject to change. While the code
-in the `master` branch should always be in a "working" state, breaking changes
-and major refactors may be introduced between releases.
 
-(This should probably *not* be used in production-ready applications.)
+
+## Stability
+
+Release versions of this library should be in a working state, but as this
+project is under perpetual development, code might change from version to
+version.
 */
 
 #![warn(clippy::filetype_is_file)]

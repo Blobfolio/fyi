@@ -78,11 +78,43 @@ pub const FLAG_NEWLINE: u8 =   0b0100;
 #[cfg(feature = "timestamps")]
 #[derive(Debug, Default, Clone)]
 /// # Message.
+///
+/// The `Msg` struct provides a partitioned, contiguous byte source to hold
+/// arbitrary messages of the "Error: Oh no!" variety. They can be modified
+/// efficiently in place (per-part) and printed to `Stderr` or `Stdout`.
+///
+/// ## Examples
+///
+/// ```no_run
+/// use fyi_msg::{Msg, MsgKind};
+/// Msg::new(MsgKind::Success, "You did it!")
+///     .with_newline(true)
+///     .print();
+/// ```
+///
+/// Take a look at the `examples/` directory for a rundown on the different
+/// message types and basic usage.
 pub struct Msg(MsgBuffer6);
 
 #[cfg(not(feature = "timestamps"))]
 #[derive(Debug, Default, Clone)]
 /// # Message.
+///
+/// The `Msg` struct provides a partitioned, contiguous byte source to hold
+/// arbitrary messages of the "Error: Oh no!" variety. They can be modified
+/// efficiently in place (per-part) and printed to `Stderr` or `Stdout`.
+///
+/// ## Examples
+///
+/// ```no_run
+/// use fyi_msg::{Msg, MsgKind};
+/// Msg::new(MsgKind::Success, "You did it!")
+///     .with_newline(true)
+///     .print();
+/// ```
+///
+/// Take a look at the `examples/` directory for a rundown on the different
+/// message types and basic usage.
 pub struct Msg(MsgBuffer5);
 
 impl AsRef<str> for Msg {
@@ -150,7 +182,14 @@ impl Msg {
 	/// # New Message.
 	///
 	/// This creates a new message with a built-in prefix (which can be
-	/// [`MsgKind::None`], though in that case, [`Msg::plain`] is better).
+	/// [`MsgKind::None`](crate::MsgKind::None), though in that case, [`Msg::plain`] is better).
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::{Msg, MsgKind};
+	/// let msg = Msg::new(MsgKind::Info, "This is a message.");
+	/// ```
 	pub fn new<S>(kind: MsgKind, msg: S) -> Self
 	where S: AsRef<str> {
 		let msg = msg.as_ref().as_bytes();
@@ -173,6 +212,13 @@ impl Msg {
 	///
 	/// This creates a new message with a user-defined prefix and color. See
 	/// [here](https://misc.flogisoft.com/bash/tip_colors_and_formatting) for a BASH color code primer.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::{Msg, MsgKind};
+	/// let msg = Msg::custom("Prefix", 199, "This message has a pink prefix.");
+	/// ```
 	pub fn custom<S>(prefix: S, color: u8, msg: S) -> Self
 	where S: AsRef<str> {
 		let prefix = prefix.as_ref().as_bytes();
@@ -210,6 +256,13 @@ impl Msg {
 	/// Same as [`Msg::custom`], except no validation or formatting is applied
 	/// to the provided prefix. This can be useful in cases where the prefix
 	/// requires special spacing or delimiters.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::{Msg, MsgKind};
+	/// let msg = Msg::custom("Prefix: ", "This message has an unformatted prefix.");
+	/// ```
 	pub fn custom_unchecked<S>(prefix: S, msg: S) -> Self
 	where S: AsRef<str> {
 		let prefix = prefix.as_ref().as_bytes();
@@ -235,6 +288,13 @@ impl Msg {
 	///
 	/// This is equivalent to [`Msg::new`] with [`MsgKind::None`], but
 	/// streamlined.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::Msg;
+	/// let msg = Msg::plain("This message has no prefix.");
+	/// ```
 	pub fn plain<S>(msg: S) -> Self
 	where S: AsRef<str> {
 		let msg = msg.as_ref().as_bytes();
@@ -257,6 +317,16 @@ impl Msg {
 	/// This is a convenience method for quickly creating a new error with a
 	/// terminating line break. After creation, it is a normal [`Msg`] that can
 	/// be manipulated in the usual ways.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::{Msg, MsgKind};
+	/// assert_eq!(
+	///     Msg::new(MsgKind::Error, "Oh no!"),
+	///     Msg::error("Oh no!")
+	/// );
+	/// ```
 	pub fn error<S>(msg: S) -> Self
 	where S: AsRef<str> {
 		let msg = msg.as_ref().as_bytes();
@@ -287,7 +357,14 @@ impl Msg {
 	/// # New Message.
 	///
 	/// This creates a new message with a built-in prefix (which can be
-	/// [`MsgKind::None`], though in that case, [`Msg::plain`] is better).
+	/// [`MsgKind::None`](crate::MsgKind::None), though in that case, [`Msg::plain`] is better).
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::{Msg, MsgKind};
+	/// let msg = Msg::new(MsgKind::Info, "This is a message.");
+	/// ```
 	pub fn new<S>(kind: MsgKind, msg: S) -> Self
 	where S: AsRef<str> {
 		let msg = msg.as_ref().as_bytes();
@@ -309,6 +386,13 @@ impl Msg {
 	///
 	/// This creates a new message with a user-defined prefix and color. See
 	/// [here](https://misc.flogisoft.com/bash/tip_colors_and_formatting) for a BASH color code primer.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::{Msg, MsgKind};
+	/// let msg = Msg::custom("Prefix", 199, "This message has a pink prefix.");
+	/// ```
 	pub fn custom<S>(prefix: S, color: u8, msg: S) -> Self
 	where S: AsRef<str> {
 		let prefix = prefix.as_ref().as_bytes();
@@ -345,6 +429,13 @@ impl Msg {
 	/// Same as [`Msg::custom`], except no validation or formatting is applied
 	/// to the provided prefix. This can be useful in cases where the prefix
 	/// requires special spacing or delimiters.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::{Msg, MsgKind};
+	/// let msg = Msg::custom("Prefix: ", "This message has an unformatted prefix.");
+	/// ```
 	pub fn custom_unchecked<S>(prefix: S, msg: S) -> Self
 	where S: AsRef<str> {
 		let prefix = prefix.as_ref().as_bytes();
@@ -369,6 +460,13 @@ impl Msg {
 	///
 	/// This is equivalent to [`Msg::new`] with [`MsgKind::None`], but
 	/// streamlined.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::Msg;
+	/// let msg = Msg::plain("This message has no prefix.");
+	/// ```
 	pub fn plain<S>(msg: S) -> Self
 	where S: AsRef<str> {
 		let msg = msg.as_ref().as_bytes();
@@ -390,6 +488,16 @@ impl Msg {
 	/// This is a convenience method for quickly creating a new error with a
 	/// terminating line break. After creation, it is a normal [`Msg`] that can
 	/// be manipulated in the usual ways.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::{Msg, MsgKind};
+	/// assert_eq!(
+	///     Msg::new(MsgKind::Error, "Oh no!"),
+	///     Msg::error("Oh no!")
+	/// );
+	/// ```
 	pub fn error<S>(msg: S) -> Self
 	where S: AsRef<str> {
 		let msg = msg.as_ref().as_bytes();
@@ -421,6 +529,14 @@ impl Msg {
 	/// This can be used to quickly set indentation, timestamps, and/or a
 	/// trailing line break, but only affirmatively; it will not unset any
 	/// missing value.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi::{Msg, FLAG_INDENT, FLAG_NEWLINE};
+	/// let msg = Msg::plain("Indented message with trailing line.")
+	///     .with_flags(FLAG_INDENT | FLAG_NEWLINE);
+	/// ```
 	pub fn with_flags(mut self, flags: u8) -> Self {
 		if 0 != flags & FLAG_INDENT {
 			self.set_indent(1);
@@ -442,6 +558,14 @@ impl Msg {
 	///
 	/// Indent the message using four spaces per `indent`. To remove
 	/// indentation, pass `0`.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi::Msg;
+	/// let msg = Msg::plain("Indented message.")
+	///     .with_indent(1);
+	/// ```
 	pub fn with_indent(mut self, indent: u8) -> Self {
 		self.set_indent(indent);
 		self
@@ -453,6 +577,14 @@ impl Msg {
 	///
 	/// Disable, enable, and/or recalculate the timestamp prefix for the
 	/// message.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi::Msg;
+	/// let msg = Msg::plain("Timestamped message.")
+	///     .with_timestamp(true);
+	/// ```
 	pub fn with_timestamp(mut self, timestamp: bool) -> Self {
 		self.set_timestamp(timestamp);
 		self
@@ -463,6 +595,18 @@ impl Msg {
 	///
 	/// Add a trailing linebreak to the end of the message. This is either one
 	/// or none; calling it multiple times won't add more lines.
+	///
+	/// Without a linebreak, [`Msg::print`] is analogous to `print!()`,
+	/// whereas with a linebreak, it is more like `println!()`. (The newline
+	/// isn't limited to print contexts, but that's mainly what it is for.)
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi::Msg;
+	/// let msg = Msg::plain("This has a trailing newline.")
+	///     .with_newline(true);
+	/// ```
 	pub fn with_newline(mut self, newline: bool) -> Self {
 		self.set_newline(newline);
 		self
@@ -472,15 +616,35 @@ impl Msg {
 	/// # With Prefix.
 	///
 	/// Set or reset the message prefix.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi::{Msg, MsgKind};
+	/// assert_eq!(
+	///     Msg::plain("Hello world.").with_prefix(MsgKind::Success),
+	///     Msg::new(MsgKind::Success, "Hello world.")
+	/// );
+	/// ```
 	pub fn with_prefix(mut self, kind: MsgKind) -> Self {
 		self.set_prefix(kind);
 		self
 	}
 
 	#[must_use]
-	/// # With Prefix.
+	/// # With Custom Prefix.
 	///
 	/// Set or reset the message with a user-defined prefix and color.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi::Msg;
+	/// assert_eq!(
+	///     Msg::plain("Hello world.").with_custom_prefix("Prefix", 4),
+	///     Msg::custom("Prefix", 4, "Hello world.")
+	/// );
+	/// ```
 	pub fn with_custom_prefix<S>(mut self, prefix: S, color: u8) -> Self
 	where S: AsRef<str> {
 		self.set_custom_prefix(prefix, color);
@@ -491,6 +655,16 @@ impl Msg {
 	/// # With Message.
 	///
 	/// Set or reset the message portion of the message.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi::Msg;
+	///
+	/// // A contrived example…
+	/// let mut msg = Msg::plain("Should I say this?")
+	///     .with_msg("No, this!");
+	/// ```
 	pub fn with_msg<S>(mut self, msg: S) -> Self
 	where S: AsRef<str> {
 		self.set_msg(msg);
@@ -504,6 +678,16 @@ impl Msg {
 	///
 	/// Note: suffixes immediately follow the message portion and should
 	/// explicitly include any spaces or separators in their value.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi::Msg;
+	///
+	/// // A contrived example…
+	/// let mut msg = Msg::plain("5,000 matching files were found.")
+	///     .with_suffix(" (75%)");
+	/// ```
 	pub fn with_suffix<S>(mut self, suffix: S) -> Self
 	where S: AsRef<str> {
 		self.set_suffix(suffix);
@@ -514,12 +698,18 @@ impl Msg {
 /// ## Setters.
 impl Msg {
 	/// # Set Indentation.
+	///
+	/// This is the setter companion to the [`Msg::with_indent`] builder method.
+	/// Refer to that documentation for more information.
 	pub fn set_indent(&mut self, indent: u8) {
 		self.0.replace(PART_INDENT, &b" ".repeat(4.min(indent as usize) * 4));
 	}
 
 	#[cfg(feature = "timestamps")]
 	/// # Set Timestamp.
+	///
+	/// This is the setter companion to the [`Msg::with_timestamp`] builder method.
+	/// Refer to that documentation for more information.
 	pub fn set_timestamp(&mut self, timestamp: bool) {
 		if timestamp {
 			self.0.replace(
@@ -536,6 +726,9 @@ impl Msg {
 	}
 
 	/// # Set Linebreak.
+	///
+	/// This is the setter companion to the [`Msg::with_newline`] builder method.
+	/// Refer to that documentation for more information.
 	pub fn set_newline(&mut self, newline: bool) {
 		if newline {
 			if 0 == self.0.len(PART_NEWLINE) {
@@ -548,11 +741,17 @@ impl Msg {
 	}
 
 	/// # Set Prefix.
+	///
+	/// This is the setter companion to the [`Msg::with_prefix`] builder method.
+	/// Refer to that documentation for more information.
 	pub fn set_prefix(&mut self, kind: MsgKind) {
 		self.0.replace(PART_PREFIX, kind.as_bytes());
 	}
 
 	/// # Set Custom Prefix.
+	///
+	/// This is the setter companion to the [`Msg::with_custom_prefix`] builder method.
+	/// Refer to that documentation for more information.
 	pub fn set_custom_prefix<S>(&mut self, prefix: S, color: u8)
 	where S: AsRef<str> {
 		let prefix = prefix.as_ref().as_bytes();
@@ -571,12 +770,18 @@ impl Msg {
 	}
 
 	/// # Set Message.
+	///
+	/// This is the setter companion to the [`Msg::with_msg`] builder method.
+	/// Refer to that documentation for more information.
 	pub fn set_msg<S>(&mut self, msg: S)
 	where S: AsRef<str> {
 		self.0.replace(PART_MSG, msg.as_ref().as_bytes());
 	}
 
 	/// # Set Suffix.
+	///
+	/// This is the setter companion to the [`Msg::with_suffix`] builder method.
+	/// Refer to that documentation for more information.
 	pub fn set_suffix<S>(&mut self, suffix: S)
 	where S: AsRef<str> {
 		self.0.replace(PART_SUFFIX, suffix.as_ref().as_bytes());
@@ -587,20 +792,28 @@ impl Msg {
 impl Msg {
 	#[must_use]
 	/// # As Bytes.
+	///
+	/// Return the entire message as a byte slice.
 	pub fn as_bytes(&self) -> &[u8] { &self.0 }
 
 	#[must_use]
 	/// # As Str.
+	///
+	/// Return the entire message as a string slice.
 	pub fn as_str(&self) -> &str {
 		unsafe { std::str::from_utf8_unchecked(&self.0) }
 	}
 
 	#[must_use]
 	/// # Into Vec.
+	///
+	/// Consume the message, returning a `Vec<u8>`.
 	pub fn into_vec(self) -> Vec<u8> { self.0.into_vec() }
 
 	#[must_use]
 	/// # Into String.
+	///
+	/// Consume the message, returning an owned string.
 	pub fn into_string(self) -> String {
 		unsafe { String::from_utf8_unchecked(self.0.into_vec()) }
 	}
@@ -611,11 +824,12 @@ impl Msg {
 	///
 	/// This will return a byte string that should fit a given console width if
 	/// printed. This is subject to the usual disclaimers of "Unicode is
-	/// monstrous and unpredictable", but it does its best, and will be more
-	/// accurate than simply chopping to `len()`.
+	/// monstrously complicated…", but it does its best, and will be more
+	/// accurate than simply chopping to the [`Msg::len`].
 	///
-	/// Space will be trimmed from the message portion as needed, leaving
-	/// prefixes, suffixes, and other parts unchanged.
+	/// Only the user-defined message portion of the `Msg` will be trimmed for
+	/// space. Prefixes, suffixes, the trailing newline, etc., are left
+	/// unchanged.
 	///
 	/// If the message cannot be made to fit, an empty byte string is returned.
 	pub fn fitted(&self, width: usize) -> Cow<[u8]> {
@@ -678,10 +892,13 @@ impl Msg {
 	#[must_use]
 	/// # Length.
 	///
-	/// The buffers don't necessarily end on partitioned space, but they do for
-	/// [`Msg`] structs, so we can make this `const` by inferring the length
-	/// from the end of the last part.
-	pub const fn len(&self) -> usize { self.0.end(PART_NEWLINE) }
+	/// This returns the total length of the entire `Msg`, ANSI markup and all.
+	pub const fn len(&self) -> usize {
+		// Because the buffers used by `Msg` end on partitioned space, we can
+		// infer the length given the ending index of the newline part, making
+		// this method `const`.
+		self.0.end(PART_NEWLINE)
+	}
 
 	#[must_use]
 	/// # Is Empty.
@@ -694,6 +911,13 @@ impl Msg {
 	///
 	/// This is equivalent to calling either `print!()` or `println()`
 	/// depending on whether or not a trailing linebreak has been set.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::Msg;
+	/// Msg::plain("Hello world!").with_newline(true).print();
+	/// ```
 	pub fn print(&self) {
 		use io::Write;
 
@@ -707,6 +931,13 @@ impl Msg {
 	///
 	/// This is equivalent to calling either `eprint!()` or `eprintln()`
 	/// depending on whether or not a trailing linebreak has been set.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::Msg;
+	/// Msg::error("Oh no!").with_newline(true).eprint();
+	/// ```
 	pub fn eprint(&self) {
 		use io::Write;
 
@@ -724,6 +955,13 @@ impl Msg {
 	///
 	/// Be careful calling this method in parallel contexts as it will only
 	/// stop the current thread, not the entire program execution.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::Msg;
+	/// Msg::error("Oh no!").with_newline(true).die(1);
+	/// ```
 	pub fn die(&self, code: i32) {
 		self.eprint();
 		std::process::exit(code);

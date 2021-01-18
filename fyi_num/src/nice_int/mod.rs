@@ -67,7 +67,6 @@ impl fmt::Display for NiceInt {
 }
 
 impl From<u8> for NiceInt {
-	/// # From `u8`.
 	fn from(num: u8) -> Self {
 		unsafe {
 			let mut out = Self::default();
@@ -203,7 +202,7 @@ impl From<usize> for NiceInt {
 
 /// ## Miscellaneous.
 ///
-/// This section provides contains a few random odds and ends.
+/// This section contains a few random odds and ends.
 impl NiceInt {
 	#[must_use]
 	#[inline]
@@ -256,7 +255,7 @@ impl NiceInt {
 /// ## Doubles.
 ///
 /// This section provides methods for nicely rendering floats, which are very
-/// much not integers, at last after the decimal, but close enough.
+/// much not integers, at least after the decimal, but close enough.
 impl NiceInt {
 	#[must_use]
 	/// # Percent `f64`.
@@ -316,16 +315,31 @@ impl NiceInt {
 
 
 /// # Write `u8` x 3
+///
+/// ## Safety
+///
+/// The destination pointer must have at least 3 bytes free or undefined
+/// things may happen!
 unsafe fn write_u8_3(buf: *mut u8, num: usize) {
 	ptr::copy_nonoverlapping(TRIPLE.as_ptr().add(num * 3), buf, 3);
 }
 
 /// # Write `u8` x 2
+///
+/// ## Safety
+///
+/// The destination pointer must have at least 2 bytes free or undefined
+/// things may happen!
 unsafe fn write_u8_2(buf: *mut u8, num: usize) {
 	ptr::copy_nonoverlapping(DOUBLE.as_ptr().add(num << 1), buf, 2);
 }
 
 /// # Write `u8` x 1
+///
+/// ## Safety
+///
+/// The destination pointer must have at least 1 byte free or undefined
+/// things may happen!
 unsafe fn write_u8_1(buf: *mut u8, num: usize) {
 	ptr::copy_nonoverlapping(SINGLE.as_ptr().add(num), buf, 1);
 }
