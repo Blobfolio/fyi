@@ -2,15 +2,22 @@
 # FYI Witcher: Witcher
 */
 
+mod witch;
+
 use ahash::AHashSet;
 use crate::utility;
 use std::{
-	fs,
+	convert::TryFrom,
+	fs::{
+		self,
+		ReadDir,
+	},
 	path::{
 		Path,
 		PathBuf,
 	},
 };
+use witch::Witch;
 
 
 
@@ -76,11 +83,11 @@ const LOWER: u8 = 1 << 5;
 /// ```
 pub struct Witcher {
 	/// Directories to scan.
-	dirs: Vec<PathBuf>,
+	dirs: Vec<ReadDir>,
 	/// Files found.
 	files: Vec<PathBuf>,
 	/// Unique path hashes (to prevent duplicate scans, results).
-	seen: AHashSet<u64>,
+	seen: AHashSet<Witch>,
 	/// Filter callback.
 	cb: Box<dyn Fn(&PathBuf) -> bool + 'static + Send + Sync>,
 }
@@ -297,16 +304,22 @@ impl Witcher {
 	/// ```
 	pub fn with_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
-		if let Ok(path) = fs::canonicalize(path.as_ref()) {
-			if self.seen.insert(utility::hash64(utility::path_as_bytes(&path))) {
-				if path.is_dir() {
-					self.dirs.push(path);
+		let path: PathBuf = PathBuf::from(path.as_ref());
+		if let Ok(w) = Witch::try_from(&path) {
+			if self.seen.insert(w) {
+				if w.is_dir() {
+					if let Ok(rd) = fs::read_dir(path) {
+						self.dirs.push(rd);
+					}
 				}
-				else if (self.cb)(&path) {
-					self.files.push(path);
+				else if let Ok(path) = fs::canonicalize(path) {
+					if (self.cb)(&path) {
+						self.files.push(path);
+					}
 				}
 			}
 		}
+
 		self
 	}
 
@@ -334,55 +347,40 @@ impl Witcher {
 			PoisonError,
 		};
 
-		// Short circuit.
-		if self.dirs.is_empty() {
-			return self.files;
-		}
-
-		// Let's destructure to make life easier.
+		// Break up the data.
 		let Self { mut dirs, files, seen, cb } = self;
-
-		// We'll need to be able to share data between threads.
 		let seen = Arc::from(Mutex::new(seen));
 		let files = Arc::from(Mutex::new(files));
 
-		loop {
-			// Process each directory in the queue, separating its (unique)
-			// results into new collections of directories or files
-			// respectively.
+		// Process until we're our of directories.
+		while ! dirs.is_empty() {
 			dirs = dirs.par_drain(..)
-				.filter_map(|p| fs::read_dir(p).ok())
 				.flat_map(|paths|
-					paths.filter_map(|p| p.ok().map(|p| p.path()))
-						.collect::<Vec<PathBuf>>()
+					paths.filter_map(|p| p.ok().and_then(|p| {
+						let path = p.path();
+						Witch::try_from(&path).ok().zip(Some(path))
+					}))
+						.par_bridge()
 				)
-				.filter_map(|p| std::fs::canonicalize(p)
-					.ok()
-					.and_then(|p| {
-						if seen.lock()
-							.unwrap_or_else(PoisonError::into_inner)
-							.insert(utility::hash64(utility::path_as_bytes(&p)))
-						{
-							if p.is_dir() { return Some(p); }
-							else if cb(&p) {
-								files.lock()
-									.unwrap_or_else(PoisonError::into_inner)
-									.push(p);
-							}
+				.filter(|(w, _)| seen.lock().unwrap_or_else(PoisonError::into_inner).insert(*w))
+				.filter_map(|(w, p)|
+					if w.is_dir() { fs::read_dir(p).ok() }
+					else {
+						if let Some(p) = fs::canonicalize(p).ok().filter(|p| cb(p)) {
+							files.lock()
+								.unwrap_or_else(PoisonError::into_inner)
+								.push(p);
 						}
-
 						None
-					})
+					}
 				)
 				.collect();
-
-			if dirs.is_empty() {
-				return Arc::<Mutex<Vec<PathBuf>>>::try_unwrap(files)
-					.ok()
-					.and_then(|x| x.into_inner().ok())
-					.unwrap_or_default()
-			}
 		}
+
+		Arc::<Mutex<Vec<PathBuf>>>::try_unwrap(files)
+			.ok()
+			.and_then(|x| x.into_inner().ok())
+			.unwrap_or_default()
 	}
 
 	#[cfg(feature = "witching")]
