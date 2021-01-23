@@ -327,10 +327,7 @@ impl Witcher {
 	///     .build();
 	/// ```
 	pub fn build(self) -> Vec<PathBuf> {
-		use rayon::{
-			prelude::*,
-			iter::Either,
-		};
+		use rayon::prelude::*;
 		use std::sync::{
 			Arc,
 			Mutex,
@@ -343,16 +340,17 @@ impl Witcher {
 		}
 
 		// Let's destructure to make life easier.
-		let Self { mut dirs, mut files, seen, cb } = self;
+		let Self { mut dirs, files, seen, cb } = self;
 
-		// We'll need to be able to share the path cache between threads.
+		// We'll need to be able to share data between threads.
 		let seen = Arc::from(Mutex::new(seen));
+		let files = Arc::from(Mutex::new(files));
 
 		loop {
 			// Process each directory in the queue, separating its (unique)
 			// results into new collections of directories or files
 			// respectively.
-			let (d2, f2): (Vec<PathBuf>, Vec<PathBuf>) = dirs.par_drain(..)
+			dirs = dirs.par_drain(..)
 				.filter_map(|p| fs::read_dir(p).ok())
 				.flat_map(|paths|
 					paths.filter_map(|p| p.ok().map(|p| p.path()))
@@ -365,23 +363,25 @@ impl Witcher {
 							.unwrap_or_else(PoisonError::into_inner)
 							.insert(utility::hash64(utility::path_as_bytes(&p)))
 						{
-							if p.is_dir() { return Some(Either::Left(p)); }
-							else if cb(&p) { return Some(Either::Right(p)); }
+							if p.is_dir() { return Some(p); }
+							else if cb(&p) {
+								files.lock()
+									.unwrap_or_else(PoisonError::into_inner)
+									.push(p);
+							}
 						}
 
 						None
 					})
 				)
-				.partition_map(|p| p);
+				.collect();
 
-			// Record the matching files.
-			files.par_extend(f2);
-
-			// If there are no new directories, we're done.
-			if d2.is_empty() { return files; }
-
-			// Load the directories back up so we can do it all over again.
-			dirs.par_extend(d2);
+			if dirs.is_empty() {
+				return Arc::<Mutex<Vec<PathBuf>>>::try_unwrap(files)
+					.ok()
+					.and_then(|x| x.into_inner().ok())
+					.unwrap_or_default()
+			}
 		}
 	}
 
