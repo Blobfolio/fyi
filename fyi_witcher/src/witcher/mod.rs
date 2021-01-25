@@ -412,13 +412,12 @@ impl Witcher {
 		// Process until we're our of directories.
 		loop {
 			dirs = dirs.par_drain(..)
-				.flat_map(|paths|
-					paths.filter_map(|p| p.ok().and_then(|p| {
-						let path = p.path();
-						Witch::try_from(&path).ok().zip(Some(path))
-					}))
-						.par_bridge()
-				)
+				.flat_map(rayon::iter::ParallelBridge::par_bridge)
+				.filter_map(std::result::Result::ok)
+				.filter_map(|p| {
+					let path = p.path();
+					Witch::try_from(&path).ok().zip(Some(path))
+				})
 				.filter(|(w, _)| seen.lock().insert(*w))
 				.filter_map(|(w, p)|
 					if w.is_dir() { fs::read_dir(p).ok() }
