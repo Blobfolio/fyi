@@ -12,9 +12,12 @@ publish = false
 num-integer = "0.1.*"
 
 [dev-dependencies]
-criterion = "*"
 num-format = "0.4.*"
 rand = "*"
+
+[dev-dependencies.criterion]
+version = ">= 0.3.4"
+default-features = false
 
 [[bench]]
 name = "fn_nice_elapsed"
