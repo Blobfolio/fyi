@@ -281,9 +281,11 @@ impl Witcher {
 	///     .with_ext(b".jpg")
 	///     .build();
 	/// ```
-	pub fn with_paths<P>(self, paths: &[P]) -> Self
-	where P: AsRef<Path> {
-		paths.iter().fold(self, Self::with_path)
+	pub fn with_paths<P, I>(self, paths: I) -> Self
+	where
+		P: AsRef<Path>,
+		I: IntoIterator<Item=P> {
+		paths.into_iter().fold(self, Self::with_path)
 	}
 
 	/// # With Path.
