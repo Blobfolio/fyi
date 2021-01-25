@@ -6,7 +6,6 @@ mod witch;
 
 use ahash::AHashSet;
 use crate::utility;
-use parking_lot::Mutex;
 use rayon::iter::{
 	ParallelBridge,
 	ParallelDrainRange,
@@ -22,9 +21,22 @@ use std::{
 		Path,
 		PathBuf,
 	},
-	sync::Arc,
+	sync::{
+		Arc,
+		Mutex,
+	},
 };
 use witch::Witch;
+
+
+
+/// Helper: Unlock the inner Mutex, handling poisonings inasmuch as is
+/// possible.
+macro_rules! mutex_ptr {
+	($mutex:expr) => (
+		$mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+	);
+}
 
 
 
@@ -378,11 +390,11 @@ impl Witcher {
 				.flat_map(ParallelBridge::par_bridge)
 				.filter_map(Witch::from_dent)
 				.filter_map(|(w, p)|
-					if seen.lock().insert(w) {
+					if mutex_ptr!(seen).insert(w) {
 						if w.is_dir() { fs::read_dir(p).ok() }
 						else {
 							if let Some(p) = fs::canonicalize(p).ok().filter(|p| cb(p)) {
-								files.lock().push(p);
+								mutex_ptr!(files).push(p);
 							}
 							None
 						}
@@ -396,7 +408,7 @@ impl Witcher {
 
 		Arc::<Mutex<Vec<PathBuf>>>::try_unwrap(files)
 			.ok()
-			.map(parking_lot::Mutex::into_inner)
+			.and_then(|x| x.into_inner().ok())
 			.unwrap_or_default()
 	}
 
@@ -413,11 +425,11 @@ impl Witcher {
 				.flat_map(ParallelBridge::par_bridge)
 				.filter_map(Witch::from_dent)
 				.filter_map(|(w, p)|
-					if seen.lock().insert(w) {
+					if mutex_ptr!(seen).insert(w) {
 						if w.is_dir() { fs::read_dir(p).ok() }
 						else {
 							if let Ok(p) = fs::canonicalize(p) {
-								files.lock().push(p);
+								mutex_ptr!(files).push(p);
 							}
 							None
 						}
@@ -431,7 +443,7 @@ impl Witcher {
 
 		Arc::<Mutex<Vec<PathBuf>>>::try_unwrap(files)
 			.ok()
-			.map(parking_lot::Mutex::into_inner)
+			.and_then(|x| x.into_inner().ok())
 			.unwrap_or_default()
 	}
 
