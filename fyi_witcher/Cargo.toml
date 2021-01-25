@@ -56,6 +56,9 @@ harness = false
 [[example]]
 name = "witcher"
 
+[[example]]
+name = "walk-and-count"
+
 [features]
 # Enable Regex matching in Witcher.
 regexp = [ "regex" ]
