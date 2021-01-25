@@ -38,6 +38,9 @@ optional = true
 version = "0.3.*"
 optional = true
 
+[dev-dependencies]
+rand = "*"
+
 [dev-dependencies.criterion]
 version = ">= 0.3.4"
 default-features = false

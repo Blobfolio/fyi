@@ -6,6 +6,12 @@ mod witch;
 
 use ahash::AHashSet;
 use crate::utility;
+use parking_lot::Mutex;
+use rayon::iter::{
+	ParallelBridge,
+	ParallelDrainRange,
+	ParallelIterator,
+};
 use std::{
 	convert::TryFrom,
 	fs::{
@@ -16,6 +22,7 @@ use std::{
 		Path,
 		PathBuf,
 	},
+	sync::Arc,
 };
 use witch::Witch;
 
@@ -359,10 +366,6 @@ impl Witcher {
 
 	/// # Build With Callback.
 	fn build_cb(self) -> Vec<PathBuf> {
-		use parking_lot::Mutex;
-		use rayon::prelude::*;
-		use std::sync::Arc;
-
 		// Break up the data.
 		let Self { mut dirs, files, seen, cb } = self;
 		let seen = Arc::from(Mutex::new(seen));
@@ -372,22 +375,19 @@ impl Witcher {
 		// Process until we're our of directories.
 		loop {
 			dirs = dirs.par_drain(..)
-				.flat_map(|paths|
-					paths.filter_map(|p| p.ok().and_then(|p| {
-						let path = p.path();
-						Witch::try_from(&path).ok().zip(Some(path))
-					}))
-						.par_bridge()
-				)
-				.filter(|(w, _)| seen.lock().insert(*w))
+				.flat_map(ParallelBridge::par_bridge)
+				.filter_map(Witch::from_dent)
 				.filter_map(|(w, p)|
-					if w.is_dir() { fs::read_dir(p).ok() }
-					else {
-						if let Some(p) = fs::canonicalize(p).ok().filter(|p| cb(p)) {
-							files.lock().push(p);
+					if seen.lock().insert(w) {
+						if w.is_dir() { fs::read_dir(p).ok() }
+						else {
+							if let Some(p) = fs::canonicalize(p).ok().filter(|p| cb(p)) {
+								files.lock().push(p);
+							}
+							None
 						}
-						None
 					}
+					else { None }
 				)
 				.collect();
 
@@ -402,10 +402,6 @@ impl Witcher {
 
 	/// # Build Without Callback.
 	fn build_no_cb(self) -> Vec<PathBuf> {
-		use parking_lot::Mutex;
-		use rayon::prelude::*;
-		use std::sync::Arc;
-
 		// Break up the data.
 		let Self { mut dirs, files, seen, .. } = self;
 		let seen = Arc::from(Mutex::new(seen));
@@ -414,21 +410,19 @@ impl Witcher {
 		// Process until we're our of directories.
 		loop {
 			dirs = dirs.par_drain(..)
-				.flat_map(rayon::iter::ParallelBridge::par_bridge)
-				.filter_map(std::result::Result::ok)
-				.filter_map(|p| {
-					let path = p.path();
-					Witch::try_from(&path).ok().zip(Some(path))
-				})
-				.filter(|(w, _)| seen.lock().insert(*w))
+				.flat_map(ParallelBridge::par_bridge)
+				.filter_map(Witch::from_dent)
 				.filter_map(|(w, p)|
-					if w.is_dir() { fs::read_dir(p).ok() }
-					else {
-						if let Ok(p) = fs::canonicalize(p) {
-							files.lock().push(p);
+					if seen.lock().insert(w) {
+						if w.is_dir() { fs::read_dir(p).ok() }
+						else {
+							if let Ok(p) = fs::canonicalize(p) {
+								files.lock().push(p);
+							}
+							None
 						}
-						None
 					}
+					else { None }
 				)
 				.collect();
 
