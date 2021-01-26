@@ -479,10 +479,10 @@ limitations under the License.
 
 **Used By:**
 
-* [fyi 0.5.4](https://github.com/Blobfolio/fyi)
-* [fyi_menu 0.5.4](https://github.com/Blobfolio/fyi)
-* [fyi_msg 0.5.4](https://github.com/Blobfolio/fyi)
-* [fyi_num 0.5.4](https://github.com/Blobfolio/fyi)
+* [fyi 0.5.5](https://github.com/Blobfolio/fyi)
+* [fyi_menu 0.5.5](https://github.com/Blobfolio/fyi)
+* [fyi_msg 0.5.5](https://github.com/Blobfolio/fyi)
+* [fyi_num 0.5.5](https://github.com/Blobfolio/fyi)
 
 
 ```
