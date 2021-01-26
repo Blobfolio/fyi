@@ -325,18 +325,19 @@ impl Witcher {
 	/// ```
 	pub fn with_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
-		let path: PathBuf = PathBuf::from(path.as_ref());
-		if let Ok(w) = Witch::try_from(&path) {
-			if self.seen.insert(w) {
-				if w.is_dir() {
-					if let Ok(rd) = fs::read_dir(path) {
-						self.dirs.push(rd);
+		if let Ok(path) = fs::canonicalize(path.as_ref()) {
+			if let Ok(w) = Witch::try_from(&path) {
+				if self.seen.insert(w) {
+					if w.is_dir() {
+						if let Ok(rd) = fs::read_dir(path) {
+							self.dirs.push(rd);
+						}
 					}
-				}
-				else if let Ok(path) = fs::canonicalize(path) {
-					match self.cb {
-						Some(ref cb) => if cb(&path) { self.files.push(path); },
-						None => { self.files.push(path); }
+					else {
+						match self.cb {
+							Some(ref cb) => if cb(&path) { self.files.push(path); },
+							None => { self.files.push(path); }
+						}
 					}
 				}
 			}
@@ -393,7 +394,7 @@ impl Witcher {
 					if mutex_ptr!(seen).insert(w) {
 						if w.is_dir() { fs::read_dir(p).ok() }
 						else {
-							if let Some(p) = fs::canonicalize(p).ok().filter(|p| cb(p)) {
+							if cb(&p) {
 								mutex_ptr!(files).push(p);
 							}
 							None
@@ -428,9 +429,7 @@ impl Witcher {
 					if mutex_ptr!(seen).insert(w) {
 						if w.is_dir() { fs::read_dir(p).ok() }
 						else {
-							if let Ok(p) = fs::canonicalize(p) {
-								mutex_ptr!(files).push(p);
-							}
+							mutex_ptr!(files).push(p);
 							None
 						}
 					}
@@ -490,7 +489,7 @@ mod tests {
 			.with_path(PathBuf::from("tests/"))
 			.build();
 		assert!(! w1.is_empty());
-		assert_eq!(w1.len(), 3);
+		assert_eq!(w1.len(), 9);
 		assert!(w1.contains(&abs_p1));
 		assert!(w1.contains(&abs_p2));
 		assert!(! w1.contains(&abs_perr));
