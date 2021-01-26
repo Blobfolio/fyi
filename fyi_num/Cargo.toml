@@ -1,6 +1,6 @@
 [package]
 name = "fyi_num"
-version = "0.5.4"
+version = "0.5.5"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "Number helpers."
@@ -12,9 +12,12 @@ publish = false
 num-integer = "0.1.*"
 
 [dev-dependencies]
-criterion = "*"
 num-format = "0.4.*"
 rand = "*"
+
+[dev-dependencies.criterion]
+version = ">= 0.3.4"
+default-features = false
 
 [[bench]]
 name = "fn_nice_elapsed"

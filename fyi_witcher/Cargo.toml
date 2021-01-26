@@ -1,6 +1,6 @@
 [package]
 name = "fyi_witcher"
-version = "0.5.4"
+version = "0.5.5"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "Path traversal helpers."
@@ -37,8 +37,9 @@ optional = true
 version = "0.3.*"
 optional = true
 
-[dev-dependencies]
-criterion = "*"
+[dev-dependencies.criterion]
+version = ">= 0.3.4"
+default-features = false
 
 [[bench]]
 name = "fw_utility"
@@ -50,6 +51,9 @@ harness = false
 
 [[example]]
 name = "witcher"
+
+[[example]]
+name = "walk-and-count"
 
 [features]
 # Enable Regex matching in Witcher.

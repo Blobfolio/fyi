@@ -2,15 +2,41 @@
 # FYI Witcher: Witcher
 */
 
+mod witch;
+
 use ahash::AHashSet;
 use crate::utility;
+use rayon::iter::{
+	ParallelBridge,
+	ParallelDrainRange,
+	ParallelIterator,
+};
 use std::{
-	fs,
+	convert::TryFrom,
+	fs::{
+		self,
+		ReadDir,
+	},
 	path::{
 		Path,
 		PathBuf,
 	},
+	sync::{
+		Arc,
+		Mutex,
+	},
 };
+use witch::Witch;
+
+
+
+/// Helper: Unlock the inner Mutex, handling poisonings inasmuch as is
+/// possible.
+macro_rules! mutex_ptr {
+	($mutex:expr) => (
+		$mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+	);
+}
 
 
 
@@ -76,13 +102,13 @@ const LOWER: u8 = 1 << 5;
 /// ```
 pub struct Witcher {
 	/// Directories to scan.
-	dirs: Vec<PathBuf>,
+	dirs: Vec<ReadDir>,
 	/// Files found.
 	files: Vec<PathBuf>,
 	/// Unique path hashes (to prevent duplicate scans, results).
-	seen: AHashSet<u64>,
+	seen: AHashSet<Witch>,
 	/// Filter callback.
-	cb: Box<dyn Fn(&PathBuf) -> bool + 'static + Send + Sync>,
+	cb: Option<Box<dyn Fn(&PathBuf) -> bool + 'static + Send + Sync>>,
 }
 
 impl Default for Witcher {
@@ -91,7 +117,7 @@ impl Default for Witcher {
 			dirs: Vec::new(),
 			files: Vec::with_capacity(2048),
 			seen: AHashSet::with_capacity(2048),
-			cb: Box::new(|_: &PathBuf| true),
+			cb: None,
 		}
 	}
 }
@@ -114,7 +140,7 @@ impl Witcher {
 	/// ```
 	pub fn with_filter<F>(mut self, cb: F) -> Self
 	where F: Fn(&PathBuf) -> bool + 'static + Send + Sync {
-		self.cb = Box::new(cb);
+		self.cb = Some(Box::new(cb));
 		self
 	}
 
@@ -164,14 +190,14 @@ impl Witcher {
 					(e, m)
 				};
 
-				self.cb = Box::new(move |p: &PathBuf| {
+				self.cb = Some(Box::new(move |p: &PathBuf| {
 					let path: &[u8] = utility::path_as_bytes(p);
 					let p_len: usize = path.len();
 
 					p_len > 3 &&
 					path[p_len - 3] == b'.' &&
 					ext == unsafe { *(path[p_len - 2..].as_ptr().cast::<u16>()) | mask }
-				});
+				}));
 			},
 			// Like: .jpg
 			4 => {
@@ -182,13 +208,13 @@ impl Witcher {
 					(e, m)
 				};
 
-				self.cb = Box::new(move |p: &PathBuf| {
+				self.cb = Some(Box::new(move |p: &PathBuf| {
 					let path: &[u8] = utility::path_as_bytes(p);
 					let p_len: usize = path.len();
 
 					p_len > 4 &&
 					ext == unsafe { *(path[p_len - 4..].as_ptr().cast::<u32>()) | mask }
-				});
+				}));
 			},
 			// Like: .html
 			5 => {
@@ -200,14 +226,14 @@ impl Witcher {
 					(e, m)
 				};
 
-				self.cb = Box::new(move |p: &PathBuf| {
+				self.cb = Some(Box::new(move |p: &PathBuf| {
 					let path: &[u8] = utility::path_as_bytes(p);
 					let p_len: usize = path.len();
 
 					p_len > 5 &&
 					path[p_len - 5] == b'.' &&
 					ext == unsafe { *(path[p_len - 4..].as_ptr().cast::<u32>()) | mask }
-				});
+				}));
 			},
 			// Like: .xhtml
 			_ => {
@@ -216,7 +242,7 @@ impl Witcher {
 				// just merge the strategies of [`slice::ends_with`] and
 				// [`slice::eq_ignore_ascii_case`].
 				let ext: Box<[u8]> = Box::from(ext.to_ascii_lowercase());
-				self.cb = Box::new(move |p: &PathBuf| {
+				self.cb = Some(Box::new(move |p: &PathBuf| {
 					let path: &[u8] = utility::path_as_bytes(p);
 					let p_len: usize = path.len();
 
@@ -225,7 +251,7 @@ impl Witcher {
 						.skip(p_len - len)
 						.zip(ext.iter())
 						.all(|(a, b)| a.to_ascii_lowercase() == *b)
-				});
+				}));
 			}
 		}
 
@@ -254,7 +280,7 @@ impl Witcher {
 	where R: std::borrow::Borrow<str> {
 		use regex::bytes::Regex;
 		let pattern: Regex = Regex::new(reg.borrow()).expect("Invalid Regex.");
-		self.cb = Box::new(move|p: &PathBuf| pattern.is_match(utility::path_as_bytes(p)));
+		self.cb = Some(Box::new(move|p: &PathBuf| pattern.is_match(utility::path_as_bytes(p))));
 		self
 	}
 
@@ -274,9 +300,11 @@ impl Witcher {
 	///     .with_ext(b".jpg")
 	///     .build();
 	/// ```
-	pub fn with_paths<P>(self, paths: &[P]) -> Self
-	where P: AsRef<Path> {
-		paths.iter().fold(self, Self::with_path)
+	pub fn with_paths<P, I>(self, paths: I) -> Self
+	where
+		P: AsRef<Path>,
+		I: IntoIterator<Item=P> {
+		paths.into_iter().fold(self, Self::with_path)
 	}
 
 	/// # With Path.
@@ -298,15 +326,23 @@ impl Witcher {
 	pub fn with_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
 		if let Ok(path) = fs::canonicalize(path.as_ref()) {
-			if self.seen.insert(utility::hash64(utility::path_as_bytes(&path))) {
-				if path.is_dir() {
-					self.dirs.push(path);
-				}
-				else if (self.cb)(&path) {
-					self.files.push(path);
+			if let Ok(w) = Witch::try_from(&path) {
+				if self.seen.insert(w) {
+					if w.is_dir() {
+						if let Ok(rd) = fs::read_dir(path) {
+							self.dirs.push(rd);
+						}
+					}
+					else {
+						match self.cb {
+							Some(ref cb) => if cb(&path) { self.files.push(path); },
+							None => { self.files.push(path); }
+						}
+					}
 				}
 			}
 		}
+
 		self
 	}
 
@@ -327,62 +363,87 @@ impl Witcher {
 	///     .build();
 	/// ```
 	pub fn build(self) -> Vec<PathBuf> {
-		use rayon::{
-			prelude::*,
-			iter::Either,
-		};
-		use std::sync::{
-			Arc,
-			Mutex,
-			PoisonError,
-		};
-
-		// Short circuit.
+		// We don't have to do anything!
 		if self.dirs.is_empty() {
-			return self.files;
+			self.files
 		}
+		// Traverse without extra filtering.
+		else if self.cb.is_none() {
+			self.build_no_cb()
+		}
+		// Traverse with filtering.
+		else {
+			self.build_cb()
+		}
+	}
 
-		// Let's destructure to make life easier.
-		let Self { mut dirs, mut files, seen, cb } = self;
-
-		// We'll need to be able to share the path cache between threads.
+	/// # Build With Callback.
+	fn build_cb(self) -> Vec<PathBuf> {
+		// Break up the data.
+		let Self { mut dirs, files, seen, cb } = self;
 		let seen = Arc::from(Mutex::new(seen));
+		let files = Arc::from(Mutex::new(files));
+		let cb = cb.unwrap();
 
+		// Process until we're our of directories.
 		loop {
-			// Process each directory in the queue, separating its (unique)
-			// results into new collections of directories or files
-			// respectively.
-			let (d2, f2): (Vec<PathBuf>, Vec<PathBuf>) = dirs.par_drain(..)
-				.filter_map(|p| fs::read_dir(p).ok())
-				.flat_map(|paths|
-					paths.filter_map(|p| p.ok().map(|p| p.path()))
-						.collect::<Vec<PathBuf>>()
-				)
-				.filter_map(|p| std::fs::canonicalize(p)
-					.ok()
-					.and_then(|p| {
-						if seen.lock()
-							.unwrap_or_else(PoisonError::into_inner)
-							.insert(utility::hash64(utility::path_as_bytes(&p)))
-						{
-							if p.is_dir() { return Some(Either::Left(p)); }
-							else if cb(&p) { return Some(Either::Right(p)); }
+			dirs = dirs.par_drain(..)
+				.flat_map(ParallelBridge::par_bridge)
+				.filter_map(Witch::from_dent)
+				.filter_map(|(w, p)|
+					if mutex_ptr!(seen).insert(w) {
+						if w.is_dir() { fs::read_dir(p).ok() }
+						else {
+							if cb(&p) {
+								mutex_ptr!(files).push(p);
+							}
+							None
 						}
-
-						None
-					})
+					}
+					else { None }
 				)
-				.partition_map(|p| p);
+				.collect();
 
-			// Record the matching files.
-			files.par_extend(f2);
-
-			// If there are no new directories, we're done.
-			if d2.is_empty() { return files; }
-
-			// Load the directories back up so we can do it all over again.
-			dirs.par_extend(d2);
+			if dirs.is_empty() { break; }
 		}
+
+		Arc::<Mutex<Vec<PathBuf>>>::try_unwrap(files)
+			.ok()
+			.and_then(|x| x.into_inner().ok())
+			.unwrap_or_default()
+	}
+
+	/// # Build Without Callback.
+	fn build_no_cb(self) -> Vec<PathBuf> {
+		// Break up the data.
+		let Self { mut dirs, files, seen, .. } = self;
+		let seen = Arc::from(Mutex::new(seen));
+		let files = Arc::from(Mutex::new(files));
+
+		// Process until we're our of directories.
+		loop {
+			dirs = dirs.par_drain(..)
+				.flat_map(ParallelBridge::par_bridge)
+				.filter_map(Witch::from_dent)
+				.filter_map(|(w, p)|
+					if mutex_ptr!(seen).insert(w) {
+						if w.is_dir() { fs::read_dir(p).ok() }
+						else {
+							mutex_ptr!(files).push(p);
+							None
+						}
+					}
+					else { None }
+				)
+				.collect();
+
+			if dirs.is_empty() { break; }
+		}
+
+		Arc::<Mutex<Vec<PathBuf>>>::try_unwrap(files)
+			.ok()
+			.and_then(|x| x.into_inner().ok())
+			.unwrap_or_default()
 	}
 
 	#[cfg(feature = "witching")]
@@ -428,7 +489,7 @@ mod tests {
 			.with_path(PathBuf::from("tests/"))
 			.build();
 		assert!(! w1.is_empty());
-		assert_eq!(w1.len(), 3);
+		assert_eq!(w1.len(), 9);
 		assert!(w1.contains(&abs_p1));
 		assert!(w1.contains(&abs_p2));
 		assert!(! w1.contains(&abs_perr));

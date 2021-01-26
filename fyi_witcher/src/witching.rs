@@ -27,11 +27,11 @@ use std::{
 	path::PathBuf,
 	sync::{
 		Arc,
+		Mutex,
 		atomic::{
 			AtomicBool,
 			Ordering::SeqCst,
 		},
-		Mutex,
 	},
 	time::{
 		Duration,
