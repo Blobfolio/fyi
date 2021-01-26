@@ -2,17 +2,18 @@
 # FYI Witcher: Witcher
 */
 
-mod witch;
-
 use ahash::AHashSet;
-use crate::utility;
+use crate::utility::{
+	path_as_bytes,
+	resolve_dir_entry,
+	resolve_path,
+};
 use rayon::iter::{
 	ParallelBridge,
 	ParallelDrainRange,
 	ParallelIterator,
 };
 use std::{
-	convert::TryFrom,
 	fs::{
 		self,
 		ReadDir,
@@ -26,7 +27,6 @@ use std::{
 		Mutex,
 	},
 };
-use witch::Witch;
 
 
 
@@ -106,9 +106,9 @@ pub struct Witcher {
 	/// Files found.
 	files: Vec<PathBuf>,
 	/// Unique path hashes (to prevent duplicate scans, results).
-	seen: AHashSet<Witch>,
+	seen: AHashSet<u128>,
 	/// Filter callback.
-	cb: Option<Box<dyn Fn(&PathBuf) -> bool + 'static + Send + Sync>>,
+	cb: Box<dyn Fn(&PathBuf) -> bool + 'static + Send + Sync>,
 }
 
 impl Default for Witcher {
@@ -117,7 +117,7 @@ impl Default for Witcher {
 			dirs: Vec::new(),
 			files: Vec::with_capacity(2048),
 			seen: AHashSet::with_capacity(2048),
-			cb: None,
+			cb: Box::new(|_: &PathBuf| true),
 		}
 	}
 }
@@ -140,7 +140,7 @@ impl Witcher {
 	/// ```
 	pub fn with_filter<F>(mut self, cb: F) -> Self
 	where F: Fn(&PathBuf) -> bool + 'static + Send + Sync {
-		self.cb = Some(Box::new(cb));
+		self.cb = Box::new(cb);
 		self
 	}
 
@@ -190,14 +190,14 @@ impl Witcher {
 					(e, m)
 				};
 
-				self.cb = Some(Box::new(move |p: &PathBuf| {
-					let path: &[u8] = utility::path_as_bytes(p);
+				self.cb = Box::new(move |p: &PathBuf| {
+					let path: &[u8] = path_as_bytes(p);
 					let p_len: usize = path.len();
 
 					p_len > 3 &&
 					path[p_len - 3] == b'.' &&
 					ext == unsafe { *(path[p_len - 2..].as_ptr().cast::<u16>()) | mask }
-				}));
+				});
 			},
 			// Like: .jpg
 			4 => {
@@ -208,13 +208,13 @@ impl Witcher {
 					(e, m)
 				};
 
-				self.cb = Some(Box::new(move |p: &PathBuf| {
-					let path: &[u8] = utility::path_as_bytes(p);
+				self.cb = Box::new(move |p: &PathBuf| {
+					let path: &[u8] = path_as_bytes(p);
 					let p_len: usize = path.len();
 
 					p_len > 4 &&
 					ext == unsafe { *(path[p_len - 4..].as_ptr().cast::<u32>()) | mask }
-				}));
+				});
 			},
 			// Like: .html
 			5 => {
@@ -226,14 +226,14 @@ impl Witcher {
 					(e, m)
 				};
 
-				self.cb = Some(Box::new(move |p: &PathBuf| {
-					let path: &[u8] = utility::path_as_bytes(p);
+				self.cb = Box::new(move |p: &PathBuf| {
+					let path: &[u8] = path_as_bytes(p);
 					let p_len: usize = path.len();
 
 					p_len > 5 &&
 					path[p_len - 5] == b'.' &&
 					ext == unsafe { *(path[p_len - 4..].as_ptr().cast::<u32>()) | mask }
-				}));
+				});
 			},
 			// Like: .xhtml
 			_ => {
@@ -242,8 +242,8 @@ impl Witcher {
 				// just merge the strategies of [`slice::ends_with`] and
 				// [`slice::eq_ignore_ascii_case`].
 				let ext: Box<[u8]> = Box::from(ext.to_ascii_lowercase());
-				self.cb = Some(Box::new(move |p: &PathBuf| {
-					let path: &[u8] = utility::path_as_bytes(p);
+				self.cb = Box::new(move |p: &PathBuf| {
+					let path: &[u8] = path_as_bytes(p);
 					let p_len: usize = path.len();
 
 					p_len > len &&
@@ -251,7 +251,7 @@ impl Witcher {
 						.skip(p_len - len)
 						.zip(ext.iter())
 						.all(|(a, b)| a.to_ascii_lowercase() == *b)
-				}));
+				});
 			}
 		}
 
@@ -280,7 +280,7 @@ impl Witcher {
 	where R: std::borrow::Borrow<str> {
 		use regex::bytes::Regex;
 		let pattern: Regex = Regex::new(reg.borrow()).expect("Invalid Regex.");
-		self.cb = Some(Box::new(move|p: &PathBuf| pattern.is_match(utility::path_as_bytes(p))));
+		self.cb = Box::new(move|p: &PathBuf| pattern.is_match(path_as_bytes(p)));
 		self
 	}
 
@@ -325,20 +325,15 @@ impl Witcher {
 	/// ```
 	pub fn with_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
-		if let Ok(path) = fs::canonicalize(path.as_ref()) {
-			if let Ok(w) = Witch::try_from(&path) {
-				if self.seen.insert(w) {
-					if w.is_dir() {
-						if let Ok(rd) = fs::read_dir(path) {
-							self.dirs.push(rd);
-						}
+		if let Some((hash, dir, path)) = resolve_path(PathBuf::from(path.as_ref()), false) {
+			if self.seen.insert(hash) {
+				if dir {
+					if let Ok(rd) = fs::read_dir(path) {
+						self.dirs.push(rd);
 					}
-					else {
-						match self.cb {
-							Some(ref cb) => if cb(&path) { self.files.push(path); },
-							None => { self.files.push(path); }
-						}
-					}
+				}
+				else if (self.cb)(&path) {
+					self.files.push(path);
 				}
 			}
 		}
@@ -365,71 +360,24 @@ impl Witcher {
 	pub fn build(self) -> Vec<PathBuf> {
 		// We don't have to do anything!
 		if self.dirs.is_empty() {
-			self.files
+			return self.files;
 		}
-		// Traverse without extra filtering.
-		else if self.cb.is_none() {
-			self.build_no_cb()
-		}
-		// Traverse with filtering.
-		else {
-			self.build_cb()
-		}
-	}
 
-	/// # Build With Callback.
-	fn build_cb(self) -> Vec<PathBuf> {
 		// Break up the data.
 		let Self { mut dirs, files, seen, cb } = self;
 		let seen = Arc::from(Mutex::new(seen));
 		let files = Arc::from(Mutex::new(files));
-		let cb = cb.unwrap();
 
 		// Process until we're our of directories.
 		loop {
 			dirs = dirs.par_drain(..)
 				.flat_map(ParallelBridge::par_bridge)
-				.filter_map(Witch::from_dent)
-				.filter_map(|(w, p)|
-					if mutex_ptr!(seen).insert(w) {
-						if w.is_dir() { fs::read_dir(p).ok() }
+				.filter_map(resolve_dir_entry)
+				.filter_map(|(hash, dir, p)|
+					if mutex_ptr!(seen).insert(hash) {
+						if dir { fs::read_dir(p).ok() }
 						else {
-							if cb(&p) {
-								mutex_ptr!(files).push(p);
-							}
-							None
-						}
-					}
-					else { None }
-				)
-				.collect();
-
-			if dirs.is_empty() { break; }
-		}
-
-		Arc::<Mutex<Vec<PathBuf>>>::try_unwrap(files)
-			.ok()
-			.and_then(|x| x.into_inner().ok())
-			.unwrap_or_default()
-	}
-
-	/// # Build Without Callback.
-	fn build_no_cb(self) -> Vec<PathBuf> {
-		// Break up the data.
-		let Self { mut dirs, files, seen, .. } = self;
-		let seen = Arc::from(Mutex::new(seen));
-		let files = Arc::from(Mutex::new(files));
-
-		// Process until we're our of directories.
-		loop {
-			dirs = dirs.par_drain(..)
-				.flat_map(ParallelBridge::par_bridge)
-				.filter_map(Witch::from_dent)
-				.filter_map(|(w, p)|
-					if mutex_ptr!(seen).insert(w) {
-						if w.is_dir() { fs::read_dir(p).ok() }
-						else {
-							mutex_ptr!(files).push(p);
+							if cb(&p) { mutex_ptr!(files).push(p); }
 							None
 						}
 					}

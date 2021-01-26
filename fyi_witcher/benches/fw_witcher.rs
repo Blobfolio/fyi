@@ -15,14 +15,35 @@ use std::path::PathBuf;
 
 
 fn build(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_witcher::Witcher");
-	group.sample_size(50);
+	println!("{:?}", Witcher::default().with_path("/usr/share").build().len());
 
-	group.bench_function("with_path(/usr/share/man).build()", move |b| {
+	let mut group = c.benchmark_group("fyi_witcher::Witcher");
+	group.sample_size(30);
+
+	group.bench_function("with_path(/usr/share).build()", move |b| {
 		b.iter(|| {
 			let _ = black_box(
 				Witcher::default()
-					.with_path("/usr/share/man")
+					.with_path("/usr/share")
+					.build()
+			);
+		})
+	});
+
+	group.finish();
+}
+
+fn build_lite(c: &mut Criterion) {
+	println!("{:?}", fyi_witcher::lite::Witcher::default().with_path("/usr/share").build().len());
+
+	let mut group = c.benchmark_group("fyi_witcher::lite::Witcher");
+	group.sample_size(30);
+
+	group.bench_function("with_path(/usr/share).build()", move |b| {
+		b.iter(|| {
+			let _ = black_box(
+				fyi_witcher::lite::Witcher::default()
+					.with_path("/usr/share")
 					.build()
 			);
 		})
@@ -33,7 +54,7 @@ fn build(c: &mut Criterion) {
 
 fn regex(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::Witcher");
-	group.sample_size(50);
+	group.sample_size(30);
 
 	group.bench_function(r"with_regex((?i).+\.gz$).with_path(/usr/share/man).build()", move |b| {
 		b.iter(||{
@@ -51,7 +72,7 @@ fn regex(c: &mut Criterion) {
 
 fn filter(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::Witcher");
-	group.sample_size(50);
+	group.sample_size(30);
 
 	fn cb(path: &PathBuf) -> bool {
 		let bytes: &[u8] = unsafe { &*(path.as_os_str() as *const OsStr as *const [u8]) };
@@ -95,6 +116,7 @@ fn with_ext(c: &mut Criterion) {
 criterion_group!(
 	benches,
 	build,
+	build_lite,
 	filter,
 	regex,
 	with_ext,

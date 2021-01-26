@@ -6,6 +6,8 @@ This crate provides two main components, both of them file-related:
 * [`Witcher`] is a simple, minimally configurable file system traversal library.
 * [`Witching`] is a lightweight, automatic progress bar wrapper that can be used while iterating through/operating on a set of paths.
 
+The `Witcher` struct is also available in a "lite" version — [`lite::Witcher`] — that omits the filter/callback functionality. When you just want a list of all files, you should use this version instead.
+
 
 
 ## Optional Features
@@ -53,6 +55,7 @@ version.
 
 
 
+pub mod lite;
 mod witcher;
 #[cfg(feature = "witching")] mod witching;
 pub mod utility;

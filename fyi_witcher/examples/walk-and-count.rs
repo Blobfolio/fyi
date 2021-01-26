@@ -4,7 +4,7 @@
 This simply finds all files under /usr/share and reports the total.
 */
 
-use fyi_witcher::Witcher;
+use fyi_witcher::lite::Witcher;
 
 
 
