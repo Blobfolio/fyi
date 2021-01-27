@@ -9,7 +9,7 @@ repository = "https://github.com/Blobfolio/fyi"
 publish = false
 
 [dependencies]
-ahash = "0.6.*"
+ahash = "0.7.*"
 rayon = "1.5.*"
 
 [dependencies.bytecount]
