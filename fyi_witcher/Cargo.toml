@@ -49,6 +49,10 @@ harness = false
 name = "fw_witcher"
 harness = false
 
+[[bench]]
+name = "fw_witcher_filtered"
+harness = false
+
 [[example]]
 name = "witch"
 
