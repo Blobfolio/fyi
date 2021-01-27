@@ -50,10 +50,10 @@ name = "fw_witcher"
 harness = false
 
 [[example]]
-name = "witcher"
+name = "witch"
 
 [[example]]
-name = "walk-and-count"
+name = "witcher"
 
 [features]
 # Enable Regex matching in Witcher.

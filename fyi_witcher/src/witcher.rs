@@ -325,15 +325,15 @@ impl Witcher {
 	/// ```
 	pub fn with_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
-		if let Some((hash, dir, path)) = resolve_path(PathBuf::from(path.as_ref()), false) {
-			if self.seen.insert(hash) {
-				if dir {
-					if let Ok(rd) = fs::read_dir(path) {
+		if let Some((h, is_dir, p)) = resolve_path(PathBuf::from(path.as_ref()), false) {
+			if self.seen.insert(h) {
+				if is_dir {
+					if let Ok(rd) = fs::read_dir(p) {
 						self.dirs.push(rd);
 					}
 				}
-				else if (self.cb)(&path) {
-					self.files.push(path);
+				else if (self.cb)(&p) {
+					self.files.push(p);
 				}
 			}
 		}
@@ -373,9 +373,9 @@ impl Witcher {
 			dirs = dirs.par_drain(..)
 				.flat_map(ParallelBridge::par_bridge)
 				.filter_map(resolve_dir_entry)
-				.filter_map(|(hash, dir, p)|
-					if mutex_ptr!(seen).insert(hash) {
-						if dir { fs::read_dir(p).ok() }
+				.filter_map(|(h, is_dir, p)|
+					if mutex_ptr!(seen).insert(h) {
+						if is_dir { fs::read_dir(p).ok() }
 						else {
 							if cb(&p) { mutex_ptr!(files).push(p); }
 							None

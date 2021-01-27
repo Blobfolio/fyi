@@ -14,6 +14,21 @@ use std::path::PathBuf;
 
 
 
+fn witch(c: &mut Criterion) {
+	println!("{:?}", fyi_witcher::witch(&["/usr/share"]).len());
+
+	let mut group = c.benchmark_group("fyi_witcher");
+	group.sample_size(30);
+
+	group.bench_function("witch(/usr/share)", move |b| {
+		b.iter(|| {
+			let _ = black_box(fyi_witcher::witch(&["/usr/share"]));
+		})
+	});
+
+	group.finish();
+}
+
 fn build(c: &mut Criterion) {
 	println!("{:?}", Witcher::default().with_path("/usr/share").build().len());
 
@@ -24,25 +39,6 @@ fn build(c: &mut Criterion) {
 		b.iter(|| {
 			let _ = black_box(
 				Witcher::default()
-					.with_path("/usr/share")
-					.build()
-			);
-		})
-	});
-
-	group.finish();
-}
-
-fn build_lite(c: &mut Criterion) {
-	println!("{:?}", fyi_witcher::lite::Witcher::default().with_path("/usr/share").build().len());
-
-	let mut group = c.benchmark_group("fyi_witcher::lite::Witcher");
-	group.sample_size(30);
-
-	group.bench_function("with_path(/usr/share).build()", move |b| {
-		b.iter(|| {
-			let _ = black_box(
-				fyi_witcher::lite::Witcher::default()
 					.with_path("/usr/share")
 					.build()
 			);
@@ -116,9 +112,9 @@ fn with_ext(c: &mut Criterion) {
 criterion_group!(
 	benches,
 	build,
-	build_lite,
 	filter,
 	regex,
 	with_ext,
+	witch,
 );
 criterion_main!(benches);
