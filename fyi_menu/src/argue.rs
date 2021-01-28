@@ -175,13 +175,14 @@ impl Deref for Argue {
 }
 
 impl<I> From<I> for Argue
-where I: Iterator<Item=String> {
+where I: IntoIterator<Item=String> {
 	fn from(src: I) -> Self
-	where I: Iterator<Item=String> {
-		src.skip_while(|x|
-			x.is_empty() ||
-			x.as_bytes().iter().all(u8::is_ascii_whitespace)
-		)
+	where I: IntoIterator<Item=String> {
+		src.into_iter()
+			.skip_while(|x|
+				x.is_empty() ||
+				x.as_bytes().iter().all(u8::is_ascii_whitespace)
+			)
 			.fold(
 				Self::default(),
 				Self::push
@@ -192,7 +193,7 @@ where I: Iterator<Item=String> {
 impl FromIterator<String> for Argue {
 	#[inline]
 	fn from_iter<I: IntoIterator<Item=String>>(src: I) -> Self {
-		Self::from(src.into_iter())
+		Self::from(src)
 	}
 }
 
@@ -216,7 +217,8 @@ impl Argue {
 	/// let args = Argue::new(0);
 	/// ```
 	pub fn new(flags: u8) -> Self {
-		env::args().skip(1)
+		env::args()
+			.skip(1)
 			.skip_while(|x|
 				x.is_empty() ||
 				x.as_bytes().iter().all(u8::is_ascii_whitespace)

@@ -26,7 +26,7 @@ fn from_iter(c: &mut Criterion) {
 			String::from("199"),
 			String::from("-t"),
 			String::from("A penny saved is a penny earned."),
-		].into_iter()),
+		]),
 		*Argue::from(vec![
 			String::from("print"),
 			String::from("--prefix"),
@@ -35,7 +35,7 @@ fn from_iter(c: &mut Criterion) {
 			String::from("199"),
 			String::from("-t"),
 			String::from("A penny saved is a penny earned."),
-		].into_iter())
+		])
 	);
 
 	// Keys and values split.
@@ -49,7 +49,7 @@ fn from_iter(c: &mut Criterion) {
 				String::from("199"),
 				String::from("-t"),
 				String::from("A penny saved is a penny earned."),
-			].into_iter(),
+			],
 			|v| { let _ = black_box(Argue::from(v)); }
 		)
 	});
@@ -65,7 +65,7 @@ fn from_iter(c: &mut Criterion) {
 				String::from("more"),
 				String::from("more"),
 				String::from("A penny saved is a penny earned."),
-			].into_iter(),
+			],
 			|v| { let _ = black_box(Argue::from(v)); }
 		)
 	});
@@ -86,7 +86,7 @@ fn switch(c: &mut Criterion) {
 			String::from("199"),
 			String::from("-t"),
 			String::from("A penny saved is a penny earned."),
-		].into_iter())
+		])
 	}
 
 	group.bench_function("switch()", move |b| {
@@ -119,7 +119,7 @@ fn option(c: &mut Criterion) {
 			String::from("199"),
 			String::from("-t"),
 			String::from("A penny saved is a penny earned."),
-		].into_iter())
+		])
 	}
 
 	group.bench_function("option()", move |b| {
