@@ -29,8 +29,9 @@ use std::{
 
 
 
-/// Helper: Unlock the inner Mutex, handling poisonings inasmuch as is
-/// possible.
+/// Helper: Mutex Unlock.
+///
+/// This just moves tedious code out of the way.
 macro_rules! mutex_ptr {
 	($mutex:expr) => (
 		$mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -41,7 +42,14 @@ macro_rules! mutex_ptr {
 
 /// # Traverse Paths Deeply.
 ///
-/// This works just like [`Witcher`], but without the overhead of filtering.
+/// This works just like [`Witcher`], but without any state or filtering logic,
+/// making it more efficient in cases where you just want a dump of ALL FILES.
+///
+/// ## Examples
+///
+/// ```no_run
+/// let files = fyi_witcher::witch(&["/usr/share"]);
+/// ```
 pub fn witch<P, I>(paths: I) -> Vec<PathBuf>
 where P: AsRef<Path>, I: IntoIterator<Item=P> {
 	// Parse out seed paths.
