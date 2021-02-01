@@ -2,10 +2,14 @@
 # FYI Msg
 */
 
-mod ansi;
-mod buffer;
-mod kind;
+pub(super) mod ansi;
+pub(super) mod buffer;
+pub(super) mod kind;
 
+use crate::{
+	MsgKind,
+	NiceANSI,
+};
 use std::{
 	fmt,
 	hash,
@@ -13,24 +17,10 @@ use std::{
 	ops::Deref,
 };
 
+#[cfg(feature = "timestamps")] use crate::MsgBuffer6;
+#[cfg(not(feature = "timestamps"))] use crate::MsgBuffer5;
+
 #[cfg(feature = "fitted")] use std::borrow::Cow;
-
-#[allow(unreachable_pub)] pub use ansi::NiceANSI;
-
-#[allow(unreachable_pub)]
-pub use buffer::{
-	MsgBuffer2,
-	MsgBuffer3,
-	MsgBuffer4,
-	MsgBuffer5,
-	MsgBuffer6,
-	MsgBuffer7,
-	MsgBuffer8,
-	MsgBuffer9,
-	MsgBuffer10,
-};
-
-#[allow(unreachable_pub)] pub use kind::MsgKind;
 
 
 

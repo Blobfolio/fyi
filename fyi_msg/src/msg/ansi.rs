@@ -9,7 +9,6 @@ use std::{
 
 
 
-#[allow(unreachable_pub)] // It is one or the other.
 #[derive(Debug, Copy, Clone)]
 /// # Nice ANSI.
 ///

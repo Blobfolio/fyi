@@ -55,19 +55,20 @@ version.
 mod msg;
 
 pub use msg::{
-	Msg,
-	MsgBuffer2,
-	MsgBuffer3,
-	MsgBuffer4,
-	MsgBuffer5,
-	MsgBuffer6,
-	MsgBuffer7,
-	MsgBuffer8,
-	MsgBuffer9,
-	MsgBuffer10,
-	MsgKind,
+	ansi::NiceANSI,
+	buffer::MsgBuffer10,
+	buffer::MsgBuffer2,
+	buffer::MsgBuffer3,
+	buffer::MsgBuffer4,
+	buffer::MsgBuffer5,
+	buffer::MsgBuffer6,
+	buffer::MsgBuffer7,
+	buffer::MsgBuffer8,
+	buffer::MsgBuffer9,
 	FLAG_INDENT,
 	FLAG_NEWLINE,
+	kind::MsgKind,
+	Msg,
 };
 
 #[cfg(feature = "timestamps")]
