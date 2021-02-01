@@ -9,7 +9,6 @@ use crate::{
 use fyi_msg::Msg;
 use std::{
 	cell::Cell,
-	env,
 	iter::FromIterator,
 	ops::Deref,
 	process::exit,
@@ -199,6 +198,115 @@ impl FromIterator<String> for Argue {
 
 /// ## Instantiation and Builder Patterns.
 impl Argue {
+	#[cfg(all(target_os = "linux", not(target_env = "musl")))]
+	#[must_use]
+	/// # New Instance.
+	///
+	/// This populates arguments from the environment using a specialized
+	/// implementation that requires slightly less overhead than using the
+	/// stock [`std::env::args`] iterator. The first (command path) part is
+	/// automatically excluded.
+	///
+	/// To construct an `Argue` from arbitrary raw values, use the
+	/// `Argue::from_iter()` method (via the [`std::iter::FromIterator`] trait).
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_menu::Argue;
+	///
+	/// let args = Argue::new(0);
+	/// ```
+	pub fn new(flags: u8) -> Self {
+		use std::ffi::CStr;
+
+		// Start with a default.
+		let mut out = Self::default();
+
+		// Process!
+		if let Some((start, len)) = argv::env() {
+			let mut idx: usize = 0;
+
+			for i in 0..len {
+				// Convert to bytes.
+				let bytes: &[u8] = unsafe { CStr::from_ptr(*start.add(i)).to_bytes() };
+
+				// Skip leading empties.
+				if
+					idx == 0 &&
+					(bytes.is_empty() || bytes.iter().all(u8::is_ascii_whitespace))
+				{
+					continue;
+				}
+
+				// Find out what we've got!
+				match KeyKind::from(bytes) {
+					// Passthrough.
+					KeyKind::None => {
+						out.args.push(String::from_utf8_lossy(bytes).into_owned());
+						idx += 1;
+					},
+					// Record the key and passthrough.
+					KeyKind::Short => {
+						if bytes == b"-V" { out.flags |= FLAG_HAS_VERSION; }
+						else if bytes == b"-h" { out.flags |= FLAG_HAS_HELP; }
+
+						out.args.push(String::from_utf8_lossy(bytes).into_owned());
+						out.insert_key(idx);
+						out.last.set(idx);
+						idx += 1;
+					},
+					// Record the key and passthrough.
+					KeyKind::Long => {
+						if bytes == b"--version" { out.flags |= FLAG_HAS_VERSION; }
+						else if bytes == b"--help" { out.flags |= FLAG_HAS_HELP; }
+
+						out.args.push(String::from_utf8_lossy(bytes).into_owned());
+						out.insert_key(idx);
+						out.last.set(idx);
+						idx += 1;
+					},
+					// Split a short key/value pair.
+					KeyKind::ShortV => {
+						let mut val = String::from_utf8_lossy(bytes).into_owned();
+						let v2 = val.split_off(2);
+						out.args.push(val);
+						out.args.push(v2);
+
+						out.insert_key(idx);
+						out.last.set(idx + 1);
+						idx += 2;
+					},
+					// Split a long key/value pair.
+					KeyKind::LongV(x) => {
+						let mut val = String::from_utf8_lossy(bytes).into_owned();
+
+						// There is a value.
+						if x + 1 < val.len() {
+							let tmp = val.split_off(x + 1);
+							val.truncate(x);
+							out.args.push(val);
+							out.args.push(tmp);
+						}
+						// The value is empty.
+						else {
+							val.truncate(x);
+							out.args.push(val);
+							out.args.push(String::new());
+						}
+
+						out.insert_key(idx);
+						out.last.set(idx + 1);
+						idx += 2;
+					},
+				}
+			}
+		}
+
+		out.with_flags(flags)
+	}
+
+	#[cfg(any(not(target_os = "linux"), target_env = "musl"))]
 	#[must_use]
 	#[inline]
 	/// # New Instance.
@@ -217,7 +325,7 @@ impl Argue {
 	/// let args = Argue::new(0);
 	/// ```
 	pub fn new(flags: u8) -> Self {
-		env::args()
+		std::env::args()
 			.skip(1)
 			.skip_while(|x|
 				x.is_empty() ||
@@ -778,6 +886,59 @@ impl Argue {
 				self.args.truncate(idx);
 			}
 		}
+	}
+}
+
+
+
+#[cfg(all(target_os = "linux", not(target_env = "musl")))]
+#[allow(clippy::similar_names)] // Follow convention.
+/// # Linux Specialized Args
+///
+/// This is a non-allocating version of [`std::env::args`] for non-Musl Linux
+/// systems inspired by [`argv`](https://crates.io/crates/argv).
+///
+/// Other targets just use the normal [`std::env::args`].
+mod argv {
+	use std::os::raw::{
+		c_char,
+		c_int,
+	};
+
+	static mut ARGC: c_int = 0;
+	static mut ARGV: *const *const c_char = std::ptr::null();
+
+	#[cfg(target_os = "linux")]
+	#[link_section = ".init_array"]
+	#[used]
+	static CAPTURE: unsafe extern "C" fn(c_int, *const *const c_char) = capture;
+
+	#[cfg_attr(target_os = "macos", link_section = "__DATA,__mod_init_func")]
+	#[allow(dead_code)]
+	unsafe extern "C" fn capture(argc: c_int, argv: *const *const c_char) {
+		ARGC = argc;
+		ARGV = argv;
+	}
+
+	/// # Raw Arguments.
+	///
+	/// This will skip the first (path) argument and return a pointer and
+	/// length if there's anything worth returning.
+	///
+	/// ## Safety
+	///
+	/// This accesses mutable statics — `ARGC` and `ARGV` — but because they
+	/// are only mutated prior to the execution of `main()`, it's A-OK.
+	///
+	/// Also worth noting, the operating system is responsible for ensuring
+	/// `ARGV + ARGC` does not overflow, so no worries there either.
+	pub(super) fn env() -> Option<(*const *const c_char, usize)> {
+		// We'll only return arguments if there are at least 2 of them.
+		let len = unsafe { ARGC } as usize;
+		if len > 1 {
+			Some((unsafe { ARGV.add(1) }, len - 1))
+		}
+		else { None }
 	}
 }
 
