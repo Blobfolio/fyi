@@ -50,7 +50,13 @@ mod nice_elapsed;
 mod nice_int;
 
 pub use nice_elapsed::NiceElapsed;
-pub use nice_int::NiceInt;
+pub use nice_int::{
+	nice_u8::NiceU8,
+	nice_u16::NiceU16,
+	nice_u32::NiceU32,
+	nice_u64::NiceU64,
+	nice_percent::NicePercent,
+};
 
 
 

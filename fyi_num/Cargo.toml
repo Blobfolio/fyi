@@ -24,5 +24,21 @@ name = "fn_nice_elapsed"
 harness = false
 
 [[bench]]
-name = "fn_nice_int"
+name = "fn_nice_percent"
+harness = false
+
+[[bench]]
+name = "fn_nice_u8"
+harness = false
+
+[[bench]]
+name = "fn_nice_u16"
+harness = false
+
+[[bench]]
+name = "fn_nice_u32"
+harness = false
+
+[[bench]]
+name = "fn_nice_u64"
 harness = false

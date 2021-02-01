@@ -13,7 +13,9 @@ use fyi_msg::{
 };
 use fyi_num::{
 	NiceElapsed,
-	NiceInt,
+	NicePercent,
+	NiceU32,
+	NiceU64,
 	write_time,
 };
 use rayon::prelude::*;
@@ -581,7 +583,7 @@ impl WitchingInner {
 	fn tick_set_done(&mut self) {
 		if 0 != self.flags & TICK_DONE {
 			self.flags &= ! TICK_DONE;
-			self.buf.replace(PART_DONE, &NiceInt::from(self.done));
+			self.buf.replace(PART_DONE, &NiceU32::from(self.done));
 		}
 	}
 
@@ -591,9 +593,7 @@ impl WitchingInner {
 	fn tick_set_percent(&mut self) {
 		if 0 != self.flags & TICK_PERCENT {
 			self.flags &= ! TICK_PERCENT;
-			unsafe {
-				self.buf.replace(PART_PERCENT, &NiceInt::percent_f64(self.percent()));
-			}
+			self.buf.replace(PART_PERCENT, &NicePercent::from(self.percent()));
 		}
 	}
 
@@ -652,7 +652,7 @@ impl WitchingInner {
 	fn tick_set_total(&mut self) {
 		if 0 != self.flags & TICK_TOTAL {
 			self.flags &= ! TICK_TOTAL;
-			self.buf.replace(PART_TOTAL, &NiceInt::from(self.total));
+			self.buf.replace(PART_TOTAL, &NiceU32::from(self.total));
 		}
 	}
 
@@ -1055,7 +1055,7 @@ impl Witching {
 	fn summary(&self) -> String {
 		format!(
 			"{} {} in {}.",
-			NiceInt::from(self.total()).as_str(),
+			NiceU32::from(self.total()).as_str(),
 			self.label(),
 			NiceElapsed::from(self.elapsed()).as_str(),
 		)
@@ -1095,10 +1095,8 @@ impl Witching {
 			Msg::new(MsgKind::Crunched, self.summary())
 				.with_suffix(format!(
 					" \x1b[2m(Saved {} bytes, {}.)\x1b[0m",
-					NiceInt::from(before - after).as_str(),
-					unsafe {
-						NiceInt::percent_f64(1.0 - (after as f64 / before as f64)).as_str()
-					},
+					NiceU64::from(before - after).as_str(),
+					NicePercent::from(1.0 - (after as f64 / before as f64)).as_str(),
 				))
 		}
 			.with_newline(true)

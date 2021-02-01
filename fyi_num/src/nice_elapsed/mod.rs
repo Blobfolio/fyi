@@ -124,8 +124,8 @@ impl NiceElapsed {
 	/// # Maximum Value
 	///
 	/// We can save some processing time by hard-coding the maximum value.
-	/// Because `NiceInt` does not support days, this is equivalent to `86400`,
-	/// which comes out to `>1 day`.
+	/// Because `NiceElapsed` does not support days, this is equivalent to
+	/// `86400`, which comes out to `>1 day`.
 	pub const fn max() -> Self {
 		Self {
 			//       >   1   •    d   a    y
