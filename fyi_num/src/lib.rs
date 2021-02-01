@@ -46,11 +46,9 @@ version.
 
 
 
-mod nice_ansi;
 mod nice_elapsed;
 mod nice_int;
 
-pub use nice_ansi::NiceANSI;
 pub use nice_elapsed::NiceElapsed;
 pub use nice_int::NiceInt;
 

@@ -2,17 +2,20 @@
 # FYI Msg
 */
 
+mod ansi;
 mod buffer;
 mod kind;
 
-use fyi_num::NiceANSI;
 use std::{
 	fmt,
 	hash,
 	io,
 	ops::Deref,
 };
+
 #[cfg(feature = "fitted")] use std::borrow::Cow;
+
+#[allow(unreachable_pub)] pub use ansi::NiceANSI;
 
 #[allow(unreachable_pub)]
 pub use buffer::{
@@ -27,8 +30,7 @@ pub use buffer::{
 	MsgBuffer10,
 };
 
-#[allow(unreachable_pub)]
-pub use kind::MsgKind;
+#[allow(unreachable_pub)] pub use kind::MsgKind;
 
 
 
