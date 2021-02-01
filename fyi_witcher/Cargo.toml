@@ -57,7 +57,7 @@ harness = false
 name = "witch"
 
 [[example]]
-name = "witcher"
+name = "witching"
 
 [features]
 # Enable Regex matching in Witcher.
