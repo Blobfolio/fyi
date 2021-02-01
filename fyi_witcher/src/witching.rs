@@ -43,21 +43,13 @@ use std::{
 
 
 
-/// Helper: Unlock the inner Mutex, handling poisonings inasmuch as is
-/// possible.
-macro_rules! mutex_ptr {
-	($mutex:expr) => (
-		$mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
-	);
-}
-
 /// Helper: Pass through a getter to the `WitchingInner`.
 macro_rules! get_inner {
 	($func:ident, $type:ty) => {
 		#[must_use]
 		/// Wrapper.
 		pub fn $func(&self) -> $type {
-			let ptr = mutex_ptr!(self.inner);
+			let ptr = crate::mutex_ptr!(self.inner);
 			ptr.$func()
 		}
 	};
@@ -1133,7 +1125,7 @@ impl Witching {
 	///
 	/// Wrapper for `WitchingInner::stop()`.
 	fn stop(&self) {
-		let mut ptr = mutex_ptr!(self.inner);
+		let mut ptr = crate::mutex_ptr!(self.inner);
 		ptr.stop();
 	}
 
@@ -1142,7 +1134,7 @@ impl Witching {
 	/// Wrapper for `WitchingInner::set_title()`.
 	pub fn set_title<S> (&self, title: S)
 	where S: Into<Msg> {
-		let mut ptr = mutex_ptr!(self.inner);
+		let mut ptr = crate::mutex_ptr!(self.inner);
 		ptr.set_title(title);
 	}
 }
@@ -1151,7 +1143,7 @@ impl Witching {
 ///
 /// Wrapper for `WitchingInner::tick()`.
 fn progress_tick(inner: &Arc<Mutex<WitchingInner>>) -> bool {
-	let mut ptr = mutex_ptr!(inner);
+	let mut ptr = crate::mutex_ptr!(inner);
 	ptr.tick()
 }
 
@@ -1159,7 +1151,7 @@ fn progress_tick(inner: &Arc<Mutex<WitchingInner>>) -> bool {
 ///
 /// Wrapper for `WitchingInner::end_task()`.
 fn progress_end(inner: &Arc<Mutex<WitchingInner>>, task: &PathBuf) {
-	let mut ptr = mutex_ptr!(inner);
+	let mut ptr = crate::mutex_ptr!(inner);
 	ptr.end_task(task);
 }
 
@@ -1167,7 +1159,7 @@ fn progress_end(inner: &Arc<Mutex<WitchingInner>>, task: &PathBuf) {
 ///
 /// Wrapper for `WitchingInner::start_task()`.
 fn progress_start(inner: &Arc<Mutex<WitchingInner>>, task: &PathBuf) {
-	let mut ptr = mutex_ptr!(inner);
+	let mut ptr = crate::mutex_ptr!(inner);
 	ptr.start_task(task);
 }
 

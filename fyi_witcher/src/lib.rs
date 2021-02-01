@@ -53,6 +53,7 @@ version.
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::module_name_repetitions)]
 
+#![macro_use]
 
 
 mod witch;
@@ -70,3 +71,15 @@ pub use witching::{
 	WITCHING_QUIET,
 	WITCHING_SUMMARIZE,
 };
+
+
+
+#[macro_export]
+/// Helper: Mutex Unlock.
+///
+/// This just moves tedious code out of the way.
+macro_rules! mutex_ptr {
+	($mutex:expr) => (
+		$mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+	);
+}

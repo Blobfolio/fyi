@@ -29,17 +29,6 @@ use std::{
 
 
 
-/// Helper: Mutex Unlock.
-///
-/// This just moves tedious code out of the way.
-macro_rules! mutex_ptr {
-	($mutex:expr) => (
-		$mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
-	);
-}
-
-
-
 /// # Traverse Paths Deeply.
 ///
 /// This works just like [`Witcher`], but without any state or filtering logic,
@@ -85,12 +74,12 @@ where P: AsRef<Path>, I: IntoIterator<Item=P> {
 			.filter_map(resolve_dir_entry)
 			.filter_map(|(h, is_dir, p)|
 				// A new path.
-				if mutex_ptr!(seen).insert(h) {
+				if crate::mutex_ptr!(seen).insert(h) {
 					// A directory to look at on the next while.
 					if is_dir { fs::read_dir(p).ok() }
 					// A file.
 					else {
-						mutex_ptr!(files).push(p);
+						crate::mutex_ptr!(files).push(p);
 						None
 					}
 				}

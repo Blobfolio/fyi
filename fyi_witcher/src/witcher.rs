@@ -30,16 +30,6 @@ use std::{
 
 
 
-/// Helper: Unlock the inner Mutex, handling poisonings inasmuch as is
-/// possible.
-macro_rules! mutex_ptr {
-	($mutex:expr) => (
-		$mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
-	);
-}
-
-
-
 /// # Lowercase Mask.
 ///
 /// An uppercase ASCII byte can be made lowercase by BIT-ORing its value
@@ -374,10 +364,10 @@ impl Witcher {
 				.flat_map(ParallelBridge::par_bridge)
 				.filter_map(resolve_dir_entry)
 				.filter_map(|(h, is_dir, p)|
-					if mutex_ptr!(seen).insert(h) {
+					if crate::mutex_ptr!(seen).insert(h) {
 						if is_dir { fs::read_dir(p).ok() }
 						else {
-							if cb(&p) { mutex_ptr!(files).push(p); }
+							if cb(&p) { crate::mutex_ptr!(files).push(p); }
 							None
 						}
 					}
