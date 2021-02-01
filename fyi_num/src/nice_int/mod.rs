@@ -2,11 +2,7 @@
 # FYI Num: "Nice" Integer
 */
 
-use crate::{
-	DOUBLE,
-	SINGLE,
-	TRIPLE,
-};
+use crate::DOUBLE;
 
 use std::{
 	fmt,
@@ -321,7 +317,10 @@ impl NiceInt {
 /// The destination pointer must have at least 3 bytes free or undefined
 /// things may happen!
 unsafe fn write_u8_3(buf: *mut u8, num: usize) {
-	ptr::copy_nonoverlapping(TRIPLE.as_ptr().add(num * 3), buf, 3);
+	let (div, rem) = num_integer::div_mod_floor(num, 100);
+	let ptr = DOUBLE.as_ptr();
+	ptr::copy_nonoverlapping(ptr.add((div << 1) + 1), buf, 1);
+	ptr::copy_nonoverlapping(ptr.add(rem << 1), buf.add(1), 2);
 }
 
 /// # Write `u8` x 2
@@ -341,7 +340,7 @@ unsafe fn write_u8_2(buf: *mut u8, num: usize) {
 /// The destination pointer must have at least 1 byte free or undefined
 /// things may happen!
 unsafe fn write_u8_1(buf: *mut u8, num: usize) {
-	ptr::copy_nonoverlapping(SINGLE.as_ptr().add(num), buf, 1);
+	ptr::copy_nonoverlapping(DOUBLE.as_ptr().add((num << 1) + 1), buf, 1);
 }
 
 
