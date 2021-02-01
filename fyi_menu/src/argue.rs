@@ -200,6 +200,7 @@ impl FromIterator<String> for Argue {
 impl Argue {
 	#[cfg(all(target_os = "linux", not(target_env = "musl")))]
 	#[must_use]
+	#[inline]
 	/// # New Instance.
 	///
 	/// This populates arguments from the environment using a specialized
@@ -218,92 +219,13 @@ impl Argue {
 	/// let args = Argue::new(0);
 	/// ```
 	pub fn new(flags: u8) -> Self {
-		use std::ffi::CStr;
-
-		// Start with a default.
-		let mut out = Self::default();
-
-		// Process!
-		if let Some((start, len)) = argv::env() {
-			let mut idx: usize = 0;
-
-			for i in 0..len {
-				// Convert to bytes.
-				let bytes: &[u8] = unsafe { CStr::from_ptr(*start.add(i)).to_bytes() };
-
-				// Skip leading empties.
-				if
-					idx == 0 &&
-					(bytes.is_empty() || bytes.iter().all(u8::is_ascii_whitespace))
-				{
-					continue;
-				}
-
-				// Find out what we've got!
-				match KeyKind::from(bytes) {
-					// Passthrough.
-					KeyKind::None => {
-						out.args.push(String::from_utf8_lossy(bytes).into_owned());
-						idx += 1;
-					},
-					// Record the key and passthrough.
-					KeyKind::Short => {
-						if bytes == b"-V" { out.flags |= FLAG_HAS_VERSION; }
-						else if bytes == b"-h" { out.flags |= FLAG_HAS_HELP; }
-
-						out.args.push(String::from_utf8_lossy(bytes).into_owned());
-						out.insert_key(idx);
-						out.last.set(idx);
-						idx += 1;
-					},
-					// Record the key and passthrough.
-					KeyKind::Long => {
-						if bytes == b"--version" { out.flags |= FLAG_HAS_VERSION; }
-						else if bytes == b"--help" { out.flags |= FLAG_HAS_HELP; }
-
-						out.args.push(String::from_utf8_lossy(bytes).into_owned());
-						out.insert_key(idx);
-						out.last.set(idx);
-						idx += 1;
-					},
-					// Split a short key/value pair.
-					KeyKind::ShortV => {
-						let mut val = String::from_utf8_lossy(bytes).into_owned();
-						let v2 = val.split_off(2);
-						out.args.push(val);
-						out.args.push(v2);
-
-						out.insert_key(idx);
-						out.last.set(idx + 1);
-						idx += 2;
-					},
-					// Split a long key/value pair.
-					KeyKind::LongV(x) => {
-						let mut val = String::from_utf8_lossy(bytes).into_owned();
-
-						// There is a value.
-						if x + 1 < val.len() {
-							let tmp = val.split_off(x + 1);
-							val.truncate(x);
-							out.args.push(val);
-							out.args.push(tmp);
-						}
-						// The value is empty.
-						else {
-							val.truncate(x);
-							out.args.push(val);
-							out.args.push(String::new());
-						}
-
-						out.insert_key(idx);
-						out.last.set(idx + 1);
-						idx += 2;
-					},
-				}
-			}
-		}
-
-		out.with_flags(flags)
+		argv::Args::default()
+			.skip_while(|b| b.is_empty() || b.iter().all(u8::is_ascii_whitespace))
+			.fold(
+				Self::default(),
+				Self::push_bytes
+			)
+			.with_flags(flags)
 	}
 
 	#[cfg(any(not(target_os = "linux"), target_env = "musl"))]
@@ -819,20 +741,20 @@ impl Argue {
 			},
 			// Record the key and passthrough.
 			KeyKind::Short => {
-				let idx: usize = self.args.len();
 				if val == "-V" { self.flags |= FLAG_HAS_VERSION; }
 				else if val == "-h" { self.flags |= FLAG_HAS_HELP; }
 
+				let idx: usize = self.args.len();
 				self.args.push(val);
 				self.insert_key(idx);
 				self.last.set(idx);
 			},
 			// Record the key and passthrough.
 			KeyKind::Long => {
-				let idx: usize = self.args.len();
 				if val == "--version" { self.flags |= FLAG_HAS_VERSION; }
 				else if val == "--help" { self.flags |= FLAG_HAS_HELP; }
 
+				let idx: usize = self.args.len();
 				self.args.push(val);
 				self.insert_key(idx);
 				self.last.set(idx);
@@ -859,6 +781,69 @@ impl Argue {
 
 				self.args.push(val);
 				self.args.push(tmp);
+				self.insert_key(idx);
+				self.last.set(idx + 1);
+			},
+		}
+
+		self
+	}
+
+	#[cfg(all(target_os = "linux", not(target_env = "musl")))]
+	/// # Parse Keys (Bytes).
+	fn push_bytes(mut self, bytes: &[u8]) -> Self {
+		// Find out what we've got!
+		match KeyKind::from(bytes) {
+			// Passthrough.
+			KeyKind::None => {
+				self.args.push(String::from_utf8_lossy(bytes).into_owned());
+			},
+			// Record the key and passthrough.
+			KeyKind::Short => {
+				if bytes[1] == b'V' { self.flags |= FLAG_HAS_VERSION; }
+				else if bytes[1] == b'h' { self.flags |= FLAG_HAS_HELP; }
+
+				let idx = self.args.len();
+				self.args.push(String::from_utf8_lossy(bytes).into_owned());
+				self.insert_key(idx);
+				self.last.set(idx);
+			},
+			// Record the key and passthrough.
+			KeyKind::Long => {
+				if bytes == b"--version" { self.flags |= FLAG_HAS_VERSION; }
+				else if bytes == b"--help" { self.flags |= FLAG_HAS_HELP; }
+
+				let idx = self.args.len();
+				self.args.push(String::from_utf8_lossy(bytes).into_owned());
+				self.insert_key(idx);
+				self.last.set(idx);
+			},
+			// Split a short key/value pair.
+			KeyKind::ShortV => {
+				let idx = self.args.len();
+				let mut val = String::from_utf8_lossy(bytes).into_owned();
+				let tmp = val.split_off(2);
+
+				self.args.push(val);
+				self.args.push(tmp);
+
+				self.insert_key(idx);
+				self.last.set(idx + 1);
+			},
+			// Split a long key/value pair.
+			KeyKind::LongV(x) => {
+				let idx = self.args.len();
+				let mut val = String::from_utf8_lossy(bytes).into_owned();
+
+				// Grab the value or make one.
+				let tmp: String =
+					if x + 1 < bytes.len() { val.split_off(x + 1) }
+					else { String::new() };
+
+				val.truncate(x);
+				self.args.push(val);
+				self.args.push(tmp);
+
 				self.insert_key(idx);
 				self.last.set(idx + 1);
 			},
@@ -900,9 +885,12 @@ impl Argue {
 ///
 /// Other targets just use the normal [`std::env::args`].
 mod argv {
-	use std::os::raw::{
-		c_char,
-		c_int,
+	use std::{
+		ffi::CStr,
+		os::raw::{
+			c_char,
+			c_int,
+		},
 	};
 
 	static mut ARGC: c_int = 0;
@@ -925,20 +913,65 @@ mod argv {
 	/// This will skip the first (path) argument and return a pointer and
 	/// length if there's anything worth returning.
 	///
-	/// ## Safety
-	///
-	/// This accesses mutable statics — `ARGC` and `ARGV` — but because they
-	/// are only mutated prior to the execution of `main()`, it's A-OK.
-	///
-	/// Also worth noting, the operating system is responsible for ensuring
-	/// `ARGV + ARGC` does not overflow, so no worries there either.
-	pub(super) fn env() -> Option<(*const *const c_char, usize)> {
-		// We'll only return arguments if there are at least 2 of them.
-		let len = unsafe { ARGC } as usize;
-		if len > 1 {
-			Some((unsafe { ARGV.add(1) }, len - 1))
+	/// The actual iterables are byte slices in this case, rather than
+	/// (os)strings.
+	pub(super) struct Args {
+		next: *const *const c_char,
+		end: *const *const c_char,
+	}
+
+	impl Default for Args {
+		/// # Raw Arguments.
+		///
+		/// ## Safety
+		///
+		/// This accesses mutable statics — `ARGC` and `ARGV` — but because
+		/// they are only mutated prior to the execution of `main()`, it's
+		/// A-OK.
+		///
+		/// Also worth noting, the operating system is responsible for ensuring
+		/// `ARGV + ARGC` does not overflow, so no worries there either.
+		fn default() -> Self {
+			// We'll only return arguments if there are at least 2 of them.
+			let len = unsafe { ARGC } as usize;
+			if len > 1 {
+				Self {
+					next: unsafe { ARGV.add(1) },
+					end: unsafe { ARGV.add(len) },
+				}
+			}
+			else {
+				let end = unsafe { ARGV.add(len) };
+				Self {
+					next: end,
+					end
+				}
+			}
 		}
-		else { None }
+	}
+
+	impl Iterator for Args {
+		type Item = &'static [u8];
+
+		fn next(&mut self) -> Option<Self::Item> {
+			if self.next >= self.end { None }
+			else {
+				let out = unsafe { CStr::from_ptr(*self.next).to_bytes() };
+				self.next = unsafe { self.next.add(1) };
+				Some(out)
+			}
+		}
+
+		fn size_hint(&self) -> (usize, Option<usize>) {
+			let len = self.len();
+			(len, Some(len))
+		}
+	}
+
+	impl ExactSizeIterator for Args {
+		fn len(&self) -> usize {
+			unsafe { self.end.offset_from(self.next) as usize }
+		}
 	}
 }
 
