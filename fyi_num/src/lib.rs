@@ -1,20 +1,26 @@
 /*!
 # FYI Num
 
-This crate contains some numeric helpers, namely around decimal/byte conversion
-and formatting.
+This crate contains helpers to format unsigned integers as "pretty" byte strings with commas marking each thousand. To that singular end, they are much faster than using the `format!` macro or an external crate like [`num_format`].
 
-The most generally useful member of this library is [`NiceInt`], which converts
-`u8`, `u16`, `u32`, `usize`, and `u64` values into formatted (comma-separated)
-ASCII strings very quickly.
+To minimize unnecessary allocation, structs are split up by type:
+
+* [`NiceU8`]
+* [`NiceU16`]
+* [`NiceU32`]
+* [`NiceU64`]
+
+Note: [`NiceU64`] implements both `from<u64>` and `from<usize>`, so can be used for either type.
+
+Working on a similar idea, there is also [`NicePercent`], which implements `from<f32>` and `from<f64>` to convert values between `0..=1` to a "pretty" percent byte string, like `75.66%`.
+
+Last but not least, there is [`NiceElapsed`], which converts numerical time into a human-readable, oxford-joined byte string, like `1 hour, 2 minutes, and 3 seconds`.
 
 
 
 ## Stability
 
-Release versions of this library should be in a working state, but as this
-project is under perpetual development, code might change from version to
-version.
+Release versions of this library should be in a working state, but as this project is under perpetual development, code might change from version to version.
 */
 
 #![warn(clippy::filetype_is_file)]
