@@ -933,7 +933,7 @@ mod argv {
 		/// `ARGV + ARGC` does not overflow, so no worries there either.
 		fn default() -> Self {
 			// We'll only return arguments if there are at least 2 of them.
-			let len = unsafe { ARGC } as usize;
+			let len: usize = unsafe { ARGC } as usize;
 			if len > 1 {
 				Self {
 					next: unsafe { ARGV.add(1) },
