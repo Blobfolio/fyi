@@ -32,38 +32,6 @@ rustflags   := "-C link-arg=-s"
 
 
 
-# A/B Test Two Binaries (second is implied)
-@ab BIN="/usr/bin/fyi" REBUILD="":
-	[ -z "{{ REBUILD }}" ] || just build
-	[ -f "{{ cargo_bin }}" ] || just build
-
-	clear
-
-	fyi print -p "{{ BIN }}" -c 209 "$( "{{ BIN }}" -V )"
-	fyi print -p "{{ cargo_bin }}" -c 199 "$( "{{ cargo_bin }}" -V )"
-	fyi blank
-
-	just _ab "{{ BIN }}" 'error "Twinkle, twinkle little star, how I wonder what you are."' 2>/dev/null
-	just _ab "{{ BIN }}" 'error -t "Twinkle, twinkle little star, how I wonder what you are."' 2>/dev/null
-	just _ab "{{ BIN }}" 'error -i -t "Twinkle, twinkle little star, how I wonder what you are."' 2>/dev/null
-	just _ab "{{ BIN }}" 'print -p "Iron Maiden" -c 199 "Let he who hath understanding reckon the number of the beast."' 2>/dev/null
-
-
-# A/B Test Inner
-@_ab BIN ARGS:
-	"{{ BIN }}" {{ ARGS }}
-	"{{ cargo_bin }}" {{ ARGS }}
-
-	#sleep 30
-	hyperfine --warmup 50 \
-		--runs 1000 \
-		--style color \
-		'{{ BIN }} {{ ARGS }}' \
-		'{{ cargo_bin }} {{ ARGS }}'
-
-	echo "\n\033[2m-----\033[0m\n\n"
-
-
 # Bench it!
 bench BENCH="" FILTER="":
 	#!/usr/bin/env bash
