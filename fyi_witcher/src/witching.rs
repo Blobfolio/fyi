@@ -605,8 +605,8 @@ impl WitchingInner {
 		if secs == self.elapsed { false }
 		else {
 			self.elapsed = secs;
+			let [h, m, s] = NiceElapsed::hms(secs);
 			unsafe {
-				let [h, m, s] = NiceElapsed::hms(secs);
 				write_time(
 					self.buf.as_mut_ptr().add(self.buf.start(PART_ELAPSED)),
 					h,
@@ -946,13 +946,11 @@ impl Witching {
 	///
 	/// What label should we be using? One or many?
 	fn label(&self) -> &str {
-		unsafe {
-			if self.set.len() == 1 {
-				std::str::from_utf8_unchecked(&self.label[1..usize::from(self.label[0])])
-			}
-			else {
-				std::str::from_utf8_unchecked(&self.label[usize::from(self.label[0])..])
-			}
+		if self.set.len() == 1 {
+			unsafe { std::str::from_utf8_unchecked(&self.label[1..usize::from(self.label[0])]) }
+		}
+		else {
+			unsafe { std::str::from_utf8_unchecked(&self.label[usize::from(self.label[0])..]) }
 		}
 	}
 
