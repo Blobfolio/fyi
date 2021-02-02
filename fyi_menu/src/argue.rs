@@ -320,9 +320,7 @@ impl Argue {
 				0 != self.flags & FLAG_HAS_HELP
 			)
 		{
-			Msg::plain(cb())
-				.with_newline(true)
-				.print();
+			fyi_msg::plain!(cb());
 			exit(0);
 		}
 
@@ -352,17 +350,15 @@ impl Argue {
 		if ! self.args.is_empty() {
 			// If that entry is "help", we're done!
 			if self.args[0] == "help" {
-				Msg::plain(cb(None)).with_newline(true).print();
+				fyi_msg::plain!(cb(None));
 				exit(0);
 			}
 			// Otherwise we need to check for the flags.
 			else if 0 != self.flags & FLAG_HAS_HELP {
-				Msg::plain(
+				fyi_msg::plain!(
 					if self.keys[0] == 0 && self.keys[KEY_LEN] != 0 { cb(None) }
 					else { cb(Some(&self.args[0])) }
-				)
-					.with_newline(true)
-					.print();
+				);
 				exit(0);
 			}
 		}
@@ -441,8 +437,11 @@ impl Argue {
 	pub fn with_version<S>(self, name: S, version: S) -> Self
 	where S: AsRef<str> {
 		if 0 != self.flags & FLAG_HAS_VERSION {
-			Msg::plain(format!("{} v{}\n", name.as_ref(), version.as_ref()))
-				.print();
+			fyi_msg::plain!(format!(
+				"{} v{}\n",
+				name.as_ref(),
+				version.as_ref()
+			));
 			exit(0);
 		}
 

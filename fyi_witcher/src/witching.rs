@@ -1058,9 +1058,7 @@ impl Witching {
 	///
 	/// `Done: 5 files in 3 seconds.`
 	fn summarize(&self) {
-		Msg::new(MsgKind::Done, self.summary())
-			.with_newline(true)
-			.eprint();
+		fyi_msg::done!(self.summary(), true);
 	}
 
 	/// # Summarize (with savings).
@@ -1100,9 +1098,7 @@ impl Witching {
 	///
 	/// `No files were found.`
 	fn summarize_empty(&self) {
-		Msg::new(MsgKind::Warning, format!("No {} were found.", self.label()))
-			.with_newline(true)
-			.eprint();
+		fyi_msg::warning!(format!("No {} were found.", self.label()), true);
 	}
 
 

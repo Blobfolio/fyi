@@ -2,8 +2,6 @@
 # FYI Num: "Nice" Integer
 */
 
-#![macro_use]
-
 pub(super) mod nice_u8;
 pub(super) mod nice_u16;
 pub(super) mod nice_u32;
