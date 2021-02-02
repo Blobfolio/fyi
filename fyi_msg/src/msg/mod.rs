@@ -168,7 +168,6 @@ impl PartialEq<Vec<u8>> for Msg {
 	fn eq(&self, other: &Vec<u8>) -> bool { self.0 == *other }
 }
 
-#[cfg(feature = "timestamps")]
 /// ## Instantiation.
 impl Msg {
 	/// # New Message.
@@ -187,7 +186,9 @@ impl Msg {
 		let msg = msg.as_ref().as_bytes();
 		let p_end = kind.len();
 		let m_end = p_end + msg.len();
-		Self(MsgBuffer6::from_raw_parts(
+
+		#[cfg(feature = "timestamps")]
+		return Self(MsgBuffer6::from_raw_parts(
 			[kind.as_bytes(), msg].concat(),
 			[
 				0, 0,         // Indentation.
@@ -197,7 +198,19 @@ impl Msg {
 				m_end, m_end, // Suffix.
 				m_end, m_end, // Newline.
 			]
-		))
+		));
+
+		#[cfg(not(feature = "timestamps"))]
+		return Self(MsgBuffer5::from_raw_parts(
+			[kind.as_bytes(), msg].concat(),
+			[
+				0, 0,         // Indentation.
+				0, p_end,     // Prefix.
+				p_end, m_end, // Message.
+				m_end, m_end, // Suffix.
+				m_end, m_end, // Newline.
+			]
+		));
 	}
 
 	/// # Custom Prefix.
@@ -230,7 +243,8 @@ impl Msg {
 		let m_end = v.len();
 		let p_end = m_end - msg.len();
 
-		Self(MsgBuffer6::from_raw_parts(
+		#[cfg(feature = "timestamps")]
+		return Self(MsgBuffer6::from_raw_parts(
 			v,
 			[
 				0, 0,         // Indentation.
@@ -240,7 +254,19 @@ impl Msg {
 				m_end, m_end, // Suffix.
 				m_end, m_end, // Newline.
 			]
-		))
+		));
+
+		#[cfg(not(feature = "timestamps"))]
+		return Self(MsgBuffer5::from_raw_parts(
+			v,
+			[
+				0, 0,         // Indentation.
+				0, p_end,     // Prefix.
+				p_end, m_end, // Message.
+				m_end, m_end, // Suffix.
+				m_end, m_end, // Newline.
+			]
+		));
 	}
 
 	/// # Custom Prefix (Unchecked)
@@ -263,7 +289,8 @@ impl Msg {
 		let p_end = prefix.len();
 		let m_end = p_end + msg.len();
 
-		Self(MsgBuffer6::from_raw_parts(
+		#[cfg(feature = "timestamps")]
+		return Self(MsgBuffer6::from_raw_parts(
 			[prefix, msg].concat(),
 			[
 				0, 0,         // Indentation.
@@ -273,7 +300,19 @@ impl Msg {
 				m_end, m_end, // Suffix.
 				m_end, m_end, // Newline.
 			]
-		))
+		));
+
+		#[cfg(not(feature = "timestamps"))]
+		return Self(MsgBuffer5::from_raw_parts(
+			[prefix, msg].concat(),
+			[
+				0, 0,         // Indentation.
+				0, p_end,     // Prefix.
+				p_end, m_end, // Message.
+				m_end, m_end, // Suffix.
+				m_end, m_end, // Newline.
+			]
+		));
 	}
 
 	/// # New Message Without Prefix.
@@ -291,7 +330,9 @@ impl Msg {
 	where S: AsRef<str> {
 		let msg = msg.as_ref().as_bytes();
 		let len = msg.len();
-		Self(MsgBuffer6::from_raw_parts(
+
+		#[cfg(feature = "timestamps")]
+		return Self(MsgBuffer6::from_raw_parts(
 			msg.to_vec(),
 			[
 				0, 0,     // Indentation.
@@ -301,7 +342,19 @@ impl Msg {
 				len, len, // Suffix.
 				len, len, // Newline.
 			]
-		))
+		));
+
+		#[cfg(not(feature = "timestamps"))]
+		return Self(MsgBuffer5::from_raw_parts(
+			msg.to_vec(),
+			[
+				0, 0,     // Indentation.
+				0, 0,     // Prefix.
+				0, len,   // Message.
+				len, len, // Suffix.
+				len, len, // Newline.
+			]
+		));
 	}
 
 	/// # Error
@@ -329,7 +382,9 @@ impl Msg {
 		v.extend_from_slice(b"\n");
 
 		let m_end = len + 18;
-		Self(MsgBuffer6::from_raw_parts(
+
+		#[cfg(feature = "timestamps")]
+		return Self(MsgBuffer6::from_raw_parts(
 			v,
 			[
 				0, 0,             // Indentation.
@@ -339,168 +394,10 @@ impl Msg {
 				m_end, m_end,     // Suffix.
 				m_end, m_end + 1, // Newline.
 			]
-		))
-	}
-}
+		));
 
-#[cfg(not(feature = "timestamps"))]
-/// ## Instantiation.
-impl Msg {
-	/// # New Message.
-	///
-	/// This creates a new message with a built-in prefix (which can be
-	/// [`MsgKind::None`](crate::MsgKind::None), though in that case, [`Msg::plain`] is better).
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::{Msg, MsgKind};
-	/// let msg = Msg::new(MsgKind::Info, "This is a message.");
-	/// ```
-	pub fn new<S>(kind: MsgKind, msg: S) -> Self
-	where S: AsRef<str> {
-		let msg = msg.as_ref().as_bytes();
-		let p_end = kind.len();
-		let m_end = p_end + msg.len();
-		Self(MsgBuffer5::from_raw_parts(
-			[kind.as_bytes(), msg].concat(),
-			[
-				0, 0,         // Indentation.
-				0, p_end,     // Prefix.
-				p_end, m_end, // Message.
-				m_end, m_end, // Suffix.
-				m_end, m_end, // Newline.
-			]
-		))
-	}
-
-	/// # Custom Prefix.
-	///
-	/// This creates a new message with a user-defined prefix and color. See
-	/// [here](https://misc.flogisoft.com/bash/tip_colors_and_formatting) for a BASH color code primer.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::{Msg, MsgKind};
-	/// let msg = Msg::custom("Prefix", 199, "This message has a pink prefix.");
-	/// ```
-	pub fn custom<S>(prefix: S, color: u8, msg: S) -> Self
-	where S: AsRef<str> {
-		let prefix = prefix.as_ref().as_bytes();
-		if prefix.is_empty() {
-			return Self::plain(msg);
-		}
-
-		// Start a vector with the prefix bits.
-		let msg = msg.as_ref().as_bytes();
-		let v = [
-			NiceANSI::from(color).as_bytes(),
-			prefix,
-			b":\x1b[0m ",
-			msg,
-		].concat();
-
-		let m_end = v.len();
-		let p_end = m_end - msg.len();
-
-		Self(MsgBuffer5::from_raw_parts(
-			v,
-			[
-				0, 0,         // Indentation.
-				0, p_end,     // Prefix.
-				p_end, m_end, // Message.
-				m_end, m_end, // Suffix.
-				m_end, m_end, // Newline.
-			]
-		))
-	}
-
-	/// # Custom Prefix (Unchecked)
-	///
-	/// Same as [`Msg::custom`], except no validation or formatting is applied
-	/// to the provided prefix. This can be useful in cases where the prefix
-	/// requires special spacing or delimiters.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::{Msg, MsgKind};
-	/// let msg = Msg::custom("Prefix: ", "This message has an unformatted prefix.");
-	/// ```
-	pub fn custom_unchecked<S>(prefix: S, msg: S) -> Self
-	where S: AsRef<str> {
-		let prefix = prefix.as_ref().as_bytes();
-		let msg = msg.as_ref().as_bytes();
-
-		let p_end = prefix.len();
-		let m_end = p_end + msg.len();
-
-		Self(MsgBuffer5::from_raw_parts(
-			[prefix, msg].concat(),
-			[
-				0, 0,         // Indentation.
-				0, p_end,     // Prefix.
-				p_end, m_end, // Message.
-				m_end, m_end, // Suffix.
-				m_end, m_end, // Newline.
-			]
-		))
-	}
-
-	/// # New Message Without Prefix.
-	///
-	/// This is equivalent to [`Msg::new`] with [`MsgKind::None`], but
-	/// streamlined.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	/// let msg = Msg::plain("This message has no prefix.");
-	/// ```
-	pub fn plain<S>(msg: S) -> Self
-	where S: AsRef<str> {
-		let msg = msg.as_ref().as_bytes();
-		let len = msg.len();
-		Self(MsgBuffer5::from_raw_parts(
-			msg.to_vec(),
-			[
-				0, 0,     // Indentation.
-				0, 0,     // Prefix.
-				0, len,   // Message.
-				len, len, // Suffix.
-				len, len, // Newline.
-			]
-		))
-	}
-
-	/// # Error
-	///
-	/// This is a convenience method for quickly creating a new error with a
-	/// terminating line break. After creation, it is a normal [`Msg`] that can
-	/// be manipulated in the usual ways.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::{Msg, MsgKind};
-	/// assert_eq!(
-	///     Msg::new(MsgKind::Error, "Oh no!"),
-	///     Msg::error("Oh no!")
-	/// );
-	/// ```
-	pub fn error<S>(msg: S) -> Self
-	where S: AsRef<str> {
-		let msg = msg.as_ref().as_bytes();
-		let len = msg.len();
-		let mut v = Vec::with_capacity(19 + len);
-		v.extend_from_slice(MsgKind::Error.as_bytes());
-		v.extend_from_slice(msg);
-		v.extend_from_slice(b"\n");
-
-		let m_end = len + 18;
-		Self(MsgBuffer5::from_raw_parts(
+		#[cfg(not(feature = "timestamps"))]
+		return Self(MsgBuffer5::from_raw_parts(
 			v,
 			[
 				0, 0,             // Indentation.
