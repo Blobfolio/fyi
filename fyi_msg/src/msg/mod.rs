@@ -1005,11 +1005,7 @@ impl Msg {
 
 			// Print an error and do it all over again.
 			result.truncate(0);
-			Self::new(
-				MsgKind::Error,
-				"Invalid input: enter \x1b[91mN\x1b[0m or \x1b[92mY\x1b[0m."
-			)
-				.with_flags(FLAG_NEWLINE)
+			Self::error("Invalid input; enter \x1b[91mN\x1b[0m or \x1b[92mY\x1b[0m.")
 				.print();
 		}
 	}
