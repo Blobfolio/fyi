@@ -835,7 +835,8 @@ impl Msg {
 		// If the fixed width bits are themselves too big, we can't fit print.
 		let fixed_width: usize =
 			self.0.len(PART_INDENT) +
-			unsafe { self.0.width(PART_PREFIX) + self.0.width(PART_SUFFIX) } +
+			self.0.width(PART_PREFIX) +
+			self.0.width(PART_SUFFIX) +
 			if 0 == self.0.len(PART_TIMESTAMP) { 0 }
 			else { 21 };
 
@@ -843,7 +844,8 @@ impl Msg {
 		// If the fixed width bits are themselves too big, we can't fit print.
 		let fixed_width: usize =
 			self.0.len(PART_INDENT) +
-			unsafe { self.0.width(PART_PREFIX) + self.0.width(PART_SUFFIX) };
+			self.0.width(PART_PREFIX) +
+			self.0.width(PART_SUFFIX);
 
 		if fixed_width > width {
 			return Cow::Owned(Vec::new());
@@ -858,7 +860,7 @@ impl Msg {
 		}
 
 		// Okay, try to trim it.
-		let keep = unsafe { self.0.fitted(PART_MSG, trim) };
+		let keep = self.0.fitted(PART_MSG, trim);
 		if keep == 0 {
 			Cow::Owned(Vec::new())
 		}
