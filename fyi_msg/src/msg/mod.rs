@@ -279,7 +279,7 @@ impl Msg {
 	///
 	/// ```no_run
 	/// use fyi_msg::{Msg, MsgKind};
-	/// let msg = Msg::custom("Prefix: ", "This message has an unformatted prefix.");
+	/// let msg = Msg::custom_unchecked("Prefix:", "This message has an unformatted prefix.");
 	/// ```
 	pub fn custom_unchecked<S>(prefix: S, msg: S) -> Self
 	where S: AsRef<str> {
@@ -406,7 +406,7 @@ impl Msg {
 				m_end, m_end,     // Suffix.
 				m_end, m_end + 1, // Newline.
 			]
-		))
+		));
 	}
 }
 
@@ -422,7 +422,7 @@ impl Msg {
 	/// ## Examples
 	///
 	/// ```no_run
-	/// use fyi::{Msg, FLAG_INDENT, FLAG_NEWLINE};
+	/// use fyi_msg::{Msg, FLAG_INDENT, FLAG_NEWLINE};
 	/// let msg = Msg::plain("Indented message with trailing line.")
 	///     .with_flags(FLAG_INDENT | FLAG_NEWLINE);
 	/// ```
@@ -451,7 +451,7 @@ impl Msg {
 	/// ## Examples
 	///
 	/// ```no_run
-	/// use fyi::Msg;
+	/// use fyi_msg::Msg;
 	/// let msg = Msg::plain("Indented message.")
 	///     .with_indent(1);
 	/// ```
@@ -470,7 +470,7 @@ impl Msg {
 	/// ## Examples
 	///
 	/// ```no_run
-	/// use fyi::Msg;
+	/// use fyi_msg::Msg;
 	/// let msg = Msg::plain("Timestamped message.")
 	///     .with_timestamp(true);
 	/// ```
@@ -492,7 +492,7 @@ impl Msg {
 	/// ## Examples
 	///
 	/// ```no_run
-	/// use fyi::Msg;
+	/// use fyi_msg::Msg;
 	/// let msg = Msg::plain("This has a trailing newline.")
 	///     .with_newline(true);
 	/// ```
@@ -509,7 +509,7 @@ impl Msg {
 	/// ## Examples
 	///
 	/// ```no_run
-	/// use fyi::{Msg, MsgKind};
+	/// use fyi_msg::{Msg, MsgKind};
 	/// assert_eq!(
 	///     Msg::plain("Hello world.").with_prefix(MsgKind::Success),
 	///     Msg::new(MsgKind::Success, "Hello world.")
@@ -528,7 +528,7 @@ impl Msg {
 	/// ## Examples
 	///
 	/// ```no_run
-	/// use fyi::Msg;
+	/// use fyi_msg::Msg;
 	/// assert_eq!(
 	///     Msg::plain("Hello world.").with_custom_prefix("Prefix", 4),
 	///     Msg::custom("Prefix", 4, "Hello world.")
@@ -548,7 +548,7 @@ impl Msg {
 	/// ## Examples
 	///
 	/// ```no_run
-	/// use fyi::Msg;
+	/// use fyi_msg::Msg;
 	///
 	/// // A contrived example…
 	/// let mut msg = Msg::plain("Should I say this?")
@@ -571,7 +571,7 @@ impl Msg {
 	/// ## Examples
 	///
 	/// ```no_run
-	/// use fyi::Msg;
+	/// use fyi_msg::Msg;
 	///
 	/// // A contrived example…
 	/// let mut msg = Msg::plain("5,000 matching files were found.")

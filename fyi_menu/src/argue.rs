@@ -121,12 +121,12 @@ const KEY_LEN: usize = 15;
 /// If you just want a clean set to iterate over, `Argue` can be dereferenced
 /// to a string slice:
 ///
-/// ```no_run
+/// ```ignore
 /// let arg_slice: &[String] = *args;
 /// ```
 ///
 /// Or it can be converted into an owned string Vector:
-/// ```no_run
+/// ```ignore
 /// let args: Vec<String> = args.take();
 /// ```
 pub struct Argue {
@@ -490,7 +490,7 @@ impl Argue {
 	///
 	/// ## Examples
 	///
-	/// ```no_run
+	/// ```ignore
 	/// use fyi_menu::Argue;
 	///
 	/// let mut args = Argue::new(0);

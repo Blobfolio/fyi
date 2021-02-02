@@ -18,7 +18,7 @@ use std::{
 /// ## Examples
 ///
 /// ```no_run
-/// use fyi_num::NiceANSI;
+/// use fyi_msg::NiceANSI;
 /// assert_eq!(
 ///     NiceANSI::from(199).as_str(),
 ///     "\x1b[1;38;5;199m"
@@ -86,12 +86,12 @@ impl NiceANSI {
 	#[must_use]
 	#[inline]
 	/// # As Bytes.
-	pub(crate) fn as_bytes(&self) -> &[u8] { self }
+	pub fn as_bytes(&self) -> &[u8] { self }
 
 	#[must_use]
 	#[inline]
 	/// # As Str.
-	pub(crate) fn as_str(&self) -> &str {
+	pub fn as_str(&self) -> &str {
 		unsafe { std::str::from_utf8_unchecked(self) }
 	}
 }

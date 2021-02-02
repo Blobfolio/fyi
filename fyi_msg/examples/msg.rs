@@ -67,12 +67,15 @@ fn main() {
 
 	println!();
 
-	MsgKind::Info.into_msg("Messages can be timestamped.")
-		.with_timestamp(true)
-		.with_newline(true)
-		.print();
+	#[cfg(feature = "timestamps")]
+	{
+		MsgKind::Info.into_msg("Messages can be timestamped.")
+			.with_timestamp(true)
+			.with_newline(true)
+			.print();
 
-	println!();
+		println!();
+	}
 
 	MsgKind::Info.into_msg("Messages can be indented (0).")
 		.with_newline(true)

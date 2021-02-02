@@ -47,7 +47,7 @@ macro_rules! elapsed_from {
 /// ```no_run
 /// use fyi_num::NiceElapsed;
 /// assert_eq!(
-///     NiceElapsed::from(61).as_str(),
+///     NiceElapsed::from(61_u32).as_str(),
 ///     "1 minute and 1 second"
 /// );
 /// ```

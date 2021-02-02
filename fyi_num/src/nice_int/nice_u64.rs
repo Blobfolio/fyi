@@ -20,7 +20,7 @@ const SIZE: usize = 26;
 /// ```no_run
 /// use fyi_num::NiceU64;
 /// assert_eq!(
-///     NiceU64::from(33231).as_str(),
+///     NiceU64::from(33231_u64).as_str(),
 ///     "33,231"
 /// );
 pub struct NiceU64 {

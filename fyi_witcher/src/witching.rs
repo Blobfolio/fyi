@@ -683,14 +683,14 @@ impl WitchingInner {
 /// `Witching` is instantiated using a builder pattern. Simple chain the desired
 /// `with_*()` methods together along with [`Witching::run`] when you're ready to go!
 ///
-/// ```no_run
+/// ```ignore
 /// use fyi_witcher::Witcher;
 /// use fyi_witcher::Witching;
 ///
 /// // Find the files you want.
 /// let files = Witcher::default()
+///     .with_ext(b".jpg")
 ///     .with_path("/my/dir")
-///     .with_ext1(b".jpg")
 ///     .into_witching() // Convert it to a Witching instance.
 ///     .with_title("My Progress Title") // Set whatever options.
 ///     .run(|p| { ... }); // Run your magic!
@@ -757,7 +757,7 @@ impl Witching {
 	///
 	/// ## Examples
 	///
-	/// ```no_run
+	/// ```ignore
 	/// use fyi_witcher::{
 	///     Witcher,
 	///     Witching,
@@ -767,8 +767,8 @@ impl Witching {
 	///
 	/// // Find and run!
 	/// Witcher::default()
+	///     .with_ext(b".jpg")
 	///     .with_path("/my/dir")
-	///     .with_ext1(b".jpg")
 	///     .into_witching() // Convert it to a Witching instance.
 	///     .with_flags(WITCHING_SUMMARIZE | WITCHING_DIFF)
 	///     .run(|p| { ... }); // Run your magic!
@@ -786,14 +786,14 @@ impl Witching {
 	///
 	/// ## Examples
 	///
-	/// ```no_run
+	/// ```ignore
 	/// use fyi_witcher::Witcher;
 	/// use fyi_witcher::Witching;
 	///
 	/// // Find and run!
 	/// Witcher::default()
+	///     .with_ext(b".jpg")
 	///     .with_path("/my/dir")
-	///     .with_ext1(b".jpg")
 	///     .into_witching() // Convert it to a Witching instance.
 	///     .with_labels("image", "images")
 	///     .run(|p| { ... });
@@ -812,14 +812,14 @@ impl Witching {
 	///
 	/// ## Examples
 	///
-	/// ```no_run
+	/// ```ignore
 	/// use fyi_witcher::Witcher;
 	/// use fyi_witcher::Witching;
 	///
 	/// // Find and run!
 	/// Witcher::default()
+	///     .with_ext(b".jpg")
 	///     .with_path("/my/dir")
-	///     .with_ext1(b".jpg")
 	///     .into_witching() // Convert it to a Witching instance.
 	///     .with_title("My Title")
 	///     .run(|p| { ... });
@@ -906,14 +906,14 @@ impl Witching {
 	///
 	/// ## Examples
 	///
-	/// ```no_run
+	/// ```ignore
 	/// use fyi_witcher::Witcher;
 	/// use fyi_witcher::Witching;
 	///
 	/// // Set up the instance.
 	/// let mut witch = Witcher::default()
+	///     .with_ext(b".jpg")
 	///     .with_path("/my/dir")
-	///     .with_ext1(b".jpg")
 	///     .into_witching() // Convert it to a Witching instance.
 	///     .with_title("My Title");
 	///
@@ -961,14 +961,14 @@ impl Witching {
 	///
 	/// ## Examples
 	///
-	/// ```no_run
+	/// ```ignore
 	/// use fyi_witcher::Witcher;
 	/// use fyi_witcher::Witching;
 	///
 	/// // Find and run!
 	/// Witcher::default()
 	///     .with_path("/my/dir")
-	///     .with_ext1(b".jpg")
+	///     .with_ext(b".jpg")
 	///     .into_witching()   // Convert it to a Witching instance.
 	///     .run(|p| { ... }); // Here's the magic.
 	/// ```
@@ -1041,7 +1041,7 @@ impl Witching {
 	///
 	/// This is the base summary, no prefix.
 	///
-	///     X files in M minutes and S seconds.
+	/// `X files in M minutes and S seconds.`
 	fn summary(&self) -> String {
 		format!(
 			"{} {} in {}.",
@@ -1056,7 +1056,7 @@ impl Witching {
 	/// This prints a simple summary after iteration has completed. It is
 	/// enabled using the [`WITCHING_SUMMARIZE`] flag and reads something like:
 	///
-	///     Done: 5 files in 3 seconds.
+	/// `Done: 5 files in 3 seconds.`
 	fn summarize(&self) {
 		Msg::new(MsgKind::Done, self.summary())
 			.with_newline(true)
@@ -1072,8 +1072,8 @@ impl Witching {
 	/// This is engaged when both [`WITCHING_SUMMARIZE`] and [`WITCHING_DIFF`] flags
 	/// are set and will return a message like:
 	///
-	///     Crunched: 5 files in 3 seconds, saving 2 bytes. (1.00%)
-	///     Crunched: 5 files in 3 seconds. (No savings.)
+	/// `Crunched: 5 files in 3 seconds, saving 2 bytes. (1.00%)`
+	/// `Crunched: 5 files in 3 seconds. (No savings.)`
 	fn summarize_diff(&self, before: u64) {
 		let after: u64 = self.du();
 
@@ -1098,7 +1098,7 @@ impl Witching {
 	/// This summary prints when the set is empty and the instance has the
 	/// [`WITCHING_SUMMARIZE`] flag set. It simply reads:
 	///
-	///     No files were found.
+	/// `No files were found.`
 	fn summarize_empty(&self) {
 		Msg::new(MsgKind::Warning, format!("No {} were found.", self.label()))
 			.with_newline(true)

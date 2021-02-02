@@ -36,7 +36,8 @@ pub fn hash64(src: &[u8]) -> u64 {
 /// ## Examples
 ///
 /// ```no_run
-/// let path = fyi_witcher::utility::path_as_bytes(PathBuf::from("/path/to/file.jpg"));
+/// use std::path::PathBuf;
+/// let path = fyi_witcher::utility::path_as_bytes(&PathBuf::from("/path/to/file.jpg"));
 /// ```
 pub fn path_as_bytes(p: &std::path::PathBuf) -> &[u8] {
 	unsafe { &*(p.as_os_str() as *const std::ffi::OsStr as *const [u8]) }

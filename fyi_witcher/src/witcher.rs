@@ -60,8 +60,8 @@ const LOWER: u8 = 1 << 5;
 /// `false` to discard it. Ultimately, they get stored in the struct with the
 /// following type:
 ///
-/// ```
-/// Box<dyn Fn(&PathBuf) -> bool + 'static + Send + Sync>
+/// ```ignore
+/// Box<dyn Fn(&std::path::PathBuf) -> bool + 'static + Send + Sync>
 /// ```
 ///
 /// ## Examples
@@ -69,6 +69,7 @@ const LOWER: u8 = 1 << 5;
 /// ```no_run
 /// use fyi_witcher::Witcher;
 /// use fyi_witcher::utility;
+/// use std::path::PathBuf;
 ///
 /// // Return all files under "/usr/share/man".
 /// let res: Vec<PathBuf> = Witcher::default()
@@ -120,7 +121,7 @@ impl Witcher {
 	///
 	/// ## Examples
 	///
-	/// ```no_run
+	/// ```ignore
 	/// use fyi_witcher::Witcher;
 	///
 	/// let files = Witcher::default()
@@ -395,7 +396,7 @@ impl Witcher {
 	///
 	/// ## Examples
 	///
-	/// ```no_run
+	/// ```ignore
 	/// use fyi_witcher::Witcher;
 	///
 	/// let files = Witcher::default()
