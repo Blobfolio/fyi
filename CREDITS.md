@@ -14,7 +14,7 @@ License details for project dependencies are listed below.
 
 **Used By:**
 
-* [libc 0.2.82](https://github.com/rust-lang/libc)
+* [libc 0.2.85](https://github.com/rust-lang/libc)
 * [num-integer 0.1.44](https://github.com/rust-num/num-integer)
 * [num-traits 0.2.14](https://github.com/rust-num/num-traits)
 
@@ -479,10 +479,10 @@ limitations under the License.
 
 **Used By:**
 
-* [fyi 0.5.5](https://github.com/Blobfolio/fyi)
-* [fyi_menu 0.5.5](https://github.com/Blobfolio/fyi)
-* [fyi_msg 0.5.5](https://github.com/Blobfolio/fyi)
-* [fyi_num 0.5.5](https://github.com/Blobfolio/fyi)
+* [fyi 0.6.0](https://github.com/Blobfolio/fyi)
+* [fyi_menu 0.6.0](https://github.com/Blobfolio/fyi)
+* [fyi_msg 0.6.0](https://github.com/Blobfolio/fyi)
+* [fyi_num 0.6.0](https://github.com/Blobfolio/fyi)
 
 
 ```
