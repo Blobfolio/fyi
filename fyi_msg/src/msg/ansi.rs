@@ -5,7 +5,6 @@
 use std::{
 	fmt,
 	ops::Deref,
-	ptr,
 };
 
 
@@ -19,7 +18,7 @@ use std::{
 /// ## Examples
 ///
 /// ```no_run
-/// use fyi_num::NiceANSI;
+/// use fyi_msg::NiceANSI;
 /// assert_eq!(
 ///     NiceANSI::from(199).as_str(),
 ///     "\x1b[1;38;5;199m"
@@ -57,64 +56,33 @@ impl fmt::Display for NiceANSI {
 
 impl From<u8> for NiceANSI {
 	fn from(src: u8) -> Self {
-		if src > 99 {
-			let mut out = Self {
-				inner: *b"\x1b[1;38;5;000m",
-				len: 13,
-			};
-
-			unsafe {
-				ptr::copy_nonoverlapping(
-					crate::TRIPLE.as_ptr().add(usize::from(src) * 3),
-					out.inner.as_mut_ptr().add(9),
-					3
-				);
+		let mut out =
+			if src > 99 {
+				Self {
+					inner: *b"\x1b[1;38;5;000m",
+					len: 13,
+				}
 			}
-
-			out
-		}
-		else if src > 9 {
-			let mut out = Self {
-				inner: *b"\x1b[1;38;5;00m0",
-				len: 12,
-			};
-
-			unsafe {
-				ptr::copy_nonoverlapping(
-					crate::DOUBLE.as_ptr().add((usize::from(src)) << 1),
-					out.inner.as_mut_ptr().add(9),
-					2
-				);
+			else if src > 9 {
+				Self {
+					inner: *b"\x1b[1;38;5;00m0",
+					len: 12,
+				}
 			}
-
-			out
-		}
-		else if src > 0 {
-			let mut out = Self {
-				inner: *b"\x1b[1;38;5;0m00",
-				len: 11,
-			};
-
-			unsafe {
-				ptr::copy_nonoverlapping(
-					crate::SINGLE.as_ptr().add(usize::from(src)),
-					out.inner.as_mut_ptr().add(9),
-					1
-				);
+			else if src > 0 {
+				Self {
+					inner: *b"\x1b[1;38;5;0m00",
+					len: 11,
+				}
 			}
+			else { Self::default() };
 
-			out
-		}
-		else { Self::default() }
+		unsafe { fyi_num::write_u8(out.inner.as_mut_ptr().add(9), src); }
+		out
 	}
 }
 
-#[allow(clippy::len_without_is_empty)] // It can't be empty.
 impl NiceANSI {
-	#[must_use]
-	/// # Length.
-	pub const fn len(&self) -> usize { self.len }
-
 	#[must_use]
 	#[inline]
 	/// # As Bytes.
@@ -125,5 +93,21 @@ impl NiceANSI {
 	/// # As Str.
 	pub fn as_str(&self) -> &str {
 		unsafe { std::str::from_utf8_unchecked(self) }
+	}
+}
+
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn t_nice_ansi() {
+		assert_eq!(NiceANSI::from(0).as_str(), "\x1b[0m");
+
+		for i in 1..=u8::MAX {
+			assert_eq!(NiceANSI::from(i).as_str(), format!("\x1b[1;38;5;{}m", i));
+		}
 	}
 }

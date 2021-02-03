@@ -1,6 +1,6 @@
 [package]
 name = "fyi_witcher"
-version = "0.5.5"
+version = "0.6.0"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "Path traversal helpers."
@@ -9,7 +9,7 @@ repository = "https://github.com/Blobfolio/fyi"
 publish = false
 
 [dependencies]
-ahash = "0.6.*"
+ahash = "0.7.*"
 rayon = "1.5.*"
 
 [dependencies.bytecount]
@@ -49,11 +49,15 @@ harness = false
 name = "fw_witcher"
 harness = false
 
-[[example]]
-name = "witcher"
+[[bench]]
+name = "fw_witcher_filtered"
+harness = false
 
 [[example]]
-name = "walk-and-count"
+name = "witch"
+
+[[example]]
+name = "witching"
 
 [features]
 # Enable Regex matching in Witcher.

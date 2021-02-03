@@ -185,7 +185,8 @@ fn blank(args: &mut Argue) {
 fn msg(kind: MsgKind, args: &mut Argue) {
 	// Exit code.
 	let exit: i32 = args.option2("-e", "--exit")
-		.map_or(0, |x| x.parse::<i32>().unwrap_or(0));
+		.and_then(|x| x.parse::<i32>().ok())
+		.unwrap_or(0);
 
 	// Basic flags.
 	let mut flags: u8 = FLAG_NEWLINE;

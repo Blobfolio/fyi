@@ -13,7 +13,9 @@ use fyi_msg::{
 };
 use fyi_num::{
 	NiceElapsed,
-	NiceInt,
+	NicePercent,
+	NiceU32,
+	NiceU64,
 	write_time,
 };
 use rayon::prelude::*;
@@ -41,21 +43,13 @@ use std::{
 
 
 
-/// Helper: Unlock the inner Mutex, handling poisonings inasmuch as is
-/// possible.
-macro_rules! mutex_ptr {
-	($mutex:expr) => (
-		$mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
-	);
-}
-
 /// Helper: Pass through a getter to the `WitchingInner`.
 macro_rules! get_inner {
 	($func:ident, $type:ty) => {
 		#[must_use]
 		/// Wrapper.
 		pub fn $func(&self) -> $type {
-			let ptr = mutex_ptr!(self.inner);
+			let ptr = crate::mutex_ptr!(self.inner);
 			ptr.$func()
 		}
 	};
@@ -581,7 +575,7 @@ impl WitchingInner {
 	fn tick_set_done(&mut self) {
 		if 0 != self.flags & TICK_DONE {
 			self.flags &= ! TICK_DONE;
-			self.buf.replace(PART_DONE, &NiceInt::from(self.done));
+			self.buf.replace(PART_DONE, &NiceU32::from(self.done));
 		}
 	}
 
@@ -591,9 +585,7 @@ impl WitchingInner {
 	fn tick_set_percent(&mut self) {
 		if 0 != self.flags & TICK_PERCENT {
 			self.flags &= ! TICK_PERCENT;
-			unsafe {
-				self.buf.replace(PART_PERCENT, &NiceInt::percent_f64(self.percent()));
-			}
+			self.buf.replace(PART_PERCENT, &NicePercent::from(self.percent()));
 		}
 	}
 
@@ -613,8 +605,8 @@ impl WitchingInner {
 		if secs == self.elapsed { false }
 		else {
 			self.elapsed = secs;
+			let [h, m, s] = NiceElapsed::hms(secs);
 			unsafe {
-				let [h, m, s] = NiceElapsed::hms(secs);
 				write_time(
 					self.buf.as_mut_ptr().add(self.buf.start(PART_ELAPSED)),
 					h,
@@ -652,7 +644,7 @@ impl WitchingInner {
 	fn tick_set_total(&mut self) {
 		if 0 != self.flags & TICK_TOTAL {
 			self.flags &= ! TICK_TOTAL;
-			self.buf.replace(PART_TOTAL, &NiceInt::from(self.total));
+			self.buf.replace(PART_TOTAL, &NiceU32::from(self.total));
 		}
 	}
 
@@ -691,14 +683,14 @@ impl WitchingInner {
 /// `Witching` is instantiated using a builder pattern. Simple chain the desired
 /// `with_*()` methods together along with [`Witching::run`] when you're ready to go!
 ///
-/// ```no_run
+/// ```ignore
 /// use fyi_witcher::Witcher;
 /// use fyi_witcher::Witching;
 ///
 /// // Find the files you want.
 /// let files = Witcher::default()
+///     .with_ext(b".jpg")
 ///     .with_path("/my/dir")
-///     .with_ext1(b".jpg")
 ///     .into_witching() // Convert it to a Witching instance.
 ///     .with_title("My Progress Title") // Set whatever options.
 ///     .run(|p| { ... }); // Run your magic!
@@ -765,7 +757,7 @@ impl Witching {
 	///
 	/// ## Examples
 	///
-	/// ```no_run
+	/// ```ignore
 	/// use fyi_witcher::{
 	///     Witcher,
 	///     Witching,
@@ -775,8 +767,8 @@ impl Witching {
 	///
 	/// // Find and run!
 	/// Witcher::default()
+	///     .with_ext(b".jpg")
 	///     .with_path("/my/dir")
-	///     .with_ext1(b".jpg")
 	///     .into_witching() // Convert it to a Witching instance.
 	///     .with_flags(WITCHING_SUMMARIZE | WITCHING_DIFF)
 	///     .run(|p| { ... }); // Run your magic!
@@ -794,14 +786,14 @@ impl Witching {
 	///
 	/// ## Examples
 	///
-	/// ```no_run
+	/// ```ignore
 	/// use fyi_witcher::Witcher;
 	/// use fyi_witcher::Witching;
 	///
 	/// // Find and run!
 	/// Witcher::default()
+	///     .with_ext(b".jpg")
 	///     .with_path("/my/dir")
-	///     .with_ext1(b".jpg")
 	///     .into_witching() // Convert it to a Witching instance.
 	///     .with_labels("image", "images")
 	///     .run(|p| { ... });
@@ -820,14 +812,14 @@ impl Witching {
 	///
 	/// ## Examples
 	///
-	/// ```no_run
+	/// ```ignore
 	/// use fyi_witcher::Witcher;
 	/// use fyi_witcher::Witching;
 	///
 	/// // Find and run!
 	/// Witcher::default()
+	///     .with_ext(b".jpg")
 	///     .with_path("/my/dir")
-	///     .with_ext1(b".jpg")
 	///     .into_witching() // Convert it to a Witching instance.
 	///     .with_title("My Title")
 	///     .run(|p| { ... });
@@ -914,14 +906,14 @@ impl Witching {
 	///
 	/// ## Examples
 	///
-	/// ```no_run
+	/// ```ignore
 	/// use fyi_witcher::Witcher;
 	/// use fyi_witcher::Witching;
 	///
 	/// // Set up the instance.
 	/// let mut witch = Witcher::default()
+	///     .with_ext(b".jpg")
 	///     .with_path("/my/dir")
-	///     .with_ext1(b".jpg")
 	///     .into_witching() // Convert it to a Witching instance.
 	///     .with_title("My Title");
 	///
@@ -954,13 +946,11 @@ impl Witching {
 	///
 	/// What label should we be using? One or many?
 	fn label(&self) -> &str {
-		unsafe {
-			if self.set.len() == 1 {
-				std::str::from_utf8_unchecked(&self.label[1..usize::from(self.label[0])])
-			}
-			else {
-				std::str::from_utf8_unchecked(&self.label[usize::from(self.label[0])..])
-			}
+		if self.set.len() == 1 {
+			unsafe { std::str::from_utf8_unchecked(&self.label[1..usize::from(self.label[0])]) }
+		}
+		else {
+			unsafe { std::str::from_utf8_unchecked(&self.label[usize::from(self.label[0])..]) }
 		}
 	}
 
@@ -971,14 +961,14 @@ impl Witching {
 	///
 	/// ## Examples
 	///
-	/// ```no_run
+	/// ```ignore
 	/// use fyi_witcher::Witcher;
 	/// use fyi_witcher::Witching;
 	///
 	/// // Find and run!
 	/// Witcher::default()
 	///     .with_path("/my/dir")
-	///     .with_ext1(b".jpg")
+	///     .with_ext(b".jpg")
 	///     .into_witching()   // Convert it to a Witching instance.
 	///     .run(|p| { ... }); // Here's the magic.
 	/// ```
@@ -1051,11 +1041,11 @@ impl Witching {
 	///
 	/// This is the base summary, no prefix.
 	///
-	///     X files in M minutes and S seconds.
+	/// `X files in M minutes and S seconds.`
 	fn summary(&self) -> String {
 		format!(
 			"{} {} in {}.",
-			NiceInt::from(self.total()).as_str(),
+			NiceU32::from(self.total()).as_str(),
 			self.label(),
 			NiceElapsed::from(self.elapsed()).as_str(),
 		)
@@ -1066,11 +1056,9 @@ impl Witching {
 	/// This prints a simple summary after iteration has completed. It is
 	/// enabled using the [`WITCHING_SUMMARIZE`] flag and reads something like:
 	///
-	///     Done: 5 files in 3 seconds.
+	/// `Done: 5 files in 3 seconds.`
 	fn summarize(&self) {
-		Msg::new(MsgKind::Done, self.summary())
-			.with_newline(true)
-			.eprint();
+		fyi_msg::done!(self.summary(), true);
 	}
 
 	/// # Summarize (with savings).
@@ -1082,8 +1070,8 @@ impl Witching {
 	/// This is engaged when both [`WITCHING_SUMMARIZE`] and [`WITCHING_DIFF`] flags
 	/// are set and will return a message like:
 	///
-	///     Crunched: 5 files in 3 seconds, saving 2 bytes. (1.00%)
-	///     Crunched: 5 files in 3 seconds. (No savings.)
+	/// `Crunched: 5 files in 3 seconds, saving 2 bytes. (1.00%)`
+	/// `Crunched: 5 files in 3 seconds. (No savings.)`
 	fn summarize_diff(&self, before: u64) {
 		let after: u64 = self.du();
 
@@ -1095,10 +1083,8 @@ impl Witching {
 			Msg::new(MsgKind::Crunched, self.summary())
 				.with_suffix(format!(
 					" \x1b[2m(Saved {} bytes, {}.)\x1b[0m",
-					NiceInt::from(before - after).as_str(),
-					unsafe {
-						NiceInt::percent_f64(1.0 - (after as f64 / before as f64)).as_str()
-					},
+					NiceU64::from(before - after).as_str(),
+					NicePercent::from(1.0 - (after as f64 / before as f64)).as_str(),
 				))
 		}
 			.with_newline(true)
@@ -1110,11 +1096,9 @@ impl Witching {
 	/// This summary prints when the set is empty and the instance has the
 	/// [`WITCHING_SUMMARIZE`] flag set. It simply reads:
 	///
-	///     No files were found.
+	/// `No files were found.`
 	fn summarize_empty(&self) {
-		Msg::new(MsgKind::Warning, format!("No {} were found.", self.label()))
-			.with_newline(true)
-			.eprint();
+		fyi_msg::warning!(format!("No {} were found.", self.label()), true);
 	}
 
 
@@ -1135,7 +1119,7 @@ impl Witching {
 	///
 	/// Wrapper for `WitchingInner::stop()`.
 	fn stop(&self) {
-		let mut ptr = mutex_ptr!(self.inner);
+		let mut ptr = crate::mutex_ptr!(self.inner);
 		ptr.stop();
 	}
 
@@ -1144,7 +1128,7 @@ impl Witching {
 	/// Wrapper for `WitchingInner::set_title()`.
 	pub fn set_title<S> (&self, title: S)
 	where S: Into<Msg> {
-		let mut ptr = mutex_ptr!(self.inner);
+		let mut ptr = crate::mutex_ptr!(self.inner);
 		ptr.set_title(title);
 	}
 }
@@ -1153,7 +1137,7 @@ impl Witching {
 ///
 /// Wrapper for `WitchingInner::tick()`.
 fn progress_tick(inner: &Arc<Mutex<WitchingInner>>) -> bool {
-	let mut ptr = mutex_ptr!(inner);
+	let mut ptr = crate::mutex_ptr!(inner);
 	ptr.tick()
 }
 
@@ -1161,7 +1145,7 @@ fn progress_tick(inner: &Arc<Mutex<WitchingInner>>) -> bool {
 ///
 /// Wrapper for `WitchingInner::end_task()`.
 fn progress_end(inner: &Arc<Mutex<WitchingInner>>, task: &PathBuf) {
-	let mut ptr = mutex_ptr!(inner);
+	let mut ptr = crate::mutex_ptr!(inner);
 	ptr.end_task(task);
 }
 
@@ -1169,7 +1153,7 @@ fn progress_end(inner: &Arc<Mutex<WitchingInner>>, task: &PathBuf) {
 ///
 /// Wrapper for `WitchingInner::start_task()`.
 fn progress_start(inner: &Arc<Mutex<WitchingInner>>, task: &PathBuf) {
-	let mut ptr = mutex_ptr!(inner);
+	let mut ptr = crate::mutex_ptr!(inner);
 	ptr.start_task(task);
 }
 

@@ -187,6 +187,7 @@ macro_rules! define_buffer {
 			}
 
 			#[cfg(feature = "fitted")]
+			#[allow(dead_code)]
 			#[must_use]
 			/// # Fit Width.
 			///
@@ -195,48 +196,45 @@ macro_rules! define_buffer {
 			/// ## Safety
 			///
 			/// The string must be valid UTF-8 or undefined things will happen.
-			pub unsafe fn fitted(&self, idx: usize, width: usize) -> usize {
-				use unicode_width::UnicodeWidthChar;
+			pub(crate) fn fitted(&self, idx: usize, stop: usize) -> usize {
+				let bytes: &[u8] = self.get(idx);
+				if bytes.is_empty() { return 0; }
 
-				// For our purposes, basic ANSI markup (of the kind we use)
-				// is considered 0-width;
+				// Iterate bytes unless/until we find something non-ASCII.
 				let mut in_ansi: bool = false;
-
-				// Count up the widths and lengths until we reach the end of
-				// the string or hit the ceiling.
-				match std::str::from_utf8_unchecked(self.get(idx))
-					.chars()
-					.try_fold((0, 0), |(w, l), c| {
-						// Find the "length" of this char.
-						let ch_len: usize = c.len_utf8();
-
-						// If we're in the middle of an ANSI sequence nothing
-						// counts, but we need to watch for the end marker so
-						// we can start paying attention again.
+				match bytes.iter()
+					.take_while(|i| i.is_ascii())
+					.try_fold((0, 0), |(l, w), &i| {
+						// In ANSI sequence, just waiting for the end.
 						if in_ansi {
-							// We're only interested in A/K/m signals.
-							if c == 'A' || c == 'K' || c == 'm' { in_ansi = false; }
-							Ok((w, l + ch_len))
+							if i == b'm' || i == b'A' || i == b'K' { in_ansi = false; }
+							Ok((l + 1, w))
 						}
-						// Are we entering an ANSI sequence?
-						else if c == '\x1b' {
+						// Starting a new ANSI sequence.
+						else if i == b'\x1b' {
 							in_ansi = true;
-							Ok((w, l + ch_len))
+							Ok((l + 1, w))
 						}
-						else {
-							// Widths can creep up unevenly. If we've gone
-							// over, we need to revert a step and exit.
-							let total_width = w + UnicodeWidthChar::width(c).unwrap_or_default();
-							if total_width > width { Err(l) }
-							else { Ok((total_width, l + ch_len)) }
-						}
+						// Control characters have no width but are otherwise
+						// no cause for concern.
+						else if i == 0 || i.is_ascii_control() { Ok((l + 1, w)) }
+						// We've reached out limit.
+						else if w + 1 > stop { Err(l) }
+						// Normal ASCII has a width of one.
+						else { Ok((l + 1, w + 1)) }
 					}) {
-						Ok((_, l)) => l,
-						Err(e) => e,
+						Ok((l, w)) =>
+							if l == bytes.len() { l }
+							// Count the rest the hard way.
+							else {
+								fitted_unicode(&bytes[l..], l, w, stop)
+							},
+						Err(l) => l,
 					}
 			}
 
 			#[cfg(feature = "fitted")]
+			#[allow(dead_code)]
 			#[must_use]
 			/// # Part Width.
 			///
@@ -245,27 +243,36 @@ macro_rules! define_buffer {
 			/// ## Safety
 			///
 			/// The string must be valid UTF-8 or undefined things will happen.
-			pub unsafe fn width(&self, idx: usize) -> usize {
-				use unicode_width::UnicodeWidthChar;
+			pub(crate) fn width(&self, idx: usize) -> usize {
+				let bytes: &[u8] = self.get(idx);
+				if bytes.is_empty() { return 0; }
 
-				if self.len(idx) == 0 { 0 }
+				// Iterate bytes unless/until we find something non-ASCII.
+				let mut in_ansi: bool = false;
+				let (len, width) = bytes.iter()
+					.take_while(|i| i.is_ascii())
+					.fold((0, 0), |(l, w), &i| {
+						// In ANSI sequence, just waiting for the end.
+						if in_ansi {
+							if i == b'm' || i == b'A' || i == b'K' { in_ansi = false; }
+							(l + 1, w)
+						}
+						// Starting a new ANSI sequence.
+						else if i == b'\x1b' {
+							in_ansi = true;
+							(l + 1, w)
+						}
+						// Control characters have no width but are otherwise
+						// no cause for concern.
+						else if i == 0 || i.is_ascii_control() { (l + 1, w) }
+						// Normal ASCII has a width of one.
+						else { (l + 1, w + 1) }
+					});
+
+				if len == bytes.len() { width }
+				// Count the rest the hard way.
 				else {
-					let mut in_ansi: bool = false;
-					std::str::from_utf8_unchecked(self.get(idx))
-						.chars()
-						.fold(0, |w, c|
-							if in_ansi {
-								if c == 'A' || c == 'K' || c == 'm' { in_ansi = false; }
-								w
-							}
-							else if c == '\x1b' {
-								in_ansi = true;
-								w
-							}
-							else {
-								w + UnicodeWidthChar::width(c).unwrap_or_default()
-							}
-						)
+					width_unicode(&bytes[len..], width)
 				}
 			}
 
@@ -447,6 +454,91 @@ define_buffer!(MsgBuffer7, 14, "7");
 define_buffer!(MsgBuffer8, 16, "8");
 define_buffer!(MsgBuffer9, 18, "9");
 define_buffer!(MsgBuffer10, 20, "10");
+
+
+
+#[cfg(feature = "fitted")]
+#[allow(dead_code)]
+#[must_use]
+/// # Fit Width.
+///
+/// This returns the length of the slice that fits a given width.
+///
+/// ## Safety
+///
+/// The string must be valid UTF-8 or undefined things will happen.
+fn fitted_unicode(chunk: &[u8], len: usize, width: usize, stop: usize) -> usize {
+	use unicode_width::UnicodeWidthChar;
+
+	// For our purposes, basic ANSI markup (of the kind we use)
+	// is considered 0-width;
+	let mut in_ansi: bool = false;
+
+	// Count up the widths and lengths until we reach the end of
+	// the string or hit the ceiling.
+	match unsafe { std::str::from_utf8_unchecked(chunk) }
+		.chars()
+		.try_fold((width, len), |(w, l), c| {
+			// Find the "length" of this char.
+			let ch_len: usize = c.len_utf8();
+
+			// If we're in the middle of an ANSI sequence nothing
+			// counts, but we need to watch for the end marker so
+			// we can start paying attention again.
+			if in_ansi {
+				// We're only interested in A/K/m signals.
+				if c == 'A' || c == 'K' || c == 'm' { in_ansi = false; }
+				Ok((w, l + ch_len))
+			}
+			// Are we entering an ANSI sequence?
+			else if c == '\x1b' {
+				in_ansi = true;
+				Ok((w, l + ch_len))
+			}
+			else {
+				// Widths can creep up unevenly. If we've gone
+				// over, we need to revert a step and exit.
+				let total_width = w + UnicodeWidthChar::width(c).unwrap_or_default();
+				if total_width > stop { Err(l) }
+				else { Ok((total_width, l + ch_len)) }
+			}
+		}) {
+			Ok((_, l)) => l,
+			Err(e) => e,
+		}
+}
+
+#[cfg(feature = "fitted")]
+#[allow(dead_code)]
+#[must_use]
+/// # Part Width (Unicode).
+///
+/// This method handles counting any remaining unicode widths from a given
+/// slice.
+///
+/// ## Safety
+///
+/// The string must be valid UTF-8 or undefined things will happen.
+fn width_unicode(chunk: &[u8], width: usize) -> usize {
+	use unicode_width::UnicodeWidthChar;
+
+	let mut in_ansi: bool = false;
+	unsafe { std::str::from_utf8_unchecked(chunk) }
+		.chars()
+		.fold(width, |w, c|
+			if in_ansi {
+				if c == 'A' || c == 'K' || c == 'm' { in_ansi = false; }
+				w
+			}
+			else if c == '\x1b' {
+				in_ansi = true;
+				w
+			}
+			else {
+				w + UnicodeWidthChar::width(c).unwrap_or_default()
+			}
+		)
+}
 
 
 

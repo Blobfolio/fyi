@@ -5,13 +5,22 @@
 /// Do it.
 fn main() {
 	use fyi_msg::{
+		confirm,
+		crunched,
+		debug,
+		done,
+		error,
+		info,
 		Msg,
 		MsgKind,
+		notice,
+		plain,
+		success,
+		task,
+		warning,
 	};
 
-	Msg::plain("This message has no prefix.")
-		.with_newline(true)
-		.print();
+	plain!("This message has no prefix.");
 
 	println!();
 
@@ -25,54 +34,41 @@ fn main() {
 
 	println!();
 
-	MsgKind::Notice.into_msg("So official!")
-		.with_newline(true)
-		.print();
-	MsgKind::Success.into_msg("Hurray! You did it!")
-		.with_newline(true)
-		.print();
-	MsgKind::Warning.into_msg("Hold it there, Sparky!")
-		.with_newline(true)
-		.print();
-	MsgKind::Error.into_msg("Oopsie.")
-		.with_newline(true)
-		.print();
+	notice!("So official!");
+	success!("Hurray! You did it!");
+	warning!("Hold it there, Sparky!");
+	error!("Oopsie.");
 
 	println!();
 
-	MsgKind::Debug.into_msg("The devil is in the details.")
-		.with_newline(true)
-		.print();
-	MsgKind::Info.into_msg("Details without the word 'bug'.")
-		.with_newline(true)
-		.print();
-	MsgKind::Task.into_msg("Let's get to work!")
-		.with_newline(true)
-		.print();
+	debug!("The devil is in the details.");
+	info!("Details without the word 'bug'.");
+	task!("Let's get to work!");
 
 	println!();
 
+	// This can be printed without actually confirming anything by building
+	// the message manually.
 	MsgKind::Confirm.into_msg("Choose your own adventure.")
 		.with_newline(true)
 		.print();
 
 	println!();
 
-	MsgKind::Crunched.into_msg("Some hard work just happened.")
-		.with_newline(true)
-		.print();
-	MsgKind::Done.into_msg("As the French say, «FIN».")
-		.with_newline(true)
-		.print();
+	crunched!("Some hard work just happened.");
+	done!("As the French say, «FIN».");
 
 	println!();
 
-	MsgKind::Info.into_msg("Messages can be timestamped.")
-		.with_timestamp(true)
-		.with_newline(true)
-		.print();
+	#[cfg(feature = "timestamps")]
+	{
+		MsgKind::Info.into_msg("Messages can be timestamped.")
+			.with_timestamp(true)
+			.with_newline(true)
+			.print();
 
-	println!();
+		println!();
+	}
 
 	MsgKind::Info.into_msg("Messages can be indented (0).")
 		.with_newline(true)
@@ -95,15 +91,11 @@ fn main() {
 
 	println!();
 
-	if MsgKind::Confirm.into_msg("Was this example useful?").prompt() {
-		Msg::plain("Great!")
-			.with_newline(true)
-			.print();
+	if confirm!("Was this example useful?") {
+		plain!("Great!");
 	}
 	else {
-		Msg::plain("Oh well. Can't please 'em all!")
-			.with_newline(true)
-			.print();
+		plain!("Oh well. Can't please 'em all!");
 	}
 
 	println!();

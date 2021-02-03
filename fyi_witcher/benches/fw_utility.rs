@@ -14,7 +14,7 @@ use fyi_witcher::utility;
 
 fn hash64(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_witcher::utility");
-	group.sample_size(50);
+	group.sample_size(30);
 
 	for kv in [
 		&b"--prefix"[..],

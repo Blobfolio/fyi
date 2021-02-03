@@ -6,6 +6,8 @@ This crate provides two main components, both of them file-related:
 * [`Witcher`] is a simple, minimally configurable file system traversal library.
 * [`Witching`] is a lightweight, automatic progress bar wrapper that can be used while iterating through/operating on a set of paths.
 
+For simple get-all-files-recursively purposes, there's also [`witch`].
+
 
 
 ## Optional Features
@@ -53,10 +55,12 @@ version.
 
 
 
+mod witch;
 mod witcher;
 #[cfg(feature = "witching")] mod witching;
 pub mod utility;
 
+pub use witch::witch;
 pub use witcher::Witcher;
 
 #[cfg(feature = "witching")]
@@ -66,3 +70,15 @@ pub use witching::{
 	WITCHING_QUIET,
 	WITCHING_SUMMARIZE,
 };
+
+
+
+#[macro_export]
+/// Helper: Mutex Unlock.
+///
+/// This just moves tedious code out of the way.
+macro_rules! mutex_ptr {
+	($mutex:expr) => (
+		$mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+	);
+}

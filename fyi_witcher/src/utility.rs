@@ -6,23 +6,6 @@ use std::path::PathBuf;
 
 
 
-/// # Trusting Canonicalize
-///
-/// This method is solely intended for use in cases where a path has been
-/// constructed from a known-canonical path, i.e. during directory traversal
-/// (where the directory was canonicalized before reading).
-///
-/// In order to avoid the expense of `realpath` syscalls, this method will
-/// first do an `lstat` to see if the path is a symlink. If not, the in-path is
-/// transparently returned.
-pub(crate) fn trusting_canonicalize(path: PathBuf) -> Result<PathBuf, std::io::Error> {
-	let meta = std::fs::symlink_metadata(&path)?;
-	if meta.file_type().is_symlink() {
-		std::fs::canonicalize(path)
-	}
-	else { Ok(path) }
-}
-
 #[must_use]
 #[inline]
 /// # `AHash` Byte Hash.
@@ -53,10 +36,55 @@ pub fn hash64(src: &[u8]) -> u64 {
 /// ## Examples
 ///
 /// ```no_run
-/// let path = fyi_witcher::utility::path_as_bytes(PathBuf::from("/path/to/file.jpg"));
+/// use std::path::PathBuf;
+/// let path = fyi_witcher::utility::path_as_bytes(&PathBuf::from("/path/to/file.jpg"));
 /// ```
 pub fn path_as_bytes(p: &std::path::PathBuf) -> &[u8] {
 	unsafe { &*(p.as_os_str() as *const std::ffi::OsStr as *const [u8]) }
+}
+
+/// # Resolve `DirEntry`.
+///
+/// This is a convenience callback for [`Witcher`] and [`lite::Witcher`] used
+/// during `ReadDir` traversal.
+///
+/// See [`resolve_path`] for more information.
+pub(crate) fn resolve_dir_entry(entry: Result<std::fs::DirEntry, std::io::Error>) -> Option<(u128, bool, PathBuf)> {
+	let entry = entry.ok()?;
+	resolve_path(entry.path(), true)
+}
+
+/// # Resolve Path.
+///
+/// This attempts to cheaply resolve a given path, returning:
+/// * A unique hash derived from the path's device and inode.
+/// * A bool indicating whether or not the path is a directory.
+/// * The canonicalized path.
+///
+/// As [`std::fs::canonicalize`] is an expensive operation, this method allows
+/// a "trusted" bypass, which will only canonicalize the path if it is a
+/// symlink.
+///
+/// The trusted mode is only appropriate in cases like `ReadDir` where the
+/// directory seed was canonicalized. The idea is that since `DirEntry` paths
+/// are joined to the seed, they'll be canonical so long as the seed was,
+/// except in cases of symlinks.
+pub(crate) fn resolve_path(path: PathBuf, trusted: bool) -> Option<(u128, bool, PathBuf)> {
+	use std::os::unix::fs::MetadataExt;
+
+	let meta = std::fs::metadata(&path).ok()?;
+	let hash: u128 = unsafe { *([meta.dev(), meta.ino()].as_ptr().cast::<u128>()) };
+	let dir: bool = meta.is_dir();
+
+	if trusted {
+		let meta = std::fs::symlink_metadata(&path).ok()?;
+		if ! meta.file_type().is_symlink() {
+			return Some((hash, dir, path));
+		}
+	}
+
+	let path = std::fs::canonicalize(path).ok()?;
+	Some((hash, dir, path))
 }
 
 #[cfg(feature = "witching")]
@@ -83,7 +111,7 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn t_trusting_canonicalize() {
+	fn t_resolve_path() {
 		let test_dir = std::fs::canonicalize("./tests/links").expect("Missing witcher link directory.");
 
 		let raw = vec![
@@ -116,7 +144,7 @@ mod tests {
 
 		let trusting = {
 			let mut tmp: Vec<PathBuf> = raw.iter()
-				.filter_map(|x| trusting_canonicalize(x.clone()).ok())
+				.filter_map(|x| resolve_path(x.clone(), true).map(|(_, _, p)| p))
 				.collect();
 			tmp.sort();
 			tmp.dedup();

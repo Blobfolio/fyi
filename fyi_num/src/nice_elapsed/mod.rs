@@ -47,7 +47,7 @@ macro_rules! elapsed_from {
 /// ```no_run
 /// use fyi_num::NiceElapsed;
 /// assert_eq!(
-///     NiceElapsed::from(61).as_str(),
+///     NiceElapsed::from(61_u32).as_str(),
 ///     "1 minute and 1 second"
 /// );
 /// ```
@@ -124,8 +124,8 @@ impl NiceElapsed {
 	/// # Maximum Value
 	///
 	/// We can save some processing time by hard-coding the maximum value.
-	/// Because `NiceInt` does not support days, this is equivalent to `86400`,
-	/// which comes out to `>1 day`.
+	/// Because `NiceElapsed` does not support days, this is equivalent to
+	/// `86400`, which comes out to `>1 day`.
 	pub const fn max() -> Self {
 		Self {
 			//       >   1   •    d   a    y
@@ -276,7 +276,10 @@ unsafe fn write_u8_advance(buf: *mut u8, num: u8) -> *mut u8 {
 	use std::ptr;
 
 	if num > 99 {
-		ptr::copy_nonoverlapping(crate::TRIPLE.as_ptr().add(usize::from(num) * 3), buf, 3);
+		let (div, rem) = num_integer::div_mod_floor(usize::from(num), 100);
+		let ptr = crate::DOUBLE.as_ptr();
+		ptr::copy_nonoverlapping(ptr.add((div << 1) + 1), buf, 1);
+		ptr::copy_nonoverlapping(ptr.add(rem << 1), buf.add(1), 2);
 		buf.add(3)
 	}
 	else if num > 9 {
@@ -284,7 +287,7 @@ unsafe fn write_u8_advance(buf: *mut u8, num: u8) -> *mut u8 {
 		buf.add(2)
 	}
 	else {
-		ptr::copy_nonoverlapping(crate::SINGLE.as_ptr().add(usize::from(num)), buf, 1);
+		ptr::copy_nonoverlapping(crate::DOUBLE.as_ptr().add((usize::from(num) << 1) + 1), buf, 1);
 		buf.add(1)
 	}
 }

@@ -14,9 +14,32 @@ use fyi_menu::Argue;
 
 fn from_iter(c: &mut Criterion) {
 	let mut group = c.benchmark_group("fyi_menu::Argue");
-	group.sample_size(50);
+	group.sample_size(30);
 
-	group.bench_function("from_iter(print --prefix hello -c 199 -t A penny saved...)", move |b| {
+	// These two styles should match.
+	assert_eq!(
+		*Argue::from(vec![
+			String::from("print"),
+			String::from("--prefix"),
+			String::from("Hello"),
+			String::from("-c"),
+			String::from("199"),
+			String::from("-t"),
+			String::from("A penny saved is a penny earned."),
+		]),
+		*Argue::from(vec![
+			String::from("print"),
+			String::from("--prefix"),
+			String::from("Hello"),
+			String::from("-c"),
+			String::from("199"),
+			String::from("-t"),
+			String::from("A penny saved is a penny earned."),
+		])
+	);
+
+	// Keys and values split.
+	group.bench_function("from_iter(print --prefix hello -c 199 -t …)", move |b| {
 		b.iter_with_setup(||
 			vec![
 				String::from("print"),
@@ -26,7 +49,23 @@ fn from_iter(c: &mut Criterion) {
 				String::from("199"),
 				String::from("-t"),
 				String::from("A penny saved is a penny earned."),
-			].into_iter(),
+			],
+			|v| { let _ = black_box(Argue::from(v)); }
+		)
+	});
+
+	// Keys and values merged.
+	group.bench_function("from_iter(print --prefix=hello -c199 -t …)", move |b| {
+		b.iter_with_setup(||
+			vec![
+				String::from("print"),
+				String::from("--prefix=Hello"),
+				String::from("-c199"),
+				String::from("-t"),
+				String::from("more"),
+				String::from("more"),
+				String::from("A penny saved is a penny earned."),
+			],
 			|v| { let _ = black_box(Argue::from(v)); }
 		)
 	});
@@ -47,7 +86,7 @@ fn switch(c: &mut Criterion) {
 			String::from("199"),
 			String::from("-t"),
 			String::from("A penny saved is a penny earned."),
-		].into_iter())
+		])
 	}
 
 	group.bench_function("switch()", move |b| {
@@ -80,7 +119,7 @@ fn option(c: &mut Criterion) {
 			String::from("199"),
 			String::from("-t"),
 			String::from("A penny saved is a penny earned."),
-		].into_iter())
+		])
 	}
 
 	group.bench_function("option()", move |b| {
@@ -99,6 +138,7 @@ fn option(c: &mut Criterion) {
 
 	group.finish();
 }
+
 
 
 criterion_group!(

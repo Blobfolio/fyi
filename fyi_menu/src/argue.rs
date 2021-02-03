@@ -9,7 +9,6 @@ use crate::{
 use fyi_msg::Msg;
 use std::{
 	cell::Cell,
-	env,
 	iter::FromIterator,
 	ops::Deref,
 	process::exit,
@@ -122,12 +121,12 @@ const KEY_LEN: usize = 15;
 /// If you just want a clean set to iterate over, `Argue` can be dereferenced
 /// to a string slice:
 ///
-/// ```no_run
+/// ```ignore
 /// let arg_slice: &[String] = *args;
 /// ```
 ///
 /// Or it can be converted into an owned string Vector:
-/// ```no_run
+/// ```ignore
 /// let args: Vec<String> = args.take();
 /// ```
 pub struct Argue {
@@ -175,13 +174,14 @@ impl Deref for Argue {
 }
 
 impl<I> From<I> for Argue
-where I: Iterator<Item=String> {
+where I: IntoIterator<Item=String> {
 	fn from(src: I) -> Self
-	where I: Iterator<Item=String> {
-		src.skip_while(|x|
-			x.is_empty() ||
-			x.as_bytes().iter().all(u8::is_ascii_whitespace)
-		)
+	where I: IntoIterator<Item=String> {
+		src.into_iter()
+			.skip_while(|x|
+				x.is_empty() ||
+				x.as_bytes().iter().all(u8::is_ascii_whitespace)
+			)
 			.fold(
 				Self::default(),
 				Self::push
@@ -192,12 +192,43 @@ where I: Iterator<Item=String> {
 impl FromIterator<String> for Argue {
 	#[inline]
 	fn from_iter<I: IntoIterator<Item=String>>(src: I) -> Self {
-		Self::from(src.into_iter())
+		Self::from(src)
 	}
 }
 
 /// ## Instantiation and Builder Patterns.
 impl Argue {
+	#[cfg(all(target_os = "linux", not(target_env = "musl")))]
+	#[must_use]
+	#[inline]
+	/// # New Instance.
+	///
+	/// This populates arguments from the environment using a specialized
+	/// implementation that requires slightly less overhead than using the
+	/// stock [`std::env::args`] iterator. The first (command path) part is
+	/// automatically excluded.
+	///
+	/// To construct an `Argue` from arbitrary raw values, use the
+	/// `Argue::from_iter()` method (via the [`std::iter::FromIterator`] trait).
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_menu::Argue;
+	///
+	/// let args = Argue::new(0);
+	/// ```
+	pub fn new(flags: u8) -> Self {
+		argv::Args::default()
+			.skip_while(|b| b.is_empty() || b.iter().all(u8::is_ascii_whitespace))
+			.fold(
+				Self::default(),
+				Self::push_bytes
+			)
+			.with_flags(flags)
+	}
+
+	#[cfg(any(not(target_os = "linux"), target_env = "musl"))]
 	#[must_use]
 	#[inline]
 	/// # New Instance.
@@ -216,7 +247,8 @@ impl Argue {
 	/// let args = Argue::new(0);
 	/// ```
 	pub fn new(flags: u8) -> Self {
-		env::args().skip(1)
+		std::env::args()
+			.skip(1)
 			.skip_while(|x|
 				x.is_empty() ||
 				x.as_bytes().iter().all(u8::is_ascii_whitespace)
@@ -288,9 +320,7 @@ impl Argue {
 				0 != self.flags & FLAG_HAS_HELP
 			)
 		{
-			Msg::plain(cb())
-				.with_newline(true)
-				.print();
+			fyi_msg::plain!(cb());
 			exit(0);
 		}
 
@@ -320,17 +350,15 @@ impl Argue {
 		if ! self.args.is_empty() {
 			// If that entry is "help", we're done!
 			if self.args[0] == "help" {
-				Msg::plain(cb(None)).with_newline(true).print();
+				fyi_msg::plain!(cb(None));
 				exit(0);
 			}
 			// Otherwise we need to check for the flags.
 			else if 0 != self.flags & FLAG_HAS_HELP {
-				Msg::plain(
+				fyi_msg::plain!(
 					if self.keys[0] == 0 && self.keys[KEY_LEN] != 0 { cb(None) }
 					else { cb(Some(&self.args[0])) }
-				)
-					.with_newline(true)
-					.print();
+				);
 				exit(0);
 			}
 		}
@@ -409,8 +437,11 @@ impl Argue {
 	pub fn with_version<S>(self, name: S, version: S) -> Self
 	where S: AsRef<str> {
 		if 0 != self.flags & FLAG_HAS_VERSION {
-			Msg::plain(format!("{} v{}\n", name.as_ref(), version.as_ref()))
-				.print();
+			fyi_msg::plain!(format!(
+				"{} v{}\n",
+				name.as_ref(),
+				version.as_ref()
+			));
 			exit(0);
 		}
 
@@ -458,7 +489,7 @@ impl Argue {
 	///
 	/// ## Examples
 	///
-	/// ```no_run
+	/// ```ignore
 	/// use fyi_menu::Argue;
 	///
 	/// let mut args = Argue::new(0);
@@ -709,20 +740,20 @@ impl Argue {
 			},
 			// Record the key and passthrough.
 			KeyKind::Short => {
-				let idx: usize = self.args.len();
 				if val == "-V" { self.flags |= FLAG_HAS_VERSION; }
 				else if val == "-h" { self.flags |= FLAG_HAS_HELP; }
 
+				let idx: usize = self.args.len();
 				self.args.push(val);
 				self.insert_key(idx);
 				self.last.set(idx);
 			},
 			// Record the key and passthrough.
 			KeyKind::Long => {
-				let idx: usize = self.args.len();
 				if val == "--version" { self.flags |= FLAG_HAS_VERSION; }
 				else if val == "--help" { self.flags |= FLAG_HAS_HELP; }
 
+				let idx: usize = self.args.len();
 				self.args.push(val);
 				self.insert_key(idx);
 				self.last.set(idx);
@@ -757,6 +788,69 @@ impl Argue {
 		self
 	}
 
+	#[cfg(all(target_os = "linux", not(target_env = "musl")))]
+	/// # Parse Keys (Bytes).
+	fn push_bytes(mut self, bytes: &[u8]) -> Self {
+		// Find out what we've got!
+		match KeyKind::from(bytes) {
+			// Passthrough.
+			KeyKind::None => {
+				self.args.push(String::from_utf8_lossy(bytes).into_owned());
+			},
+			// Record the key and passthrough.
+			KeyKind::Short => {
+				if bytes[1] == b'V' { self.flags |= FLAG_HAS_VERSION; }
+				else if bytes[1] == b'h' { self.flags |= FLAG_HAS_HELP; }
+
+				let idx = self.args.len();
+				self.args.push(String::from_utf8_lossy(bytes).into_owned());
+				self.insert_key(idx);
+				self.last.set(idx);
+			},
+			// Record the key and passthrough.
+			KeyKind::Long => {
+				if bytes == b"--version" { self.flags |= FLAG_HAS_VERSION; }
+				else if bytes == b"--help" { self.flags |= FLAG_HAS_HELP; }
+
+				let idx = self.args.len();
+				self.args.push(String::from_utf8_lossy(bytes).into_owned());
+				self.insert_key(idx);
+				self.last.set(idx);
+			},
+			// Split a short key/value pair.
+			KeyKind::ShortV => {
+				let idx = self.args.len();
+				let mut val = String::from_utf8_lossy(bytes).into_owned();
+				let tmp = val.split_off(2);
+
+				self.args.push(val);
+				self.args.push(tmp);
+
+				self.insert_key(idx);
+				self.last.set(idx + 1);
+			},
+			// Split a long key/value pair.
+			KeyKind::LongV(x) => {
+				let idx = self.args.len();
+				let mut val = String::from_utf8_lossy(bytes).into_owned();
+
+				// Grab the value or make one.
+				let tmp: String =
+					if x + 1 < bytes.len() { val.split_off(x + 1) }
+					else { String::new() };
+
+				val.truncate(x);
+				self.args.push(val);
+				self.args.push(tmp);
+
+				self.insert_key(idx);
+				self.last.set(idx + 1);
+			},
+		}
+
+		self
+	}
+
 	/// # Parse Separator.
 	///
 	/// This concatenates all arguments trailing a "--" entry into a single
@@ -775,6 +869,107 @@ impl Argue {
 			else {
 				self.args.truncate(idx);
 			}
+		}
+	}
+}
+
+
+
+#[cfg(all(target_os = "linux", not(target_env = "musl")))]
+#[allow(clippy::similar_names)] // Follow convention.
+/// # Linux Specialized Args
+///
+/// This is a non-allocating version of [`std::env::args`] for non-Musl Linux
+/// systems inspired by [`argv`](https://crates.io/crates/argv).
+///
+/// Other targets just use the normal [`std::env::args`].
+mod argv {
+	use std::{
+		ffi::CStr,
+		os::raw::{
+			c_char,
+			c_int,
+		},
+	};
+
+	static mut ARGC: c_int = 0;
+	static mut ARGV: *const *const c_char = std::ptr::null();
+
+	#[cfg(target_os = "linux")]
+	#[link_section = ".init_array"]
+	#[used]
+	static CAPTURE: unsafe extern "C" fn(c_int, *const *const c_char) = capture;
+
+	#[cfg_attr(target_os = "macos", link_section = "__DATA,__mod_init_func")]
+	#[allow(dead_code)]
+	unsafe extern "C" fn capture(argc: c_int, argv: *const *const c_char) {
+		ARGC = argc;
+		ARGV = argv;
+	}
+
+	/// # Raw Arguments.
+	///
+	/// This will skip the first (path) argument and return a pointer and
+	/// length if there's anything worth returning.
+	///
+	/// The actual iterables are byte slices in this case, rather than
+	/// (os)strings.
+	pub(super) struct Args {
+		next: *const *const c_char,
+		end: *const *const c_char,
+	}
+
+	impl Default for Args {
+		/// # Raw Arguments.
+		///
+		/// ## Safety
+		///
+		/// This accesses mutable statics — `ARGC` and `ARGV` — but because
+		/// they are only mutated prior to the execution of `main()`, it's
+		/// A-OK.
+		///
+		/// Also worth noting, the operating system is responsible for ensuring
+		/// `ARGV + ARGC` does not overflow, so no worries there either.
+		fn default() -> Self {
+			// We'll only return arguments if there are at least 2 of them.
+			let len: usize = unsafe { ARGC } as usize;
+			if len > 1 {
+				Self {
+					next: unsafe { ARGV.add(1) },
+					end: unsafe { ARGV.add(len) },
+				}
+			}
+			else {
+				let end = unsafe { ARGV.add(len) };
+				Self {
+					next: end,
+					end
+				}
+			}
+		}
+	}
+
+	impl Iterator for Args {
+		type Item = &'static [u8];
+
+		fn next(&mut self) -> Option<Self::Item> {
+			if self.next >= self.end { None }
+			else {
+				let out = unsafe { CStr::from_ptr(*self.next).to_bytes() };
+				self.next = unsafe { self.next.add(1) };
+				Some(out)
+			}
+		}
+
+		fn size_hint(&self) -> (usize, Option<usize>) {
+			let len = self.len();
+			(len, Some(len))
+		}
+	}
+
+	impl ExactSizeIterator for Args {
+		fn len(&self) -> usize {
+			unsafe { self.end.offset_from(self.next) as usize }
 		}
 	}
 }
