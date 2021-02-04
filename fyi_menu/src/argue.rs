@@ -57,7 +57,7 @@ const KEY_LEN: usize = 15;
 
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// `Argue` is a minimalistic, agnostic CLI argument parser. It does not hold
 /// information about all the expected or required arguments an application
 /// might have; instead it merely parses the raw [`std::env::args`] output into a
@@ -979,7 +979,7 @@ mod argv {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use criterion as _;
+	use fyi_bench as _;
 
 	#[test]
 	fn t_parse_args() {

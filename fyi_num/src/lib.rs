@@ -126,7 +126,7 @@ pub unsafe fn write_time(buf: *mut u8, h: u8, m: u8, s: u8) {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use criterion as _;
+	use fyi_bench as _;
 
 	#[test]
 	fn t_write_u8() {

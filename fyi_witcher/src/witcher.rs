@@ -413,7 +413,7 @@ impl Witcher {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use criterion as _;
+	use fyi_bench as _;
 
 	#[test]
 	fn t_new() {

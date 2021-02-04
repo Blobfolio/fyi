@@ -2,48 +2,22 @@
 # Benchmark: `fyi_menu::KeyKind`
 */
 
-use criterion::{
-	BenchmarkId,
-	Criterion,
-	criterion_group,
-	criterion_main,
+use fyi_bench::{
+	Bench,
+	benches,
 };
 use fyi_menu::KeyKind;
 
+benches!(
+	Bench::new("fyi_menu::KeyKind", "from(Hello World)")
+		.with(|| KeyKind::from(&b"Hello World"[..])),
 
+	Bench::new("fyi_menu::KeyKind", "from(-p)")
+		.with(|| KeyKind::from(&b"-p"[..])),
 
-fn keykind_from(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_menu::KeyKind");
-	group.sample_size(30);
+	Bench::new("fyi_menu::KeyKind", "from(--prefix)")
+		.with(|| KeyKind::from(&b"--prefix"[..])),
 
-	for kv in [
-		//&b"Hello World!"[..],
-		&b"--prefix"[..],
-		&b"--prefix-color=199"[..],
-		//&b"-p"[..],
-		//&b"-c199"[..],
-	].iter() {
-		group.bench_with_input(
-			BenchmarkId::from_parameter(&format!(
-				"from({})",
-				unsafe { std::str::from_utf8_unchecked(kv) }
-			)),
-			kv,
-			|b, &kv| {
-				b.iter(||
-					KeyKind::from(kv)
-				);
-			}
-		);
-	}
-
-	group.finish();
-}
-
-
-
-criterion_group!(
-	benches,
-	keykind_from,
+	Bench::new("fyi_menu::KeyKind", "from(--prefix-color=199)")
+		.with(|| KeyKind::from(&b"--prefix-color=199"[..]))
 );
-criterion_main!(benches);

@@ -2,47 +2,35 @@
 # Benchmark: `fyi_num::nice_u32`
 */
 
-use criterion::{
-	BenchmarkId,
-	black_box,
-	Criterion,
-	criterion_group,
-	criterion_main,
+use fyi_bench::{
+	Bench,
+	benches,
 };
 use fyi_num::NiceU32;
+use std::time::Duration;
 
+benches!(
+	Bench::new("fyi_num::NiceU32", "from(0)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceU32::from(0_u32)),
 
+	Bench::new("fyi_num::NiceU32", "from(100_020)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceU32::from(100_020_u32)),
 
-fn from_u32(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_num::NiceU32");
-	group.sample_size(30);
+	Bench::new("fyi_num::NiceU32", "from(6_330_004)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceU32::from(6_330_004_u32)),
 
-	for ints in [
-		0_u32,
-		100_020_u32,
-		6_330_004_u32,
-		57_444_000_u32,
-		777_804_132_u32,
-		u32::MAX,
-	].iter() {
-		group.bench_with_input(
-			BenchmarkId::from_parameter(format!("from<u32>({})", ints)),
-			ints,
-			|b, &ints| {
-				b.iter(|| {
-					let _ = black_box(NiceU32::from(ints)).as_str();
-				});
-			}
-		);
-	}
+	Bench::new("fyi_num::NiceU32", "from(57_444_000)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceU32::from(57_444_000_u32)),
 
-	group.finish();
-}
+	Bench::new("fyi_num::NiceU32", "from(777_804_132)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceU32::from(777_804_132_u32)),
 
-
-
-criterion_group!(
-	benches,
-	from_u32,
+	Bench::new("fyi_num::NiceU32", "from(u32::MAX)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceU32::from(u32::MAX))
 );
-criterion_main!(benches);

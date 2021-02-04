@@ -21,16 +21,27 @@ path = "../fyi_num"
 version = "0.1.*"
 optional = true
 
-[dev-dependencies.criterion]
-version = ">= 0.3.4"
-default-features = false
+[dev-dependencies.fyi_bench]
+path = "../fyi_bench"
+
+[[bench]]
+name = "fm_buffer"
+harness = false
+
+[[bench]]
+name = "fm_buffer_mut"
+harness = false
 
 [[bench]]
 name = "fm_msg"
 harness = false
 
 [[bench]]
-name = "fm_buffer"
+name = "fm_msg_fitted"
+harness = false
+
+[[bench]]
+name = "fm_msg_timestamps"
 harness = false
 
 [[example]]

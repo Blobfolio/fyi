@@ -11,9 +11,8 @@ publish = false
 [dependencies.fyi_msg]
 path = "../fyi_msg"
 
-[dev-dependencies.criterion]
-version = ">= 0.3.4"
-default-features = false
+[dev-dependencies.fyi_bench]
+path = "../fyi_bench"
 
 [[bench]]
 name = "fm_argue"

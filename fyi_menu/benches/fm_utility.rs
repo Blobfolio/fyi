@@ -2,44 +2,19 @@
 # Benchmark: `fyi_menu::utility`
 */
 
-use criterion::{
-	BenchmarkId,
-	Criterion,
-	criterion_group,
-	criterion_main,
-};
-
-
-
-fn esc_arg(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_menu::utility");
-	group.sample_size(50);
-
-	for kv in [
-		"",
-		"Hello",
-		"Hello World",
-		"Hello Joe\'s World",
-	].iter() {
-		group.bench_with_input(
-			BenchmarkId::from_parameter(&format!("esc_arg({:?})", kv.to_string())),
-			&kv.to_string(),
-			|b, kv| {
-				b.iter_with_setup(||
-					kv.to_string(),
-					|s| fyi_menu::utility::esc_arg(s)
-				);
-			}
-		);
-	}
-
-	group.finish();
-}
-
-
-
-criterion_group!(
+use fyi_bench::{
+	Bench,
 	benches,
-	esc_arg,
+};
+use fyi_menu::utility::esc_arg;
+
+benches!(
+	Bench::new("fyi_menu::utility", "esc_arg(Hello)")
+		.with(|| esc_arg(String::from("Hello"))),
+
+	Bench::new("fyi_menu::utility", "esc_arg(Hello World)")
+		.with(|| esc_arg(String::from("Hello World"))),
+
+	Bench::new("fyi_menu::utility", "esc_arg(Eat at Joe's)")
+		.with(|| esc_arg(String::from("Eat at Joe's")))
 );
-criterion_main!(benches);

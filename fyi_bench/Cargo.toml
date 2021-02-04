@@ -1,0 +1,19 @@
+[package]
+name = "fyi_bench"
+version = "0.6.0"
+authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
+edition = "2018"
+description = "A simple micro-benchmark runner."
+license = "WTFPL"
+repository = "https://github.com/Blobfolio/fyi"
+publish = false
+
+[dependencies]
+serde_json = "1.0.*"
+
+[dependencies.fyi_num]
+path = "../fyi_num"
+
+[dependencies.serde]
+version = "1.0.*"
+features = [ "derive" ]

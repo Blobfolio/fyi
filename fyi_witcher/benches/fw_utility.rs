@@ -2,44 +2,19 @@
 # Benchmark: `fyi_witcher::utility`
 */
 
-use criterion::{
-	BenchmarkId,
-	Criterion,
-	criterion_group,
-	criterion_main,
-};
-use fyi_witcher::utility;
-
-
-
-fn hash64(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_witcher::utility");
-	group.sample_size(30);
-
-	for kv in [
-		&b"--prefix"[..],
-		b"-p",
-		b"/usr/share/man/man1/fyi-confirm.1.gz",
-	].iter() {
-		group.bench_with_input(
-			BenchmarkId::from_parameter(&format!(
-				"hash64({:?})",
-				unsafe { std::str::from_utf8_unchecked(kv) }
-			)),
-			kv,
-			|b, kv| {
-				b.iter(|| utility::hash64(&kv))
-			}
-		);
-	}
-
-	group.finish();
-}
-
-
-
-criterion_group!(
+use fyi_bench::{
+	Bench,
 	benches,
-	hash64,
+};
+use fyi_witcher::utility::hash64;
+
+benches!(
+	Bench::new("fyi_witcher::utility", "hash64(-p)")
+		.with(|| hash64(&b"-p"[..])),
+
+	Bench::new("fyi_witcher::utility", "hash64(--prefix)")
+		.with(|| hash64(&b"--prefix"[..])),
+
+	Bench::new("fyi_witcher::utility", "hash64(/usr/share/...)")
+		.with(|| hash64(&b"/usr/share/man/man1/fyi-confirm.1.gz"[..]))
 );
-criterion_main!(benches);

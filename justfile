@@ -22,6 +22,7 @@ pkg_dir2    := justfile_directory() + "/fyi_menu"
 pkg_dir3    := justfile_directory() + "/fyi_msg"
 pkg_dir4    := justfile_directory() + "/fyi_witcher"
 pkg_dir5    := justfile_directory() + "/fyi_num"
+pkg_dir6    := justfile_directory() + "/fyi_bench"
 
 cargo_dir   := "/tmp/" + pkg_id + "-cargo"
 cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
@@ -33,27 +34,24 @@ rustflags   := "-C link-arg=-s"
 
 
 # Bench it!
-bench BENCH="" FILTER="":
+bench BENCH="":
 	#!/usr/bin/env bash
 
 	clear
-
 	if [ -z "{{ BENCH }}" ]; then
-		RUSTFLAGS="{{ rustflags }}" cargo-criterion \
+		RUSTFLAGS="{{ rustflags }}" cargo bench \
 			--benches \
 			--workspace \
-			--plotting-backend disabled \
 			--all-features \
 			--target x86_64-unknown-linux-gnu \
-			--target-dir "{{ cargo_dir }}" -- "{{ FILTER }}"
+			--target-dir "{{ cargo_dir }}"
 	else
-		RUSTFLAGS="{{ rustflags }}" cargo-criterion \
+		RUSTFLAGS="{{ rustflags }}" cargo bench \
 			--bench "{{ BENCH }}" \
 			--workspace \
-			--plotting-backend disabled \
 			--all-features \
 			--target x86_64-unknown-linux-gnu \
-			--target-dir "{{ cargo_dir }}" -- "{{ FILTER }}"
+			--target-dir "{{ cargo_dir }}"
 	fi
 	exit 0
 
@@ -159,6 +157,7 @@ bench BENCH="" FILTER="":
 	[ ! -d "{{ pkg_dir3 }}/target" ] || rm -rf "{{ pkg_dir3 }}/target"
 	[ ! -d "{{ pkg_dir4 }}/target" ] || rm -rf "{{ pkg_dir4 }}/target"
 	[ ! -d "{{ pkg_dir5 }}/target" ] || rm -rf "{{ pkg_dir5 }}/target"
+	[ ! -d "{{ pkg_dir6 }}/target" ] || rm -rf "{{ pkg_dir6 }}/target"
 
 	cargo update
 
@@ -267,6 +266,7 @@ version:
 	just _version "{{ pkg_dir3 }}" "$_ver2"
 	just _version "{{ pkg_dir4 }}" "$_ver2"
 	just _version "{{ pkg_dir5 }}" "$_ver2"
+	just _version "{{ pkg_dir6 }}" "$_ver2"
 
 
 # Set version for real.

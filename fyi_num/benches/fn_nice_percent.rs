@@ -2,47 +2,35 @@
 # Benchmark: `fyi_num::nice_percent`
 */
 
-use criterion::{
-	BenchmarkId,
-	black_box,
-	Criterion,
-	criterion_group,
-	criterion_main,
+use fyi_bench::{
+	Bench,
+	benches,
 };
 use fyi_num::NicePercent;
+use std::time::Duration;
 
+benches!(
+	Bench::new("fyi_num::NicePercent", "from(0)")
+		.timed(Duration::from_secs(1))
+		.with(|| NicePercent::from(0_f32)),
 
+	Bench::new("fyi_num::NicePercent", "from(0.1)")
+		.timed(Duration::from_secs(1))
+		.with(|| NicePercent::from(0.1_f32)),
 
-fn from_f32(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_num::NicePercent");
-	group.sample_size(30);
+	Bench::new("fyi_num::NicePercent", "from(0.12)")
+		.timed(Duration::from_secs(1))
+		.with(|| NicePercent::from(0.12_f32)),
 
-	for ints in [
-		0_f32,
-		0.1_f32,
-		0.12_f32,
-		0.123_f32,
-		0.1234_f32,
-		0.12345_f32,
-	].iter() {
-		group.bench_with_input(
-			BenchmarkId::from_parameter(format!("from<f32>({})", ints)),
-			ints,
-			|b, &ints| {
-				b.iter(|| {
-					let _ = black_box(NicePercent::from(ints)).as_str();
-				});
-			}
-		);
-	}
+	Bench::new("fyi_num::NicePercent", "from(0.123)")
+		.timed(Duration::from_secs(1))
+		.with(|| NicePercent::from(0.123_f32)),
 
-	group.finish();
-}
+	Bench::new("fyi_num::NicePercent", "from(0.1234)")
+		.timed(Duration::from_secs(1))
+		.with(|| NicePercent::from(0.1234_f32)),
 
-
-
-criterion_group!(
-	benches,
-	from_f32,
+	Bench::new("fyi_num::NicePercent", "from(0.12345)")
+		.timed(Duration::from_secs(1))
+		.with(|| NicePercent::from(0.12345_f32))
 );
-criterion_main!(benches);
