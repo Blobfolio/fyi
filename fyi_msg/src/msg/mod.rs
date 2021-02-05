@@ -591,7 +591,7 @@ impl Msg {
 	/// This is the setter companion to the [`Msg::with_indent`] builder method.
 	/// Refer to that documentation for more information.
 	pub fn set_indent(&mut self, indent: u8) {
-		self.0.replace(PART_INDENT, &b" ".repeat(4.min(indent as usize) * 4));
+		self.0.replace(PART_INDENT, &b" ".repeat(4.min(indent as usize) << 2));
 	}
 
 	#[cfg(feature = "timestamps")]
