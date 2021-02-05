@@ -84,6 +84,8 @@ version.
 
 mod msg;
 
+#[cfg(feature = "fitted")] mod fitted;
+
 pub use msg::{
 	ansi::NiceANSI,
 	buffer::MsgBuffer10,
@@ -99,6 +101,12 @@ pub use msg::{
 	FLAG_NEWLINE,
 	kind::MsgKind,
 	Msg,
+};
+
+#[cfg(feature = "fitted")]
+pub use fitted::{
+	length_width,
+	width,
 };
 
 #[cfg(feature = "timestamps")]

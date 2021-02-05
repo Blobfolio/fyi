@@ -33,6 +33,10 @@ name = "fm_buffer_mut"
 harness = false
 
 [[bench]]
+name = "fm_fitted"
+harness = false
+
+[[bench]]
 name = "fm_msg"
 harness = false
 

@@ -732,8 +732,8 @@ impl Msg {
 		// If the fixed width bits are themselves too big, we can't fit print.
 		let fixed_width: usize =
 			self.0.len(PART_INDENT) +
-			self.0.width(PART_PREFIX) +
-			self.0.width(PART_SUFFIX) +
+			crate::width(self.0.get(PART_PREFIX)) +
+			crate::width(self.0.get(PART_SUFFIX)) +
 			if 0 == self.0.len(PART_TIMESTAMP) { 0 }
 			else { 21 };
 
@@ -741,8 +741,8 @@ impl Msg {
 		// If the fixed width bits are themselves too big, we can't fit print.
 		let fixed_width: usize =
 			self.0.len(PART_INDENT) +
-			self.0.width(PART_PREFIX) +
-			self.0.width(PART_SUFFIX);
+			crate::width(self.0.get(PART_PREFIX)) +
+			crate::width(self.0.get(PART_SUFFIX));
 
 		if fixed_width > width {
 			return Cow::Owned(Vec::new());
@@ -750,17 +750,9 @@ impl Msg {
 
 		// Check the length again; the fixed bits might just have a lot of
 		// ANSI.
-		let trim = width - fixed_width;
-		let msg_len = self.0.len(PART_MSG);
-		if msg_len <= trim {
-			return Cow::Borrowed(self);
-		}
-
-		// Okay, try to trim it.
-		let keep = self.0.fitted(PART_MSG, trim);
-		if keep == 0 {
-			Cow::Owned(Vec::new())
-		}
+		let keep = crate::length_width(self.0.get(PART_MSG), width - fixed_width);
+		if keep == 0 { Cow::Owned(Vec::new()) }
+		else if keep == self.0.len(PART_MSG) { Cow::Borrowed(self) }
 		else {
 			// We have to trim the message to fit. Let's do it on a copy.
 			let mut tmp = self.clone();
