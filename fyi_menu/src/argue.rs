@@ -285,6 +285,7 @@ impl Argue {
 		// Required?
 		if 0 != flags & FLAG_REQUIRED && self.args.is_empty() {
 			Msg::error("Missing options, flags, arguments, and/or ketchup.").die(1);
+			unreachable!();
 		}
 
 		// Handle separator.
