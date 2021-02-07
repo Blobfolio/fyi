@@ -147,17 +147,17 @@ use fyi_msg::{
 /// Main.
 fn main() {
 	// Parse CLI arguments.
-	let mut args = Argue::new(FLAG_REQUIRED | FLAG_SUBCOMMAND)
+	let args = Argue::new(FLAG_REQUIRED | FLAG_SUBCOMMAND)
 		.with_version("FYI", env!("CARGO_PKG_VERSION"))
 		.with_subcommand_help(helper);
 
 	match MsgKind::from(unsafe { args.peek_unchecked() }) {
-		MsgKind::Blank => blank(&mut args),
+		MsgKind::Blank => blank(&args),
 		MsgKind::None => {
 			Msg::error("Invalid message type.").die(1);
 			unreachable!();
 		},
-		kind => msg(kind, &mut args),
+		kind => msg(kind, &args),
 	}
 }
 
@@ -166,7 +166,7 @@ fn main() {
 /// Shoot Blanks.
 ///
 /// Print one or more blank lines to `Stdout` or `Stderr`.
-fn blank(args: &mut Argue) {
+fn blank(args: &Argue) {
 	// How many lines should we print?
 	let msg = Msg::plain("\n".repeat(
 		args.option2(b"-c", b"--count")
@@ -182,7 +182,7 @@ fn blank(args: &mut Argue) {
 
 #[doc(hidden)]
 /// Basic Message.
-fn msg(kind: MsgKind, args: &mut Argue) {
+fn msg(kind: MsgKind, args: &Argue) {
 	// Exit code.
 	let exit: i32 = args.option2(b"-e", b"--exit")
 		.and_then(|x| String::from_utf8_lossy(x).parse::<i32>().ok())
@@ -199,17 +199,23 @@ fn msg(kind: MsgKind, args: &mut Argue) {
 		if MsgKind::Custom == kind {
 			args.option2(b"-p", b"--prefix")
 				.map_or_else(
-					|| Msg::plain(String::from_utf8_lossy(args.arg(0).unwrap_or_default())),
+					|| Msg::plain(String::from_utf8_lossy(args.first_arg())),
 					|prefix| {
 						let color: u8 = args.option2(b"-c", b"--prefix-color")
 							.and_then(|x| String::from_utf8_lossy(x).parse::<u8>().ok())
 							.unwrap_or(199);
-						Msg::custom(String::from_utf8_lossy(prefix), color, String::from_utf8_lossy(args.arg(0).unwrap_or_default()))
+						Msg::custom(
+							String::from_utf8_lossy(prefix),
+							color,
+							String::from_utf8_lossy(args.first_arg())
+						)
 					}
 				)
 		}
 		// Built-in prefix.
-		else { Msg::new(kind, String::from_utf8_lossy(args.arg(0).unwrap_or_default())) }
+		else {
+			Msg::new(kind, String::from_utf8_lossy(args.first_arg()))
+		}
 		.with_flags(flags);
 
 	// It's a prompt!

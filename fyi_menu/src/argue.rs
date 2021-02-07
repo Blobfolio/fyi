@@ -682,6 +682,37 @@ impl Argue {
 	}
 
 	#[must_use]
+	/// # First Trailing Argument.
+	///
+	/// Return the first trailing argument, or print an error and exit the
+	/// thread if there isn't one.
+	///
+	/// This is just like [`Argue::take_arg`], but does not remove the entry
+	/// from the set.
+	///
+	/// As with other arg-related methods, it is important to query all options
+	/// first, as that helps the struct determine the boundary between named
+	/// and unnamed values.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_menu::Argue;
+	///
+	/// let mut args = Argue::new(0);
+	/// let opt: String = args.take_arg();
+	/// ```
+	pub fn first_arg(&self) -> &[u8] {
+		let idx = self.arg_idx();
+		if idx >= self.args.len() {
+			Msg::error("Missing required argument.").die(1);
+			unreachable!();
+		}
+
+		self.args[idx].as_ref()
+	}
+
+	#[must_use]
 	/// # Take Next Trailing Argument.
 	///
 	/// Return an owned copy of the first available argument — removing it from
