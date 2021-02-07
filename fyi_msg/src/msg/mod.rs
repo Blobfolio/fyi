@@ -2,14 +2,11 @@
 # FYI Msg
 */
 
-pub(super) mod ansi;
 pub(super) mod buffer;
 pub(super) mod kind;
 
-use crate::{
-	MsgKind,
-	NiceANSI,
-};
+use crate::MsgKind;
+use fyi_num::NiceU8;
 use std::{
 	fmt,
 	hash,
@@ -234,7 +231,9 @@ impl Msg {
 		// Start a vector with the prefix bits.
 		let msg = msg.as_ref().as_bytes();
 		let v = [
-			NiceANSI::from(color).as_bytes(),
+			b"\x1b[1;38;5;",
+			&*NiceU8::from(color),
+			b"m",
 			prefix,
 			b":\x1b[0m ",
 			msg,
@@ -650,7 +649,9 @@ impl Msg {
 			self.0.replace(
 				PART_PREFIX,
 				&[
-					NiceANSI::from(color).as_bytes(),
+					b"\x1b[1;38;5;",
+					&*NiceU8::from(color),
+					b"m",
 					prefix,
 					b":\x1b[0m ",
 				].concat(),

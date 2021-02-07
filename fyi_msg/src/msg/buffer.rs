@@ -372,6 +372,32 @@ mod tests {
 	use super::*;
 
 	#[test]
+	fn extend() {
+		let mut buf = MsgBuffer3::from_raw_parts(
+			vec![0, 0, 1, 1, 0, 0],
+			[
+				2, 4,
+				4, 6,
+				6, 6,
+			]
+		);
+
+		buf.extend(0, &[3, 3, 3]);
+
+		assert_eq!(buf, vec![0, 0, 1, 1, 3, 3, 3, 0, 0]);
+		assert_eq!(buf.start(0)..buf.end(0), 2..7);
+		assert_eq!(buf.len(0), 5);
+		assert_eq!(buf.start(1)..buf.end(1), 7..9);
+		assert_eq!(buf.len(1), 2);
+		assert_eq!(buf.len(2), 0);
+
+		buf.extend(2, &[4, 4]);
+		assert_eq!(buf, vec![0, 0, 1, 1, 3, 3, 3, 0, 0, 4, 4]);
+		assert_eq!(buf.len(2), 2);
+		assert_eq!(buf.range(2), 9..11);
+	}
+
+	#[test]
 	fn replace() {
 		let mut buf = MsgBuffer3::from_raw_parts(
 			vec![0, 0, 1, 1, 0, 0],

@@ -87,7 +87,6 @@ mod msg;
 #[cfg(feature = "fitted")] mod fitted;
 
 pub use msg::{
-	ansi::NiceANSI,
 	buffer::MsgBuffer10,
 	buffer::MsgBuffer2,
 	buffer::MsgBuffer3,
