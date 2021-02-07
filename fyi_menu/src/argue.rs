@@ -443,11 +443,7 @@ impl Argue {
 	pub fn with_version<S>(self, name: S, version: S) -> Self
 	where S: AsRef<str> {
 		if 0 != self.flags & FLAG_HAS_VERSION {
-			fyi_msg::plain!(format!(
-				"{} v{}\n",
-				name.as_ref(),
-				version.as_ref()
-			));
+			fyi_msg::plain!(format!("{} v{}", name.as_ref(), version.as_ref()));
 			exit(0);
 		}
 
