@@ -15,13 +15,5 @@ path = "../fyi_msg"
 path = "../fyi_bench"
 
 [[bench]]
-name = "fm_argue"
-harness = false
-
-[[bench]]
 name = "fm_keykind"
-harness = false
-
-[[bench]]
-name = "fm_utility"
 harness = false

@@ -169,13 +169,13 @@ fn main() {
 fn blank(args: &mut Argue) {
 	// How many lines should we print?
 	let msg = Msg::plain("\n".repeat(
-		args.option2("-c", "--count")
-			.and_then(|c| c.parse::<usize>().ok())
+		args.option2(b"-c", b"--count")
+			.and_then(|c| String::from_utf8_lossy(c).parse::<usize>().ok())
 			.map_or(1, |c| 1_usize.max(c))
 	));
 
 	// Print it to `Stderr`.
-	if args.switch("--stderr") { msg.eprint(); }
+	if args.switch(b"--stderr") { msg.eprint(); }
 	// Print it to `Stdout`.
 	else { msg.print(); }
 }
@@ -184,32 +184,32 @@ fn blank(args: &mut Argue) {
 /// Basic Message.
 fn msg(kind: MsgKind, args: &mut Argue) {
 	// Exit code.
-	let exit: i32 = args.option2("-e", "--exit")
-		.and_then(|x| x.parse::<i32>().ok())
+	let exit: i32 = args.option2(b"-e", b"--exit")
+		.and_then(|x| String::from_utf8_lossy(x).parse::<i32>().ok())
 		.unwrap_or(0);
 
 	// Basic flags.
 	let mut flags: u8 = FLAG_NEWLINE;
-	if args.switch2("-i", "--indent") { flags |= FLAG_INDENT; }
-	if args.switch2("-t", "--timestamp") { flags |= FLAG_TIMESTAMP; }
+	if args.switch2(b"-i", b"--indent") { flags |= FLAG_INDENT; }
+	if args.switch2(b"-t", b"--timestamp") { flags |= FLAG_TIMESTAMP; }
 
 	// The main message.
 	let msg =
 		// Custom message prefix.
 		if MsgKind::Custom == kind {
-			args.option2("-p", "--prefix")
+			args.option2(b"-p", b"--prefix")
 				.map_or_else(
-					|| Msg::plain(args.arg(0).unwrap_or_default()),
+					|| Msg::plain(String::from_utf8_lossy(args.arg(0).unwrap_or_default())),
 					|prefix| {
-						let color: u8 = args.option2("-c", "--prefix-color")
-							.and_then(|x| x.parse::<u8>().ok())
+						let color: u8 = args.option2(b"-c", b"--prefix-color")
+							.and_then(|x| String::from_utf8_lossy(x).parse::<u8>().ok())
 							.unwrap_or(199);
-						Msg::custom(prefix, color, args.arg(0).unwrap_or_default())
+						Msg::custom(String::from_utf8_lossy(prefix), color, String::from_utf8_lossy(args.arg(0).unwrap_or_default()))
 					}
 				)
 		}
 		// Built-in prefix.
-		else { Msg::new(kind, args.take_arg()) }
+		else { Msg::new(kind, String::from_utf8_lossy(args.arg(0).unwrap_or_default())) }
 		.with_flags(flags);
 
 	// It's a prompt!
@@ -220,7 +220,7 @@ fn msg(kind: MsgKind, args: &mut Argue) {
 		return;
 	}
 	// Print to `Stderr`.
-	else if args.switch("--stderr") { msg.eprint(); }
+	else if args.switch(b"--stderr") { msg.eprint(); }
 	// Print to `Stdout`.
 	else { msg.print(); }
 
@@ -236,7 +236,7 @@ fn msg(kind: MsgKind, args: &mut Argue) {
 ///
 /// Print the appropriate help screen given the call details. Most of the sub-
 /// commands work the same way, but a few have their own distinct messages.
-fn helper(cmd: Option<&str>) -> String {
+fn helper(cmd: Option<&[u8]>) -> String {
 	format!(
 		r#"
                       ;\
@@ -267,15 +267,18 @@ fn helper(cmd: Option<&str>) -> String {
 		env!("CARGO_PKG_VERSION"),
 		"\x1b[0m",
 		match cmd {
-			Some("blank") => include_str!("../help/blank.txt").to_string(),
-			Some("print") => include_str!("../help/print.txt").to_string(),
-			Some("confirm") | Some("prompt") => include_str!("../help/confirm.txt").to_string(),
-			Some(x) if MsgKind::from(x) != MsgKind::None => format!(
-				include_str!("../help/generic.txt"),
-				x,
-				Msg::new(MsgKind::from(x), "Hello World").as_str(),
-				x.to_lowercase(),
-			),
+			Some(b"blank") => include_str!("../help/blank.txt").to_string(),
+			Some(b"print") => include_str!("../help/print.txt").to_string(),
+			Some(b"confirm") | Some(b"prompt") => include_str!("../help/confirm.txt").to_string(),
+			Some(x) if MsgKind::from(x) != MsgKind::None => {
+				let txt = String::from_utf8_lossy(x).into_owned();
+				format!(
+					include_str!("../help/generic.txt"),
+					txt,
+					Msg::new(MsgKind::from(x), "Hello World").as_str(),
+					txt.to_lowercase(),
+				)
+			},
 			_ => include_str!("../help/help.txt").to_string(),
 		}
 	)

@@ -8,8 +8,8 @@ use crate::{
 };
 use fyi_msg::Msg;
 use std::{
+	borrow::Cow,
 	cell::Cell,
-	iter::FromIterator,
 	ops::Deref,
 	process::exit,
 };
@@ -58,11 +58,29 @@ const KEY_LEN: usize = 15;
 
 
 #[derive(Debug, Clone)]
-/// `Argue` is a minimalistic, agnostic CLI argument parser. It does not hold
-/// information about all the expected or required arguments an application
-/// might have; instead it merely parses the raw [`std::env::args`] output into a
-/// consistent state and provides various methods of querying the set
-/// afterwards.
+/// `Argue` is an agnostic CLI argument parser. Unlike more robust libraries
+/// like [clap](https://crates.io/crates/clap), `Argue` does not hold
+/// information about expected or required arguments; it merely parses the raw
+/// arguments into a consistent state so the implementor can query them as
+/// needed.
+///
+/// Post-processing is an exercise largely left to the implementing library to
+/// do in its own way, in its own time. `Argue` exposes several methods for
+/// quickly querying the individual pieces of the set, but it can also be
+/// dereferenced to a slice or consumed into an owned vector for fully manual
+/// processing if desired.
+///
+/// Arguments are processed and held as bytes — `Cow<'static, [u8]>` — rather
+/// than (os)strings, again leaving the choice of later conversion entirely up
+/// to the implementor. For non-Musl Linux systems, this is almost entirely
+/// non-allocating as CLI arguments map directly back to the `CStr` pointers.
+/// For other systems, `Argue` falls back to [`std::env::args_os`], so requires
+///  a bit more allocation.
+///
+/// For simple applications, this agnostic approach can significantly reduce
+/// the overhead of processing CLI arguments, but because handling is left to
+/// the implementing library, it might be too tedious or limiting for more
+/// complex use cases.
 ///
 /// ## Assumptions
 ///
@@ -107,31 +125,32 @@ const KEY_LEN: usize = 15;
 /// ends tucked away as flags.
 ///
 /// ```no_run
+/// use std::borrow::Cow;
 /// use fyi_menu::{Argue, FLAG_REQUIRED};
 ///
 /// // Parse the env arguments, aborting if the set is empty.
 /// let args = Argue::new(FLAG_REQUIRED);
 ///
 /// // Check to see what's there.
-/// let switch: bool = args.switch("-s");
-/// let option: Option<&str> = args.option("--my-opt");
-/// let extras: &[String] = args.args();
+/// let switch: bool = args.switch(b"-s");
+/// let option: Option<&[u8]> = args.option(b"--my-opt");
+/// let extras: &[Cow<'static, [u8]>] = args.args();
 /// ```
 ///
 /// If you just want a clean set to iterate over, `Argue` can be dereferenced
-/// to a string slice:
+/// to a slice:
 ///
 /// ```ignore
-/// let arg_slice: &[String] = *args;
+/// let arg_slice: &[Cow<'static, [u8]>] = *args;
 /// ```
 ///
-/// Or it can be converted into an owned string Vector:
+/// Or it can be converted into an owned Vector:
 /// ```ignore
-/// let args: Vec<String> = args.take();
+/// let args: Vec<Cow<'static, [u8]>> = args.take();
 /// ```
 pub struct Argue {
 	/// Parsed arguments.
-	args: Vec<String>,
+	args: Vec<Cow<'static, [u8]>>,
 	/// Keys.
 	///
 	/// This array holds the key indexes (from `self.args`) so checks can avoid
@@ -159,7 +178,7 @@ impl Default for Argue {
 	#[inline]
 	fn default() -> Self {
 		Self {
-			args: Vec::with_capacity(16),
+			args: Vec::new(),
 			keys: [0_usize; KEY_SIZE],
 			last: Cell::new(0),
 			flags: 0,
@@ -168,32 +187,9 @@ impl Default for Argue {
 }
 
 impl Deref for Argue {
-	type Target = [String];
+	type Target = [Cow<'static, [u8]>];
 	#[inline]
 	fn deref(&self) -> &Self::Target { &self.args }
-}
-
-impl<I> From<I> for Argue
-where I: IntoIterator<Item=String> {
-	fn from(src: I) -> Self
-	where I: IntoIterator<Item=String> {
-		src.into_iter()
-			.skip_while(|x|
-				x.is_empty() ||
-				x.as_bytes().iter().all(u8::is_ascii_whitespace)
-			)
-			.fold(
-				Self::default(),
-				Self::push
-			)
-	}
-}
-
-impl FromIterator<String> for Argue {
-	#[inline]
-	fn from_iter<I: IntoIterator<Item=String>>(src: I) -> Self {
-		Self::from(src)
-	}
 }
 
 /// ## Instantiation and Builder Patterns.
@@ -219,11 +215,16 @@ impl Argue {
 	/// let args = Argue::new(0);
 	/// ```
 	pub fn new(flags: u8) -> Self {
-		argv::Args::default()
+		let iter = argv::Args::default();
+		let len = iter.len();
+		iter
 			.skip_while(|b| b.is_empty() || b.iter().all(u8::is_ascii_whitespace))
 			.fold(
-				Self::default(),
-				Self::push_bytes
+				Self {
+					args: Vec::with_capacity(len),
+					..Self::default()
+				},
+				Self::push
 			)
 			.with_flags(flags)
 	}
@@ -247,15 +248,18 @@ impl Argue {
 	/// let args = Argue::new(0);
 	/// ```
 	pub fn new(flags: u8) -> Self {
-		std::env::args()
+		use std::os::unix::ffi::OsStrExt;
+
+		std::env::args_os()
 			.skip(1)
+			.map(|b| b.as_bytes().to_vec())
 			.skip_while(|x|
 				x.is_empty() ||
-				x.as_bytes().iter().all(u8::is_ascii_whitespace)
+				x.iter().all(u8::is_ascii_whitespace)
 			)
 			.fold(
 				Self::default(),
-				Self::push
+				Self::push_vec
 			)
 			.with_flags(flags)
 	}
@@ -316,7 +320,7 @@ impl Argue {
 		if
 			! self.args.is_empty() &&
 			(
-				self.args[0] == "help" ||
+				self.args[0].as_ref().eq(b"help") ||
 				0 != self.flags & FLAG_HAS_HELP
 			)
 		{
@@ -340,16 +344,16 @@ impl Argue {
 	/// ```no_run
 	/// use fyi_menu::Argue;
 	///
-	/// let args = Argue::new(0).with_subcommand_help(|_: Option<&str>| {
+	/// let args = Argue::new(0).with_subcommand_help(|_: Option<&[u8]>| {
 	///     "Help-o world!"
 	/// });
 	/// ```
 	pub fn with_subcommand_help<S, F>(self, cb: F) -> Self
-	where S: AsRef<str>, F: Fn(Option<&str>) -> S {
+	where S: AsRef<str>, F: Fn(Option<&[u8]>) -> S {
 		// There has to be a first entry...
 		if ! self.args.is_empty() {
 			// If that entry is "help", we're done!
-			if self.args[0] == "help" {
+			if self.args[0].as_ref().eq(b"help") {
 				fyi_msg::plain!(cb(None));
 				exit(0);
 			}
@@ -357,7 +361,7 @@ impl Argue {
 			else if 0 != self.flags & FLAG_HAS_HELP {
 				fyi_msg::plain!(
 					if self.keys[0] == 0 && self.keys[KEY_LEN] != 0 { cb(None) }
-					else { cb(Some(&self.args[0])) }
+					else { cb(Some(self.args[0].as_ref())) }
 				);
 				exit(0);
 			}
@@ -392,21 +396,22 @@ impl Argue {
 	/// ```
 	pub fn with_list(mut self) -> Self {
 		use std::{
+			ffi::OsStr,
 			fs::File,
 			io::{
 				BufRead,
 				BufReader,
 			},
+			os::unix::ffi::OsStrExt,
 		};
 
-		if let Some(file) = self.option2("-l", "--list").and_then(|p| File::open(p).ok()) {
+		if let Some(file) = self.option2(b"-l", b"--list").and_then(|p| File::open(OsStr::from_bytes(p)).ok()) {
 			BufReader::new(file).lines()
 				.filter_map(std::result::Result::ok)
 				.for_each(|line| {
-					let trim = line.trim();
-					if ! trim.is_empty() {
-						if trim == line { self.args.push(line); }
-						else { self.args.push(trim.into()); }
+					let bytes = line.trim().as_bytes();
+					if ! bytes.is_empty() {
+						self.args.push(Cow::Owned(bytes.to_vec()))
 					}
 				});
 		}
@@ -474,7 +479,7 @@ impl Argue {
 	///
 	/// let args: Vec<String> = Argue::new(0).take();
 	/// ```
-	pub fn take(self) -> Vec<String> { self.args }
+	pub fn take(self) -> Vec<Cow<'static, [u8]>> { self.args }
 }
 
 /// ## Queries.
@@ -496,7 +501,7 @@ impl Argue {
 	///
 	/// if let Some("happy") = args.peek() { ... }
 	/// ```
-	pub fn peek(&self) -> Option<&str> { self.args.get(0).map(String::as_str) }
+	pub fn peek(&self) -> Option<&[u8]> { self.args.get(0).map(Cow::as_ref) }
 
 	#[must_use]
 	#[inline]
@@ -518,9 +523,9 @@ impl Argue {
 	///
 	/// // This is actually safe because FLAG_REQUIRED would have errored out
 	/// // if nothing were present.
-	/// let first: &str = unsafe { args.peek_unchecked() };
+	/// let first: &[u8] = unsafe { args.peek_unchecked() };
 	/// ```
-	pub unsafe fn peek_unchecked(&self) -> &str { &self.args[0] }
+	pub unsafe fn peek_unchecked(&self) -> &[u8] { self.args[0].as_ref() }
 
 	#[must_use]
 	#[inline]
@@ -536,11 +541,11 @@ impl Argue {
 	/// let mut args = Argue::new(0);
 	/// let switch: bool = args.switch("--my-switch");
 	/// ```
-	pub fn switch(&self, key: &str) -> bool {
+	pub fn switch(&self, key: &[u8]) -> bool {
 		self.keys.iter()
 			.take(self.keys[KEY_LEN])
 			.map(|x| &self.args[*x])
-			.any(|x| x == key)
+			.any(|x| x.as_ref().eq(key))
 	}
 
 	#[must_use]
@@ -559,11 +564,14 @@ impl Argue {
 	/// let mut args = Argue::new(0);
 	/// let switch: bool = args.switch2("-s", "--my-switch");
 	/// ```
-	pub fn switch2(&self, short: &str, long: &str) -> bool {
+	pub fn switch2(&self, short: &[u8], long: &[u8]) -> bool {
 		self.keys.iter()
 			.take(self.keys[KEY_LEN])
 			.map(|x| &self.args[*x])
-			.any(|x| x == short || x == long)
+			.any(|x| {
+				let xr = x.as_ref();
+				xr.eq(short) || xr.eq(long)
+			})
 	}
 
 	/// # Option.
@@ -583,17 +591,17 @@ impl Argue {
 	/// use fyi_menu::Argue;
 	///
 	/// let mut args = Argue::new(0);
-	/// let opt: Option<&str> = args.option("--my-opt");
+	/// let opt: Option<&[u8]> = args.option("--my-opt");
 	/// ```
-	pub fn option(&self, key: &str) -> Option<&str> {
+	pub fn option(&self, key: &[u8]) -> Option<&[u8]> {
 		self.keys.iter()
 			.take(self.keys[KEY_LEN])
-			.position(|&x| self.args.get(x).map_or(false, |x| x == key))
+			.position(|&x| self.args.get(x).map_or(false, |x| x.as_ref().eq(key)))
 			.and_then(|idx| {
 				let idx = self.keys[idx] + 1;
 				self.args.get(idx).map(|x| {
 					if idx > self.last.get() { self.last.set(idx); }
-					x.as_str()
+					x.as_ref()
 				})
 			})
 	}
@@ -610,17 +618,20 @@ impl Argue {
 	/// use fyi_menu::Argue;
 	///
 	/// let mut args = Argue::new(0);
-	/// let opt: Option<&str> = args.option2("-o", "--my-opt");
+	/// let opt: Option<&[u8]> = args.option2("-o", "--my-opt");
 	/// ```
-	pub fn option2(&self, short: &str, long: &str) -> Option<&str> {
+	pub fn option2(&self, short: &[u8], long: &[u8]) -> Option<&[u8]> {
 		self.keys.iter()
 			.take(self.keys[KEY_LEN])
-			.position(|&x| self.args.get(x).map_or(false, |x| x == short || x == long))
+			.position(|&x| self.args.get(x).map_or(false, |x| {
+				let xr = x.as_ref();
+				xr.eq(short) || xr.eq(long)
+			}))
 			.and_then(|idx| {
 				let idx = self.keys[idx] + 1;
 				self.args.get(idx).map(|x| {
 					if idx > self.last.get() { self.last.set(idx); }
-					x.as_str()
+					x.as_ref()
 				})
 			})
 	}
@@ -645,7 +656,7 @@ impl Argue {
 	/// let mut args = Argue::new(0);
 	/// let extras: &[String] = args.args();
 	/// ```
-	pub fn args(&self) -> &[String] {
+	pub fn args(&self) -> &[Cow<'static, [u8]>] {
 		let idx = self.arg_idx();
 		if idx < self.args.len() {
 			&self.args[self.arg_idx()..]
@@ -661,10 +672,10 @@ impl Argue {
 	/// Note, this is different than dereferencing the whole `Argue` struct
 	/// and requesting its zero index; that would refer to the first CLI
 	/// argument of any kind, which could be a subcommand or key.
-	pub fn arg(&self, idx: usize) -> Option<&str> {
+	pub fn arg(&self, idx: usize) -> Option<&[u8]> {
 		let start_idx = self.arg_idx();
 		if start_idx + idx < self.args.len() {
-			Some(self.args[start_idx + idx].as_str())
+			Some(self.args[start_idx + idx].as_ref())
 		}
 		else { None }
 	}
@@ -691,10 +702,11 @@ impl Argue {
 	/// let mut args = Argue::new(0);
 	/// let opt: String = args.take_arg();
 	/// ```
-	pub fn take_arg(&mut self) -> String {
+	pub fn take_arg(&mut self) -> Cow<'static, [u8]> {
 		let idx = self.arg_idx();
 		if idx >= self.args.len() {
 			Msg::error("Missing required argument.").die(1);
+			unreachable!();
 		}
 
 		self.args.remove(idx)
@@ -722,80 +734,21 @@ impl Argue {
 	fn insert_key(&mut self, idx: usize) {
 		if self.keys[KEY_LEN] == KEY_LEN {
 			Msg::error("Too many options.").die(1);
+			unreachable!();
 		}
 
 		self.keys[self.keys[KEY_LEN]] = idx;
 		self.keys[KEY_LEN] += 1;
 	}
 
-	/// # Parse Keys.
-	///
-	/// This indexes the keys and parses out dangling values in cases like
-	/// `-aVal` or `--a=Val`.
-	fn push(mut self, mut val: String) -> Self {
-		match KeyKind::from(val.as_bytes()) {
-			// Passthrough.
-			KeyKind::None => {
-				self.args.push(val);
-			},
-			// Record the key and passthrough.
-			KeyKind::Short => {
-				if val == "-V" { self.flags |= FLAG_HAS_VERSION; }
-				else if val == "-h" { self.flags |= FLAG_HAS_HELP; }
-
-				let idx: usize = self.args.len();
-				self.args.push(val);
-				self.insert_key(idx);
-				self.last.set(idx);
-			},
-			// Record the key and passthrough.
-			KeyKind::Long => {
-				if val == "--version" { self.flags |= FLAG_HAS_VERSION; }
-				else if val == "--help" { self.flags |= FLAG_HAS_HELP; }
-
-				let idx: usize = self.args.len();
-				self.args.push(val);
-				self.insert_key(idx);
-				self.last.set(idx);
-			},
-			// Split a short key/value pair.
-			KeyKind::ShortV => {
-				let idx: usize = self.args.len();
-				let tmp: String = val.split_off(2);
-
-				self.args.push(val);
-				self.args.push(tmp);
-				self.insert_key(idx);
-				self.last.set(idx + 1);
-			},
-			// Split a long key/value pair.
-			KeyKind::LongV(x) => {
-				let idx: usize = self.args.len();
-				let tmp: String =
-					if x + 1 < val.len() { val.split_off(x + 1) }
-					else { String::new() };
-
-				// Chop off the "=" sign.
-				val.truncate(x);
-
-				self.args.push(val);
-				self.args.push(tmp);
-				self.insert_key(idx);
-				self.last.set(idx + 1);
-			},
-		}
-
-		self
-	}
-
 	#[cfg(all(target_os = "linux", not(target_env = "musl")))]
 	/// # Parse Keys (Bytes).
-	fn push_bytes(mut self, bytes: &[u8]) -> Self {
+	fn push(mut self, bytes: &'static [u8]) -> Self {
 		// Find out what we've got!
 		match KeyKind::from(bytes) {
 			// Passthrough.
 			KeyKind::None => {
-				self.args.push(String::from_utf8_lossy(bytes).into_owned());
+				self.args.push(Cow::Borrowed(bytes));
 			},
 			// Record the key and passthrough.
 			KeyKind::Short => {
@@ -803,7 +756,7 @@ impl Argue {
 				else if bytes[1] == b'h' { self.flags |= FLAG_HAS_HELP; }
 
 				let idx = self.args.len();
-				self.args.push(String::from_utf8_lossy(bytes).into_owned());
+				self.args.push(Cow::Borrowed(bytes));
 				self.insert_key(idx);
 				self.last.set(idx);
 			},
@@ -813,18 +766,16 @@ impl Argue {
 				else if bytes == b"--help" { self.flags |= FLAG_HAS_HELP; }
 
 				let idx = self.args.len();
-				self.args.push(String::from_utf8_lossy(bytes).into_owned());
+				self.args.push(Cow::Borrowed(bytes));
 				self.insert_key(idx);
 				self.last.set(idx);
 			},
 			// Split a short key/value pair.
 			KeyKind::ShortV => {
 				let idx = self.args.len();
-				let mut val = String::from_utf8_lossy(bytes).into_owned();
-				let tmp = val.split_off(2);
 
-				self.args.push(val);
-				self.args.push(tmp);
+				self.args.push(Cow::Borrowed(&bytes[0..2]));
+				self.args.push(Cow::Borrowed(&bytes[2..]));
 
 				self.insert_key(idx);
 				self.last.set(idx + 1);
@@ -832,16 +783,80 @@ impl Argue {
 			// Split a long key/value pair.
 			KeyKind::LongV(x) => {
 				let idx = self.args.len();
-				let mut val = String::from_utf8_lossy(bytes).into_owned();
 
-				// Grab the value or make one.
-				let tmp: String =
-					if x + 1 < bytes.len() { val.split_off(x + 1) }
-					else { String::new() };
+				self.args.push(Cow::Borrowed(&bytes[0..x]));
 
-				val.truncate(x);
-				self.args.push(val);
-				self.args.push(tmp);
+				if x + 1 < bytes.len() {
+					self.args.push(Cow::Borrowed(&bytes[x + 1..]));
+				}
+				else {
+					self.args.push(Cow::Owned(Vec::new()));
+				}
+
+				self.insert_key(idx);
+				self.last.set(idx + 1);
+			},
+		}
+
+		self
+	}
+
+	#[cfg(any(not(target_os = "linux"), target_env = "musl"))]
+	/// # Parse Keys (Owned Bytes).
+	fn push_vec(mut self, mut bytes: Vec<u8>) -> Self {
+		// Find out what we've got!
+		match KeyKind::from(&bytes[..]) {
+			// Passthrough.
+			KeyKind::None => {
+				self.args.push(Cow::Owned(bytes));
+			},
+			// Record the key and passthrough.
+			KeyKind::Short => {
+				if bytes[1] == b'V' { self.flags |= FLAG_HAS_VERSION; }
+				else if bytes[1] == b'h' { self.flags |= FLAG_HAS_HELP; }
+
+				let idx = self.args.len();
+				self.args.push(Cow::Owned(bytes));
+				self.insert_key(idx);
+				self.last.set(idx);
+			},
+			// Record the key and passthrough.
+			KeyKind::Long => {
+				if bytes == b"--version" { self.flags |= FLAG_HAS_VERSION; }
+				else if bytes == b"--help" { self.flags |= FLAG_HAS_HELP; }
+
+				let idx = self.args.len();
+				self.args.push(Cow::Owned(bytes));
+				self.insert_key(idx);
+				self.last.set(idx);
+			},
+			// Split a short key/value pair.
+			KeyKind::ShortV => {
+				let idx = self.args.len();
+
+				let v2 = bytes.split_off(2);
+				self.args.push(Cow::Owned(bytes));
+				self.args.push(Cow::Owned(v2));
+
+				self.insert_key(idx);
+				self.last.set(idx + 1);
+			},
+			// Split a long key/value pair.
+			KeyKind::LongV(x) => {
+				let idx = self.args.len();
+
+
+				if x + 1 < bytes.len() {
+					let v2 = bytes.split_off(x + 1);
+					bytes.truncate(x);
+					self.args.push(Cow::Owned(bytes));
+					self.args.push(Cow::Owned(v2));
+				}
+				else {
+					bytes.truncate(x);
+					self.args.push(Cow::Owned(bytes));
+					self.args.push(Cow::Owned(Vec::new()));
+				}
 
 				self.insert_key(idx);
 				self.last.set(idx + 1);
@@ -859,12 +874,20 @@ impl Argue {
 	/// It is not recursive; if a separator has its own separator, it will
 	/// merely be included in the re-glued string.
 	fn parse_separator(&mut self) {
-		if let Some(idx) = self.args.iter().position(|x| x == "--") {
+		if let Some(idx) = self.args.iter().position(|x| x.as_ref().eq(b"--")) {
 			if idx + 1 < self.args.len() {
-				self.args[idx] = self.args.drain(idx + 1..)
-					.map(utility::esc_arg)
-					.collect::<Vec<String>>()
-					.join(" ");
+				let mut joined: Vec<u8> = self.args.drain(idx + 1..)
+					.flat_map(|x| {
+						let mut v: Vec<u8> = x.into_owned();
+						utility::esc_arg_b(&mut v);
+						v.push(b' ');
+						v
+					})
+					.collect::<Vec<u8>>();
+				if let Some(b' ') = joined.last() {
+					joined.truncate(joined.len() - 1);
+				}
+				self.args[idx] = Cow::Owned(joined);
 			}
 			else {
 				self.args.truncate(idx);
@@ -976,6 +999,7 @@ mod argv {
 
 
 
+#[cfg(all(target_os = "linux", not(target_env = "musl")))]
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -983,70 +1007,77 @@ mod tests {
 
 	#[test]
 	fn t_parse_args() {
-		let mut base: Vec<String> = vec![
-			String::from(""),
-			String::from("hey"),
-			String::from("-kVal"),
-			String::from("--empty="),
-			String::from("--key=Val"),
-			String::from("--"),
-			String::from("stuff"),
-			String::from("and things")
+		let mut base: Vec<&[u8]> = vec![
+			b"hey",
+			b"-kVal",
+			b"--empty=",
+			b"--key=Val",
+			b"--",
+			b"stuff",
+			b"and things",
 		];
 
-		let mut args = Argue::from_iter(base.clone()).with_flags(FLAG_SEPARATOR);
+		let mut args = base.iter()
+			.fold(Argue::default(), |a, &b| a.push(b))
+			.with_flags(FLAG_SEPARATOR);
+
+		// Check the overall structure.
 		assert_eq!(
 			*args,
 			[
-				String::from("hey"),
-				String::from("-k"),
-				String::from("Val"),
-				String::from("--empty"),
-				String::new(),
-				String::from("--key"),
-				String::from("Val"),
-				String::from("stuff 'and things'"),
+				Cow::from(&b"hey"[..]),
+				Cow::from(&b"-k"[..]),
+				Cow::from(&b"Val"[..]),
+				Cow::from(&b"--empty"[..]),
+				Cow::from(vec![]),
+				Cow::from(&b"--key"[..]),
+				Cow::from(&b"Val"[..]),
+				Cow::from(&b"stuff 'and things'"[..]),
 			]
 		);
 
-		assert_eq!(args.peek(), Some("hey"));
-		assert!(args.switch("-k"));
-		assert!(args.switch("--key"));
-		assert!(args.switch2("-k", "--key"));
-		assert_eq!(args.option("--key"), Some("Val"));
-		assert_eq!(args.option2("-k", "--key"), Some("Val"));
-		assert_eq!(args.args(), &[String::from("stuff 'and things'")]);
+		// Test the finders.
+		assert_eq!(args.peek(), Some(&b"hey"[..]));
+		assert!(args.switch(b"-k"));
+		assert!(args.switch(b"--key"));
+		assert!(args.switch2(b"-k", b"--key"));
+		assert_eq!(args.option(b"--key"), Some(&b"Val"[..]));
+		assert_eq!(args.option2(b"-k", b"--key"), Some(&b"Val"[..]));
 
-		// Let's make sure first-position keys are OK.
-		base[0] = String::from("--prefix");
-		args = Argue::from_iter(base.clone());
+		{
+			let a = args.args();
+			assert_eq!(a.len(), 1);
+			assert_eq!(a[0].as_ref(), b"stuff 'and things'");
+		}
+
+		// Let's test a first-position key, and also not doing separator bits.
+		base.insert(0, b"--prefix");
+		args = base.iter()
+			.fold(Argue::default(), |a, &b| a.push(b));
+
+		// The whole thing again.
 		assert_eq!(
 			*args,
 			[
-				String::from("--prefix"),
-				String::from("hey"),
-				String::from("-k"),
-				String::from("Val"),
-				String::from("--empty"),
-				String::new(),
-				String::from("--key"),
-				String::from("Val"),
-				String::from("--"), // We didn't reglue these this time.
-				String::from("stuff"),
-				String::from("and things")
+				Cow::from(&b"--prefix"[..]),
+				Cow::from(&b"hey"[..]),
+				Cow::from(&b"-k"[..]),
+				Cow::from(&b"Val"[..]),
+				Cow::from(&b"--empty"[..]),
+				Cow::from(vec![]),
+				Cow::from(&b"--key"[..]),
+				Cow::from(&b"Val"[..]),
+				Cow::from(&b"--"[..]),
+				Cow::from(&b"stuff"[..]),
+				Cow::from(&b"and things"[..]),
 			]
 		);
 
-		assert_eq!(args.peek(), Some("--prefix"));
-		assert!(args.switch("--prefix"));
-		assert_eq!(args.option("--prefix"), Some("hey"));
+		assert_eq!(args.peek(), Some(&b"--prefix"[..]));
+		assert!(args.switch(b"--prefix"));
+		assert_eq!(args.option(b"--prefix"), Some(&b"hey"[..]));
 
-		args = Argue::from_iter(vec!["-k".to_string()]);
-		assert_eq!(args.args(), Vec::<String>::new().as_slice());
-
-		args = Argue::from_iter(vec![]);
-		assert!(! args.switch("--prefix"));
-		assert_eq!(args.option("--prefix"), None);
-		assert_eq!(args.args(), Vec::<String>::new().as_slice());
+		// Something that doesn't exist.
+		assert_eq!(args.option(b"foo"), None);
 	}
 }

@@ -72,21 +72,21 @@ impl fmt::Display for MsgKind {
 	}
 }
 
-impl From<&str> for MsgKind {
-	fn from(txt: &str) -> Self {
+impl From<&[u8]> for MsgKind {
+	fn from(txt: &[u8]) -> Self {
 		match txt {
-			"confirm" | "prompt" => Self::Confirm,
-			"crunched" => Self::Crunched,
-			"debug" => Self::Debug,
-			"done" => Self::Done,
-			"error" => Self::Error,
-			"info" => Self::Info,
-			"notice" => Self::Notice,
-			"success" => Self::Success,
-			"task" => Self::Task,
-			"warning" => Self::Warning,
-			#[cfg(feature = "bin_kinds")] "blank" => Self::Blank,
-			#[cfg(feature = "bin_kinds")] "print" => Self::Custom,
+			b"confirm" | b"prompt" => Self::Confirm,
+			b"crunched" => Self::Crunched,
+			b"debug" => Self::Debug,
+			b"done" => Self::Done,
+			b"error" => Self::Error,
+			b"info" => Self::Info,
+			b"notice" => Self::Notice,
+			b"success" => Self::Success,
+			b"task" => Self::Task,
+			b"warning" => Self::Warning,
+			#[cfg(feature = "bin_kinds")] b"blank" => Self::Blank,
+			#[cfg(feature = "bin_kinds")] b"print" => Self::Custom,
 			_ => Self::None,
 		}
 	}
