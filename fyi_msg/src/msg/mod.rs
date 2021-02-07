@@ -590,7 +590,8 @@ impl Msg {
 	/// This is the setter companion to the [`Msg::with_indent`] builder method.
 	/// Refer to that documentation for more information.
 	pub fn set_indent(&mut self, indent: u8) {
-		self.0.replace(PART_INDENT, &b" ".repeat(4.min(indent as usize) << 2));
+		static SPACES: [u8; 16] = [32_u8; 16];
+		self.0.replace(PART_INDENT, &SPACES[0..4.min(usize::from(indent)) << 2]);
 	}
 
 	#[cfg(feature = "timestamps")]
