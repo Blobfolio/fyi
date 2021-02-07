@@ -205,15 +205,12 @@ fn msg(kind: MsgKind, args: &mut Argue) {
 							.and_then(|x| x.parse::<u8>().ok())
 							.unwrap_or(199);
 						Msg::custom(prefix, color, args.arg(0).unwrap_or_default())
-							.with_flags(flags)
 					}
 				)
 		}
 		// Built-in prefix.
-		else {
-			Msg::new(kind, args.take_arg())
-				.with_flags(flags)
-		};
+		else { Msg::new(kind, args.take_arg()) }
+		.with_flags(flags);
 
 	// It's a prompt!
 	if MsgKind::Confirm == kind {
