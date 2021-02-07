@@ -146,7 +146,7 @@ macro_rules! define_buffer {
 				String::from_utf8(self.buf).unwrap()
 			}
 
-			#[allow(clippy::missing_const_for_fn)] // This doesn't work.
+			#[allow(clippy::missing_const_for_fn)] // Doesn't work.
 			#[must_use]
 			#[inline]
 			/// # Into Vec.

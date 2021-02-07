@@ -136,11 +136,23 @@ impl MsgKind {
 		}
 	}
 
-	#[allow(clippy::missing_const_for_fn)] // Can't const unsafe.
 	#[must_use]
 	/// # As Str.
-	pub fn as_str(self) -> &'static str {
-		unsafe { std::str::from_utf8_unchecked(self.as_bytes()) }
+	pub const fn as_str(self) -> &'static str {
+		match self {
+			#[cfg(feature = "bin_kinds")] Self::None | Self::Blank | Self::Custom => "",
+			#[cfg(not(feature = "bin_kinds"))] Self::None => "",
+			Self::Confirm => "\x1b[1;38;5;208mConfirm:\x1b[0m ",
+			Self::Crunched => "\x1b[92;1mCrunched:\x1b[0m ",
+			Self::Debug => "\x1b[96;1mDebug:\x1b[0m ",
+			Self::Done => "\x1b[92;1mDone:\x1b[0m ",
+			Self::Error => "\x1b[91;1mError:\x1b[0m ",
+			Self::Info => "\x1b[95;1mInfo:\x1b[0m ",
+			Self::Notice => "\x1b[95;1mNotice:\x1b[0m ",
+			Self::Success => "\x1b[92;1mSuccess:\x1b[0m ",
+			Self::Task => "\x1b[1;38;5;199mTask:\x1b[0m ",
+			Self::Warning => "\x1b[93;1mWarning:\x1b[0m ",
+		}
 	}
 
 	/// # Into Message.

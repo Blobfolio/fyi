@@ -897,7 +897,7 @@ impl Witching {
 	}
 
 	#[must_use]
-	#[allow(clippy::missing_const_for_fn)] // Evidently it can't!
+	#[allow(clippy::missing_const_for_fn)] // Doesn't work.
 	/// # Into Vec.
 	///
 	/// Consume and return the path collection. This may be useful in cases

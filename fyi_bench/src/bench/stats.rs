@@ -25,7 +25,6 @@ pub struct Stats {
 	pub(crate) fit: f64,
 }
 
-#[allow(clippy::fallible_impl_from)]
 #[allow(clippy::similar_names)]
 impl From<&[(usize, Duration)]> for Stats {
 	fn from(src: &[(usize, Duration)]) -> Self {
@@ -64,11 +63,8 @@ impl From<&[(usize, Duration)]> for Stats {
 		let nxvar = sq_a - ((sum_a * sum_a) / len);
 		let nyvar = sq_b - ((sum_b * sum_b) / len);
 
-		// Check the fit.
+		// Save the values.
 		out.fit = (ncovar * ncovar) / (nxvar * nyvar);
-		debug_assert!(out.fit.is_nan() || out.fit <= 1.0);
-
-		// And finally, average.
 		out.avg = ncovar / nxvar;
 
 		out

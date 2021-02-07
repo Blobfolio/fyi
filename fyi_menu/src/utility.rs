@@ -4,7 +4,7 @@
 
 
 
-#[allow(clippy::suspicious_else_formatting)] // What does lines have to do with it?
+#[allow(clippy::suspicious_else_formatting)] // It is what it is.
 /// # Escape Arg String.
 ///
 /// This is a very *crude* reverse argument parser that 'quotes' values needing
