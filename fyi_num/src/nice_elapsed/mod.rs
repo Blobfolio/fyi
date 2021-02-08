@@ -4,10 +4,6 @@
 
 use std::{
 	fmt,
-	mem::{
-		self,
-		MaybeUninit,
-	},
 	ops::Deref,
 };
 
@@ -143,11 +139,11 @@ impl NiceElapsed {
 	/// All numbers must be — but should be — less than 60 or undefined things
 	/// may happen.
 	unsafe fn from_hms(h: u8, m: u8, s: u8) -> Self {
-		let mut buf = [MaybeUninit::<u8>::uninit(); 36];
+		let mut buf = [0_u8; 36];
 		let count: u8 = h.ne(&0) as u8 + m.ne(&0) as u8 + s.ne(&0) as u8;
 
 		let len: usize = {
-			let mut dst = buf.as_mut_ptr() as *mut u8;
+			let mut dst = buf.as_mut_ptr();
 
 			// Hours.
 			if h > 0 {
@@ -196,12 +192,12 @@ impl NiceElapsed {
 				}
 			}
 
-			dst.offset_from(buf.as_ptr() as *const u8) as usize
+			dst.offset_from(buf.as_ptr()) as usize
 		};
 
 		// Put it all together!
 		Self {
-			inner: mem::transmute::<_, [u8; 36]>(buf),
+			inner: buf,
 			len
 		}
 	}
