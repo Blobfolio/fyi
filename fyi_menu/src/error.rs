@@ -9,7 +9,7 @@ use std::{
 
 
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 /// # Error Struct.
 pub enum ArgueError {
 	/// Missing anything.
@@ -24,6 +24,12 @@ pub enum ArgueError {
 	Passthru(i32),
 	/// Too many options defined.
 	TooManyKeys,
+	/// Wants subcommand help.
+	WantsDynamicHelp(Option<Vec<u8>>),
+	/// Wants help.
+	WantsHelp,
+	/// Wants version.
+	WantsVersion,
 }
 
 impl AsRef<str> for ArgueError {
@@ -32,7 +38,10 @@ impl AsRef<str> for ArgueError {
 			Self::Empty => "Missing options, flags, arguments, and/or ketchup.",
 			Self::NoArg => "Missing required trailing argument.",
 			Self::NoSubCmd => "Missing/invalid subcommand.",
-			Self::Passthru(_) => "",
+			Self::Passthru(_)
+				| Self::WantsDynamicHelp(_)
+				| Self::WantsHelp
+				| Self::WantsVersion => "",
 			Self::TooManyKeys => "Too many keys.",
 		}
 	}
@@ -49,9 +58,12 @@ impl fmt::Display for ArgueError {
 impl ArgueError {
 	#[must_use]
 	/// # Exit code.
-	pub const fn exit_code(self) -> i32 {
+	pub const fn exit_code(&self) -> i32 {
 		match self {
-			Self::Passthru(c) => c,
+			Self::Passthru(c) => *c,
+			Self::WantsDynamicHelp(_)
+				| Self::WantsHelp
+				| Self::WantsVersion => 0,
 			_ => 1,
 		}
 	}

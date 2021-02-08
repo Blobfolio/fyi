@@ -11,7 +11,6 @@ use std::{
 	borrow::Cow,
 	cell::Cell,
 	ops::Deref,
-	process::exit,
 };
 
 
@@ -21,32 +20,51 @@ use std::{
 /// If a program is called with zero arguments — no flags, options, trailing
 /// args —, an error will be printed and the thread will exit with status code
 /// `1`.
-pub const FLAG_REQUIRED: u8 =   0b0001;
+pub const FLAG_REQUIRED: u8 =     0b0000_0001;
 
 /// # Flag: Merge Separator Args.
 ///
 /// If the program is called with `--` followed by additional arguments, those
 /// arguments are glued back together into a single entry, replacing that `--`.
-pub const FLAG_SEPARATOR: u8 =  0b0010;
+pub const FLAG_SEPARATOR: u8 =    0b0000_0010;
 
 /// # Flag: Expect Subcommand.
 ///
 /// Set this flag to treat the first value as a subcommand rather than a
 /// trailing argument. (This fixes the edge case where the command has zero
 /// dash-prefixed keys.)
-pub const FLAG_SUBCOMMAND: u8 = 0b0100;
+pub const FLAG_SUBCOMMAND: u8 =   0b0000_0100;
+
+/// # Flag: Check For Help Flag.
+///
+/// When set, [`Argue`] will return [`ArgueError::WantsDynamicHelp`] if help args
+/// are present. The subcommand, if any, is included, allowing the caller to
+/// dynamically handle output.
+pub const FLAG_DYNAMIC_HELP: u8 = 0b0000_1000;
+
+/// # Flag: Check For Help Flag.
+///
+/// When set, [`Argue`] will return [`ArgueError::WantsHelp`] if help args are
+/// present.
+pub const FLAG_HELP: u8 =         0b0001_0000;
+
+/// # Flag: Check For Version Flag.
+///
+/// When set, [`Argue`] will return [`ArgueError::WantsVersion`] if version
+/// args are present.
+pub const FLAG_VERSION: u8 =      0b0010_0000;
 
 /// # Flag: Has Help.
 ///
 /// This flag is set if either `-h` or `--help` switches are present. It has
-/// no effect unless [`Argue::with_help`] is called.
-const FLAG_HAS_HELP: u8 =       0b1000;
+/// no effect unless [`Argue::FLAG_HELP`] is set.
+const FLAG_HAS_HELP: u8 =         0b0100_0000;
 
 /// # Flag: Has Version.
 ///
 /// This flag is set if either `-V` or `--version` switches are present. It has
-/// no effect unless [`Argue::with_version`] is called.
-const FLAG_HAS_VERSION: u8 =  0b1_0000;
+/// no effect unless [`Argue::FLAG_VERSION`] is set.
+const FLAG_HAS_VERSION: u8 =      0b1000_0000;
 
 
 
@@ -276,9 +294,32 @@ impl Argue {
 	pub fn with_flags(mut self, flags: u8) -> Result<Self, ArgueError> {
 		self.flags |= flags;
 
-		// Required?
-		if 0 != flags & FLAG_REQUIRED && self.args.is_empty() {
-			return Err(ArgueError::Empty);
+		// There are no arguments.
+		if self.args.is_empty() {
+			// Required?
+			if 0 != flags & FLAG_REQUIRED {
+				return Err(ArgueError::Empty);
+			}
+		}
+		// There are arguments.
+		else {
+			// Stop for Version?
+			if 0 != flags & FLAG_VERSION && 0 != flags & FLAG_HAS_VERSION {
+				return Err(ArgueError::WantsVersion);
+			}
+
+			// Stop for Help?
+			if 0 != flags & FLAG_HAS_HELP || self.args[0].as_ref().eq(b"help") {
+				if 0 != flags & FLAG_HELP {
+					return Err(ArgueError::WantsHelp);
+				}
+				else if 0 != flags & FLAG_DYNAMIC_HELP {
+					return Err(ArgueError::WantsDynamicHelp(
+						Some(self.args.remove(0).into_owned())
+							.filter(|x| ! x.is_empty() && x != b"help" && x[0] != b'-')
+					));
+				}
+			}
 		}
 
 		// Handle separator.
@@ -287,81 +328,6 @@ impl Argue {
 		}
 
 		Ok(self)
-	}
-
-	#[must_use]
-	/// # Help Helper.
-	///
-	/// Chain this method to `new()` to print a help screen if the first CLI
-	/// entry is "help" (a subcommand of sorts) or either "-h" or "--help"
-	/// switches are present.
-	///
-	/// To reduce overhead, this method accepts a callback which must return
-	/// a string for printing.
-	///
-	/// In non-help contexts, `self` is just transparently returned.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_menu::Argue;
-	///
-	/// let args = Argue::new(0).with_help(|| "Help-o world!");
-	/// ```
-	pub fn with_help<S, F>(self, cb: F) -> Self
-	where S: AsRef<str>, F: Fn() -> S {
-		// There has to be a first entry...
-		if
-			! self.args.is_empty() &&
-			(
-				self.args[0].as_ref().eq(b"help") ||
-				0 != self.flags & FLAG_HAS_HELP
-			)
-		{
-			fyi_msg::plain!(cb());
-			exit(0);
-		}
-
-		self
-	}
-
-	#[must_use]
-	/// # Help Helper (with subcommand support).
-	///
-	/// This method works just like [`Argue::with_help`] except that it will
-	/// pass the subcommand — if any, and if not "help" — to the callback,
-	/// allowing you to potentially supply different help for different
-	/// contexts.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_menu::Argue;
-	///
-	/// let args = Argue::new(0).with_subcommand_help(|_: Option<&[u8]>| {
-	///     "Help-o world!"
-	/// });
-	/// ```
-	pub fn with_subcommand_help<S, F>(self, cb: F) -> Self
-	where S: AsRef<str>, F: Fn(Option<&[u8]>) -> S {
-		// There has to be a first entry...
-		if ! self.args.is_empty() {
-			// If that entry is "help", we're done!
-			if self.args[0].as_ref().eq(b"help") {
-				fyi_msg::plain!(cb(None));
-				exit(0);
-			}
-			// Otherwise we need to check for the flags.
-			else if 0 != self.flags & FLAG_HAS_HELP {
-				fyi_msg::plain!(
-					if self.keys[0] == 0 && self.keys[KEY_LEN] != 0 { cb(None) }
-					else { cb(Some(self.args[0].as_ref())) }
-				);
-				exit(0);
-			}
-		}
-
-		self
 	}
 
 	#[must_use]
@@ -408,36 +374,6 @@ impl Argue {
 						self.args.push(Cow::Owned(bytes.to_vec()))
 					}
 				});
-		}
-
-		self
-	}
-
-	#[must_use]
-	/// # Print Name/Version.
-	///
-	/// Similar to `with_help()`, this method can be chained to `new()` to
-	/// print the program name and version, then exit with a status code of
-	/// `0`, if either "-V" or "--version" flags are present.
-	///
-	/// If no version flags are found, `self` is transparently passed through.
-	///
-	/// TODO: if there ever ends up being an env!() macro for the bin, use that
-	/// to bypass the need to collect arguments from the caller.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_menu::Argue;
-	///
-	/// let args = Argue::new(0)
-	///     .with_version("My App", env!("CARGO_PKG_VERSION"));
-	/// ```
-	pub fn with_version<S>(self, name: S, version: S) -> Self
-	where S: AsRef<str> {
-		if 0 != self.flags & FLAG_HAS_VERSION {
-			fyi_msg::plain!(format!("{} v{}", name.as_ref(), version.as_ref()));
-			exit(0);
 		}
 
 		self

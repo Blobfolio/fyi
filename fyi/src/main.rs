@@ -131,8 +131,10 @@ print a certain number of blank lines for you. Run
 use fyi_menu::{
 	Argue,
 	ArgueError,
+	FLAG_DYNAMIC_HELP,
 	FLAG_REQUIRED,
 	FLAG_SUBCOMMAND,
+	FLAG_VERSION,
 };
 use fyi_msg::{
 	Msg,
@@ -149,20 +151,36 @@ use fyi_msg::{
 fn main() {
 	// Handle errors.
 	if let Err(e) = _main() {
-		if ! matches!(e, ArgueError::Passthru(_)) {
-			Msg::error(e).eprint();
+		match e {
+			ArgueError::Passthru(_) => {},
+			ArgueError::WantsDynamicHelp(x) => {
+				helper(x);
+				return;
+			},
+			ArgueError::WantsVersion => {
+				fyi_msg::plain!(concat!("FYI v", env!("CARGO_PKG_VERSION")));
+				return;
+			},
+			_ => {
+				fyi_msg::error!(&e);
+			},
 		}
 
 		std::process::exit(e.exit_code());
 	}
 }
 
+#[doc(hidden)]
+#[inline]
 /// Actual Main.
+///
+/// This lets us more easily bubble errors, which are printed and handled
+/// specially.
 fn _main() -> Result<(), ArgueError> {
 	// Parse CLI arguments.
-	let args = Argue::new(FLAG_REQUIRED | FLAG_SUBCOMMAND)?
-		.with_version("FYI", env!("CARGO_PKG_VERSION"))
-		.with_subcommand_help(helper);
+	let args = Argue::new(
+		FLAG_DYNAMIC_HELP | FLAG_REQUIRED | FLAG_SUBCOMMAND | FLAG_VERSION
+	)?;
 
 	match MsgKind::from(unsafe { args.peek_unchecked() }) {
 		MsgKind::Blank => {
@@ -257,8 +275,8 @@ fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgueError> {
 ///
 /// Print the appropriate help screen given the call details. Most of the sub-
 /// commands work the same way, but a few have their own distinct messages.
-fn helper(cmd: Option<&[u8]>) -> String {
-	format!(
+fn helper(cmd: Option<Vec<u8>>) {
+	fyi_msg::plain!(format!(
 		r#"
                       ;\
                      |' \
@@ -287,20 +305,35 @@ fn helper(cmd: Option<&[u8]>) -> String {
 		"\x1b[38;5;199mFYI\x1b[0;38;5;69m v",
 		env!("CARGO_PKG_VERSION"),
 		"\x1b[0m",
-		match cmd {
-			Some(b"blank") => include_str!("../help/blank.txt").to_string(),
-			Some(b"print") => include_str!("../help/print.txt").to_string(),
-			Some(b"confirm") | Some(b"prompt") => include_str!("../help/confirm.txt").to_string(),
-			Some(x) if MsgKind::from(x) != MsgKind::None => {
-				let txt = String::from_utf8_lossy(x).into_owned();
-				format!(
-					include_str!("../help/generic.txt"),
-					txt,
-					Msg::new(MsgKind::from(x), "Hello World").as_str(),
-					txt.to_lowercase(),
-				)
+		sub_helper(cmd),
+	));
+}
+
+#[doc(hidden)]
+#[cold]
+/// # Sub Help.
+///
+/// This text varies by subcommand.
+fn sub_helper(cmd: Option<Vec<u8>>) -> String {
+	if let Some(cmd) = cmd {
+		match cmd.as_slice() {
+			b"blank" => return include_str!("../help/blank.txt").to_string(),
+			b"print" => return include_str!("../help/print.txt").to_string(),
+			b"confirm" | b"prompt" => return include_str!("../help/confirm.txt").to_string(),
+			x => {
+				let kind = MsgKind::from(x);
+				if kind != MsgKind::None {
+					let txt = String::from_utf8_lossy(x).into_owned();
+					return format!(
+						include_str!("../help/generic.txt"),
+						txt,
+						Msg::new(kind, "Hello World").as_str(),
+						txt.to_lowercase(),
+					);
+				}
 			},
-			_ => include_str!("../help/help.txt").to_string(),
 		}
-	)
+	}
+
+	include_str!("../help/help.txt").to_string()
 }

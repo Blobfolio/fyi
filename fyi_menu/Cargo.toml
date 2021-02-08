@@ -8,9 +8,6 @@ license = "WTFPL"
 repository = "https://github.com/Blobfolio/fyi"
 publish = false
 
-[dependencies.fyi_msg]
-path = "../fyi_msg"
-
 [dev-dependencies.fyi_bench]
 path = "../fyi_bench"
 

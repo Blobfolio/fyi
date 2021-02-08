@@ -54,9 +54,12 @@ pub mod utility;
 
 pub use argue::{
 	Argue,
+	FLAG_DYNAMIC_HELP,
+	FLAG_HELP,
 	FLAG_REQUIRED,
 	FLAG_SEPARATOR,
 	FLAG_SUBCOMMAND,
+	FLAG_VERSION,
 };
 pub use error::ArgueError;
 pub use keykind::KeyKind;
