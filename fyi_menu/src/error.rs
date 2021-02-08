@@ -16,8 +16,10 @@ pub enum ArgueError {
 	Empty,
 	/// No trailing args.
 	NoArg,
-	/// Other.
+	/// Expected subcommand.
 	NoSubCmd,
+	/// Other.
+	Other(&'static str),
 	/// Miscellaneous Silent Failure.
 	///
 	/// This has no corresponding error text, but does have its own exit code.
@@ -38,6 +40,7 @@ impl AsRef<str> for ArgueError {
 			Self::Empty => "Missing options, flags, arguments, and/or ketchup.",
 			Self::NoArg => "Missing required trailing argument.",
 			Self::NoSubCmd => "Missing/invalid subcommand.",
+			Self::Other(s) => s,
 			Self::Passthru(_)
 				| Self::WantsDynamicHelp(_)
 				| Self::WantsHelp
