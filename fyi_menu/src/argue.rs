@@ -937,8 +937,10 @@ mod tests {
 		];
 
 		let mut args = base.iter()
-			.fold(Argue::default(), |a, &b| a.push(b))
-			.with_flags(FLAG_SEPARATOR);
+			.try_fold(Argue::default(), |a, &b| a.push(b))
+			.expect("Failed to build Argue.")
+			.with_flags(FLAG_SEPARATOR)
+			.expect("Failed to build Argue.");
 
 		// Check the overall structure.
 		assert_eq!(
@@ -972,7 +974,8 @@ mod tests {
 		// Let's test a first-position key, and also not doing separator bits.
 		base.insert(0, b"--prefix");
 		args = base.iter()
-			.fold(Argue::default(), |a, &b| a.push(b));
+			.try_fold(Argue::default(), |a, &b| a.push(b))
+			.expect("Failed to build Argue.");
 
 		// The whole thing again.
 		assert_eq!(
