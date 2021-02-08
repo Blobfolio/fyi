@@ -130,6 +130,7 @@ print a certain number of blank lines for you. Run
 
 use fyi_menu::{
 	Argue,
+	ArgueError,
 	FLAG_REQUIRED,
 	FLAG_SUBCOMMAND,
 };
@@ -146,17 +147,29 @@ use fyi_msg::{
 #[doc(hidden)]
 /// Main.
 fn main() {
+	// Handle errors.
+	if let Err(e) = _main() {
+		if ! matches!(e, ArgueError::Passthru(_)) {
+			Msg::error(e).eprint();
+		}
+
+		std::process::exit(e.exit_code());
+	}
+}
+
+/// Actual Main.
+fn _main() -> Result<(), ArgueError> {
 	// Parse CLI arguments.
-	let args = Argue::new(FLAG_REQUIRED | FLAG_SUBCOMMAND)
+	let args = Argue::new(FLAG_REQUIRED | FLAG_SUBCOMMAND)?
 		.with_version("FYI", env!("CARGO_PKG_VERSION"))
 		.with_subcommand_help(helper);
 
 	match MsgKind::from(unsafe { args.peek_unchecked() }) {
-		MsgKind::Blank => blank(&args),
-		MsgKind::None => {
-			Msg::error("Invalid message type.").die(1);
-			unreachable!();
+		MsgKind::Blank => {
+			blank(&args);
+			Ok(())
 		},
+		MsgKind::None => Err(ArgueError::NoSubCmd),
 		kind => msg(kind, &args),
 	}
 }
@@ -182,7 +195,7 @@ fn blank(args: &Argue) {
 
 #[doc(hidden)]
 /// Basic Message.
-fn msg(kind: MsgKind, args: &Argue) {
+fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgueError> {
 	// Exit code.
 	let exit: i32 = args.option2(b"-e", b"--exit")
 		.and_then(|x| String::from_utf8_lossy(x).parse::<i32>().ok())
@@ -197,43 +210,45 @@ fn msg(kind: MsgKind, args: &Argue) {
 	let msg =
 		// Custom message prefix.
 		if MsgKind::Custom == kind {
-			args.option2(b"-p", b"--prefix")
-				.map_or_else(
-					|| Msg::plain(String::from_utf8_lossy(args.first_arg())),
-					|prefix| {
-						let color: u8 = args.option2(b"-c", b"--prefix-color")
-							.and_then(|x| String::from_utf8_lossy(x).parse::<u8>().ok())
-							.unwrap_or(199);
-						Msg::custom(
-							String::from_utf8_lossy(prefix),
-							color,
-							String::from_utf8_lossy(args.first_arg())
-						)
-					}
+			if let Some(prefix) = args.option2(b"-p", b"--prefix").map(String::from_utf8_lossy) {
+				let color: u8 = args.option2(b"-c", b"--prefix-color")
+					.and_then(|x| String::from_utf8_lossy(x).parse::<u8>().ok())
+					.unwrap_or(199);
+
+				Msg::custom(
+					prefix,
+					color,
+					String::from_utf8_lossy(args.first_arg()?)
 				)
+			}
+			else {
+				Msg::plain(String::from_utf8_lossy(args.first_arg()?))
+			}
 		}
 		// Built-in prefix.
 		else {
-			Msg::new(kind, String::from_utf8_lossy(args.first_arg()))
+			Msg::new(kind, String::from_utf8_lossy(args.first_arg()?))
 		}
 		.with_flags(flags);
 
 	// It's a prompt!
 	if MsgKind::Confirm == kind {
-		if ! msg.prompt() {
-			std::process::exit(1);
+		if msg.prompt() {
+			return Ok(());
 		}
-		return;
+		else {
+			return Err(ArgueError::Passthru(1));
+		}
 	}
+
 	// Print to `Stderr`.
-	else if args.switch(b"--stderr") { msg.eprint(); }
+	if args.switch(b"--stderr") { msg.eprint(); }
 	// Print to `Stdout`.
 	else { msg.print(); }
 
 	// Special exit?
-	if 0 != exit {
-		std::process::exit(exit);
-	}
+	if 0 == exit { Ok(()) }
+	else { Err(ArgueError::Passthru(exit)) }
 }
 
 #[doc(hidden)]

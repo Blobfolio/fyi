@@ -3,10 +3,10 @@
 */
 
 use crate::{
+	ArgueError,
 	KeyKind,
 	utility,
 };
-use fyi_msg::Msg;
 use std::{
 	borrow::Cow,
 	cell::Cell,
@@ -195,7 +195,6 @@ impl Deref for Argue {
 /// ## Instantiation and Builder Patterns.
 impl Argue {
 	#[cfg(all(target_os = "linux", not(target_env = "musl")))]
-	#[must_use]
 	#[inline]
 	/// # New Instance.
 	///
@@ -214,23 +213,22 @@ impl Argue {
 	///
 	/// let args = Argue::new(0);
 	/// ```
-	pub fn new(flags: u8) -> Self {
+	pub fn new(flags: u8) -> Result<Self, ArgueError> {
 		let iter = argv::Args::default();
 		let len = iter.len();
 		iter
 			.skip_while(|b| b.is_empty() || b.iter().all(u8::is_ascii_whitespace))
-			.fold(
+			.try_fold(
 				Self {
 					args: Vec::with_capacity(len),
 					..Self::default()
 				},
 				Self::push
-			)
+			)?
 			.with_flags(flags)
 	}
 
 	#[cfg(any(not(target_os = "linux"), target_env = "musl"))]
-	#[must_use]
 	#[inline]
 	/// # New Instance.
 	///
@@ -247,7 +245,7 @@ impl Argue {
 	///
 	/// let args = Argue::new(0);
 	/// ```
-	pub fn new(flags: u8) -> Self {
+	pub fn new(flags: u8) -> Result<Self, ArgueError> {
 		use std::os::unix::ffi::OsStrExt;
 
 		std::env::args_os()
@@ -257,14 +255,10 @@ impl Argue {
 				x.is_empty() ||
 				x.iter().all(u8::is_ascii_whitespace)
 			)
-			.fold(
-				Self::default(),
-				Self::push_vec
-			)
+			.try_fold(Self::default(), Self::push)?
 			.with_flags(flags)
 	}
 
-	#[must_use]
 	/// # With Flags.
 	///
 	/// This method can be used to set additional parsing options in cases
@@ -279,13 +273,12 @@ impl Argue {
 	///
 	/// let args = Argue::new(0).with_flags(FLAG_REQUIRED);
 	/// ```
-	pub fn with_flags(mut self, flags: u8) -> Self {
+	pub fn with_flags(mut self, flags: u8) -> Result<Self, ArgueError> {
 		self.flags |= flags;
 
 		// Required?
 		if 0 != flags & FLAG_REQUIRED && self.args.is_empty() {
-			Msg::error("Missing options, flags, arguments, and/or ketchup.").die(1);
-			unreachable!();
+			return Err(ArgueError::Empty);
 		}
 
 		// Handle separator.
@@ -293,7 +286,7 @@ impl Argue {
 			self.parse_separator();
 		}
 
-		self
+		Ok(self)
 	}
 
 	#[must_use]
@@ -462,9 +455,6 @@ impl Argue {
 	///
 	/// Use this method to consume the struct and return the parsed arguments
 	/// as a `Vec<String>`.
-	///
-	/// Unless `take_arg()` was called previously, the vector should represent
-	/// all of the original arguments (albeit reformatted).
 	///
 	/// If you merely want something to iterate over, you can alternatively
 	/// dereference the struct to a string slice.
@@ -677,15 +667,11 @@ impl Argue {
 		else { None }
 	}
 
-	#[must_use]
 	/// # First Trailing Argument.
 	///
 	/// Return the first trailing argument, or print an error and exit the
 	/// thread if there isn't one.
 	///
-	/// This is just like [`Argue::take_arg`], but does not remove the entry
-	/// from the set.
-	///
 	/// As with other arg-related methods, it is important to query all options
 	/// first, as that helps the struct determine the boundary between named
 	/// and unnamed values.
@@ -696,48 +682,16 @@ impl Argue {
 	/// use fyi_menu::Argue;
 	///
 	/// let mut args = Argue::new(0);
-	/// let opt: String = args.take_arg();
+	/// let opt: &[u8] = args.first_arg();
 	/// ```
-	pub fn first_arg(&self) -> &[u8] {
+	pub fn first_arg(&self) -> Result<&[u8], ArgueError> {
 		let idx = self.arg_idx();
 		if idx >= self.args.len() {
-			Msg::error("Missing required argument.").die(1);
-			unreachable!();
+			Err(ArgueError::NoArg)
 		}
-
-		self.args[idx].as_ref()
-	}
-
-	#[must_use]
-	/// # Take Next Trailing Argument.
-	///
-	/// Return an owned copy of the first available argument — removing it from
-	/// the collection — or print an error message and exit.
-	///
-	/// This method is intended for use in cases where exactly one argument is
-	/// expected and required. All other cases should probably just call
-	/// `args()` and work from that slice.
-	///
-	/// As with other arg-related methods, it is important to query all options
-	/// first, as that helps the struct determine the boundary between named
-	/// and unnamed values.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_menu::Argue;
-	///
-	/// let mut args = Argue::new(0);
-	/// let opt: String = args.take_arg();
-	/// ```
-	pub fn take_arg(&mut self) -> Cow<'static, [u8]> {
-		let idx = self.arg_idx();
-		if idx >= self.args.len() {
-			Msg::error("Missing required argument.").die(1);
-			unreachable!();
+		else {
+			Ok(self.args[idx].as_ref())
 		}
-
-		self.args.remove(idx)
 	}
 }
 
@@ -759,19 +713,20 @@ impl Argue {
 	/// This will record the key index, unless the maximum number of keys
 	/// has been reached, in which case it will print an error and exit with a
 	/// status code of `1` instead.
-	fn insert_key(&mut self, idx: usize) {
+	fn insert_key(&mut self, idx: usize) -> Result<(), ArgueError> {
 		if self.keys[KEY_LEN] == KEY_LEN {
-			Msg::error("Too many options.").die(1);
-			unreachable!();
+			return Err(ArgueError::TooManyKeys);
 		}
 
 		self.keys[self.keys[KEY_LEN]] = idx;
 		self.keys[KEY_LEN] += 1;
+
+		Ok(())
 	}
 
 	#[cfg(all(target_os = "linux", not(target_env = "musl")))]
 	/// # Parse Keys (Bytes).
-	fn push(mut self, bytes: &'static [u8]) -> Self {
+	fn push(mut self, bytes: &'static [u8]) -> Result<Self, ArgueError> {
 		// Find out what we've got!
 		match KeyKind::from(bytes) {
 			// Passthrough.
@@ -785,7 +740,7 @@ impl Argue {
 
 				let idx = self.args.len();
 				self.args.push(Cow::Borrowed(bytes));
-				self.insert_key(idx);
+				self.insert_key(idx)?;
 				self.last.set(idx);
 			},
 			// Record the key and passthrough.
@@ -795,7 +750,7 @@ impl Argue {
 
 				let idx = self.args.len();
 				self.args.push(Cow::Borrowed(bytes));
-				self.insert_key(idx);
+				self.insert_key(idx)?;
 				self.last.set(idx);
 			},
 			// Split a short key/value pair.
@@ -805,7 +760,7 @@ impl Argue {
 				self.args.push(Cow::Borrowed(&bytes[0..2]));
 				self.args.push(Cow::Borrowed(&bytes[2..]));
 
-				self.insert_key(idx);
+				self.insert_key(idx)?;
 				self.last.set(idx + 1);
 			},
 			// Split a long key/value pair.
@@ -821,17 +776,17 @@ impl Argue {
 					self.args.push(Cow::Owned(Vec::new()));
 				}
 
-				self.insert_key(idx);
+				self.insert_key(idx)?;
 				self.last.set(idx + 1);
 			},
 		}
 
-		self
+		Ok(self)
 	}
 
 	#[cfg(any(not(target_os = "linux"), target_env = "musl"))]
 	/// # Parse Keys (Owned Bytes).
-	fn push_vec(mut self, mut bytes: Vec<u8>) -> Self {
+	fn push(mut self, mut bytes: Vec<u8>) -> Result<Self, ArgueError> {
 		// Find out what we've got!
 		match KeyKind::from(&bytes[..]) {
 			// Passthrough.
@@ -845,7 +800,7 @@ impl Argue {
 
 				let idx = self.args.len();
 				self.args.push(Cow::Owned(bytes));
-				self.insert_key(idx);
+				self.insert_key(idx)?;
 				self.last.set(idx);
 			},
 			// Record the key and passthrough.
@@ -855,7 +810,7 @@ impl Argue {
 
 				let idx = self.args.len();
 				self.args.push(Cow::Owned(bytes));
-				self.insert_key(idx);
+				self.insert_key(idx)?;
 				self.last.set(idx);
 			},
 			// Split a short key/value pair.
@@ -866,7 +821,7 @@ impl Argue {
 				self.args.push(Cow::Owned(bytes));
 				self.args.push(Cow::Owned(v2));
 
-				self.insert_key(idx);
+				self.insert_key(idx)?;
 				self.last.set(idx + 1);
 			},
 			// Split a long key/value pair.
@@ -886,12 +841,12 @@ impl Argue {
 					self.args.push(Cow::Owned(Vec::new()));
 				}
 
-				self.insert_key(idx);
+				self.insert_key(idx)?;
 				self.last.set(idx + 1);
 			},
 		}
 
-		self
+		Ok(self)
 	}
 
 	/// # Parse Separator.

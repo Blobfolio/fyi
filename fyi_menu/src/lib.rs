@@ -48,6 +48,7 @@ version.
 
 
 mod argue;
+mod error;
 mod keykind;
 pub mod utility;
 
@@ -57,5 +58,5 @@ pub use argue::{
 	FLAG_SEPARATOR,
 	FLAG_SUBCOMMAND,
 };
-
+pub use error::ArgueError;
 pub use keykind::KeyKind;
