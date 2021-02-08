@@ -297,23 +297,23 @@ impl Argue {
 		// There are no arguments.
 		if self.args.is_empty() {
 			// Required?
-			if 0 != flags & FLAG_REQUIRED {
+			if 0 != self.flags & FLAG_REQUIRED {
 				return Err(ArgueError::Empty);
 			}
 		}
 		// There are arguments.
 		else {
 			// Stop for Version?
-			if 0 != flags & FLAG_VERSION && 0 != flags & FLAG_HAS_VERSION {
+			if 0 != self.flags & FLAG_VERSION && 0 != self.flags & FLAG_HAS_VERSION {
 				return Err(ArgueError::WantsVersion);
 			}
 
 			// Stop for Help?
-			if 0 != flags & FLAG_HAS_HELP || self.args[0].as_ref().eq(b"help") {
-				if 0 != flags & FLAG_HELP {
+			if 0 != self.flags & FLAG_HAS_HELP || self.args[0].as_ref().eq(b"help") {
+				if 0 != self.flags & FLAG_HELP {
 					return Err(ArgueError::WantsHelp);
 				}
-				else if 0 != flags & FLAG_DYNAMIC_HELP {
+				else if 0 != self.flags & FLAG_DYNAMIC_HELP {
 					return Err(ArgueError::WantsDynamicHelp(
 						Some(self.args.remove(0).into_owned())
 							.filter(|x| ! x.is_empty() && x != b"help" && x[0] != b'-')
@@ -323,7 +323,7 @@ impl Argue {
 		}
 
 		// Handle separator.
-		if 0 != flags & FLAG_SEPARATOR {
+		if 0 != self.flags & FLAG_SEPARATOR {
 			self.parse_separator();
 		}
 
