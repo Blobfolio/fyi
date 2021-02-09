@@ -18,8 +18,7 @@ macro_rules! elapsed_from {
 				if 0 == num { Self::min() }
 				// Hours, and maybe minutes and/or seconds.
 				else if num < 86400 {
-					let [h, m, s] = Self::hms(num as u32);
-					unsafe { Self::from_hms(h, m, s) }
+					Self::from(Self::hms(num as u32))
 				}
 				// We're into days, which we don't do.
 				else { Self::max() }
@@ -89,11 +88,37 @@ impl From<u32> for NiceElapsed {
 		if 0 == num { Self::min() }
 		// Hours, and maybe minutes and/or seconds.
 		else if num < 86400 {
-			let [h, m, s] = Self::hms(num);
-			unsafe { Self::from_hms(h, m, s) }
+			Self::from(Self::hms(num))
 		}
 		// We're into days, which we don't do.
 		else { Self::max() }
+	}
+}
+
+impl From<[u8; 3]> for NiceElapsed {
+	fn from(num: [u8; 3]) -> Self {
+		let mut buf = [0_u8; 36];
+
+		let count: u8 = num.iter().filter(|&x| x.ne(&0)).count() as u8;
+
+		let (end, _) = num.iter()
+			.zip(&[ElapsedKind::Hour, ElapsedKind::Minute, ElapsedKind::Second])
+			.filter(|(&val, _)| val.ne(&0))
+			.fold(
+				(buf.as_mut_ptr(), false),
+				|(mut dst, counted), (&val, kind)| {
+					dst = unsafe { write_u8_advance(dst, val) };
+					dst = kind.write_label(dst, val == 1);
+
+					(kind.write_joiner(count, counted, dst), true)
+				}
+			);
+
+		// Put it all together!
+		Self {
+			inner: buf,
+			len: unsafe { end.offset_from(buf.as_ptr()) as usize },
+		}
 	}
 }
 
@@ -127,78 +152,6 @@ impl NiceElapsed {
 			//       >   1   •    d   a    y
 			inner: [62, 49, 32, 100, 97, 121, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 			len: 6,
-		}
-	}
-
-	/// # From Hours, Minutes, Seconds.
-	///
-	/// Fill the buffer with the appropriate output given all the different bits.
-	///
-	/// ## Safety
-	///
-	/// All numbers must be — but should be — less than 60 or undefined things
-	/// may happen.
-	unsafe fn from_hms(h: u8, m: u8, s: u8) -> Self {
-		let mut buf = [0_u8; 36];
-		let count: u8 = h.ne(&0) as u8 + m.ne(&0) as u8 + s.ne(&0) as u8;
-
-		let len: usize = {
-			let mut dst = buf.as_mut_ptr();
-
-			// Hours.
-			if h > 0 {
-				dst = write_u8_advance(dst, h);
-				if h == 1 {
-					dst = write_advance(dst, b" hour".as_ptr(), 5);
-				}
-				else {
-					dst = write_advance(dst, b" hours".as_ptr(), 6);
-				}
-
-				if 3 == count {
-					dst = write_advance(dst, b", ".as_ptr(), 2);
-				}
-				else if 2 == count {
-					dst = write_advance(dst, b" and ".as_ptr(), 5);
-				}
-			}
-
-			// Minutes.
-			if m > 0 {
-				dst = write_u8_advance(dst, m);
-				if m == 1 {
-					dst = write_advance(dst, b" minute".as_ptr(), 7);
-				}
-				else {
-					dst = write_advance(dst, b" minutes".as_ptr(), 8);
-				}
-
-				if 3 == count {
-					dst = write_advance(dst, b", and ".as_ptr(), 6);
-				}
-				else if 2 == count && h == 0 {
-					dst = write_advance(dst, b" and ".as_ptr(), 5);
-				}
-			}
-
-			// Seconds.
-			if s > 0 {
-				dst = write_u8_advance(dst, s);
-				if s == 1 {
-					dst = write_advance(dst, b" second".as_ptr(), 7);
-				}
-				else {
-					dst = write_advance(dst, b" seconds".as_ptr(), 8);
-				}
-			}
-
-			dst.offset_from(buf.as_ptr()) as usize
-		};
-
-		// Put it all together!
-		Self {
-			inner: buf,
-			len
 		}
 	}
 
@@ -246,19 +199,62 @@ impl NiceElapsed {
 
 
 
-#[must_use]
-/// # Write and Advance.
-///
-/// Write data to a pointer, then return a new pointer advanced that many
-/// places.
-///
-/// ## Safety
-///
-/// The pointer must have enough room to hold the new data!
-unsafe fn write_advance(dst: *mut u8, src: *const u8, len: usize) -> *mut u8 {
-	std::ptr::copy_nonoverlapping(src, dst, len);
-	dst.add(len)
+#[derive(Debug, Copy, Clone)]
+/// # Unit Helpers.
+enum ElapsedKind {
+	Hour,
+	Minute,
+	Second,
 }
+
+impl ElapsedKind {
+	/// # Label.
+	const fn label(self) -> (usize, *const u8) {
+		match self {
+			Self::Hour => (6, b" hours".as_ptr()),
+			Self::Minute => (8, b" minutes".as_ptr()),
+			Self::Second => (8, b" seconds".as_ptr()),
+		}
+	}
+
+	/// # Write Label.
+	fn write_label(self, dst: *mut u8, singular: bool) -> *mut u8 {
+		let (mut len, label) = self.label();
+		if singular { len -= 1; }
+
+		unsafe {
+			std::ptr::copy_nonoverlapping(label, dst, len);
+			dst.add(len)
+		}
+	}
+
+	/// # Write Joiner.
+	fn write_joiner(self, count: u8, counted: bool, dst: *mut u8) -> *mut u8 {
+		match (self, count, counted) {
+			(Self::Hour, 3, _) => {
+				unsafe {
+					std::ptr::copy_nonoverlapping(b", ".as_ptr(), dst, 2);
+					dst.add(2)
+				}
+			},
+			(Self::Hour, 2, _) | (Self::Minute, 2, false) => {
+				unsafe {
+					std::ptr::copy_nonoverlapping(b" and ".as_ptr(), dst, 5);
+					dst.add(5)
+				}
+			},
+			(Self::Minute, 3, _) => {
+				unsafe {
+					std::ptr::copy_nonoverlapping(b", and ".as_ptr(), dst, 6);
+					dst.add(6)
+				}
+			},
+			_ => { dst },
+		}
+	}
+}
+
+
 
 /// # Write u8.
 ///
@@ -269,21 +265,14 @@ unsafe fn write_advance(dst: *mut u8, src: *const u8, len: usize) -> *mut u8 {
 ///
 /// The pointer must have enough space for the value, i.e. 1-3 digits.
 unsafe fn write_u8_advance(buf: *mut u8, num: u8) -> *mut u8 {
-	use std::ptr;
+	assert!(num < 100);
 
-	if num > 99 {
-		let (div, rem) = num_integer::div_mod_floor(usize::from(num), 100);
-		let ptr = crate::DOUBLE.as_ptr();
-		ptr::copy_nonoverlapping(ptr.add((div << 1) + 1), buf, 1);
-		ptr::copy_nonoverlapping(ptr.add(rem << 1), buf.add(1), 2);
-		buf.add(3)
-	}
-	else if num > 9 {
-		ptr::copy_nonoverlapping(crate::DOUBLE.as_ptr().add(usize::from(num) << 1), buf, 2);
+	if num > 9 {
+		std::ptr::copy_nonoverlapping(crate::DOUBLE.as_ptr().add(usize::from(num) << 1), buf, 2);
 		buf.add(2)
 	}
 	else {
-		ptr::copy_nonoverlapping(crate::DOUBLE.as_ptr().add((usize::from(num) << 1) + 1), buf, 1);
+		std::ptr::copy_nonoverlapping(crate::DOUBLE.as_ptr().add((usize::from(num) << 1) + 1), buf, 1);
 		buf.add(1)
 	}
 }
