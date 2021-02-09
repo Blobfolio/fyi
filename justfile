@@ -209,6 +209,7 @@ bench BENCH="":
 	cargo run \
 		-q \
 		--all-features \
+		--release \
 		--example "{{ DEMO }}" \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
