@@ -35,10 +35,10 @@ use std::{
 		Mutex,
 		atomic::{
 			AtomicBool,
+			AtomicU16,
 			AtomicU32,
 			AtomicU64,
 			AtomicU8,
-			AtomicUsize,
 			Ordering::SeqCst,
 		},
 	},
@@ -107,8 +107,8 @@ const PART_DOING: usize = 8;
 
 
 /// Misc Variables.
-const MIN_BARS_WIDTH: usize = 10;
-const MIN_DRAW_WIDTH: usize = 40;
+const MIN_BARS_WIDTH: u32 = 10;
+const MIN_DRAW_WIDTH: u32 = 40;
 
 
 
@@ -122,9 +122,9 @@ struct WitchingInner {
 	flags: AtomicU8,
 
 	last_hash: AtomicU64,
-	last_lines: AtomicUsize,
+	last_lines: AtomicU16,
 	last_time: Mutex<Instant>,
-	last_width: AtomicUsize,
+	last_width: AtomicU32,
 
 	started: Mutex<Instant>,
 	title: Mutex<Msg>,
@@ -207,9 +207,9 @@ impl Default for WitchingInner {
 			flags: AtomicU8::new(TICK_DEFAULT),
 
 			last_hash: AtomicU64::default(),
-			last_lines: AtomicUsize::default(),
+			last_lines: AtomicU16::default(),
 			last_time: Mutex::new(Instant::now()),
-			last_width: AtomicUsize::default(),
+			last_width: AtomicU32::default(),
 
 			started: Mutex::new(Instant::now()),
 			title: Mutex::new(Msg::default()),
@@ -238,7 +238,7 @@ impl WitchingInner {
 	/// # Doing.
 	///
 	/// Return the number of active tasks.
-	fn last_width(&self) -> usize { self.last_width.load(SeqCst) }
+	fn last_width(&self) -> u32 { self.last_width.load(SeqCst) }
 
 	/// # Percent.
 	///
@@ -348,7 +348,7 @@ impl WitchingInner {
 		self.print_cls();
 
 		// Update the line count and print!
-		self.last_lines.store(bytecount::count(&*buf, b'\n'), SeqCst);
+		self.last_lines.store(bytecount::count(&*buf, b'\n') as u16, SeqCst);
 		Self::print(&*buf);
 	}
 
@@ -386,7 +386,7 @@ impl WitchingInner {
 			match last_lines.cmp(&10) {
 				Ordering::Equal => { Self::print(&CLS10[..]); },
 				Ordering::Less => {
-					Self::print(&CLS10[0..10 + 14 * last_lines]);
+					Self::print(&CLS10[0..10 + 14 * usize::from(last_lines)]);
 				},
 				// To clear more lines, print our pre-calculated buffer (which
 				// covers the first 10), and duplicate the line-up chunk (n-10)
@@ -394,7 +394,7 @@ impl WitchingInner {
 				Ordering::Greater => {
 					Self::print(&[
 						&CLS10[..],
-						&CLS10[14..28].repeat(last_lines - 10),
+						&CLS10[14..28].repeat(usize::from(last_lines) - 10),
 					].concat());
 				},
 			}
@@ -496,35 +496,35 @@ impl WitchingInner {
 		// 2: the spaces after total;
 		// 2: the braces around the bar itself (should there be one);
 		// 2: the spaces after the bar itself (should there be one);
-		let space: usize = 255_usize.min(self.last_width().saturating_sub({
+		let space: u32 = 255_u32.min(self.last_width().saturating_sub({
 			let buf = mutex_ptr!(self.buf);
 			11 +
-			buf.len(PART_ELAPSED) +
-			buf.len(PART_DONE) +
-			buf.len(PART_TOTAL) +
-			buf.len(PART_PERCENT)
+			buf.len(PART_ELAPSED) as u32 +
+			buf.len(PART_DONE) as u32 +
+			buf.len(PART_TOTAL) as u32 +
+			buf.len(PART_PERCENT) as u32
 		}));
 
-		let total = self.total() as usize;
-		let done = self.done() as usize;
+		let total = self.total();
+		let done = self.done();
 
 		// Insufficient space!
 		if space < MIN_BARS_WIDTH || 0 == total { (0, 0, 0) }
 		// Done!
-		else if done == total { (space, 0, 0) }
+		else if done == total { (space as usize, 0, 0) }
 		// Working on it!
 		else {
 			// Done and doing are both floored to prevent rounding-related
 			// overflow. Any remaining space will be counted as "pending".
-			let o_done: usize = num_integer::div_floor(
+			let o_done: u32 = num_integer::div_floor(
 				done * space,
 				total
 			);
-			let o_doing: usize = num_integer::div_floor(
-				mutex_ptr!(self.doing).len() * space,
+			let o_doing: u32 = num_integer::div_floor(
+				mutex_ptr!(self.doing).len() as u32 * space,
 				total
 			);
-			(o_done, o_doing, space - o_doing - o_done)
+			(o_done as usize, o_doing as usize, (space - o_doing - o_done) as usize)
 		}
 	}
 
@@ -569,7 +569,7 @@ impl WitchingInner {
 				mutex_ptr!(self.buf).truncate(PART_DOING, 0);
 			}
 			else {
-				let width: usize = self.last_width().saturating_sub(6);
+				let width: usize = self.last_width().saturating_sub(6) as usize;
 				let tasks: Vec<u8> = {
 					let mut v = Vec::with_capacity(256);
 					v.extend_from_slice(b"\x1b[35m");
@@ -644,7 +644,7 @@ impl WitchingInner {
 			else {
 				mutex_ptr!(self.buf).replace(
 					PART_TITLE,
-					&title.fitted(self.last_width() - 1),
+					&title.fitted(self.last_width() as usize - 1),
 				);
 			}
 		}
@@ -1012,7 +1012,7 @@ impl Witching {
 			// Quiet iteration.
 			else {
 				self.set.par_iter().for_each(cb);
-				self.stop();
+				self.inner.stop();
 			}
 
 			// Summarize?
@@ -1034,34 +1034,29 @@ impl Witching {
 		// `Mutex` crashes or something.
 		let done = Arc::new(AtomicBool::new(false));
 
-		// Run steady tick until we're out of tasks.
+		// Run steady tick until we're out of tasks. We're spawning this thread
+		// independently of Rayon so as not to monopolize its thoughtful
+		// division of labor.
 		let t_inner = self.inner.clone();
 		let t_sleep = Duration::from_millis(60);
 		let t_done = done.clone();
 		let t_handle = std::thread::spawn(move || loop {
-			if t_done.load(SeqCst) || ! progress_tick(&t_inner) { break; }
+			if t_done.load(SeqCst) || ! t_inner.tick() { break; }
 			std::thread::sleep(t_sleep);
 		});
 
 		// Do the main loop!
 		let inner = self.inner.clone();
-		self.set.par_iter().for_each(|x| {
-			progress_start(&inner, x);
+		self.set.par_iter().for_each(move |x| {
+			inner.start_task(x);
 			cb(x);
-			progress_end(&inner, x);
+			inner.end_task(x);
 		});
 
-		// The steady tick loop should close on its own, but just in case,
-		// let's give it another reason to do so.
+		// The steady tick loop should close on its own, but just in case
+		// the task data got weird, this will force its destruction.
 		done.store(true, SeqCst);
 		t_handle.join().unwrap();
-	}
-
-	/// # Stop.
-	///
-	/// Wrapper for `WitchingInner::stop()`.
-	fn stop(&self) {
-		self.inner.stop();
 	}
 
 	/// # Summary.
@@ -1129,26 +1124,7 @@ impl Witching {
 	}
 }
 
-/// # Tick.
-///
-/// Wrapper for `WitchingInner::tick()`.
-fn progress_tick(inner: &Arc<WitchingInner>) -> bool {
-	inner.tick()
-}
 
-/// # End Task.
-///
-/// Wrapper for `WitchingInner::end_task()`.
-fn progress_end(inner: &Arc<WitchingInner>, task: &PathBuf) {
-	inner.end_task(task);
-}
-
-/// # Start Task.
-///
-/// Wrapper for `WitchingInner::start_task()`.
-fn progress_start(inner: &Arc<WitchingInner>, task: &PathBuf) {
-	inner.start_task(task);
-}
 
 #[inline]
 /// # Format Task Into Message.
