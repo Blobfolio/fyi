@@ -82,6 +82,36 @@ impl fmt::Display for NiceElapsed {
 	}
 }
 
+impl From<[u8; 3]> for NiceElapsed {
+	/// # From HMS.
+	///
+	/// This is meant to be a slice of pre-parsed hours, minutes, and seconds.
+	/// It is not intended to be used directly, but if it is, values must be
+	/// under 100 or it will panic.
+	fn from(num: [u8; 3]) -> Self {
+		let mut buf = [0_u8; 36];
+		let count: u8 = num.iter().filter(|&x| x.ne(&0)).count() as u8;
+		let (end, _) = num.iter()
+			.zip(&[ElapsedKind::Hour, ElapsedKind::Minute, ElapsedKind::Second])
+			.filter(|(&val, _)| val.ne(&0))
+			.fold(
+				(buf.as_mut_ptr(), false),
+				|(mut dst, any), (&val, kind)| {
+					dst = unsafe { write_u8_advance(dst, val) };
+					dst = kind.write_label(dst, val == 1);
+
+					(kind.write_joiner(dst, count, any), true)
+				}
+			);
+
+		// Put it all together!
+		Self {
+			inner: buf,
+			len: unsafe { end.offset_from(buf.as_ptr()) as usize },
+		}
+	}
+}
+
 impl From<u32> for NiceElapsed {
 	fn from(num: u32) -> Self {
 		// Nothing!
@@ -92,33 +122,6 @@ impl From<u32> for NiceElapsed {
 		}
 		// We're into days, which we don't do.
 		else { Self::max() }
-	}
-}
-
-impl From<[u8; 3]> for NiceElapsed {
-	fn from(num: [u8; 3]) -> Self {
-		let mut buf = [0_u8; 36];
-
-		let count: u8 = num.iter().filter(|&x| x.ne(&0)).count() as u8;
-
-		let (end, _) = num.iter()
-			.zip(&[ElapsedKind::Hour, ElapsedKind::Minute, ElapsedKind::Second])
-			.filter(|(&val, _)| val.ne(&0))
-			.fold(
-				(buf.as_mut_ptr(), false),
-				|(mut dst, counted), (&val, kind)| {
-					dst = unsafe { write_u8_advance(dst, val) };
-					dst = kind.write_label(dst, val == 1);
-
-					(kind.write_joiner(count, counted, dst), true)
-				}
-			);
-
-		// Put it all together!
-		Self {
-			inner: buf,
-			len: unsafe { end.offset_from(buf.as_ptr()) as usize },
-		}
 	}
 }
 
@@ -159,20 +162,35 @@ impl NiceElapsed {
 	/// # Time Chunks.
 	///
 	/// This method splits seconds into hours, minutes, and seconds. Days are not
-	/// supported; the maximum return value is `(23, 59, 59)`.
+	/// supported; the maximum return value is `[23, 59, 59]`.
+	///
+	/// Given the limited range of digits involved, we're able to use some data
+	/// rounding trickery to achieve conversion, bypassing the need for
+	/// (relatively) expensive division and remainder calculations.
+	///
+	/// ## Example.
+	///
+	/// ```no_run
+	/// use fyi_num::NiceElapsed;
+	///
+	/// assert_eq!(NiceElapsed::hms(121), [0_u8, 2_u8, 1_u8]);
 	pub const fn hms(mut num: u32) -> [u8; 3] {
 		if num < 60 { [0, 0, num as u8] }
 		else if num < 86399 {
 			let mut buf = [0_u8; 3];
 
+			// There are hours.
 			if num >= 3600 {
 				buf[0] = ((num * 0x91A3) >> 27) as u8;
 				num -= buf[0] as u32 * 3600;
 			}
+
+			// There are minutes.
 			if num >= 60 {
 				buf[1] = ((num * 0x889) >> 17) as u8;
 				buf[2] = (num - buf[1] as u32 * 60) as u8;
 			}
+			// There are seconds.
 			else if num > 0 { buf[2] = num as u8; }
 
 			buf
@@ -201,6 +219,9 @@ impl NiceElapsed {
 
 #[derive(Debug, Copy, Clone)]
 /// # Unit Helpers.
+///
+/// This abstracts some of the verbosity of formatting, allowing us to
+/// instantiate [`NiceElapsed`] with an iterator.
 enum ElapsedKind {
 	Hour,
 	Minute,
@@ -209,6 +230,9 @@ enum ElapsedKind {
 
 impl ElapsedKind {
 	/// # Label.
+	///
+	/// This is always plural, as singularity can be derived by reducing the
+	/// length by one.
 	const fn label(self) -> (usize, *const u8) {
 		match self {
 			Self::Hour => (6, b" hours".as_ptr()),
@@ -229,8 +253,16 @@ impl ElapsedKind {
 	}
 
 	/// # Write Joiner.
-	fn write_joiner(self, count: u8, counted: bool, dst: *mut u8) -> *mut u8 {
-		match (self, count, counted) {
+	///
+	/// This will add commas and/or ands as necessary.
+	///
+	/// The `any` bool is used to indicate whether or not a value has
+	/// previously been printed. This affects the joiner of minutes, as it
+	/// varies based on whether or not hours are involved.
+	///
+	/// Seconds and single-count values never write joiners.
+	fn write_joiner(self, dst: *mut u8, count: u8, any: bool) -> *mut u8 {
+		match (self, count, any) {
 			(Self::Hour, 3, _) => {
 				unsafe {
 					std::ptr::copy_nonoverlapping(b", ".as_ptr(), dst, 2);
@@ -261,9 +293,15 @@ impl ElapsedKind {
 /// This will quickly write a `u8` number as a UTF-8 byte slice to the provided
 /// pointer.
 ///
-/// ## Safety
+/// ## Panics.
 ///
-/// The pointer must have enough space for the value, i.e. 1-3 digits.
+/// This method is not intended to write the full `u8` spectrum; it will panic
+/// if a value is greater than 99.
+///
+/// ## Safety.
+///
+/// The pointer must have enough space for the value, i.e. 1-2 digits. This
+/// isn't a problem given the method calls from this scope.
 unsafe fn write_u8_advance(buf: *mut u8, num: u8) -> *mut u8 {
 	assert!(num < 100);
 
