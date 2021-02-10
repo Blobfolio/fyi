@@ -126,17 +126,18 @@ const MIN_DRAW_WIDTH: usize = 40;
 /// it can be wrapped up in an `Arc<Mutex>` and passed between threads.
 struct WitchingInner {
 	buf: MsgBuffer9,
-	elapsed: u32,
+	flags: u8,
+
 	last_hash: u64,
 	last_lines: usize,
-	last_time: u128,
+	last_time: Instant,
 	last_width: usize,
 
-	doing: AHashSet<Msg>,
-	done: u32,
-	flags: u8,
 	started: Instant,
 	title: Msg,
+	elapsed: u32,
+	done: u32,
+	doing: AHashSet<Msg>,
 	total: u32,
 }
 
@@ -210,16 +211,18 @@ impl Default for WitchingInner {
 					120, 120, // Current Tasks.
 				]
 			),
-			doing: AHashSet::new(),
-			done: 0,
-			elapsed: 0,
 			flags: TICK_DEFAULT,
+
 			last_hash: 0,
 			last_lines: 0,
-			last_time: 0,
+			last_time: Instant::now(),
 			last_width: 0,
+
 			started: Instant::now(),
 			title: Msg::default(),
+			elapsed: 0,
+			done: 0,
+			doing: AHashSet::new(),
 			total: 0,
 		}
 	}
@@ -433,11 +436,10 @@ impl WitchingInner {
 		}
 
 		// We don't want to tick too often... that will just look bad.
-		let ms = self.started.elapsed().as_millis();
-		if ms.saturating_sub(self.last_time) < 60 {
+		if self.last_time.elapsed().as_millis() < 60 {
 			return true;
 		}
-		self.last_time = ms;
+		self.last_time = Instant::now();
 
 		// Check the terminal width first because it affects most of what
 		// follows.
