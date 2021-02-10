@@ -221,11 +221,8 @@ impl Default for WitchingInner {
 	}
 }
 
+/// # Getters.
 impl WitchingInner {
-	// ------------------------------------------------------------------------
-	// Getters
-	// ------------------------------------------------------------------------
-
 	/// # Done.
 	///
 	/// Return the number of completed tasks.
@@ -269,13 +266,10 @@ impl WitchingInner {
 	///
 	/// Return the total number of tasks.
 	fn total(&self) -> u32 { self.total.load(SeqCst) }
+}
 
-
-
-	// ------------------------------------------------------------------------
-	// Setters
-	// ------------------------------------------------------------------------
-
+/// # Setters.
+impl WitchingInner {
 	/// # End Task.
 	///
 	/// Remove a task from the currently-running list and increment `done` by
@@ -327,25 +321,10 @@ impl WitchingInner {
 			self.flags.fetch_or(TICK_DOING | TICK_BAR, SeqCst);
 		}
 	}
+}
 
-
-
-	// ------------------------------------------------------------------------
-	// Render
-	// ------------------------------------------------------------------------
-
-	/// # Tick Flag Toggle.
-	///
-	/// If a flag is set, unset it and return true.
-	fn flag_toggle(&self, flag: u8) -> bool {
-		let flags = self.flags.load(SeqCst);
-		if 0 == flags & flag { false }
-		else {
-			self.flags.store(flags & ! flag, SeqCst);
-			true
-		}
-	}
-
+/// # Render.
+impl WitchingInner {
 	/// # Preprint.
 	///
 	/// This method accepts a completed buffer ready for printing, hashing it
@@ -434,6 +413,21 @@ impl WitchingInner {
 		self.done.store(self.total(), SeqCst);
 		mutex_ptr!(self.doing).clear();
 		self.print_blank();
+	}
+}
+
+/// # Ticks.
+impl WitchingInner {
+	/// # Tick Flag Toggle.
+	///
+	/// If a flag is set, unset it and return true.
+	fn flag_toggle(&self, flag: u8) -> bool {
+		let flags = self.flags.load(SeqCst);
+		if 0 == flags & flag { false }
+		else {
+			self.flags.store(flags & ! flag, SeqCst);
+			true
+		}
 	}
 
 	/// # Tick.
@@ -761,11 +755,8 @@ impl Deref for Witching {
 	fn deref(&self) -> &Self::Target { &self.set }
 }
 
+/// # Setup.
 impl Witching {
-	// ------------------------------------------------------------------------
-	// Setup
-	// ------------------------------------------------------------------------
-
 	#[must_use]
 	/// # With Flags.
 	///
@@ -800,7 +791,12 @@ impl Witching {
 	/// The `Witching` summary will report how many "files" were run. Use this
 	/// method to call them "images" or "documents" or whatever else.
 	///
-	/// ## Examples
+	/// ## Panics
+	///
+	/// Panics if either label is empty, or if their combined length is greater
+	/// than `250`.
+	///
+	/// ## Examples.
 	///
 	/// ```ignore
 	/// use fyi_witcher::Witcher;
@@ -873,7 +869,7 @@ impl Witching {
 	/// ## Panics
 	///
 	/// Panics if either label is empty, or if their combined length is greater
-	/// than `255`.
+	/// than `250`.
 	///
 	/// ## Examples
 	///
@@ -888,7 +884,7 @@ impl Witching {
 		let one: &[u8] = one.as_ref().as_bytes();
 		let many: &[u8] = many.as_ref().as_bytes();
 
-		assert!(! one.is_empty() && ! many.is_empty() && one.len() + many.len() <= 255);
+		assert!(! one.is_empty() && ! many.is_empty() && one.len() + many.len() <= 250);
 
 		unsafe { self.set_labels_unchecked(one, many); }
 	}
@@ -901,7 +897,7 @@ impl Witching {
 	/// ## Safety
 	///
 	/// Both labels must have a length, and their combined length must not
-	/// exceed `255`.
+	/// exceed `250`.
 	pub unsafe fn set_labels_unchecked(&mut self, one: &[u8], many: &[u8]) {
 		// Make sure we start with one spot for the boundary.
 		self.outer.truncate(1);
@@ -912,6 +908,17 @@ impl Witching {
 		self.outer.extend_from_slice(many);
 	}
 
+	/// # Set Title.
+	///
+	/// Wrapper for `WitchingInner::set_title()`.
+	pub fn set_title<S> (&self, title: S)
+	where S: Into<Msg> {
+		self.inner.set_title(title);
+	}
+}
+
+/// # Conversion.
+impl Witching {
 	#[must_use]
 	#[allow(clippy::missing_const_for_fn)] // Doesn't work.
 	/// # Into Vec.
@@ -940,13 +947,10 @@ impl Witching {
 	/// let files: Vec<PathBuf> = witch.into_vec();
 	/// ```
 	pub fn into_vec(self) -> Vec<PathBuf> { self.set }
+}
 
-
-
-	// ------------------------------------------------------------------------
-	// Operations
-	// ------------------------------------------------------------------------
-
+/// # Ops.
+impl Witching {
 	#[must_use]
 	/// # Total File(s) Size.
 	///
@@ -1053,6 +1057,13 @@ impl Witching {
 		t_handle.join().unwrap();
 	}
 
+	/// # Stop.
+	///
+	/// Wrapper for `WitchingInner::stop()`.
+	fn stop(&self) {
+		self.inner.stop();
+	}
+
 	/// # Summary.
 	///
 	/// This is the base summary, no prefix.
@@ -1115,27 +1126,6 @@ impl Witching {
 	/// `No files were found.`
 	fn summarize_empty(&self) {
 		fyi_msg::warning!(format!("No {} were found.", self.label()), true);
-	}
-
-
-
-	// ------------------------------------------------------------------------
-	// `WitchingInner` Wrappers
-	// ------------------------------------------------------------------------
-
-	/// # Stop.
-	///
-	/// Wrapper for `WitchingInner::stop()`.
-	fn stop(&self) {
-		self.inner.stop();
-	}
-
-	/// # Set Title.
-	///
-	/// Wrapper for `WitchingInner::set_title()`.
-	pub fn set_title<S> (&self, title: S)
-	where S: Into<Msg> {
-		self.inner.set_title(title);
 	}
 }
 
