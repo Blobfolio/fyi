@@ -700,14 +700,15 @@ pub struct Witching {
 	set: Vec<PathBuf>,
 	/// The stateful data.
 	inner: Arc<Mutex<WitchingInner>>,
-	/// Flags.
-	flags: u8,
-	/// Summary labels.
+	/// Flags and Labels.
 	///
-	/// The first byte stores the boundary between the singular and plural
-	/// labels, such that `label[1..label[0]]` is singular, and `label[label[0]..]`
-	/// is plural.
-	label: Vec<u8>,
+	/// The first byte stores the instance flags. The second byte stores the
+	/// boundary between singular and plural labels — such that the singular
+	/// label can be found at `[2..outer[1]]` — and the rest is used to hold
+	/// the labels.
+	///
+	/// The default labels are "file" and "files".
+	outer: Vec<u8>,
 }
 
 impl Default for Witching {
@@ -715,9 +716,8 @@ impl Default for Witching {
 		Self {
 			set: Vec::new(),
 			inner: Arc::new(Mutex::new(WitchingInner::default())),
-			flags: 0,
 			// "file" and "files" respectively.
-			label: vec![5, 102, 105, 108, 101, 102, 105, 108, 101, 115],
+			outer: vec![0, 5, 102, 105, 108, 101, 102, 105, 108, 101, 115],
 		}
 	}
 }
@@ -844,7 +844,9 @@ impl Witching {
 	/// let mut witch = Witching::default();
 	/// witch.set_flags(0);
 	/// ```
-	pub fn set_flags(&mut self, flags: u8) { self.flags = flags; }
+	pub fn set_flags(&mut self, flags: u8) {
+		self.outer[0] = flags;
+	}
 
 	/// # Set Labels.
 	///
@@ -886,14 +888,12 @@ impl Witching {
 	/// exceed `255`.
 	pub unsafe fn set_labels_unchecked(&mut self, one: &[u8], many: &[u8]) {
 		// Make sure we start with one spot for the boundary.
-		self.label.truncate(0);
-		self.label.push(one.len() as u8 + 1);
+		self.outer.truncate(1);
+		self.outer.push(one.len() as u8 + 2);
 
-		// Add the singular.
-		self.label.extend_from_slice(one);
-
-		// And add the plural.
-		self.label.extend_from_slice(many);
+		// Add the labels.
+		self.outer.extend_from_slice(one);
+		self.outer.extend_from_slice(many);
 	}
 
 	#[must_use]
@@ -947,10 +947,10 @@ impl Witching {
 	/// What label should we be using? One or many?
 	fn label(&self) -> &str {
 		if self.set.len() == 1 {
-			unsafe { std::str::from_utf8_unchecked(&self.label[1..usize::from(self.label[0])]) }
+			unsafe { std::str::from_utf8_unchecked(&self.outer[2..usize::from(self.outer[1])]) }
 		}
 		else {
-			unsafe { std::str::from_utf8_unchecked(&self.label[usize::from(self.label[0])..]) }
+			unsafe { std::str::from_utf8_unchecked(&self.outer[usize::from(self.outer[1])..]) }
 		}
 	}
 
@@ -976,17 +976,17 @@ impl Witching {
 	where F: Fn(&PathBuf) + Copy + Send + Sync + 'static {
 		// Empty set?
 		if self.set.is_empty() {
-			if 0 != self.flags & WITCHING_SUMMARIZE {
+			if 0 != self.outer[0] & WITCHING_SUMMARIZE {
 				self.summarize_empty();
 			}
 		}
 		else {
 			// We might need to note our starting size.
 			let before: u64 =
-				if 0 == self.flags & WITCHING_DIFF { 0 }
+				if 0 == self.outer[0] & WITCHING_DIFF { 0 }
 				else { self.du() };
 
-			if 0 == self.flags & WITCHING_QUIET {
+			if 0 == self.outer[0] & WITCHING_QUIET {
 				self.run_sexy(cb);
 			}
 			// Quiet iteration.
@@ -996,9 +996,9 @@ impl Witching {
 			}
 
 			// Summarize?
-			if 0 != self.flags & WITCHING_SUMMARIZE {
+			if 0 != self.outer[0] & WITCHING_SUMMARIZE {
 				// Just the time.
-				if 0 == self.flags & WITCHING_DIFF { self.summarize(); }
+				if 0 == self.outer[0] & WITCHING_DIFF { self.summarize(); }
 				// Time and savings.
 				else { self.summarize_diff(before); }
 			}
@@ -1018,7 +1018,7 @@ impl Witching {
 		let t_inner = self.inner.clone();
 		let t_sleep = Duration::from_millis(60);
 		let t_done = done.clone();
-		let t_handle = std::thread::spawn(move|| loop {
+		let t_handle = std::thread::spawn(move || loop {
 			if t_done.load(SeqCst) || ! progress_tick(&t_inner) { break; }
 			std::thread::sleep(t_sleep);
 		});
