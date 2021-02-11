@@ -146,7 +146,7 @@ macro_rules! define_buffer {
 				String::from_utf8(self.buf).unwrap()
 			}
 
-			#[allow(clippy::missing_const_for_fn)] // This doesn't work.
+			#[allow(clippy::missing_const_for_fn)] // Doesn't work.
 			#[must_use]
 			#[inline]
 			/// # Into Vec.
@@ -184,96 +184,6 @@ macro_rules! define_buffer {
 			/// # Part Length.
 			pub const fn len(&self, idx: usize) -> usize {
 				self.end(idx) - self.start(idx)
-			}
-
-			#[cfg(feature = "fitted")]
-			#[allow(dead_code)]
-			#[must_use]
-			/// # Fit Width.
-			///
-			/// This returns the length of the slice that fits a given width.
-			///
-			/// ## Safety
-			///
-			/// The string must be valid UTF-8 or undefined things will happen.
-			pub(crate) fn fitted(&self, idx: usize, stop: usize) -> usize {
-				let bytes: &[u8] = self.get(idx);
-				if bytes.is_empty() { return 0; }
-
-				// Iterate bytes unless/until we find something non-ASCII.
-				let mut in_ansi: bool = false;
-				match bytes.iter()
-					.take_while(|i| i.is_ascii())
-					.try_fold((0, 0), |(l, w), &i| {
-						// In ANSI sequence, just waiting for the end.
-						if in_ansi {
-							if i == b'm' || i == b'A' || i == b'K' { in_ansi = false; }
-							Ok((l + 1, w))
-						}
-						// Starting a new ANSI sequence.
-						else if i == b'\x1b' {
-							in_ansi = true;
-							Ok((l + 1, w))
-						}
-						// Control characters have no width but are otherwise
-						// no cause for concern.
-						else if i == 0 || i.is_ascii_control() { Ok((l + 1, w)) }
-						// We've reached out limit.
-						else if w + 1 > stop { Err(l) }
-						// Normal ASCII has a width of one.
-						else { Ok((l + 1, w + 1)) }
-					}) {
-						Ok((l, w)) =>
-							if l == bytes.len() { l }
-							// Count the rest the hard way.
-							else {
-								fitted_unicode(&bytes[l..], l, w, stop)
-							},
-						Err(l) => l,
-					}
-			}
-
-			#[cfg(feature = "fitted")]
-			#[allow(dead_code)]
-			#[must_use]
-			/// # Part Width.
-			///
-			/// Return the "display width" of the part.
-			///
-			/// ## Safety
-			///
-			/// The string must be valid UTF-8 or undefined things will happen.
-			pub(crate) fn width(&self, idx: usize) -> usize {
-				let bytes: &[u8] = self.get(idx);
-				if bytes.is_empty() { return 0; }
-
-				// Iterate bytes unless/until we find something non-ASCII.
-				let mut in_ansi: bool = false;
-				let (len, width) = bytes.iter()
-					.take_while(|i| i.is_ascii())
-					.fold((0, 0), |(l, w), &i| {
-						// In ANSI sequence, just waiting for the end.
-						if in_ansi {
-							if i == b'm' || i == b'A' || i == b'K' { in_ansi = false; }
-							(l + 1, w)
-						}
-						// Starting a new ANSI sequence.
-						else if i == b'\x1b' {
-							in_ansi = true;
-							(l + 1, w)
-						}
-						// Control characters have no width but are otherwise
-						// no cause for concern.
-						else if i == 0 || i.is_ascii_control() { (l + 1, w) }
-						// Normal ASCII has a width of one.
-						else { (l + 1, w + 1) }
-					});
-
-				if len == bytes.len() { width }
-				// Count the rest the hard way.
-				else {
-					width_unicode(&bytes[len..], width)
-				}
 			}
 
 			#[must_use]
@@ -457,94 +367,35 @@ define_buffer!(MsgBuffer10, 20, "10");
 
 
 
-#[cfg(feature = "fitted")]
-#[allow(dead_code)]
-#[must_use]
-/// # Fit Width.
-///
-/// This returns the length of the slice that fits a given width.
-///
-/// ## Safety
-///
-/// The string must be valid UTF-8 or undefined things will happen.
-fn fitted_unicode(chunk: &[u8], len: usize, width: usize, stop: usize) -> usize {
-	use unicode_width::UnicodeWidthChar;
-
-	// For our purposes, basic ANSI markup (of the kind we use)
-	// is considered 0-width;
-	let mut in_ansi: bool = false;
-
-	// Count up the widths and lengths until we reach the end of
-	// the string or hit the ceiling.
-	match unsafe { std::str::from_utf8_unchecked(chunk) }
-		.chars()
-		.try_fold((width, len), |(w, l), c| {
-			// Find the "length" of this char.
-			let ch_len: usize = c.len_utf8();
-
-			// If we're in the middle of an ANSI sequence nothing
-			// counts, but we need to watch for the end marker so
-			// we can start paying attention again.
-			if in_ansi {
-				// We're only interested in A/K/m signals.
-				if c == 'A' || c == 'K' || c == 'm' { in_ansi = false; }
-				Ok((w, l + ch_len))
-			}
-			// Are we entering an ANSI sequence?
-			else if c == '\x1b' {
-				in_ansi = true;
-				Ok((w, l + ch_len))
-			}
-			else {
-				// Widths can creep up unevenly. If we've gone
-				// over, we need to revert a step and exit.
-				let total_width = w + UnicodeWidthChar::width(c).unwrap_or_default();
-				if total_width > stop { Err(l) }
-				else { Ok((total_width, l + ch_len)) }
-			}
-		}) {
-			Ok((_, l)) => l,
-			Err(e) => e,
-		}
-}
-
-#[cfg(feature = "fitted")]
-#[allow(dead_code)]
-#[must_use]
-/// # Part Width (Unicode).
-///
-/// This method handles counting any remaining unicode widths from a given
-/// slice.
-///
-/// ## Safety
-///
-/// The string must be valid UTF-8 or undefined things will happen.
-fn width_unicode(chunk: &[u8], width: usize) -> usize {
-	use unicode_width::UnicodeWidthChar;
-
-	let mut in_ansi: bool = false;
-	unsafe { std::str::from_utf8_unchecked(chunk) }
-		.chars()
-		.fold(width, |w, c|
-			if in_ansi {
-				if c == 'A' || c == 'K' || c == 'm' { in_ansi = false; }
-				w
-			}
-			else if c == '\x1b' {
-				in_ansi = true;
-				w
-			}
-			else {
-				w + UnicodeWidthChar::width(c).unwrap_or_default()
-			}
-		)
-}
-
-
-
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn extend() {
+		let mut buf = MsgBuffer3::from_raw_parts(
+			vec![0, 0, 1, 1, 0, 0],
+			[
+				2, 4,
+				4, 6,
+				6, 6,
+			]
+		);
+
+		buf.extend(0, &[3, 3, 3]);
+
+		assert_eq!(buf, vec![0, 0, 1, 1, 3, 3, 3, 0, 0]);
+		assert_eq!(buf.start(0)..buf.end(0), 2..7);
+		assert_eq!(buf.len(0), 5);
+		assert_eq!(buf.start(1)..buf.end(1), 7..9);
+		assert_eq!(buf.len(1), 2);
+		assert_eq!(buf.len(2), 0);
+
+		buf.extend(2, &[4, 4]);
+		assert_eq!(buf, vec![0, 0, 1, 1, 3, 3, 3, 0, 0, 4, 4]);
+		assert_eq!(buf.len(2), 2);
+		assert_eq!(buf.range(2), 9..11);
+	}
 
 	#[test]
 	fn replace() {

@@ -75,24 +75,25 @@ macro_rules! impl_from {
 				};
 				let ptr = out.inner.as_mut_ptr();
 
-				// Write the integer parts.
+				// Convert it to the kind of percent people think about.
 				num *= 100.0;
-				let base = <$type>::floor(num);
 
-				if base >= 10.0 {
+				// Write the integer parts.
+				let base = num.trunc() as usize;
+				if base >= 10 {
 					out.from -= 2;
-					unsafe { super::write_u8_2(ptr.add(out.from), base as usize); }
+					unsafe { super::write_u8_2(ptr.add(out.from), base); }
 				}
 				else {
 					out.from -= 1;
-					unsafe { super::write_u8_1(ptr.add(out.from), num as usize); }
+					unsafe { super::write_u8_1(ptr.add(out.from), base); }
 				}
 
-				// Write the rest.
+				// Write the fraction.
 				unsafe {
 					super::write_u8_2(
 						ptr.add(IDX_PERCENT_DECIMAL),
-						<$type>::floor((num - base) * 100.0) as usize
+						<$type>::floor(num.fract() * 100.0) as usize
 					);
 				}
 

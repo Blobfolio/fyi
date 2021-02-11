@@ -21,7 +21,7 @@ use std::path::PathBuf;
 /// ```
 pub fn hash64(src: &[u8]) -> u64 {
 	use std::hash::Hasher;
-	let mut hasher = ahash::AHasher::default();
+	let mut hasher = ahash::AHasher::new_with_keys(1319, 2371);
 	hasher.write(src);
 	hasher.finish()
 }
@@ -100,8 +100,8 @@ pub(crate) fn resolve_path(path: PathBuf, trusted: bool) -> Option<(u128, bool, 
 /// any whitespace weirdness that might be lurking at the edge.
 ///
 /// This method requires the `witching` crate feature be enabled.
-pub fn term_width() -> usize {
-	term_size::dimensions().map_or(0, |(w, _)| w.saturating_sub(1))
+pub fn term_width() -> u32 {
+	term_size::dimensions().map_or(0, |(w, _)| (w as u32).saturating_sub(1))
 }
 
 

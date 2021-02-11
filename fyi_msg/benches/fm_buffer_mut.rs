@@ -23,9 +23,31 @@ adjtime_config.5.gz________deb-old.5.gz_______________devscripts.conf.5.gz______
 }
 
 benches!(
-	Bench::new("fyi_msg::MsgBuffer3", "len(2)")
-		.with(|| test_data().len(2)),
+	Bench::new("fyi_msg::MsgBuffer3", "extend(+6)")
+		.with(|| {
+			let mut msg = test_data();
+			msg.extend(1, b" LOL.");
+			msg
+		}),
 
-	Bench::new("fyi_msg::MsgBuffer3", "range(2)")
-		.with(|| test_data().range(2))
+	Bench::new("fyi_msg::MsgBuffer3", "replace(bigger)")
+		.with(|| {
+			let mut msg = test_data();
+			msg.replace(1, b"Hello, my name is Bob.");
+			msg
+		}),
+
+	Bench::new("fyi_msg::MsgBuffer3", "replace(smaller)")
+		.with(|| {
+			let mut msg = test_data();
+			msg.replace(1, b"!!");
+			msg
+		}),
+
+	Bench::new("fyi_msg::MsgBuffer3", "truncate(0)")
+		.with(|| {
+			let mut msg = test_data();
+			msg.truncate(1, 0);
+			msg
+		})
 );

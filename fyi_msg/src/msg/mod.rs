@@ -2,14 +2,11 @@
 # FYI Msg
 */
 
-pub(super) mod ansi;
 pub(super) mod buffer;
 pub(super) mod kind;
 
-use crate::{
-	MsgKind,
-	NiceANSI,
-};
+use crate::MsgKind;
+use fyi_num::NiceU8;
 use std::{
 	fmt,
 	hash,
@@ -234,7 +231,9 @@ impl Msg {
 		// Start a vector with the prefix bits.
 		let msg = msg.as_ref().as_bytes();
 		let v = [
-			NiceANSI::from(color).as_bytes(),
+			b"\x1b[1;38;5;",
+			&*NiceU8::from(color),
+			b"m",
 			prefix,
 			b":\x1b[0m ",
 			msg,
@@ -591,7 +590,8 @@ impl Msg {
 	/// This is the setter companion to the [`Msg::with_indent`] builder method.
 	/// Refer to that documentation for more information.
 	pub fn set_indent(&mut self, indent: u8) {
-		self.0.replace(PART_INDENT, &b" ".repeat(4.min(indent as usize) * 4));
+		static SPACES: [u8; 16] = [32_u8; 16];
+		self.0.replace(PART_INDENT, &SPACES[0..4.min(usize::from(indent)) << 2]);
 	}
 
 	#[cfg(feature = "timestamps")]
@@ -650,7 +650,9 @@ impl Msg {
 			self.0.replace(
 				PART_PREFIX,
 				&[
-					NiceANSI::from(color).as_bytes(),
+					b"\x1b[1;38;5;",
+					&*NiceU8::from(color),
+					b"m",
 					prefix,
 					b":\x1b[0m ",
 				].concat(),
@@ -732,8 +734,8 @@ impl Msg {
 		// If the fixed width bits are themselves too big, we can't fit print.
 		let fixed_width: usize =
 			self.0.len(PART_INDENT) +
-			self.0.width(PART_PREFIX) +
-			self.0.width(PART_SUFFIX) +
+			crate::width(self.0.get(PART_PREFIX)) +
+			crate::width(self.0.get(PART_SUFFIX)) +
 			if 0 == self.0.len(PART_TIMESTAMP) { 0 }
 			else { 21 };
 
@@ -741,8 +743,8 @@ impl Msg {
 		// If the fixed width bits are themselves too big, we can't fit print.
 		let fixed_width: usize =
 			self.0.len(PART_INDENT) +
-			self.0.width(PART_PREFIX) +
-			self.0.width(PART_SUFFIX);
+			crate::width(self.0.get(PART_PREFIX)) +
+			crate::width(self.0.get(PART_SUFFIX));
 
 		if fixed_width > width {
 			return Cow::Owned(Vec::new());
@@ -750,17 +752,9 @@ impl Msg {
 
 		// Check the length again; the fixed bits might just have a lot of
 		// ANSI.
-		let trim = width - fixed_width;
-		let msg_len = self.0.len(PART_MSG);
-		if msg_len <= trim {
-			return Cow::Borrowed(self);
-		}
-
-		// Okay, try to trim it.
-		let keep = self.0.fitted(PART_MSG, trim);
-		if keep == 0 {
-			Cow::Owned(Vec::new())
-		}
+		let keep = crate::length_width(self.0.get(PART_MSG), width - fixed_width);
+		if keep == 0 { Cow::Owned(Vec::new()) }
+		else if keep == self.0.len(PART_MSG) { Cow::Borrowed(self) }
 		else {
 			// We have to trim the message to fit. Let's do it on a copy.
 			let mut tmp = self.clone();
@@ -913,7 +907,7 @@ impl Msg {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use criterion as _;
+	use fyi_bench as _;
 
 	#[test]
 	fn t_msg() {

@@ -2,46 +2,31 @@
 # Benchmark: `fyi_num::nice_u64`
 */
 
-use criterion::{
-	BenchmarkId,
-	black_box,
-	Criterion,
-	criterion_group,
-	criterion_main,
+use fyi_bench::{
+	Bench,
+	benches,
 };
 use fyi_num::NiceU64;
+use std::time::Duration;
 
+benches!(
+	Bench::new("fyi_num::NiceU64", "from(0)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceU64::from(0_u64)),
 
+	Bench::new("fyi_num::NiceU64", "from(6_489_320_013)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceU64::from(6_489_320_013_u64)),
 
-fn from_u64(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_num::NiceU64");
-	group.sample_size(30);
+	Bench::new("fyi_num::NiceU64", "from(42_489_320_013)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceU64::from(42_489_320_013_u64)),
 
-	for ints in [
-		0_u64,
-		6_489_320_013_u64,
-		42_489_320_013_u64,
-		1_999_999_999_999_u64,
-		u64::MAX,
-	].iter() {
-		group.bench_with_input(
-			BenchmarkId::from_parameter(format!("from<u64>({})", ints)),
-			ints,
-			|b, &ints| {
-				b.iter(|| {
-					let _ = black_box(NiceU64::from(ints)).as_str();
-				});
-			}
-		);
-	}
+	Bench::new("fyi_num::NiceU64", "from(1_999_999_999_999)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceU64::from(1_999_999_999_999_u64)),
 
-	group.finish();
-}
-
-
-
-criterion_group!(
-	benches,
-	from_u64,
+	Bench::new("fyi_num::NiceU64", "from(u64::MAX)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceU64::from(u64::MAX))
 );
-criterion_main!(benches);

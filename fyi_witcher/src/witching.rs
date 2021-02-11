@@ -5,7 +5,11 @@ This struct is only available when the crate feature `witching` is enabled.
 */
 
 use ahash::AHashSet;
-use crate::utility;
+use crate::{
+	AHASH_STATE,
+	mutex_ptr,
+	utility,
+};
 use fyi_msg::{
 	Msg,
 	MsgKind,
@@ -18,13 +22,12 @@ use fyi_num::{
 	NiceU64,
 	write_time,
 };
-use rayon::prelude::*;
+use rayon::iter::{
+	IntoParallelRefIterator,
+	ParallelIterator,
+};
 use std::{
 	cmp::Ordering,
-	io::{
-		self,
-		Write,
-	},
 	ops::Deref,
 	path::PathBuf,
 	sync::{
@@ -32,6 +35,10 @@ use std::{
 		Mutex,
 		atomic::{
 			AtomicBool,
+			AtomicU16,
+			AtomicU32,
+			AtomicU64,
+			AtomicU8,
 			Ordering::SeqCst,
 		},
 	},
@@ -40,20 +47,6 @@ use std::{
 		Instant,
 	},
 };
-
-
-
-/// Helper: Pass through a getter to the `WitchingInner`.
-macro_rules! get_inner {
-	($func:ident, $type:ty) => {
-		#[must_use]
-		/// Wrapper.
-		pub fn $func(&self) -> $type {
-			let ptr = crate::mutex_ptr!(self.inner);
-			ptr.$func()
-		}
-	};
-}
 
 
 
@@ -114,8 +107,8 @@ const PART_DOING: usize = 8;
 
 
 /// Misc Variables.
-const MIN_BARS_WIDTH: usize = 10;
-const MIN_DRAW_WIDTH: usize = 40;
+const MIN_BARS_WIDTH: u32 = 10;
+const MIN_DRAW_WIDTH: u32 = 40;
 
 
 
@@ -125,25 +118,26 @@ const MIN_DRAW_WIDTH: usize = 40;
 /// Most of the stateful data for our [`Witching`] struct lives here so that
 /// it can be wrapped up in an `Arc<Mutex>` and passed between threads.
 struct WitchingInner {
-	buf: MsgBuffer9,
-	elapsed: u32,
-	last_hash: u64,
-	last_lines: usize,
-	last_time: u128,
-	last_width: usize,
+	buf: Mutex<MsgBuffer9>,
+	flags: AtomicU8,
 
-	doing: AHashSet<Msg>,
-	done: u32,
-	flags: u8,
-	started: Instant,
-	title: Msg,
-	total: u32,
+	last_hash: AtomicU64,
+	last_lines: AtomicU16,
+	last_time: Mutex<Instant>,
+	last_width: AtomicU32,
+
+	started: Mutex<Instant>,
+	title: Mutex<Msg>,
+	elapsed: AtomicU32,
+	done: AtomicU32,
+	doing: Mutex<AHashSet<Msg>>,
+	total: AtomicU32,
 }
 
 impl Default for WitchingInner {
 	fn default() -> Self {
 		Self {
-			buf: MsgBuffer9::from_raw_parts(
+			buf: Mutex::new(MsgBuffer9::from_raw_parts(
 				vec![
 					//  Title would go here.
 
@@ -209,52 +203,54 @@ impl Default for WitchingInner {
 					110, 115, // Percent.
 					120, 120, // Current Tasks.
 				]
-			),
-			doing: AHashSet::new(),
-			done: 0,
-			elapsed: 0,
-			flags: TICK_DEFAULT,
-			last_hash: 0,
-			last_lines: 0,
-			last_time: 0,
-			last_width: 0,
-			started: Instant::now(),
-			title: Msg::default(),
-			total: 0,
+			)),
+			flags: AtomicU8::new(TICK_DEFAULT),
+
+			last_hash: AtomicU64::default(),
+			last_lines: AtomicU16::default(),
+			last_time: Mutex::new(Instant::now()),
+			last_width: AtomicU32::default(),
+
+			started: Mutex::new(Instant::now()),
+			title: Mutex::new(Msg::default()),
+			elapsed: AtomicU32::default(),
+			done: AtomicU32::default(),
+			doing: Mutex::new(AHashSet::with_hasher(AHASH_STATE)),
+			total: AtomicU32::default(),
 		}
 	}
 }
 
+/// # Getters.
 impl WitchingInner {
-	// ------------------------------------------------------------------------
-	// Getters
-	// ------------------------------------------------------------------------
-
-	/// # Doing.
-	///
-	/// Return the number of active tasks.
-	pub(crate) fn doing(&self) -> u32 { self.doing.len() as u32 }
-
 	/// # Done.
 	///
 	/// Return the number of completed tasks.
-	pub(crate) const fn done(&self) -> u32 { self.done }
+	fn done(&self) -> u32 { self.done.load(SeqCst) }
 
 	/// # Elapsed (Seconds).
 	///
 	/// Return the elapsed time in seconds.
-	pub(crate) fn elapsed(&self) -> u32 {
-		86400.min(self.started.elapsed().as_secs()) as u32
+	fn elapsed(&self) -> u32 {
+		86400_u32.min(mutex_ptr!(self.started).elapsed().as_secs() as u32)
 	}
+
+	/// # Doing.
+	///
+	/// Return the number of active tasks.
+	fn last_width(&self) -> u32 { self.last_width.load(SeqCst) }
 
 	/// # Percent.
 	///
 	/// Return the percentage of tasks completed, i.e. `done / total`.
-	pub(crate) fn percent(&self) -> f64 {
-		if self.total == 0 || self.done == 0 { 0.0 }
-		else if self.done == self.total { 1.0 }
+	fn percent(&self) -> f64 {
+		let total = self.total();
+		let done = self.done();
+
+		if total == 0 || done == 0 { 0.0 }
+		else if done == total { 1.0 }
 		else {
-			f64::from(self.done) / f64::from(self.total)
+			f64::from(done) / f64::from(total)
 		}
 	}
 
@@ -262,26 +258,25 @@ impl WitchingInner {
 	///
 	/// If the amount completed is less than the total amount, this returns
 	/// `true`, otherwise `false`.
-	pub(crate) const fn is_running(&self) -> bool { 0 != self.flags & TICKING }
+	fn is_running(&self) -> bool {
+		0 != self.flags.load(SeqCst) & TICKING
+	}
 
 	/// # Total.
 	///
 	/// Return the total number of tasks.
-	pub(crate) const fn total(&self) -> u32 { self.total }
+	fn total(&self) -> u32 { self.total.load(SeqCst) }
+}
 
-
-
-	// ------------------------------------------------------------------------
-	// Setters
-	// ------------------------------------------------------------------------
-
+/// # Setters.
+impl WitchingInner {
 	/// # End Task.
 	///
 	/// Remove a task from the currently-running list and increment `done` by
 	/// one.
-	pub(crate) fn end_task(&mut self, task: &PathBuf) {
-		if self.doing.remove(&task_msg(task)) {
-			self.flags |= TICK_DOING | TICK_BAR;
+	fn end_task(&self, task: &PathBuf) {
+		if mutex_ptr!(self.doing).remove(&task_msg(task)) {
+			self.flags.fetch_or(TICK_DOING | TICK_BAR, SeqCst);
 			self.increment();
 		}
 	}
@@ -290,13 +285,16 @@ impl WitchingInner {
 	///
 	/// Increment `done` by one. If this reaches the total, it will
 	/// automatically trigger a stop.
-	pub(crate) fn increment(&mut self) {
-		let new_done = self.total.min(self.done + 1);
-		if new_done != self.done {
-			if new_done == self.total { self.stop(); }
+	fn increment(&self) {
+		let total = self.total();
+		let done = self.done();
+		let new_done = total.min(done + 1);
+
+		if new_done != done {
+			if new_done == total { self.stop(); }
 			else {
-				self.flags |= TICK_DONE | TICK_PERCENT | TICK_BAR;
-				self.done = new_done;
+				self.flags.fetch_or(TICK_DONE | TICK_PERCENT | TICK_BAR, SeqCst);
+				self.done.store(new_done, SeqCst);
 			}
 		}
 	}
@@ -305,65 +303,60 @@ impl WitchingInner {
 	///
 	/// This updates the progress bar's title. If an empty string is passed,
 	/// the title will be removed.
-	pub(crate) fn set_title<S> (&mut self, title: S)
+	fn set_title<S> (&self, title: S)
 	where S: Into<Msg> {
 		let title: Msg = title.into().with_newline(true);
-		if self.title != title {
-			self.title = title;
-			self.flags |= TICK_TITLE;
+		let mut old_title = mutex_ptr!(self.title);
+		if old_title.ne(&title) {
+			*old_title = title;
+			self.flags.fetch_or(TICK_TITLE, SeqCst);
 		}
 	}
 
 	/// # Start Task.
 	///
 	/// Add a task to the currently-running list.
-	pub(crate) fn start_task(&mut self, task: &PathBuf) {
-		if self.doing.insert(task_msg(task)) {
-			self.flags |= TICK_DOING | TICK_BAR;
+	fn start_task(&self, task: &PathBuf) {
+		if mutex_ptr!(self.doing).insert(task_msg(task)) {
+			self.flags.fetch_or(TICK_DOING | TICK_BAR, SeqCst);
 		}
 	}
+}
 
-
-
-	// ------------------------------------------------------------------------
-	// Render
-	// ------------------------------------------------------------------------
-
+/// # Render.
+impl WitchingInner {
 	/// # Preprint.
 	///
 	/// This method accepts a completed buffer ready for printing, hashing it
 	/// for comparison with the last job. If unique, the previous output is
 	/// erased and replaced with the new output.
-	fn preprint(&mut self) {
-		if 0 == self.buf.total_len() {
+	fn preprint(&self) {
+		let buf = mutex_ptr!(self.buf);
+		if 0 == buf.total_len() {
 			self.print_blank();
 			return;
 		}
 
 		// Make sure the content is unique, otherwise we can leave the old bits
 		// up.
-		let hash = utility::hash64(&self.buf);
-		if hash == self.last_hash {
+		let hash = utility::hash64(&*buf);
+		if hash == self.last_hash.swap(hash, SeqCst) {
 			return;
 		}
-		self.last_hash = hash;
 
 		// Erase old lines if needed.
 		self.print_cls();
 
 		// Update the line count and print!
-		self.last_lines = bytecount::count(&self.buf, b'\n');
-		Self::print(&self.buf);
+		self.last_lines.store(bytecount::count(&*buf, b'\n') as u16, SeqCst);
+		Self::print(&*buf);
 	}
 
 	/// # Print Blank.
 	///
 	/// This simply resets the last-print hash and clears any prior output.
-	fn print_blank(&mut self) {
-		if self.last_hash != 0 {
-			self.last_hash = 0;
-		}
-
+	fn print_blank(&self) {
+		self.last_hash.store(0, SeqCst);
 		self.print_cls();
 	}
 
@@ -371,7 +364,9 @@ impl WitchingInner {
 	///
 	/// Print some arbitrary data to the write place. Haha.
 	fn print(buf: &[u8]) {
-		let writer = io::stderr();
+		use std::io::Write;
+
+		let writer = std::io::stderr();
 		let mut handle = writer.lock();
 		let _ = handle.write_all(buf).and_then(|_| handle.flush());
 	}
@@ -380,19 +375,20 @@ impl WitchingInner {
 	///
 	/// This method "erases" any prior output so that new output can be written
 	/// in the same place. That's animation, folks!
-	fn print_cls(&mut self) {
+	fn print_cls(&self) {
 		// Buffer 10 Line Clears.
 		// 0..10 moves the cursor left. This is done only once per reset.
 		// 14 is the length of each subsequent command, which moves the cursor up.
 		// To clear "n" lines, then, slice [0..(10 + 14 * n)].
 		static CLS10: [u8; 150] = [27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75];
 
-		if self.last_lines > 0 {
+		let last_lines = self.last_lines.swap(0, SeqCst);
+		if last_lines > 0 {
 			// Figure out how to slice our `CLS10` buffer.
-			match self.last_lines.cmp(&10) {
+			match last_lines.cmp(&10) {
 				Ordering::Equal => { Self::print(&CLS10[..]); },
 				Ordering::Less => {
-					Self::print(&CLS10[0..10 + 14 * self.last_lines]);
+					Self::print(&CLS10[0..10 + 14 * usize::from(last_lines)]);
 				},
 				// To clear more lines, print our pre-calculated buffer (which
 				// covers the first 10), and duplicate the line-up chunk (n-10)
@@ -400,13 +396,10 @@ impl WitchingInner {
 				Ordering::Greater => {
 					Self::print(&[
 						&CLS10[..],
-						&CLS10[14..28].repeat(self.last_lines - 10),
+						&CLS10[14..28].repeat(usize::from(last_lines) - 10),
 					].concat());
 				},
 			}
-
-			// Having cleared whatever it was, there are now no last_lines.
-			self.last_lines = 0;
 		}
 	}
 
@@ -414,43 +407,62 @@ impl WitchingInner {
 	///
 	/// This method ends all progression, setting `done` to `total` so that
 	/// summaries can be generated.
-	pub(crate) fn stop(&mut self) {
-		self.flags |= TICK_ALL;
-		self.flags &= ! TICKING;
-		self.done = self.total;
-		self.doing.clear();
+	fn stop(&self) {
+		let mut flags = self.flags.load(SeqCst);
+		flags |= TICK_ALL;
+		flags &= ! TICKING;
+		self.flags.store(flags, SeqCst);
+		self.done.store(self.total(), SeqCst);
+		mutex_ptr!(self.doing).clear();
 		self.print_blank();
+	}
+}
+
+/// # Ticks.
+impl WitchingInner {
+	/// # Tick Flag Toggle.
+	///
+	/// If a flag is set, unset it and return true.
+	fn flag_toggle(&self, flag: u8) -> bool {
+		let flags = self.flags.load(SeqCst);
+		if 0 == flags & flag { false }
+		else {
+			self.flags.store(flags & ! flag, SeqCst);
+			true
+		}
 	}
 
 	/// # Tick.
 	///
 	/// Ticking takes all of the changed values (since the last tick), updates
 	/// their corresponding parts in the buffer, and prints the result, if any.
-	pub(crate) fn tick(&mut self) -> bool {
+	fn tick(&self) -> bool {
 		// We aren't running!
 		if ! self.is_running() {
 			return false;
 		}
 
 		// We don't want to tick too often... that will just look bad.
-		let ms = self.started.elapsed().as_millis();
-		if ms.saturating_sub(self.last_time) < 60 {
-			return true;
+		{
+			let mut last_time = mutex_ptr!(self.last_time);
+			if last_time.elapsed().as_millis() < 60 {
+				return true;
+			}
+			*last_time = Instant::now();
 		}
-		self.last_time = ms;
 
 		// Check the terminal width first because it affects most of what
 		// follows.
 		self.tick_set_width();
-		if self.last_width < MIN_DRAW_WIDTH {
-			self.flags = TICKING;
+		if self.last_width() < MIN_DRAW_WIDTH {
+			self.flags.store(TICKING, SeqCst);
 			self.print_blank();
 			return true;
 		}
 
 		// If the time hasn't changed, and nothing else has changed, we can
 		// abort without all the tedious checking.
-		if ! self.tick_set_secs() && self.flags == TICKING {
+		if ! self.tick_set_secs() && self.flags.load(SeqCst) == TICKING {
 			return true;
 		}
 
@@ -486,31 +498,35 @@ impl WitchingInner {
 		// 2: the spaces after total;
 		// 2: the braces around the bar itself (should there be one);
 		// 2: the spaces after the bar itself (should there be one);
-		let space: usize = 255_usize.min(self.last_width.saturating_sub(
+		let space: u32 = 255_u32.min(self.last_width().saturating_sub({
+			let buf = mutex_ptr!(self.buf);
 			11 +
-			self.buf.len(PART_ELAPSED) +
-			self.buf.len(PART_DONE) +
-			self.buf.len(PART_TOTAL) +
-			self.buf.len(PART_PERCENT)
-		));
+			buf.len(PART_ELAPSED) as u32 +
+			buf.len(PART_DONE) as u32 +
+			buf.len(PART_TOTAL) as u32 +
+			buf.len(PART_PERCENT) as u32
+		}));
+
+		let total = self.total();
+		let done = self.done();
 
 		// Insufficient space!
-		if space < MIN_BARS_WIDTH || 0 == self.total { (0, 0, 0) }
+		if space < MIN_BARS_WIDTH || 0 == total { (0, 0, 0) }
 		// Done!
-		else if self.done == self.total { (space, 0, 0) }
+		else if done == total { (space as usize, 0, 0) }
 		// Working on it!
 		else {
 			// Done and doing are both floored to prevent rounding-related
 			// overflow. Any remaining space will be counted as "pending".
-			let done: usize = num_integer::div_floor(
-				self.done as usize * space,
-				self.total as usize
+			let o_done: u32 = num_integer::div_floor(
+				done * space,
+				total
 			);
-			let doing: usize = num_integer::div_floor(
-				self.doing.len() * space,
-				self.total as usize
+			let o_doing: u32 = num_integer::div_floor(
+				mutex_ptr!(self.doing).len() as u32 * space,
+				total
 			);
-			(done, doing, space - doing - done)
+			(o_done as usize, o_doing as usize, (space - o_doing - o_done) as usize)
 		}
 	}
 
@@ -522,23 +538,23 @@ impl WitchingInner {
 	///
 	/// The combined width of the `###` will never exceed 255, and will never
 	/// be less than 10.
-	fn tick_set_bar(&mut self) {
+	fn tick_set_bar(&self) {
 		static BAR: [u8; 255] = [b'#'; 255];
 		static DASH: [u8; 255] = [b'-'; 255];
 
-		if 0 != self.flags & TICK_BAR {
-			self.flags &= ! TICK_BAR;
+		if self.flag_toggle(TICK_BAR) {
 			let (w_done, w_doing, w_undone) = self.tick_bar_widths();
 
 			// Update the parts!.
-			if self.buf.len(PART_BAR_DONE) != w_done {
-				self.buf.replace(PART_BAR_DONE, &BAR[0..w_done]);
+			let mut buf = mutex_ptr!(self.buf);
+			if buf.len(PART_BAR_DONE) != w_done {
+				buf.replace(PART_BAR_DONE, &BAR[0..w_done]);
 			}
-			if self.buf.len(PART_BAR_DOING) != w_doing {
-				self.buf.replace(PART_BAR_DOING, &DASH[0..w_doing]);
+			if buf.len(PART_BAR_DOING) != w_doing {
+				buf.replace(PART_BAR_DOING, &DASH[0..w_doing]);
 			}
-			if self.buf.len(PART_BAR_UNDONE) != w_undone {
-				self.buf.replace(PART_BAR_UNDONE, &DASH[0..w_undone]);
+			if buf.len(PART_BAR_UNDONE) != w_undone {
+				buf.replace(PART_BAR_UNDONE, &DASH[0..w_undone]);
 			}
 		}
 	}
@@ -548,23 +564,23 @@ impl WitchingInner {
 	/// Update the task list portion of the buffer. This is triggered both by
 	/// changes to the task list as well as resoluation changes (as long values
 	/// may require lazy cropping).
-	fn tick_set_doing(&mut self) {
-		if 0 != self.flags & TICK_DOING {
-			self.flags &= ! TICK_DOING;
-			if self.doing.is_empty() {
-				self.buf.truncate(PART_DOING, 0);
+	fn tick_set_doing(&self) {
+		if self.flag_toggle(TICK_DOING) {
+			let doing = mutex_ptr!(self.doing);
+			if doing.is_empty() {
+				mutex_ptr!(self.buf).truncate(PART_DOING, 0);
 			}
 			else {
-				let width: usize = self.last_width.saturating_sub(6);
+				let width: usize = self.last_width().saturating_sub(6) as usize;
 				let tasks: Vec<u8> = {
 					let mut v = Vec::with_capacity(256);
 					v.extend_from_slice(b"\x1b[35m");
-					self.doing.iter()
+					doing.iter()
 						.for_each(|x| v.extend_from_slice(&x.fitted(width)));
 					v.extend_from_slice(b"\x1b[0m");
 					v
 				};
-				self.buf.replace(PART_DOING, &tasks);
+				mutex_ptr!(self.buf).replace(PART_DOING, &tasks);
 			}
 		}
 	}
@@ -572,20 +588,18 @@ impl WitchingInner {
 	/// # Tick Done.
 	///
 	/// This updates the "done" portion of the buffer as needed.
-	fn tick_set_done(&mut self) {
-		if 0 != self.flags & TICK_DONE {
-			self.flags &= ! TICK_DONE;
-			self.buf.replace(PART_DONE, &NiceU32::from(self.done));
+	fn tick_set_done(&self) {
+		if self.flag_toggle(TICK_DONE) {
+			mutex_ptr!(self.buf).replace(PART_DONE, &NiceU32::from(self.done()));
 		}
 	}
 
 	/// # Tick Percent.
 	///
 	/// This updates the "percent" portion of the buffer as needed.
-	fn tick_set_percent(&mut self) {
-		if 0 != self.flags & TICK_PERCENT {
-			self.flags &= ! TICK_PERCENT;
-			self.buf.replace(PART_PERCENT, &NicePercent::from(self.percent()));
+	fn tick_set_percent(&self) {
+		if self.flag_toggle(TICK_PERCENT) {
+			mutex_ptr!(self.buf).replace(PART_PERCENT, &NicePercent::from(self.percent()));
 		}
 	}
 
@@ -600,15 +614,15 @@ impl WitchingInner {
 	///
 	/// A value of `true` is returned if one or more seconds has elapsed since
 	/// the last tick, otherwise `false` is returned.
-	fn tick_set_secs(&mut self) -> bool {
+	fn tick_set_secs(&self) -> bool {
 		let secs: u32 = self.elapsed();
-		if secs == self.elapsed { false }
+		if secs == self.elapsed.swap(secs, SeqCst) { false }
 		else {
-			self.elapsed = secs;
 			let [h, m, s] = NiceElapsed::hms(secs);
 			unsafe {
+				let mut buf = mutex_ptr!(self.buf);
 				write_time(
-					self.buf.as_mut_ptr().add(self.buf.start(PART_ELAPSED)),
+					buf.as_mut_ptr().add(buf.start(PART_ELAPSED)),
 					h,
 					m,
 					s,
@@ -623,16 +637,16 @@ impl WitchingInner {
 	///
 	/// The title needs to be rewritten both on direct change and resolution
 	/// change. Long titles are lazy-cropped as needed.
-	fn tick_set_title(&mut self) {
-		if 0 != self.flags & TICK_TITLE {
-			self.flags &= ! TICK_TITLE;
-			if self.title.is_empty() {
-				self.buf.truncate(PART_TITLE, 0);
+	fn tick_set_title(&self) {
+		if self.flag_toggle(TICK_TITLE) {
+			let title = mutex_ptr!(self.title);
+			if title.is_empty() {
+				mutex_ptr!(self.buf).truncate(PART_TITLE, 0);
 			}
 			else {
-				self.buf.replace(
+				mutex_ptr!(self.buf).replace(
 					PART_TITLE,
-					&self.title.fitted(self.last_width - 1),
+					&title.fitted(self.last_width() as usize - 1),
 				);
 			}
 		}
@@ -641,10 +655,9 @@ impl WitchingInner {
 	/// # Tick Total.
 	///
 	/// This updates the "total" portion of the buffer as needed.
-	fn tick_set_total(&mut self) {
-		if 0 != self.flags & TICK_TOTAL {
-			self.flags &= ! TICK_TOTAL;
-			self.buf.replace(PART_TOTAL, &NiceU32::from(self.total));
+	fn tick_set_total(&self) {
+		if self.flag_toggle(TICK_TOTAL) {
+			mutex_ptr!(self.buf).replace(PART_TOTAL, &NiceU32::from(self.total()));
 		}
 	}
 
@@ -652,11 +665,10 @@ impl WitchingInner {
 	///
 	/// Check to see if the terminal width has changed since the last run and
 	/// update values — i.e. the relevant tick flags — as necessary.
-	fn tick_set_width(&mut self) {
+	fn tick_set_width(&self) {
 		let width = utility::term_width();
-		if width != self.last_width {
-			self.flags |= TICK_RESIZED;
-			self.last_width = width;
+		if width != self.last_width.swap(width, SeqCst) {
+			self.flags.fetch_or(TICK_RESIZED, SeqCst);
 		}
 	}
 }
@@ -699,25 +711,25 @@ pub struct Witching {
 	/// The set to progress through.
 	set: Vec<PathBuf>,
 	/// The stateful data.
-	inner: Arc<Mutex<WitchingInner>>,
-	/// Flags.
-	flags: u8,
-	/// Summary labels.
+	inner: Arc<WitchingInner>,
+	/// Flags and Labels.
 	///
-	/// The first byte stores the boundary between the singular and plural
-	/// labels, such that `label[1..label[0]]` is singular, and `label[label[0]..]`
-	/// is plural.
-	label: Vec<u8>,
+	/// The first byte stores the instance flags. The second byte stores the
+	/// boundary between singular and plural labels — such that the singular
+	/// label can be found at `[2..outer[1]]` — and the rest is used to hold
+	/// the labels.
+	///
+	/// The default labels are "file" and "files".
+	outer: Vec<u8>,
 }
 
 impl Default for Witching {
 	fn default() -> Self {
 		Self {
 			set: Vec::new(),
-			inner: Arc::new(Mutex::new(WitchingInner::default())),
-			flags: 0,
+			inner: Arc::new(WitchingInner::default()),
 			// "file" and "files" respectively.
-			label: vec![5, 102, 105, 108, 101, 102, 105, 108, 101, 115],
+			outer: vec![0, 5, 102, 105, 108, 101, 102, 105, 108, 101, 115],
 		}
 	}
 }
@@ -729,11 +741,11 @@ impl From<Vec<PathBuf>> for Witching {
 		else {
 			Self {
 				set: src,
-				inner: Arc::new(Mutex::new(WitchingInner {
-					total,
-					flags: TICK_NEW,
+				inner: Arc::new(WitchingInner {
+					total: AtomicU32::new(total),
+					flags: AtomicU8::new(TICK_NEW),
 					..WitchingInner::default()
-				})),
+				}),
 				..Self::default()
 			}
 		}
@@ -745,11 +757,8 @@ impl Deref for Witching {
 	fn deref(&self) -> &Self::Target { &self.set }
 }
 
+/// # Setup.
 impl Witching {
-	// ------------------------------------------------------------------------
-	// Setup
-	// ------------------------------------------------------------------------
-
 	#[must_use]
 	/// # With Flags.
 	///
@@ -784,7 +793,12 @@ impl Witching {
 	/// The `Witching` summary will report how many "files" were run. Use this
 	/// method to call them "images" or "documents" or whatever else.
 	///
-	/// ## Examples
+	/// ## Panics
+	///
+	/// Panics if either label is empty, or if their combined length is greater
+	/// than `250`.
+	///
+	/// ## Examples.
 	///
 	/// ```ignore
 	/// use fyi_witcher::Witcher;
@@ -844,7 +858,9 @@ impl Witching {
 	/// let mut witch = Witching::default();
 	/// witch.set_flags(0);
 	/// ```
-	pub fn set_flags(&mut self, flags: u8) { self.flags = flags; }
+	pub fn set_flags(&mut self, flags: u8) {
+		self.outer[0] = flags;
+	}
 
 	/// # Set Labels.
 	///
@@ -855,7 +871,7 @@ impl Witching {
 	/// ## Panics
 	///
 	/// Panics if either label is empty, or if their combined length is greater
-	/// than `255`.
+	/// than `250`.
 	///
 	/// ## Examples
 	///
@@ -870,7 +886,7 @@ impl Witching {
 		let one: &[u8] = one.as_ref().as_bytes();
 		let many: &[u8] = many.as_ref().as_bytes();
 
-		assert!(! one.is_empty() && ! many.is_empty() && one.len() + many.len() <= 255);
+		assert!(! one.is_empty() && ! many.is_empty() && one.len() + many.len() <= 250);
 
 		unsafe { self.set_labels_unchecked(one, many); }
 	}
@@ -883,21 +899,30 @@ impl Witching {
 	/// ## Safety
 	///
 	/// Both labels must have a length, and their combined length must not
-	/// exceed `255`.
+	/// exceed `250`.
 	pub unsafe fn set_labels_unchecked(&mut self, one: &[u8], many: &[u8]) {
 		// Make sure we start with one spot for the boundary.
-		self.label.truncate(0);
-		self.label.push(one.len() as u8 + 1);
+		self.outer.truncate(1);
+		self.outer.push(one.len() as u8 + 2);
 
-		// Add the singular.
-		self.label.extend_from_slice(one);
-
-		// And add the plural.
-		self.label.extend_from_slice(many);
+		// Add the labels.
+		self.outer.extend_from_slice(one);
+		self.outer.extend_from_slice(many);
 	}
 
+	/// # Set Title.
+	///
+	/// Wrapper for `WitchingInner::set_title()`.
+	pub fn set_title<S> (&self, title: S)
+	where S: Into<Msg> {
+		self.inner.set_title(title);
+	}
+}
+
+/// # Conversion.
+impl Witching {
 	#[must_use]
-	#[allow(clippy::missing_const_for_fn)] // Evidently it can't!
+	#[allow(clippy::missing_const_for_fn)] // Doesn't work.
 	/// # Into Vec.
 	///
 	/// Consume and return the path collection. This may be useful in cases
@@ -924,13 +949,10 @@ impl Witching {
 	/// let files: Vec<PathBuf> = witch.into_vec();
 	/// ```
 	pub fn into_vec(self) -> Vec<PathBuf> { self.set }
+}
 
-
-
-	// ------------------------------------------------------------------------
-	// Operations
-	// ------------------------------------------------------------------------
-
+/// # Ops.
+impl Witching {
 	#[must_use]
 	/// # Total File(s) Size.
 	///
@@ -947,10 +969,10 @@ impl Witching {
 	/// What label should we be using? One or many?
 	fn label(&self) -> &str {
 		if self.set.len() == 1 {
-			unsafe { std::str::from_utf8_unchecked(&self.label[1..usize::from(self.label[0])]) }
+			unsafe { std::str::from_utf8_unchecked(&self.outer[2..usize::from(self.outer[1])]) }
 		}
 		else {
-			unsafe { std::str::from_utf8_unchecked(&self.label[usize::from(self.label[0])..]) }
+			unsafe { std::str::from_utf8_unchecked(&self.outer[usize::from(self.outer[1])..]) }
 		}
 	}
 
@@ -976,29 +998,29 @@ impl Witching {
 	where F: Fn(&PathBuf) + Copy + Send + Sync + 'static {
 		// Empty set?
 		if self.set.is_empty() {
-			if 0 != self.flags & WITCHING_SUMMARIZE {
+			if 0 != self.outer[0] & WITCHING_SUMMARIZE {
 				self.summarize_empty();
 			}
 		}
 		else {
 			// We might need to note our starting size.
 			let before: u64 =
-				if 0 == self.flags & WITCHING_DIFF { 0 }
+				if 0 == self.outer[0] & WITCHING_DIFF { 0 }
 				else { self.du() };
 
-			if 0 == self.flags & WITCHING_QUIET {
+			if 0 == self.outer[0] & WITCHING_QUIET {
 				self.run_sexy(cb);
 			}
 			// Quiet iteration.
 			else {
 				self.set.par_iter().for_each(cb);
-				self.stop();
+				self.inner.stop();
 			}
 
 			// Summarize?
-			if 0 != self.flags & WITCHING_SUMMARIZE {
+			if 0 != self.outer[0] & WITCHING_SUMMARIZE {
 				// Just the time.
-				if 0 == self.flags & WITCHING_DIFF { self.summarize(); }
+				if 0 == self.outer[0] & WITCHING_DIFF { self.summarize(); }
 				// Time and savings.
 				else { self.summarize_diff(before); }
 			}
@@ -1014,25 +1036,27 @@ impl Witching {
 		// `Mutex` crashes or something.
 		let done = Arc::new(AtomicBool::new(false));
 
-		// Run steady tick until we're out of tasks.
+		// Run steady tick until we're out of tasks. We're spawning this thread
+		// independently of Rayon so as not to monopolize its thoughtful
+		// division of labor.
 		let t_inner = self.inner.clone();
 		let t_sleep = Duration::from_millis(60);
 		let t_done = done.clone();
-		let t_handle = std::thread::spawn(move|| loop {
-			if t_done.load(SeqCst) || ! progress_tick(&t_inner) { break; }
+		let t_handle = std::thread::spawn(move || loop {
+			if t_done.load(SeqCst) || ! t_inner.tick() { break; }
 			std::thread::sleep(t_sleep);
 		});
 
 		// Do the main loop!
 		let inner = self.inner.clone();
-		self.set.par_iter().for_each(|x| {
-			progress_start(&inner, x);
+		self.set.par_iter().for_each(move |x| {
+			inner.start_task(x);
 			cb(x);
-			progress_end(&inner, x);
+			inner.end_task(x);
 		});
 
-		// The steady tick loop should close on its own, but just in case,
-		// let's give it another reason to do so.
+		// The steady tick loop should close on its own, but just in case
+		// the task data got weird, this will force its destruction.
 		done.store(true, SeqCst);
 		t_handle.join().unwrap();
 	}
@@ -1045,9 +1069,9 @@ impl Witching {
 	fn summary(&self) -> String {
 		format!(
 			"{} {} in {}.",
-			NiceU32::from(self.total()).as_str(),
+			NiceU32::from(self.inner.total()).as_str(),
 			self.label(),
-			NiceElapsed::from(self.elapsed()).as_str(),
+			NiceElapsed::from(self.inner.elapsed()).as_str(),
 		)
 	}
 
@@ -1100,62 +1124,9 @@ impl Witching {
 	fn summarize_empty(&self) {
 		fyi_msg::warning!(format!("No {} were found.", self.label()), true);
 	}
-
-
-
-	// ------------------------------------------------------------------------
-	// `WitchingInner` Wrappers
-	// ------------------------------------------------------------------------
-
-	// These just return the inner values.
-	get_inner!(doing, u32);
-	get_inner!(done, u32);
-	get_inner!(elapsed, u32);
-	get_inner!(percent, f64);
-	get_inner!(total, u32);
-	get_inner!(is_running, bool);
-
-	/// # Stop.
-	///
-	/// Wrapper for `WitchingInner::stop()`.
-	fn stop(&self) {
-		let mut ptr = crate::mutex_ptr!(self.inner);
-		ptr.stop();
-	}
-
-	/// # Set Title.
-	///
-	/// Wrapper for `WitchingInner::set_title()`.
-	pub fn set_title<S> (&self, title: S)
-	where S: Into<Msg> {
-		let mut ptr = crate::mutex_ptr!(self.inner);
-		ptr.set_title(title);
-	}
 }
 
-/// # Tick.
-///
-/// Wrapper for `WitchingInner::tick()`.
-fn progress_tick(inner: &Arc<Mutex<WitchingInner>>) -> bool {
-	let mut ptr = crate::mutex_ptr!(inner);
-	ptr.tick()
-}
 
-/// # End Task.
-///
-/// Wrapper for `WitchingInner::end_task()`.
-fn progress_end(inner: &Arc<Mutex<WitchingInner>>, task: &PathBuf) {
-	let mut ptr = crate::mutex_ptr!(inner);
-	ptr.end_task(task);
-}
-
-/// # Start Task.
-///
-/// Wrapper for `WitchingInner::start_task()`.
-fn progress_start(inner: &Arc<Mutex<WitchingInner>>, task: &PathBuf) {
-	let mut ptr = crate::mutex_ptr!(inner);
-	ptr.start_task(task);
-}
 
 #[inline]
 /// # Format Task Into Message.

@@ -4,8 +4,7 @@
 
 
 
-#[allow(clippy::suspicious_else_formatting)] // What does lines have to do with it?
-#[must_use]
+#[allow(clippy::suspicious_else_formatting)] // It is what it is.
 /// # Escape Arg String.
 ///
 /// This is a very *crude* reverse argument parser that 'quotes' values needing
@@ -21,9 +20,7 @@
 /// * Backslashes are converted to forward slashes.
 /// * Single quotes are escaped with a backslash.
 /// * If the string is empty or contains anything other than `-`, `_`, `=`, `+`, `/`, `,`, `.`, `a-z`, or `0-9`, the value is wrapped in single quotes.
-pub fn esc_arg(mut s: String) -> String {
-	// Strings suck. Let's work from bytes.
-	let v = unsafe { s.as_mut_vec() };
+pub fn esc_arg_b(v: &mut Vec<u8>) {
 	let mut needs_quote: bool = v.is_empty();
 
 	if ! needs_quote {
@@ -60,8 +57,6 @@ pub fn esc_arg(mut s: String) -> String {
 		v.insert(0, b'\'');
 		v.push(b'\'');
 	}
-
-	s
 }
 
 
@@ -71,13 +66,19 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn t_esc_arg() {
-		assert_eq!("''", esc_arg("".into()));
-		assert_eq!("' '", esc_arg(" ".into()));
-		assert_eq!("Hello", esc_arg("Hello".into()));
-		assert_eq!("'Hello World'", esc_arg("Hello World".into()));
-		assert_eq!("/path/to/file", esc_arg(r"\path\to\file".into()));
-		assert_eq!(r"'Eat at Joe\'s'", esc_arg("Eat at Joe's".into()));
-		assert_eq!(r"'Björk\'s Vespertine'", esc_arg("Björk's Vespertine".into()));
+	fn t_esc_arg_b() {
+		for &(src, expected) in &[
+			(&b""[..], &b"''"[..]),
+			(&b" "[..], &b"' '"[..]),
+			(&b"Hello"[..], &b"Hello"[..]),
+			(&b"Hello World"[..], &b"'Hello World'"[..]),
+			(&br"\path\to\file"[..], &b"/path/to/file"[..]),
+			(&b"Eat at Joe's"[..], &br"'Eat at Joe\'s'"[..]),
+			("Björk's Vespertine".as_bytes(), r"'Björk\'s Vespertine'".as_bytes()),
+		] {
+			let mut v = src.to_vec();
+			esc_arg_b(&mut v);
+			assert_eq!(v, expected);
+		}
 	}
 }

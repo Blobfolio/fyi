@@ -2,64 +2,47 @@
 # Benchmark: `fyi_num::nice_elapsed`
 */
 
-use criterion::{
-	BenchmarkId,
-	black_box,
-	Criterion,
-	criterion_group,
-	criterion_main,
+use fyi_bench::{
+	Bench,
+	benches,
 };
 use fyi_num::NiceElapsed;
+use std::time::Duration;
 
+benches!(
+	Bench::new("fyi_num::NiceElapsed", "hms(10)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceElapsed::hms(10_u32)),
 
+	Bench::new("fyi_num::NiceElapsed", "hms(113)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceElapsed::hms(113_u32)),
 
-fn from(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_witcher::NiceElapsed");
-	group.sample_size(30);
+	Bench::new("fyi_num::NiceElapsed", "hms(10502)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceElapsed::hms(10502_u32)),
 
-	for secs in [1_u32, 50, 100, 2121, 37732, 428390].iter() {
-		group.bench_with_input(
-			BenchmarkId::from_parameter(format!(
-				"from::<u32>::({})",
-				secs
-			)),
-			secs,
-			|b, &secs| {
-				b.iter(|| {
-					let _ = black_box(NiceElapsed::from(secs));
-				});
-			}
-		);
-	}
+	Bench::new("fyi_num::NiceElapsed", "from(1)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceElapsed::from(1_u32)),
 
-	group.finish();
-}
+	Bench::new("fyi_num::NiceElapsed", "from(50)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceElapsed::from(50_u32)),
 
-fn hms(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_num::NiceElapsed");
-	group.sample_size(30);
+	Bench::new("fyi_num::NiceElapsed", "from(100)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceElapsed::from(100_u32)),
 
-	for secs in [10_u32, 113_u32, 10502_u32].iter() {
-		group.bench_with_input(
-			BenchmarkId::from_parameter(format!(
-				"hms({})",
-				secs,
-			)),
-			secs,
-			|b, &secs| {
-				b.iter(|| {
-					let _ = black_box(NiceElapsed::hms(secs));
-				});
-			}
-		);
-	}
+	Bench::new("fyi_num::NiceElapsed", "from(2121)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceElapsed::from(2121_u32)),
 
-	group.finish();
-}
+	Bench::new("fyi_num::NiceElapsed", "from(37732)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceElapsed::from(37732_u32)),
 
-criterion_group!(
-	benches,
-	from,
-	hms,
+	Bench::new("fyi_num::NiceElapsed", "from(428390)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceElapsed::from(428390_u32))
 );
-criterion_main!(benches);

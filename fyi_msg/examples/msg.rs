@@ -71,6 +71,7 @@ fn main() {
 	}
 
 	MsgKind::Info.into_msg("Messages can be indented (0).")
+		.with_indent(0)
 		.with_newline(true)
 		.print();
 
@@ -86,6 +87,11 @@ fn main() {
 
 	MsgKind::Info.into_msg("Messages can be indented (3).")
 		.with_indent(3)
+		.with_newline(true)
+		.print();
+
+	MsgKind::Info.into_msg("Messages can be indented (4).")
+		.with_indent(4)
 		.with_newline(true)
 		.print();
 

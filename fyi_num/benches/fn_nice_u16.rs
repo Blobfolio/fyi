@@ -2,40 +2,35 @@
 # Benchmark: `fyi_num::nice_u16`
 */
 
-use criterion::{
-	BenchmarkId,
-	black_box,
-	Criterion,
-	criterion_group,
-	criterion_main,
+use fyi_bench::{
+	Bench,
+	benches,
 };
 use fyi_num::NiceU16;
+use std::time::Duration;
 
+benches!(
+	Bench::new("fyi_num::NiceU16", "from(0)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceU16::from(0_u16)),
 
+	Bench::new("fyi_num::NiceU16", "from(18)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceU16::from(18_u16)),
 
-fn from_u16(c: &mut Criterion) {
-	let mut group = c.benchmark_group("fyi_num::NiceU16");
-	group.sample_size(30);
+	Bench::new("fyi_num::NiceU16", "from(101)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceU16::from(101_u16)),
 
-	for ints in [0_u16, 18_u16, 101_u16, 1_620_u16, 40_999_u16, u16::MAX].iter() {
-		group.bench_with_input(
-			BenchmarkId::from_parameter(format!("from<u16>({})", ints)),
-			ints,
-			|b, &ints| {
-				b.iter(|| {
-					let _ = black_box(NiceU16::from(ints)).as_str();
-				});
-			}
-		);
-	}
+	Bench::new("fyi_num::NiceU16", "from(1_620)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceU16::from(1_620_u16)),
 
-	group.finish();
-}
+	Bench::new("fyi_num::NiceU16", "from(40_999)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceU16::from(40_999_u16)),
 
-
-
-criterion_group!(
-	benches,
-	from_u16,
+	Bench::new("fyi_num::NiceU16", "from(u16::MAX)")
+		.timed(Duration::from_secs(1))
+		.with(|| NiceU16::from(u16::MAX))
 );
-criterion_main!(benches);

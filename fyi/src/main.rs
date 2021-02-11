@@ -130,8 +130,11 @@ print a certain number of blank lines for you. Run
 
 use fyi_menu::{
 	Argue,
+	ArgueError,
+	FLAG_DYNAMIC_HELP,
 	FLAG_REQUIRED,
 	FLAG_SUBCOMMAND,
+	FLAG_VERSION,
 };
 use fyi_msg::{
 	Msg,
@@ -146,18 +149,46 @@ use fyi_msg::{
 #[doc(hidden)]
 /// Main.
 fn main() {
+	// Handle errors.
+	if let Err(e) = _main() {
+		match e {
+			ArgueError::Passthru(_) => {},
+			ArgueError::WantsDynamicHelp(x) => {
+				helper(x);
+				return;
+			},
+			ArgueError::WantsVersion => {
+				fyi_msg::plain!(concat!("FYI v", env!("CARGO_PKG_VERSION")));
+				return;
+			},
+			_ => {
+				fyi_msg::error!(&e);
+			},
+		}
+
+		std::process::exit(e.exit_code());
+	}
+}
+
+#[doc(hidden)]
+#[inline]
+/// Actual Main.
+///
+/// This lets us more easily bubble errors, which are printed and handled
+/// specially.
+fn _main() -> Result<(), ArgueError> {
 	// Parse CLI arguments.
-	let mut args = Argue::new(FLAG_REQUIRED | FLAG_SUBCOMMAND)
-		.with_version("FYI", env!("CARGO_PKG_VERSION"))
-		.with_subcommand_help(helper);
+	let args = Argue::new(
+		FLAG_DYNAMIC_HELP | FLAG_REQUIRED | FLAG_SUBCOMMAND | FLAG_VERSION
+	)?;
 
 	match MsgKind::from(unsafe { args.peek_unchecked() }) {
-		MsgKind::Blank => blank(&mut args),
-		MsgKind::None => {
-			Msg::error("Invalid message type.").die(1);
-			unreachable!();
+		MsgKind::Blank => {
+			blank(&args);
+			Ok(())
 		},
-		kind => msg(kind, &mut args),
+		MsgKind::None => Err(ArgueError::NoSubCmd),
+		kind => msg(kind, &args),
 	}
 }
 
@@ -166,71 +197,72 @@ fn main() {
 /// Shoot Blanks.
 ///
 /// Print one or more blank lines to `Stdout` or `Stderr`.
-fn blank(args: &mut Argue) {
+fn blank(args: &Argue) {
 	// How many lines should we print?
 	let msg = Msg::plain("\n".repeat(
-		args.option2("-c", "--count")
-			.and_then(|c| c.parse::<usize>().ok())
+		args.option2(b"-c", b"--count")
+			.and_then(|c| String::from_utf8_lossy(c).parse::<usize>().ok())
 			.map_or(1, |c| 1_usize.max(c))
 	));
 
 	// Print it to `Stderr`.
-	if args.switch("--stderr") { msg.eprint(); }
+	if args.switch(b"--stderr") { msg.eprint(); }
 	// Print it to `Stdout`.
 	else { msg.print(); }
 }
 
 #[doc(hidden)]
 /// Basic Message.
-fn msg(kind: MsgKind, args: &mut Argue) {
+fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgueError> {
 	// Exit code.
-	let exit: i32 = args.option2("-e", "--exit")
-		.and_then(|x| x.parse::<i32>().ok())
+	let exit: i32 = args.option2(b"-e", b"--exit")
+		.and_then(|x| String::from_utf8_lossy(x).parse::<i32>().ok())
 		.unwrap_or(0);
 
 	// Basic flags.
 	let mut flags: u8 = FLAG_NEWLINE;
-	if args.switch2("-i", "--indent") { flags |= FLAG_INDENT; }
-	if args.switch2("-t", "--timestamp") { flags |= FLAG_TIMESTAMP; }
+	if args.switch2(b"-i", b"--indent") { flags |= FLAG_INDENT; }
+	if args.switch2(b"-t", b"--timestamp") { flags |= FLAG_TIMESTAMP; }
 
 	// The main message.
 	let msg =
 		// Custom message prefix.
 		if MsgKind::Custom == kind {
-			args.option2("-p", "--prefix")
-				.map_or_else(
-					|| Msg::plain(args.arg(0).unwrap_or_default()),
-					|prefix| {
-						let color: u8 = args.option2("-c", "--prefix-color")
-							.and_then(|x| x.parse::<u8>().ok())
-							.unwrap_or(199);
-						Msg::custom(prefix, color, args.arg(0).unwrap_or_default())
-							.with_flags(flags)
-					}
+			if let Some(prefix) = args.option2(b"-p", b"--prefix").map(String::from_utf8_lossy) {
+				let color: u8 = args.option2(b"-c", b"--prefix-color")
+					.and_then(|x| String::from_utf8_lossy(x).parse::<u8>().ok())
+					.unwrap_or(199);
+
+				Msg::custom(
+					prefix,
+					color,
+					String::from_utf8_lossy(args.first_arg()?)
 				)
+			}
+			else {
+				Msg::plain(String::from_utf8_lossy(args.first_arg()?))
+			}
 		}
 		// Built-in prefix.
 		else {
-			Msg::new(kind, args.take_arg())
-				.with_flags(flags)
-		};
+			Msg::new(kind, String::from_utf8_lossy(args.first_arg()?))
+		}
+		.with_flags(flags);
 
 	// It's a prompt!
 	if MsgKind::Confirm == kind {
-		if ! msg.prompt() {
-			std::process::exit(1);
-		}
-		return;
+		if msg.prompt() { return Ok(()); }
+		return Err(ArgueError::Passthru(1));
 	}
+
 	// Print to `Stderr`.
-	else if args.switch("--stderr") { msg.eprint(); }
+	if args.switch(b"--stderr") { msg.eprint(); }
 	// Print to `Stdout`.
 	else { msg.print(); }
 
 	// Special exit?
-	if 0 != exit {
-		std::process::exit(exit);
-	}
+	if 0 == exit { Ok(()) }
+	else { Err(ArgueError::Passthru(exit)) }
 }
 
 #[doc(hidden)]
@@ -239,8 +271,8 @@ fn msg(kind: MsgKind, args: &mut Argue) {
 ///
 /// Print the appropriate help screen given the call details. Most of the sub-
 /// commands work the same way, but a few have their own distinct messages.
-fn helper(cmd: Option<&str>) -> String {
-	format!(
+fn helper(cmd: Option<Vec<u8>>) {
+	fyi_msg::plain!(format!(
 		r#"
                       ;\
                      |' \
@@ -269,17 +301,35 @@ fn helper(cmd: Option<&str>) -> String {
 		"\x1b[38;5;199mFYI\x1b[0;38;5;69m v",
 		env!("CARGO_PKG_VERSION"),
 		"\x1b[0m",
-		match cmd {
-			Some("blank") => include_str!("../help/blank.txt").to_string(),
-			Some("print") => include_str!("../help/print.txt").to_string(),
-			Some("confirm") | Some("prompt") => include_str!("../help/confirm.txt").to_string(),
-			Some(x) if MsgKind::from(x) != MsgKind::None => format!(
-				include_str!("../help/generic.txt"),
-				x,
-				Msg::new(MsgKind::from(x), "Hello World").as_str(),
-				x.to_lowercase(),
-			),
-			_ => include_str!("../help/help.txt").to_string(),
+		sub_helper(cmd),
+	));
+}
+
+#[doc(hidden)]
+#[cold]
+/// # Sub Help.
+///
+/// This text varies by subcommand.
+fn sub_helper(cmd: Option<Vec<u8>>) -> String {
+	if let Some(cmd) = cmd {
+		match cmd.as_slice() {
+			b"blank" => return include_str!("../help/blank.txt").to_string(),
+			b"print" => return include_str!("../help/print.txt").to_string(),
+			b"confirm" | b"prompt" => return include_str!("../help/confirm.txt").to_string(),
+			x => {
+				let kind = MsgKind::from(x);
+				if kind != MsgKind::None {
+					let txt = String::from_utf8_lossy(x).into_owned();
+					return format!(
+						include_str!("../help/generic.txt"),
+						txt,
+						Msg::new(kind, "Hello World").as_str(),
+						txt.to_lowercase(),
+					);
+				}
+			},
 		}
-	)
+	}
+
+	include_str!("../help/help.txt").to_string()
 }

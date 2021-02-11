@@ -1,6 +1,6 @@
 [package]
 name = "fyi_witcher"
-version = "0.6.0"
+version = "0.6.1"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "Path traversal helpers."
@@ -37,9 +37,8 @@ optional = true
 version = "0.3.*"
 optional = true
 
-[dev-dependencies.criterion]
-version = ">= 0.3.4"
-default-features = false
+[dev-dependencies.fyi_bench]
+path = "../fyi_bench"
 
 [[bench]]
 name = "fw_utility"
