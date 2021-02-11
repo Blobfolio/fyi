@@ -3,10 +3,13 @@
 */
 
 use ahash::AHashSet;
-use crate::utility::{
-	path_as_bytes,
-	resolve_dir_entry,
-	resolve_path,
+use crate::{
+	AHASH_STATE,
+	utility::{
+		path_as_bytes,
+		resolve_dir_entry,
+		resolve_path,
+	},
 };
 use rayon::iter::{
 	ParallelBridge,
@@ -107,7 +110,7 @@ impl Default for Witcher {
 		Self {
 			dirs: Vec::new(),
 			files: Vec::with_capacity(2048),
-			seen: AHashSet::with_capacity(2048),
+			seen: AHashSet::with_capacity_and_hasher(2048, AHASH_STATE),
 			cb: Box::new(|_: &PathBuf| true),
 		}
 	}

@@ -3,9 +3,12 @@
 */
 
 use ahash::AHashSet;
-use crate::utility::{
-	resolve_dir_entry,
-	resolve_path,
+use crate::{
+	AHASH_STATE,
+	utility::{
+		resolve_dir_entry,
+		resolve_path,
+	},
 };
 use rayon::iter::{
 	ParallelBridge,
@@ -44,7 +47,7 @@ where P: AsRef<Path>, I: IntoIterator<Item=P> {
 	// Parse out seed paths.
 	let (mut dirs, files, seen) = {
 		let mut files: Vec<PathBuf> = Vec::with_capacity(2048);
-		let mut seen: AHashSet<u128> = AHashSet::with_capacity(2048);
+		let mut seen: AHashSet<u128> = AHashSet::with_capacity_and_hasher(2048, AHASH_STATE);
 
 		let dirs: Vec<ReadDir> = paths.into_iter()
 			.filter_map(|p| resolve_path(PathBuf::from(p.as_ref()), false))

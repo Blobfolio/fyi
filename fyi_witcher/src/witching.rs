@@ -6,6 +6,7 @@ This struct is only available when the crate feature `witching` is enabled.
 
 use ahash::AHashSet;
 use crate::{
+	AHASH_STATE,
 	mutex_ptr,
 	utility,
 };
@@ -214,7 +215,7 @@ impl Default for WitchingInner {
 			title: Mutex::new(Msg::default()),
 			elapsed: AtomicU32::default(),
 			done: AtomicU32::default(),
-			doing: Mutex::new(AHashSet::new()),
+			doing: Mutex::new(AHashSet::with_hasher(AHASH_STATE)),
 			total: AtomicU32::default(),
 		}
 	}
