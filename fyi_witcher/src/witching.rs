@@ -21,13 +21,12 @@ use fyi_num::{
 	NiceU64,
 	write_time,
 };
-use rayon::prelude::*;
+use rayon::iter::{
+	IntoParallelRefIterator,
+	ParallelIterator,
+};
 use std::{
 	cmp::Ordering,
-	io::{
-		self,
-		Write,
-	},
 	ops::Deref,
 	path::PathBuf,
 	sync::{
@@ -364,7 +363,9 @@ impl WitchingInner {
 	///
 	/// Print some arbitrary data to the write place. Haha.
 	fn print(buf: &[u8]) {
-		let writer = io::stderr();
+		use std::io::Write;
+
+		let writer = std::io::stderr();
 		let mut handle = writer.lock();
 		let _ = handle.write_all(buf).and_then(|_| handle.flush());
 	}
