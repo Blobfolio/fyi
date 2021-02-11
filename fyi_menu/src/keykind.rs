@@ -52,7 +52,7 @@ impl From<&[u8]> for KeyKind {
 			// Is short.
 			else if txt[1].is_ascii_alphabetic() {
 				if len == 2 { return Self::Short; }
-				else { return Self::ShortV; }
+				return Self::ShortV;
 			}
 		}
 

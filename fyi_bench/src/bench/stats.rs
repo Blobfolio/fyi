@@ -27,6 +27,7 @@ pub struct Stats {
 
 #[allow(clippy::similar_names)]
 impl From<&[(usize, Duration)]> for Stats {
+	#[allow(clippy::suspicious_operation_groupings)] // You don't know me.
 	fn from(src: &[(usize, Duration)]) -> Self {
 		// Sums.
 		let (sum_a, sum_b) = src.iter()

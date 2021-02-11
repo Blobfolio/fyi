@@ -58,8 +58,9 @@ where P: AsRef<Path>, I: IntoIterator<Item=P> {
 					if is_dir {
 						return fs::read_dir(p).ok();
 					}
+
 					// A file.
-					else { files.push(p); }
+					files.push(p);
 				}
 
 				None

@@ -251,12 +251,8 @@ fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgueError> {
 
 	// It's a prompt!
 	if MsgKind::Confirm == kind {
-		if msg.prompt() {
-			return Ok(());
-		}
-		else {
-			return Err(ArgueError::Passthru(1));
-		}
+		if msg.prompt() { return Ok(()); }
+		return Err(ArgueError::Passthru(1));
 	}
 
 	// Print to `Stderr`.
