@@ -729,7 +729,7 @@ impl Default for Witching {
 			set: Vec::new(),
 			inner: Arc::new(WitchingInner::default()),
 			// "file" and "files" respectively.
-			outer: vec![0, 5, 102, 105, 108, 101, 102, 105, 108, 101, 115],
+			outer: vec![0, 6, 102, 105, 108, 101, 102, 105, 108, 101, 115],
 		}
 	}
 }
