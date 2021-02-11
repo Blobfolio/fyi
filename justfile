@@ -159,7 +159,7 @@ bench BENCH="":
 	[ ! -d "{{ pkg_dir5 }}/target" ] || rm -rf "{{ pkg_dir5 }}/target"
 	[ ! -d "{{ pkg_dir6 }}/target" ] || rm -rf "{{ pkg_dir6 }}/target"
 
-	cargo update --workspace
+	cargo update -w
 
 
 # Clippy.
@@ -285,7 +285,7 @@ version:
 	#rustup default nightly-2020-09-15
 	#rustup component add clippy --toolchain nightly-2020-09-15
 	[ ! -f "{{ justfile_directory() }}/Cargo.lock" ] || rm "{{ justfile_directory() }}/Cargo.lock"
-	cargo update --workspace
+	cargo update -w
 	cargo outdated -w
 
 
