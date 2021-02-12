@@ -390,7 +390,7 @@ impl Argue {
 	/// # Into Owned Vec.
 	///
 	/// Use this method to consume the struct and return the parsed arguments
-	/// as a `Vec<String>`.
+	/// as a `Vec<Cow<[u8]>>`.
 	///
 	/// If you merely want something to iterate over, you can alternatively
 	/// dereference the struct to a string slice.
@@ -400,7 +400,7 @@ impl Argue {
 	/// ```no_run
 	/// use fyi_menu::Argue;
 	///
-	/// let args: Vec<String> = Argue::new(0).take();
+	/// let args: Vec<Cow<[u8]>> = Argue::new(0).take();
 	/// ```
 	pub fn take(self) -> Vec<Cow<'static, [u8]>> { self.args }
 }
@@ -577,7 +577,7 @@ impl Argue {
 	/// use fyi_menu::Argue;
 	///
 	/// let mut args = Argue::new(0);
-	/// let extras: &[String] = args.args();
+	/// let extras: &[Cow<[u8]>] = args.args();
 	/// ```
 	pub fn args(&self) -> &[Cow<'static, [u8]>] {
 		let idx = self.arg_idx();
