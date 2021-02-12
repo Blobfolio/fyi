@@ -143,6 +143,7 @@ use fyi_msg::{
 	FLAG_NEWLINE,
 	FLAG_TIMESTAMP,
 };
+use std::borrow::Cow;
 
 
 
@@ -201,8 +202,9 @@ fn blank(args: &Argue) {
 	// How many lines should we print?
 	let msg = Msg::plain("\n".repeat(
 		args.option2(b"-c", b"--count")
-			.and_then(|c| String::from_utf8_lossy(c).parse::<usize>().ok())
-			.map_or(1, |c| 1_usize.max(c))
+			.and_then(|x| std::str::from_utf8(x).ok())
+			.and_then(|x| x.parse::<usize>().ok())
+			.map_or(1, |x| 1_usize.max(x))
 	));
 
 	// Print it to `Stderr`.
@@ -216,7 +218,8 @@ fn blank(args: &Argue) {
 fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgueError> {
 	// Exit code.
 	let exit: i32 = args.option2(b"-e", b"--exit")
-		.and_then(|x| String::from_utf8_lossy(x).parse::<i32>().ok())
+		.and_then(|x| std::str::from_utf8(x).ok())
+		.and_then(|x| x.parse::<i32>().ok())
 		.unwrap_or(0);
 
 	// Basic flags.
@@ -228,24 +231,30 @@ fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgueError> {
 	let msg =
 		// Custom message prefix.
 		if MsgKind::Custom == kind {
-			if let Some(prefix) = args.option2(b"-p", b"--prefix").map(String::from_utf8_lossy) {
+			if let Some(prefix) = args.option2(b"-p", b"--prefix").and_then(|x| std::str::from_utf8(x).ok()) {
 				let color: u8 = args.option2(b"-c", b"--prefix-color")
-					.and_then(|x| String::from_utf8_lossy(x).parse::<u8>().ok())
+					.and_then(|x| std::str::from_utf8(x).ok())
+					.and_then(|x| x.parse::<u8>().ok())
 					.unwrap_or(199);
 
 				Msg::custom(
 					prefix,
 					color,
-					String::from_utf8_lossy(args.first_arg()?)
+					std::str::from_utf8(args.first_arg()?)
+						.map_err(|_| ArgueError::NoArg)?
 				)
 			}
 			else {
-				Msg::plain(String::from_utf8_lossy(args.first_arg()?))
+				Msg::plain(std::str::from_utf8(args.first_arg()?).map_err(|_| ArgueError::NoArg)?)
 			}
 		}
 		// Built-in prefix.
 		else {
-			Msg::new(kind, String::from_utf8_lossy(args.first_arg()?))
+			Msg::new(
+				kind,
+				std::str::from_utf8(args.first_arg()?)
+					.map_err(|_| ArgueError::NoArg)?
+			)
 		}
 		.with_flags(flags);
 
@@ -310,26 +319,25 @@ fn helper(cmd: Option<Vec<u8>>) {
 /// # Sub Help.
 ///
 /// This text varies by subcommand.
-fn sub_helper(cmd: Option<Vec<u8>>) -> String {
+fn sub_helper(cmd: Option<Vec<u8>>) -> Cow<'static, str> {
 	if let Some(cmd) = cmd {
 		match cmd.as_slice() {
-			b"blank" => return include_str!("../help/blank.txt").to_string(),
-			b"print" => return include_str!("../help/print.txt").to_string(),
-			b"confirm" | b"prompt" => return include_str!("../help/confirm.txt").to_string(),
+			b"blank" => return Cow::Borrowed(include_str!("../help/blank.txt")),
+			b"print" => return Cow::Borrowed(include_str!("../help/print.txt")),
+			b"confirm" | b"prompt" => return Cow::Borrowed(include_str!("../help/confirm.txt")),
 			x => {
 				let kind = MsgKind::from(x);
 				if kind != MsgKind::None {
-					let txt = String::from_utf8_lossy(x).into_owned();
-					return format!(
+					return Cow::Owned(format!(
 						include_str!("../help/generic.txt"),
-						txt,
+						kind,
 						Msg::new(kind, "Hello World").as_str(),
-						txt.to_lowercase(),
-					);
+						kind.as_str().to_lowercase(),
+					));
 				}
 			},
 		}
 	}
 
-	include_str!("../help/help.txt").to_string()
+	Cow::Borrowed(include_str!("../help/help.txt"))
 }
