@@ -44,7 +44,7 @@ description="Print blank line(s)."
 
 [[package.metadata.bashman.subcommands]]
 cmd = "confirm"
-description="Ask a Yes/No question using the built-in prefix \"confirm\"."
+description='Ask a Yes/No question using the built-in prefix "confirm".'
 
 [[package.metadata.bashman.subcommands]]
 cmd = "print"
