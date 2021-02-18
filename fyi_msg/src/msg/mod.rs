@@ -11,6 +11,7 @@ use crate::{
 	DefaultMsgBuffer,
 };
 use dactyl::NiceU8;
+use format_bytes::format_bytes;
 use std::{
 	fmt::{
 		self,
@@ -210,14 +211,12 @@ impl Msg {
 
 		// Start a vector with the prefix bits.
 		let msg = msg.as_ref().as_bytes();
-		let v = [
-			b"\x1b[1;38;5;",
+		let v = format_bytes!(
+			b"\x1b[1;38;5;{}m{}:\x1b[0m {}",
 			&*NiceU8::from(color),
-			b"m",
 			prefix,
-			b":\x1b[0m ",
-			msg,
-		].concat();
+			msg
+		);
 
 		let m_end = v.len() as u32;
 		let p_end = m_end - msg.len() as u32;
@@ -464,13 +463,11 @@ impl Msg {
 		}
 
 		// Start with the prefix.
-		let mut v: Vec<u8> = [
-			b"\x1b[1;38;5;",
+		let mut v: Vec<u8> = format_bytes!(
+			b"\x1b[1;38;5;{}m{}:\x1b[0m ",
 			&*NiceU8::from(color),
-			b"m",
-			prefix,
-			b":\x1b[0m ",
-		].concat();
+			prefix
+		);
 		let p_end: u32 = v.len() as u32;
 
 		// Add the message.
@@ -742,13 +739,11 @@ impl Msg {
 		else {
 			self.0.replace(
 				PART_PREFIX,
-				&[
-					b"\x1b[1;38;5;",
+				&format_bytes!(
+					b"\x1b[1;38;5;{}m{}:\x1b[0m ",
 					&*NiceU8::from(color),
-					b"m",
-					prefix,
-					b":\x1b[0m ",
-				].concat(),
+					prefix
+				),
 			);
 		}
 	}
