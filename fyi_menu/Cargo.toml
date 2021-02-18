@@ -10,6 +10,7 @@ publish = false
 
 [dev-dependencies.brunch]
 git = "https://github.com/Blobfolio/brunch.git"
+tag = "v0.1.0"
 
 [[bench]]
 name = "fm_keykind"

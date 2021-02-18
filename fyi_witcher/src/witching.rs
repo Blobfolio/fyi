@@ -16,7 +16,7 @@ use fyi_msg::{
 	MsgBuffer,
 	MsgBuffer9,
 };
-use fyi_num::{
+use dactyl::{
 	NiceElapsed,
 	NicePercent,
 	NiceU32,

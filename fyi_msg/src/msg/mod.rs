@@ -10,7 +10,7 @@ use crate::{
 	MsgBuffer,
 	DefaultMsgBuffer,
 };
-use fyi_num::NiceU8;
+use dactyl::NiceU8;
 use std::{
 	fmt::{
 		self,

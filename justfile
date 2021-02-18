@@ -21,7 +21,6 @@ pkg_dir1    := justfile_directory() + "/fyi"
 pkg_dir2    := justfile_directory() + "/fyi_menu"
 pkg_dir3    := justfile_directory() + "/fyi_msg"
 pkg_dir4    := justfile_directory() + "/fyi_witcher"
-pkg_dir5    := justfile_directory() + "/fyi_num"
 
 cargo_dir   := "/tmp/" + pkg_id + "-cargo"
 cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
@@ -155,7 +154,6 @@ bench BENCH="":
 	[ ! -d "{{ pkg_dir2 }}/target" ] || rm -rf "{{ pkg_dir2 }}/target"
 	[ ! -d "{{ pkg_dir3 }}/target" ] || rm -rf "{{ pkg_dir3 }}/target"
 	[ ! -d "{{ pkg_dir4 }}/target" ] || rm -rf "{{ pkg_dir4 }}/target"
-	[ ! -d "{{ pkg_dir5 }}/target" ] || rm -rf "{{ pkg_dir5 }}/target"
 
 	cargo update -w
 
@@ -264,7 +262,6 @@ version:
 	just _version "{{ pkg_dir2 }}" "$_ver2"
 	just _version "{{ pkg_dir3 }}" "$_ver2"
 	just _version "{{ pkg_dir4 }}" "$_ver2"
-	just _version "{{ pkg_dir5 }}" "$_ver2"
 
 
 # Set version for real.

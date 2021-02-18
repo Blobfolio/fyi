@@ -14,8 +14,9 @@ default-features = false
 features = [ "clock", "std" ]
 optional = true
 
-[dependencies.fyi_num]
-path = "../fyi_num"
+[dependencies.dactyl]
+git = "https://github.com/Blobfolio/dactyl.git"
+tag = "v0.1.0"
 
 [dependencies.unicode-width]
 version = "0.1.*"
@@ -23,6 +24,7 @@ optional = true
 
 [dev-dependencies.brunch]
 git = "https://github.com/Blobfolio/brunch.git"
+tag = "v0.1.0"
 
 [[bench]]
 name = "fm_buffer"
