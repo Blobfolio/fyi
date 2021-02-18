@@ -332,9 +332,9 @@ fn sub_helper(cmd: Option<Vec<u8>>) -> Cow<'static, str> {
 				if kind != MsgKind::None {
 					return Cow::Owned(format!(
 						include_str!("../help/generic.txt"),
-						kind,
+						kind.title(),
 						Msg::new(kind, "Hello World").as_str(),
-						kind.as_str().to_lowercase(),
+						kind.title().to_lowercase(),
 					));
 				}
 			},
