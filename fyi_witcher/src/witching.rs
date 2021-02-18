@@ -1135,7 +1135,12 @@ impl Witching {
 	///
 	/// `No files were found.`
 	fn summarize_empty(&self) {
-		fyi_msg::warning!(format!("No {} were found.", self.label()), true);
+		Msg::fmt_prefixed(
+			MsgKind::Warning,
+			format_args!("No {} were found.", self.label())
+		)
+			.with_newline(true)
+			.eprint();
 	}
 }
 
