@@ -2,7 +2,7 @@
 # Benchmark: `fyi_menu::KeyKind`
 */
 
-use fyi_bench::{
+use brunch::{
 	Bench,
 	benches,
 };

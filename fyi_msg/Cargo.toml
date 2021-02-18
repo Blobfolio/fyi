@@ -21,8 +21,8 @@ path = "../fyi_num"
 version = "0.1.*"
 optional = true
 
-[dev-dependencies.fyi_bench]
-path = "../fyi_bench"
+[dev-dependencies.brunch]
+git = "https://github.com/Blobfolio/brunch.git"
 
 [[bench]]
 name = "fm_buffer"

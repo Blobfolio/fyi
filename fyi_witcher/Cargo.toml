@@ -37,8 +37,8 @@ optional = true
 version = "0.3.*"
 optional = true
 
-[dev-dependencies.fyi_bench]
-path = "../fyi_bench"
+[dev-dependencies.brunch]
+git = "https://github.com/Blobfolio/brunch.git"
 
 [[bench]]
 name = "fw_utility"

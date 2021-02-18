@@ -1,7 +1,6 @@
 [workspace]
 members = [
 	"fyi",
-	"fyi_bench",
 	"fyi_menu",
     "fyi_msg",
     "fyi_num",

@@ -2,7 +2,7 @@
 # Benchmark: `fyi_msg::fitted`
 */
 
-use fyi_bench::{
+use brunch::{
 	Bench,
 	benches,
 };

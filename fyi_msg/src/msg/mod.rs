@@ -1000,7 +1000,7 @@ impl Msg {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use fyi_bench as _;
+	use brunch as _;
 
 	#[test]
 	fn t_msg() {

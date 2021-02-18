@@ -2,7 +2,7 @@
 # Benchmark: `fyi_num::nice_elapsed`
 */
 
-use fyi_bench::{
+use brunch::{
 	Bench,
 	benches,
 };
