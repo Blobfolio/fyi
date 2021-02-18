@@ -8,9 +8,6 @@ license = "WTFPL"
 repository = "https://github.com/Blobfolio/fyi"
 publish = false
 
-[dependencies]
-format-bytes = "0.2.*"
-
 [dependencies.chrono]
 version = "0.4.*"
 default-features = false
