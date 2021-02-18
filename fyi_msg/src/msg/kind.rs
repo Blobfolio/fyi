@@ -63,10 +63,12 @@ impl Default for MsgKind {
 
 impl Deref for MsgKind {
 	type Target = [u8];
+	#[inline]
 	fn deref(&self) -> &Self::Target { self.as_bytes() }
 }
 
 impl fmt::Display for MsgKind {
+	#[inline]
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_str(self.as_str())
 	}
@@ -190,11 +192,10 @@ impl MsgKind {
 		}
 	}
 
+	#[inline]
 	/// # Into Message.
 	pub fn into_msg<S>(self, msg: S) -> Msg
-	where S: AsRef<str> {
-		Msg::new(self, msg)
-	}
+	where S: AsRef<str> { Msg::new(self, msg) }
 }
 
 

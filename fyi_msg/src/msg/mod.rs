@@ -158,31 +158,32 @@ impl Deref for Msg {
 }
 
 impl fmt::Display for Msg {
+	#[inline]
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_str(self.as_str())
 	}
 }
 
 impl From<&str> for Msg {
+	#[inline]
 	fn from(src: &str) -> Self { Self::plain(src) }
 }
 
 impl From<String> for Msg {
+	#[inline]
 	fn from(src: String) -> Self { Self::plain(src) }
 }
 
 impl Eq for Msg {}
 
 impl hash::Hash for Msg {
-	fn hash<H: hash::Hasher>(&self, state: &mut H) {
-		self.0.hash(state);
-	}
+	#[inline]
+	fn hash<H: hash::Hasher>(&self, state: &mut H) { self.0.hash(state); }
 }
 
 impl PartialEq for Msg {
-	fn eq(&self, other: &Self) -> bool {
-		self.0 == other.0
-	}
+	#[inline]
+	fn eq(&self, other: &Self) -> bool { self.0 == other.0 }
 }
 
 impl PartialEq<str> for Msg {
