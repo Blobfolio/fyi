@@ -8,7 +8,6 @@ pub(super) mod kind;
 use crate::{
 	MsgKind,
 	MsgBuffer,
-	DefaultMsgBuffer,
 };
 use dactyl::NiceU8;
 use format_bytes::format_bytes;
@@ -23,6 +22,55 @@ use std::{
 };
 
 #[cfg(feature = "fitted")] use std::borrow::Cow;
+
+
+
+/// # Helper: ToC Setup.
+#[cfg(feature = "timestamps")]
+macro_rules! new_toc {
+	($p_end:expr, $m_end:expr) => (
+		[
+			0, 0,           // Indentation.
+			0, 0,           // Timestamp.
+			0, $p_end,      // Prefix.
+			$p_end, $m_end, // Message.
+			$m_end, $m_end, // Suffix.
+			$m_end, $m_end, // Newline.
+		]
+	);
+	($p_end:expr, $m_end:expr, true) => (
+		[
+			0, 0,               // Indentation.
+			0, 0,               // Timestamp.
+			0, $p_end,          // Prefix.
+			$p_end, $m_end,     // Message.
+			$m_end, $m_end,     // Suffix.
+			$m_end, $m_end + 1, // Newline.
+		]
+	);
+}
+
+#[cfg(not(feature = "timestamps"))]
+macro_rules! new_toc {
+	($p_end:expr, $m_end:expr) => (
+		[
+			0, 0,           // Indentation.
+			0, $p_end,      // Prefix.
+			$p_end, $m_end, // Message.
+			$m_end, $m_end, // Suffix.
+			$m_end, $m_end, // Newline.
+		]
+	);
+	($p_end:expr, $m_end:expr, true) => (
+		[
+			0, 0,               // Indentation.
+			0, $p_end,          // Prefix.
+			$p_end, $m_end,     // Message.
+			$m_end, $m_end,     // Suffix.
+			$m_end, $m_end + 1, // Newline.
+		]
+	);
+}
 
 
 
@@ -89,9 +137,19 @@ pub const FLAG_NEWLINE: u8 =   0b0100;
 /// message types and basic usage.
 pub struct Msg(MsgBuffer);
 
+impl AsRef<[u8]> for Msg {
+	#[inline]
+	fn as_ref(&self) -> &[u8] { self.as_bytes() }
+}
+
 impl AsRef<str> for Msg {
 	#[inline]
 	fn as_ref(&self) -> &str { self.as_str() }
+}
+
+impl std::borrow::Borrow<str> for Msg {
+	#[inline]
+	fn borrow(&self) -> &str { self.as_str() }
 }
 
 impl Deref for Msg {
@@ -164,31 +222,13 @@ impl Msg {
 	pub fn new<S>(kind: MsgKind, msg: S) -> Self
 	where S: AsRef<str> {
 		let msg = msg.as_ref().as_bytes();
-		let p_end = kind.len() as u32;
+		let p_end = kind.len_32();
 		let m_end = p_end + msg.len() as u32;
 
-		#[cfg(feature = "timestamps")]
-		let toc: DefaultMsgBuffer =
-			[
-				0, 0,         // Indentation.
-				0, 0,         // Timestamp.
-				0, p_end,     // Prefix.
-				p_end, m_end, // Message.
-				m_end, m_end, // Suffix.
-				m_end, m_end, // Newline.
-			];
-
-		#[cfg(not(feature = "timestamps"))]
-		let toc: DefaultMsgBuffer =
-			[
-				0, 0,         // Indentation.
-				0, p_end,     // Prefix.
-				p_end, m_end, // Message.
-				m_end, m_end, // Suffix.
-				m_end, m_end, // Newline.
-			];
-
-		Self(MsgBuffer::from_raw_parts([kind.as_bytes(), msg].concat(), toc))
+		Self(MsgBuffer::from_raw_parts(
+			[kind.as_bytes(), msg].concat(),
+			new_toc!(p_end, m_end)
+		))
 	}
 
 	/// # Custom Prefix.
@@ -221,28 +261,7 @@ impl Msg {
 		let m_end = v.len() as u32;
 		let p_end = m_end - msg.len() as u32;
 
-		#[cfg(feature = "timestamps")]
-		let toc: DefaultMsgBuffer =
-			[
-				0, 0,         // Indentation.
-				0, 0,         // Timestamp.
-				0, p_end,     // Prefix.
-				p_end, m_end, // Message.
-				m_end, m_end, // Suffix.
-				m_end, m_end, // Newline.
-			];
-
-		#[cfg(not(feature = "timestamps"))]
-		let toc: DefaultMsgBuffer =
-			[
-				0, 0,         // Indentation.
-				0, p_end,     // Prefix.
-				p_end, m_end, // Message.
-				m_end, m_end, // Suffix.
-				m_end, m_end, // Newline.
-			];
-
-		Self(MsgBuffer::from_raw_parts(v, toc))
+		Self(MsgBuffer::from_raw_parts(v, new_toc!(p_end, m_end)))
 	}
 
 	/// # Custom Prefix (Unchecked)
@@ -265,28 +284,10 @@ impl Msg {
 		let p_end = prefix.len() as u32;
 		let m_end = p_end + msg.len() as u32;
 
-		#[cfg(feature = "timestamps")]
-		let toc: DefaultMsgBuffer =
-			[
-				0, 0,         // Indentation.
-				0, 0,         // Timestamp.
-				0, p_end,     // Prefix.
-				p_end, m_end, // Message.
-				m_end, m_end, // Suffix.
-				m_end, m_end, // Newline.
-			];
-
-		#[cfg(not(feature = "timestamps"))]
-		let toc: DefaultMsgBuffer =
-			[
-				0, 0,         // Indentation.
-				0, p_end,     // Prefix.
-				p_end, m_end, // Message.
-				m_end, m_end, // Suffix.
-				m_end, m_end, // Newline.
-			];
-
-		Self(MsgBuffer::from_raw_parts([prefix, msg].concat(), toc))
+		Self(MsgBuffer::from_raw_parts(
+			[prefix, msg].concat(),
+			new_toc!(p_end, m_end)
+		))
 	}
 
 	/// # New Message Without Prefix.
@@ -305,28 +306,10 @@ impl Msg {
 		let msg = msg.as_ref().as_bytes();
 		let len = msg.len() as u32;
 
-		#[cfg(feature = "timestamps")]
-		let toc: DefaultMsgBuffer =
-			[
-				0, 0,     // Indentation.
-				0, 0,     // Timestamp.
-				0, 0,     // Prefix.
-				0, len,   // Message.
-				len, len, // Suffix.
-				len, len, // Newline.
-			];
-
-		#[cfg(not(feature = "timestamps"))]
-		let toc: DefaultMsgBuffer =
-			[
-				0, 0,     // Indentation.
-				0, 0,     // Prefix.
-				0, len,   // Message.
-				len, len, // Suffix.
-				len, len, // Newline.
-			];
-
-		Self(MsgBuffer::from_raw_parts(msg.to_vec(), toc))
+		Self(MsgBuffer::from_raw_parts(
+			msg.to_vec(),
+			new_toc!(0, len)
+		))
 	}
 
 	/// # Error
@@ -355,28 +338,7 @@ impl Msg {
 
 		let m_end = len as u32 + 18;
 
-		#[cfg(feature = "timestamps")]
-		let toc: DefaultMsgBuffer =
-			[
-				0, 0,             // Indentation.
-				0, 0,             // Timestamp.
-				0, 18,            // Prefix.
-				18, m_end,        // Message.
-				m_end, m_end,     // Suffix.
-				m_end, m_end + 1, // Newline.
-			];
-
-		#[cfg(not(feature = "timestamps"))]
-		let toc: DefaultMsgBuffer =
-			[
-				0, 0,             // Indentation.
-				0, 18,            // Prefix.
-				18, m_end,        // Message.
-				m_end, m_end,     // Suffix.
-				m_end, m_end + 1, // Newline.
-			];
-
-		Self(MsgBuffer::from_raw_parts(v, toc))
+		Self(MsgBuffer::from_raw_parts(v, new_toc!(18, m_end, true)))
 	}
 }
 
@@ -391,29 +353,7 @@ impl Msg {
 		v.write_fmt(args).unwrap();
 
 		let len: u32 = v.len() as u32;
-
-		#[cfg(feature = "timestamps")]
-		let toc: DefaultMsgBuffer =
-			[
-				0, 0,     // Indentation.
-				0, 0,     // Timestamp.
-				0, 0,     // Prefix.
-				0, len,   // Message.
-				len, len, // Suffix.
-				len, len, // Newline.
-			];
-
-		#[cfg(not(feature = "timestamps"))]
-		let toc: DefaultMsgBuffer =
-			[
-				0, 0,     // Indentation.
-				0, 0,     // Prefix.
-				0, len,   // Message.
-				len, len, // Suffix.
-				len, len, // Newline.
-			];
-
-		Self(MsgBuffer::from_raw_parts(v, toc))
+		Self(MsgBuffer::from_raw_parts(v, new_toc!(0, len)))
 	}
 
 	#[must_use]
@@ -424,31 +364,10 @@ impl Msg {
 		let mut v: Vec<u8> = kind.as_bytes().to_vec();
 		v.write_fmt(args).unwrap();
 
-		let p_end = kind.len() as u32;
+		let p_end = kind.len_32();
 		let m_end = v.len() as u32;
 
-		#[cfg(feature = "timestamps")]
-		let toc: DefaultMsgBuffer =
-			[
-				0, 0,         // Indentation.
-				0, 0,         // Timestamp.
-				0, p_end,     // Prefix.
-				p_end, m_end, // Message.
-				m_end, m_end, // Suffix.
-				m_end, m_end, // Newline.
-			];
-
-		#[cfg(not(feature = "timestamps"))]
-		let toc: DefaultMsgBuffer =
-			[
-				0, 0,         // Indentation.
-				0, p_end,     // Prefix.
-				p_end, m_end, // Message.
-				m_end, m_end, // Suffix.
-				m_end, m_end, // Newline.
-			];
-
-		Self(MsgBuffer::from_raw_parts(v, toc))
+		Self(MsgBuffer::from_raw_parts(v, new_toc!(p_end, m_end)))
 	}
 
 	#[must_use]
@@ -474,28 +393,7 @@ impl Msg {
 		v.write_fmt(args).unwrap();
 		let m_end: u32 = v.len() as u32;
 
-		#[cfg(feature = "timestamps")]
-		let toc: DefaultMsgBuffer =
-			[
-				0, 0,         // Indentation.
-				0, 0,         // Timestamp.
-				0, p_end,     // Prefix.
-				p_end, m_end, // Message.
-				m_end, m_end, // Suffix.
-				m_end, m_end, // Newline.
-			];
-
-		#[cfg(not(feature = "timestamps"))]
-		let toc: DefaultMsgBuffer =
-			[
-				0, 0,         // Indentation.
-				0, p_end,     // Prefix.
-				p_end, m_end, // Message.
-				m_end, m_end, // Suffix.
-				m_end, m_end, // Newline.
-			];
-
-		Self(MsgBuffer::from_raw_parts(v, toc))
+		Self(MsgBuffer::from_raw_parts(v, new_toc!(p_end, m_end)))
 	}
 }
 
