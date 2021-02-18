@@ -281,7 +281,7 @@ fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgueError> {
 /// Print the appropriate help screen given the call details. Most of the sub-
 /// commands work the same way, but a few have their own distinct messages.
 fn helper(cmd: Option<Vec<u8>>) {
-	fyi_msg::plain!(format!(
+	Msg::fmt(format_args!(
 		r#"
                       ;\
                      |' \
@@ -306,12 +306,14 @@ fn helper(cmd: Option<Vec<u8>>) {
             '`      ,'
                  ,-'
 
-{}"#,
+{}
+"#,
 		"\x1b[38;5;199mFYI\x1b[0;38;5;69m v",
 		env!("CARGO_PKG_VERSION"),
 		"\x1b[0m",
 		sub_helper(cmd),
-	));
+	))
+	.print();
 }
 
 #[doc(hidden)]
