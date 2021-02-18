@@ -128,7 +128,7 @@ print a certain number of blank lines for you. Run
 
 
 
-use fyi_menu::{
+use argue::{
 	Argue,
 	ArgueError,
 	FLAG_DYNAMIC_HELP,

@@ -18,7 +18,6 @@
 pkg_id      := "fyi"
 pkg_name    := "FYI"
 pkg_dir1    := justfile_directory() + "/fyi"
-pkg_dir2    := justfile_directory() + "/fyi_menu"
 pkg_dir3    := justfile_directory() + "/fyi_msg"
 pkg_dir4    := justfile_directory() + "/fyi_witcher"
 
@@ -151,7 +150,6 @@ bench BENCH="":
 	# they place *other* shit in the designated target dir. Haha.
 	[ ! -d "{{ justfile_directory() }}/target" ] || rm -rf "{{ justfile_directory() }}/target"
 	[ ! -d "{{ pkg_dir1 }}/target" ] || rm -rf "{{ pkg_dir1 }}/target"
-	[ ! -d "{{ pkg_dir2 }}/target" ] || rm -rf "{{ pkg_dir2 }}/target"
 	[ ! -d "{{ pkg_dir3 }}/target" ] || rm -rf "{{ pkg_dir3 }}/target"
 	[ ! -d "{{ pkg_dir4 }}/target" ] || rm -rf "{{ pkg_dir4 }}/target"
 
@@ -259,7 +257,6 @@ version:
 
 	# Set the release version!
 	just _version "{{ pkg_dir1 }}" "$_ver2"
-	just _version "{{ pkg_dir2 }}" "$_ver2"
 	just _version "{{ pkg_dir3 }}" "$_ver2"
 	just _version "{{ pkg_dir4 }}" "$_ver2"
 
