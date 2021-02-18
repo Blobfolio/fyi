@@ -5,6 +5,7 @@ License details for project dependencies are listed below.
 ## Overview of Licenses:
 
 * Apache License 2.0 (2)
+* MIT License (1)
 * Do What The F*ck You Want To Public License (1)
 
 
@@ -17,6 +18,11 @@ License details for project dependencies are listed below.
 * [libc 0.2.86](https://github.com/rust-lang/libc)
 * [num-integer 0.1.44](https://github.com/rust-num/num-integer)
 * [num-traits 0.2.14](https://github.com/rust-num/num-traits)
+* [proc-macro-hack 0.5.19](https://github.com/dtolnay/proc-macro-hack)
+* [proc-macro2 1.0.24](https://github.com/alexcrichton/proc-macro2)
+* [quote 1.0.9](https://github.com/dtolnay/quote)
+* [syn 1.0.60](https://github.com/dtolnay/syn)
+* [unicode-xid 0.2.1](https://github.com/unicode-rs/unicode-xid)
 
 
 ```
@@ -475,14 +481,42 @@ limitations under the License.
 
 ```
 
+### MIT License
+
+**Used By:**
+
+* [format-bytes 0.2.0](https://foss.heptapod.net/octobus/rust/format-bytes/)
+* [format-bytes-macros 0.3.0](https://foss.heptapod.net/octobus/rust/format-bytes/)
+
+
+```
+Copyright (c) 2020 Raphaël Gomès
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this
+software and associated documentation files (the "Software"), to deal in the Software
+without restriction, including without limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons
+to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or
+substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+```
+
 ### Do What The F*ck You Want To Public License
 
 **Used By:**
 
-* [fyi 0.6.1](https://github.com/Blobfolio/fyi)
-* [fyi_menu 0.6.1](https://github.com/Blobfolio/fyi)
-* [fyi_msg 0.6.1](https://github.com/Blobfolio/fyi)
-* [fyi_num 0.6.1](https://github.com/Blobfolio/fyi)
+* [argue 0.1.0](https://github.com/Blobfolio/argue)
+* [dactyl 0.1.0](https://github.com/Blobfolio/dactyl)
+* [fyi 0.6.2](https://github.com/Blobfolio/fyi)
+* [fyi_msg 0.6.2](https://github.com/Blobfolio/fyi)
 
 
 ```
