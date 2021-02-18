@@ -5,19 +5,72 @@
 pub(super) mod buffer;
 pub(super) mod kind;
 
-use crate::MsgKind;
-use fyi_num::NiceU8;
+use crate::{
+	MsgKind,
+	MsgBuffer,
+};
+use dactyl::NiceU8;
+use format_bytes::format_bytes;
 use std::{
-	fmt,
+	fmt::{
+		self,
+		Arguments,
+	},
 	hash,
 	io,
 	ops::Deref,
 };
 
-#[cfg(feature = "timestamps")] use crate::MsgBuffer6;
-#[cfg(not(feature = "timestamps"))] use crate::MsgBuffer5;
-
 #[cfg(feature = "fitted")] use std::borrow::Cow;
+
+
+
+/// # Helper: ToC Setup.
+#[cfg(feature = "timestamps")]
+macro_rules! new_toc {
+	($p_end:expr, $m_end:expr) => (
+		[
+			0, 0,           // Indentation.
+			0, 0,           // Timestamp.
+			0, $p_end,      // Prefix.
+			$p_end, $m_end, // Message.
+			$m_end, $m_end, // Suffix.
+			$m_end, $m_end, // Newline.
+		]
+	);
+	($p_end:expr, $m_end:expr, true) => (
+		[
+			0, 0,               // Indentation.
+			0, 0,               // Timestamp.
+			0, $p_end,          // Prefix.
+			$p_end, $m_end,     // Message.
+			$m_end, $m_end,     // Suffix.
+			$m_end, $m_end + 1, // Newline.
+		]
+	);
+}
+
+#[cfg(not(feature = "timestamps"))]
+macro_rules! new_toc {
+	($p_end:expr, $m_end:expr) => (
+		[
+			0, 0,           // Indentation.
+			0, $p_end,      // Prefix.
+			$p_end, $m_end, // Message.
+			$m_end, $m_end, // Suffix.
+			$m_end, $m_end, // Newline.
+		]
+	);
+	($p_end:expr, $m_end:expr, true) => (
+		[
+			0, 0,               // Indentation.
+			0, $p_end,          // Prefix.
+			$p_end, $m_end,     // Message.
+			$m_end, $m_end,     // Suffix.
+			$m_end, $m_end + 1, // Newline.
+		]
+	);
+}
 
 
 
@@ -64,7 +117,6 @@ pub const FLAG_NEWLINE: u8 =   0b0100;
 
 
 
-#[cfg(feature = "timestamps")]
 #[derive(Debug, Default, Clone)]
 /// # Message.
 ///
@@ -83,32 +135,21 @@ pub const FLAG_NEWLINE: u8 =   0b0100;
 ///
 /// Take a look at the `examples/` directory for a rundown on the different
 /// message types and basic usage.
-pub struct Msg(MsgBuffer6);
+pub struct Msg(MsgBuffer);
 
-#[cfg(not(feature = "timestamps"))]
-#[derive(Debug, Default, Clone)]
-/// # Message.
-///
-/// The `Msg` struct provides a partitioned, contiguous byte source to hold
-/// arbitrary messages of the "Error: Oh no!" variety. They can be modified
-/// efficiently in place (per-part) and printed to `Stderr` or `Stdout`.
-///
-/// ## Examples
-///
-/// ```no_run
-/// use fyi_msg::{Msg, MsgKind};
-/// Msg::new(MsgKind::Success, "You did it!")
-///     .with_newline(true)
-///     .print();
-/// ```
-///
-/// Take a look at the `examples/` directory for a rundown on the different
-/// message types and basic usage.
-pub struct Msg(MsgBuffer5);
+impl AsRef<[u8]> for Msg {
+	#[inline]
+	fn as_ref(&self) -> &[u8] { self.as_bytes() }
+}
 
 impl AsRef<str> for Msg {
 	#[inline]
 	fn as_ref(&self) -> &str { self.as_str() }
+}
+
+impl std::borrow::Borrow<str> for Msg {
+	#[inline]
+	fn borrow(&self) -> &str { self.as_str() }
 }
 
 impl Deref for Msg {
@@ -181,33 +222,13 @@ impl Msg {
 	pub fn new<S>(kind: MsgKind, msg: S) -> Self
 	where S: AsRef<str> {
 		let msg = msg.as_ref().as_bytes();
-		let p_end = kind.len();
-		let m_end = p_end + msg.len();
+		let p_end = kind.len_32();
+		let m_end = p_end + msg.len() as u32;
 
-		#[cfg(feature = "timestamps")]
-		return Self(MsgBuffer6::from_raw_parts(
+		Self(MsgBuffer::from_raw_parts(
 			[kind.as_bytes(), msg].concat(),
-			[
-				0, 0,         // Indentation.
-				0, 0,         // Timestamp.
-				0, p_end,     // Prefix.
-				p_end, m_end, // Message.
-				m_end, m_end, // Suffix.
-				m_end, m_end, // Newline.
-			]
-		));
-
-		#[cfg(not(feature = "timestamps"))]
-		return Self(MsgBuffer5::from_raw_parts(
-			[kind.as_bytes(), msg].concat(),
-			[
-				0, 0,         // Indentation.
-				0, p_end,     // Prefix.
-				p_end, m_end, // Message.
-				m_end, m_end, // Suffix.
-				m_end, m_end, // Newline.
-			]
-		));
+			new_toc!(p_end, m_end)
+		))
 	}
 
 	/// # Custom Prefix.
@@ -230,42 +251,17 @@ impl Msg {
 
 		// Start a vector with the prefix bits.
 		let msg = msg.as_ref().as_bytes();
-		let v = [
-			b"\x1b[1;38;5;",
+		let v = format_bytes!(
+			b"\x1b[1;38;5;{}m{}:\x1b[0m {}",
 			&*NiceU8::from(color),
-			b"m",
 			prefix,
-			b":\x1b[0m ",
-			msg,
-		].concat();
+			msg
+		);
 
-		let m_end = v.len();
-		let p_end = m_end - msg.len();
+		let m_end = v.len() as u32;
+		let p_end = m_end - msg.len() as u32;
 
-		#[cfg(feature = "timestamps")]
-		return Self(MsgBuffer6::from_raw_parts(
-			v,
-			[
-				0, 0,         // Indentation.
-				0, 0,         // Timestamp.
-				0, p_end,     // Prefix.
-				p_end, m_end, // Message.
-				m_end, m_end, // Suffix.
-				m_end, m_end, // Newline.
-			]
-		));
-
-		#[cfg(not(feature = "timestamps"))]
-		return Self(MsgBuffer5::from_raw_parts(
-			v,
-			[
-				0, 0,         // Indentation.
-				0, p_end,     // Prefix.
-				p_end, m_end, // Message.
-				m_end, m_end, // Suffix.
-				m_end, m_end, // Newline.
-			]
-		));
+		Self(MsgBuffer::from_raw_parts(v, new_toc!(p_end, m_end)))
 	}
 
 	/// # Custom Prefix (Unchecked)
@@ -285,33 +281,13 @@ impl Msg {
 		let prefix = prefix.as_ref().as_bytes();
 		let msg = msg.as_ref().as_bytes();
 
-		let p_end = prefix.len();
-		let m_end = p_end + msg.len();
+		let p_end = prefix.len() as u32;
+		let m_end = p_end + msg.len() as u32;
 
-		#[cfg(feature = "timestamps")]
-		return Self(MsgBuffer6::from_raw_parts(
+		Self(MsgBuffer::from_raw_parts(
 			[prefix, msg].concat(),
-			[
-				0, 0,         // Indentation.
-				0, 0,         // Timestamp.
-				0, p_end,     // Prefix.
-				p_end, m_end, // Message.
-				m_end, m_end, // Suffix.
-				m_end, m_end, // Newline.
-			]
-		));
-
-		#[cfg(not(feature = "timestamps"))]
-		return Self(MsgBuffer5::from_raw_parts(
-			[prefix, msg].concat(),
-			[
-				0, 0,         // Indentation.
-				0, p_end,     // Prefix.
-				p_end, m_end, // Message.
-				m_end, m_end, // Suffix.
-				m_end, m_end, // Newline.
-			]
-		));
+			new_toc!(p_end, m_end)
+		))
 	}
 
 	/// # New Message Without Prefix.
@@ -328,32 +304,12 @@ impl Msg {
 	pub fn plain<S>(msg: S) -> Self
 	where S: AsRef<str> {
 		let msg = msg.as_ref().as_bytes();
-		let len = msg.len();
+		let len = msg.len() as u32;
 
-		#[cfg(feature = "timestamps")]
-		return Self(MsgBuffer6::from_raw_parts(
+		Self(MsgBuffer::from_raw_parts(
 			msg.to_vec(),
-			[
-				0, 0,     // Indentation.
-				0, 0,     // Timestamp.
-				0, 0,     // Prefix.
-				0, len,   // Message.
-				len, len, // Suffix.
-				len, len, // Newline.
-			]
-		));
-
-		#[cfg(not(feature = "timestamps"))]
-		return Self(MsgBuffer5::from_raw_parts(
-			msg.to_vec(),
-			[
-				0, 0,     // Indentation.
-				0, 0,     // Prefix.
-				0, len,   // Message.
-				len, len, // Suffix.
-				len, len, // Newline.
-			]
-		));
+			new_toc!(0, len)
+		))
 	}
 
 	/// # Error
@@ -380,32 +336,64 @@ impl Msg {
 		v.extend_from_slice(msg);
 		v.extend_from_slice(b"\n");
 
-		let m_end = len + 18;
+		let m_end = len as u32 + 18;
 
-		#[cfg(feature = "timestamps")]
-		return Self(MsgBuffer6::from_raw_parts(
-			v,
-			[
-				0, 0,             // Indentation.
-				0, 0,             // Timestamp.
-				0, 18,            // Prefix.
-				18, m_end,        // Message.
-				m_end, m_end,     // Suffix.
-				m_end, m_end + 1, // Newline.
-			]
-		));
+		Self(MsgBuffer::from_raw_parts(v, new_toc!(18, m_end, true)))
+	}
+}
 
-		#[cfg(not(feature = "timestamps"))]
-		return Self(MsgBuffer5::from_raw_parts(
-			v,
-			[
-				0, 0,             // Indentation.
-				0, 18,            // Prefix.
-				18, m_end,        // Message.
-				m_end, m_end,     // Suffix.
-				m_end, m_end + 1, // Newline.
-			]
-		));
+/// ## Formatted Instantiation.
+impl Msg {
+	#[must_use]
+	/// # Plain Formatted.
+	pub fn fmt(args: Arguments) -> Self {
+		use std::io::Write;
+
+		let mut v: Vec<u8> = Vec::new();
+		v.write_fmt(args).unwrap();
+
+		let len: u32 = v.len() as u32;
+		Self(MsgBuffer::from_raw_parts(v, new_toc!(0, len)))
+	}
+
+	#[must_use]
+	/// # Prefixed Formatted.
+	pub fn fmt_prefixed(kind: MsgKind, args: Arguments) -> Self {
+		use std::io::Write;
+
+		let mut v: Vec<u8> = kind.as_bytes().to_vec();
+		v.write_fmt(args).unwrap();
+
+		let p_end = kind.len_32();
+		let m_end = v.len() as u32;
+
+		Self(MsgBuffer::from_raw_parts(v, new_toc!(p_end, m_end)))
+	}
+
+	#[must_use]
+	/// # Prefixed Formatted.
+	pub fn fmt_custom<S>(prefix: S, color: u8, args: Arguments) -> Self
+	where S: AsRef<str> {
+		use std::io::Write;
+
+		let prefix = prefix.as_ref().as_bytes();
+		if prefix.is_empty() {
+			return Self::fmt(args);
+		}
+
+		// Start with the prefix.
+		let mut v: Vec<u8> = format_bytes!(
+			b"\x1b[1;38;5;{}m{}:\x1b[0m ",
+			&*NiceU8::from(color),
+			prefix
+		);
+		let p_end: u32 = v.len() as u32;
+
+		// Add the message.
+		v.write_fmt(args).unwrap();
+		let m_end: u32 = v.len() as u32;
+
+		Self(MsgBuffer::from_raw_parts(v, new_toc!(p_end, m_end)))
 	}
 }
 
@@ -649,13 +637,11 @@ impl Msg {
 		else {
 			self.0.replace(
 				PART_PREFIX,
-				&[
-					b"\x1b[1;38;5;",
+				&format_bytes!(
+					b"\x1b[1;38;5;{}m{}:\x1b[0m ",
 					&*NiceU8::from(color),
-					b"m",
-					prefix,
-					b":\x1b[0m ",
-				].concat(),
+					prefix
+				),
 			);
 		}
 	}
@@ -778,7 +764,7 @@ impl Msg {
 	/// # Length.
 	///
 	/// This returns the total length of the entire `Msg`, ANSI markup and all.
-	pub const fn len(&self) -> usize {
+	pub fn len(&self) -> usize {
 		// Because the buffers used by `Msg` end on partitioned space, we can
 		// infer the length given the ending index of the newline part, making
 		// this method `const`.
@@ -787,7 +773,7 @@ impl Msg {
 
 	#[must_use]
 	/// # Is Empty.
-	pub const fn is_empty(&self) -> bool { self.len() == 0 }
+	pub fn is_empty(&self) -> bool { self.len() == 0 }
 }
 
 /// ## Printing.
@@ -907,7 +893,7 @@ impl Msg {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use fyi_bench as _;
+	use brunch as _;
 
 	#[test]
 	fn t_msg() {

@@ -2,7 +2,7 @@
 # Benchmark: `fyi_witcher`
 */
 
-use fyi_bench::{
+use brunch::{
 	Bench,
 	benches,
 };

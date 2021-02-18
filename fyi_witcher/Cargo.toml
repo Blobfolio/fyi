@@ -1,6 +1,6 @@
 [package]
 name = "fyi_witcher"
-version = "0.6.1"
+version = "0.6.2"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "Path traversal helpers."
@@ -21,8 +21,9 @@ path = "../fyi_msg"
 optional = true
 features = [ "fitted" ]
 
-[dependencies.fyi_num]
-path = "../fyi_num"
+[dependencies.dactyl]
+git = "https://github.com/Blobfolio/dactyl.git"
+tag = "v0.1.0"
 optional = true
 
 [dependencies.num-integer]
@@ -37,8 +38,9 @@ optional = true
 version = "0.3.*"
 optional = true
 
-[dev-dependencies.fyi_bench]
-path = "../fyi_bench"
+[dev-dependencies.brunch]
+git = "https://github.com/Blobfolio/brunch.git"
+tag = "v0.1.0"
 
 [[bench]]
 name = "fw_utility"
@@ -63,4 +65,4 @@ name = "witching"
 regexp = [ "regex" ]
 
 # Enable the Witching progress bar.
-witching = [ "bytecount", "fyi_msg", "fyi_num", "num-integer", "term_size" ]
+witching = [ "bytecount", "fyi_msg", "dactyl", "num-integer", "term_size" ]

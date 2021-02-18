@@ -96,6 +96,8 @@ pub use msg::{
 	buffer::MsgBuffer7,
 	buffer::MsgBuffer8,
 	buffer::MsgBuffer9,
+	buffer::MsgBuffer,
+	buffer::DefaultMsgBuffer,
 	FLAG_INDENT,
 	FLAG_NEWLINE,
 	kind::MsgKind,

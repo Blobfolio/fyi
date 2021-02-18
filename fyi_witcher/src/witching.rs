@@ -13,9 +13,10 @@ use crate::{
 use fyi_msg::{
 	Msg,
 	MsgKind,
+	MsgBuffer,
 	MsgBuffer9,
 };
-use fyi_num::{
+use dactyl::{
 	NiceElapsed,
 	NicePercent,
 	NiceU32,
@@ -118,7 +119,7 @@ const MIN_DRAW_WIDTH: u32 = 40;
 /// Most of the stateful data for our [`Witching`] struct lives here so that
 /// it can be wrapped up in an `Arc<Mutex>` and passed between threads.
 struct WitchingInner {
-	buf: Mutex<MsgBuffer9>,
+	buf: Mutex<MsgBuffer<MsgBuffer9>>,
 	flags: AtomicU8,
 
 	last_hash: AtomicU64,
@@ -137,7 +138,7 @@ struct WitchingInner {
 impl Default for WitchingInner {
 	fn default() -> Self {
 		Self {
-			buf: Mutex::new(MsgBuffer9::from_raw_parts(
+			buf: Mutex::new(MsgBuffer::<MsgBuffer9>::from_raw_parts(
 				vec![
 					//  Title would go here.
 
@@ -490,7 +491,7 @@ impl WitchingInner {
 	///
 	/// If the total available space winds up being less than 10, all three
 	/// values are set to zero, indicating this component should be removed.
-	fn tick_bar_widths(&self) -> (usize, usize, usize) {
+	fn tick_bar_widths(&self) -> (u32, u32, u32) {
 		// The magic "11" is made up of the following hard-coded pieces:
 		// 2: braces around elapsed time;
 		// 2: spaces after elapsed time;
@@ -501,10 +502,10 @@ impl WitchingInner {
 		let space: u32 = 255_u32.min(self.last_width().saturating_sub({
 			let buf = mutex_ptr!(self.buf);
 			11 +
-			buf.len(PART_ELAPSED) as u32 +
-			buf.len(PART_DONE) as u32 +
-			buf.len(PART_TOTAL) as u32 +
-			buf.len(PART_PERCENT) as u32
+			buf.len_u32(PART_ELAPSED) +
+			buf.len_u32(PART_DONE) +
+			buf.len_u32(PART_TOTAL) +
+			buf.len_u32(PART_PERCENT)
 		}));
 
 		let total = self.total();
@@ -513,7 +514,7 @@ impl WitchingInner {
 		// Insufficient space!
 		if space < MIN_BARS_WIDTH || 0 == total { (0, 0, 0) }
 		// Done!
-		else if done == total { (space as usize, 0, 0) }
+		else if done == total { (space, 0, 0) }
 		// Working on it!
 		else {
 			// Done and doing are both floored to prevent rounding-related
@@ -526,7 +527,7 @@ impl WitchingInner {
 				mutex_ptr!(self.doing).len() as u32 * space,
 				total
 			);
-			(o_done as usize, o_doing as usize, (space - o_doing - o_done) as usize)
+			(o_done, o_doing, space - o_doing - o_done)
 		}
 	}
 
@@ -547,14 +548,14 @@ impl WitchingInner {
 
 			// Update the parts!.
 			let mut buf = mutex_ptr!(self.buf);
-			if buf.len(PART_BAR_DONE) != w_done {
-				buf.replace(PART_BAR_DONE, &BAR[0..w_done]);
+			if buf.len_u32(PART_BAR_DONE) != w_done {
+				buf.replace(PART_BAR_DONE, &BAR[0..w_done as usize]);
 			}
-			if buf.len(PART_BAR_DOING) != w_doing {
-				buf.replace(PART_BAR_DOING, &DASH[0..w_doing]);
+			if buf.len_u32(PART_BAR_DOING) != w_doing {
+				buf.replace(PART_BAR_DOING, &DASH[0..w_doing as usize]);
 			}
-			if buf.len(PART_BAR_UNDONE) != w_undone {
-				buf.replace(PART_BAR_UNDONE, &DASH[0..w_undone]);
+			if buf.len_u32(PART_BAR_UNDONE) != w_undone {
+				buf.replace(PART_BAR_UNDONE, &DASH[0..w_undone as usize]);
 			}
 		}
 	}
@@ -1061,20 +1062,6 @@ impl Witching {
 		t_handle.join().unwrap();
 	}
 
-	/// # Summary.
-	///
-	/// This is the base summary, no prefix.
-	///
-	/// `X files in M minutes and S seconds.`
-	fn summary(&self) -> String {
-		format!(
-			"{} {} in {}.",
-			NiceU32::from(self.inner.total()).as_str(),
-			self.label(),
-			NiceElapsed::from(self.inner.elapsed()).as_str(),
-		)
-	}
-
 	/// # Summarize.
 	///
 	/// This prints a simple summary after iteration has completed. It is
@@ -1082,7 +1069,17 @@ impl Witching {
 	///
 	/// `Done: 5 files in 3 seconds.`
 	fn summarize(&self) {
-		fyi_msg::done!(self.summary(), true);
+		Msg::fmt_prefixed(
+			MsgKind::Done,
+			format_args!(
+				"{} {} in {}.",
+				NiceU32::from(self.inner.total()).as_str(),
+				self.label(),
+				NiceElapsed::from(self.inner.elapsed()).as_str(),
+			)
+		)
+			.with_newline(true)
+			.eprint();
 	}
 
 	/// # Summarize (with savings).
@@ -1100,11 +1097,27 @@ impl Witching {
 		let after: u64 = self.du();
 
 		if 0 == after || before <= after {
-			Msg::new(MsgKind::Crunched, self.summary())
+			Msg::fmt_prefixed(
+				MsgKind::Crunched,
+				format_args!(
+					"{} {} in {}.",
+					NiceU32::from(self.inner.total()).as_str(),
+					self.label(),
+					NiceElapsed::from(self.inner.elapsed()).as_str(),
+				)
+			)
 				.with_suffix(" \x1b[2m(No savings.)\x1b[0m")
 		}
 		else {
-			Msg::new(MsgKind::Crunched, self.summary())
+			Msg::fmt_prefixed(
+				MsgKind::Crunched,
+				format_args!(
+					"{} {} in {}.",
+					NiceU32::from(self.inner.total()).as_str(),
+					self.label(),
+					NiceElapsed::from(self.inner.elapsed()).as_str(),
+				)
+			)
 				.with_suffix(format!(
 					" \x1b[2m(Saved {} bytes, {}.)\x1b[0m",
 					NiceU64::from(before - after).as_str(),
@@ -1122,7 +1135,12 @@ impl Witching {
 	///
 	/// `No files were found.`
 	fn summarize_empty(&self) {
-		fyi_msg::warning!(format!("No {} were found.", self.label()), true);
+		Msg::fmt_prefixed(
+			MsgKind::Warning,
+			format_args!("No {} were found.", self.label())
+		)
+			.with_newline(true)
+			.eprint();
 	}
 }
 

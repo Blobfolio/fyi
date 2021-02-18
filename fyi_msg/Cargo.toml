@@ -1,6 +1,6 @@
 [package]
 name = "fyi_msg"
-version = "0.6.1"
+version = "0.6.2"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "Lib version of FYI."
@@ -8,21 +8,26 @@ license = "WTFPL"
 repository = "https://github.com/Blobfolio/fyi"
 publish = false
 
+[dependencies]
+format-bytes = "0.2.*"
+
 [dependencies.chrono]
 version = "0.4.*"
 default-features = false
 features = [ "clock", "std" ]
 optional = true
 
-[dependencies.fyi_num]
-path = "../fyi_num"
+[dependencies.dactyl]
+git = "https://github.com/Blobfolio/dactyl.git"
+tag = "v0.1.0"
 
 [dependencies.unicode-width]
 version = "0.1.*"
 optional = true
 
-[dev-dependencies.fyi_bench]
-path = "../fyi_bench"
+[dev-dependencies.brunch]
+git = "https://github.com/Blobfolio/brunch.git"
+tag = "v0.1.0"
 
 [[bench]]
 name = "fm_buffer"

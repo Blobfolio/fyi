@@ -1,6 +1,6 @@
 [package]
 name = "fyi"
-version = "0.6.1"
+version = "0.6.2"
 license = "WTFPL"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
@@ -44,7 +44,7 @@ description="Print blank line(s)."
 
 [[package.metadata.bashman.subcommands]]
 cmd = "confirm"
-description="Ask a Yes/No question using the built-in prefix \"confirm\"."
+description='Ask a Yes/No question using the built-in prefix "confirm".'
 
 [[package.metadata.bashman.subcommands]]
 cmd = "print"
@@ -151,8 +151,9 @@ label = "<MSG>"
 description = "The message!"
 subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "success", "task", "warning" ]
 
-[dependencies.fyi_menu]
-path = "../fyi_menu"
+[dependencies.argue]
+git = "https://github.com/Blobfolio/argue.git"
+tag = "v0.1.0"
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"

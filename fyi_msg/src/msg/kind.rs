@@ -113,6 +113,22 @@ impl MsgKind {
 			Self::Task => 23,
 		}
 	}
+
+	#[must_use]
+	/// # Length.
+	pub const fn len_32(self) -> u32 {
+		match self {
+			#[cfg(feature = "bin_kinds")] Self::None | Self::Blank | Self::Custom => 0,
+			#[cfg(not(feature = "bin_kinds"))] Self::None => 0,
+			Self::Confirm => 26,
+			Self::Crunched => 21,
+			Self::Done | Self::Info => 17,
+			Self::Debug | Self::Error => 18,
+			Self::Notice => 19,
+			Self::Success | Self::Warning => 20,
+			Self::Task => 23,
+		}
+	}
 }
 
 /// ## Conversion.
