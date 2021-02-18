@@ -56,12 +56,13 @@ pub trait ToC: Copy + Sized + Default {
 	fn lower_parts_from(&mut self, idx: usize, adj: u32);
 }
 
+/// # Helper: Generate `ToC` impls.
 macro_rules! impl_toc {
-	($Type:ident, $len:literal) => {
+	($Type:ident, $LEN:literal) => {
 		/// # Sized Message Buffer.
-		pub type $Type = [u32; $len];
+		pub type $Type = [u32; $LEN];
 
-		impl ToC for [u32; $len] {
+		impl ToC for [u32; $LEN] {
 			/// # Part start.
 			fn part_start(&self, idx: usize) -> u32 { self[idx << 1] }
 
@@ -70,7 +71,7 @@ macro_rules! impl_toc {
 
 			/// # Zero parts.
 			fn zero_parts(&mut self) {
-				self.copy_from_slice(&[0_u32; $len]);
+				self.copy_from_slice(&[0_u32; $LEN]);
 			}
 
 			/// # Increment parts from.
