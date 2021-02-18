@@ -2,7 +2,10 @@
 # FYI Witcher: Utility Methods.
 */
 
-use std::path::PathBuf;
+use std::path::{
+	Path,
+	PathBuf,
+};
 
 
 
@@ -39,7 +42,7 @@ pub fn hash64(src: &[u8]) -> u64 {
 /// use std::path::PathBuf;
 /// let path = fyi_witcher::utility::path_as_bytes(&PathBuf::from("/path/to/file.jpg"));
 /// ```
-pub fn path_as_bytes(p: &std::path::PathBuf) -> &[u8] {
+pub fn path_as_bytes(p: &Path) -> &[u8] {
 	unsafe { &*(p.as_os_str() as *const std::ffi::OsStr as *const [u8]) }
 }
 

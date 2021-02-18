@@ -14,7 +14,7 @@ use fyi_msg::{
 	Msg,
 	MsgKind,
 	MsgBuffer,
-	MsgBuffer9,
+	BUFFER9,
 };
 use dactyl::{
 	NiceElapsed,
@@ -30,7 +30,10 @@ use rayon::iter::{
 use std::{
 	cmp::Ordering,
 	ops::Deref,
-	path::PathBuf,
+	path::{
+		Path,
+		PathBuf,
+	},
 	sync::{
 		Arc,
 		Mutex,
@@ -119,7 +122,7 @@ const MIN_DRAW_WIDTH: u32 = 40;
 /// Most of the stateful data for our [`Witching`] struct lives here so that
 /// it can be wrapped up in an `Arc<Mutex>` and passed between threads.
 struct WitchingInner {
-	buf: Mutex<MsgBuffer<MsgBuffer9>>,
+	buf: Mutex<MsgBuffer<BUFFER9>>,
 	flags: AtomicU8,
 
 	last_hash: AtomicU64,
@@ -138,7 +141,7 @@ struct WitchingInner {
 impl Default for WitchingInner {
 	fn default() -> Self {
 		Self {
-			buf: Mutex::new(MsgBuffer::<MsgBuffer9>::from_raw_parts(
+			buf: Mutex::new(MsgBuffer::<BUFFER9>::from_raw_parts(
 				vec![
 					//  Title would go here.
 
@@ -275,7 +278,7 @@ impl WitchingInner {
 	///
 	/// Remove a task from the currently-running list and increment `done` by
 	/// one.
-	fn end_task(&self, task: &PathBuf) {
+	fn end_task(&self, task: &Path) {
 		if mutex_ptr!(self.doing).remove(&task_msg(task)) {
 			self.flags.fetch_or(TICK_DOING | TICK_BAR, SeqCst);
 			self.increment();
@@ -317,7 +320,7 @@ impl WitchingInner {
 	/// # Start Task.
 	///
 	/// Add a task to the currently-running list.
-	fn start_task(&self, task: &PathBuf) {
+	fn start_task(&self, task: &Path) {
 		if mutex_ptr!(self.doing).insert(task_msg(task)) {
 			self.flags.fetch_or(TICK_DOING | TICK_BAR, SeqCst);
 		}
@@ -502,10 +505,10 @@ impl WitchingInner {
 		let space: u32 = 255_u32.min(self.last_width().saturating_sub({
 			let buf = mutex_ptr!(self.buf);
 			11 +
-			buf.len_u32(PART_ELAPSED) +
-			buf.len_u32(PART_DONE) +
-			buf.len_u32(PART_TOTAL) +
-			buf.len_u32(PART_PERCENT)
+			buf.len(PART_ELAPSED) +
+			buf.len(PART_DONE) +
+			buf.len(PART_TOTAL) +
+			buf.len(PART_PERCENT)
 		}));
 
 		let total = self.total();
@@ -548,13 +551,13 @@ impl WitchingInner {
 
 			// Update the parts!.
 			let mut buf = mutex_ptr!(self.buf);
-			if buf.len_u32(PART_BAR_DONE) != w_done {
+			if buf.len(PART_BAR_DONE) != w_done {
 				buf.replace(PART_BAR_DONE, &BAR[0..w_done as usize]);
 			}
-			if buf.len_u32(PART_BAR_DOING) != w_doing {
+			if buf.len(PART_BAR_DOING) != w_doing {
 				buf.replace(PART_BAR_DOING, &DASH[0..w_doing as usize]);
 			}
-			if buf.len_u32(PART_BAR_UNDONE) != w_undone {
+			if buf.len(PART_BAR_UNDONE) != w_undone {
 				buf.replace(PART_BAR_UNDONE, &DASH[0..w_undone as usize]);
 			}
 		}
@@ -623,7 +626,7 @@ impl WitchingInner {
 			unsafe {
 				let mut buf = mutex_ptr!(self.buf);
 				write_time(
-					buf.as_mut_ptr().add(buf.start(PART_ELAPSED)),
+					buf.as_mut_ptr().add(buf.start(PART_ELAPSED) as usize),
 					h,
 					m,
 					s,
@@ -1148,7 +1151,7 @@ impl Witching {
 
 #[inline]
 /// # Format Task Into Message.
-fn task_msg(path: &PathBuf) -> Msg {
+fn task_msg(path: &Path) -> Msg {
 	// This starts with a ↳.
 	Msg::custom_unchecked("    \u{21b3} ", path.to_str().unwrap_or_default())
 		.with_newline(true)

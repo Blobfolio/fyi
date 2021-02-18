@@ -19,137 +19,94 @@ use std::{
 
 
 
-/// # Default Message Buffer.
-#[cfg(feature = "timestamps")] pub type DefaultMsgBuffer = [u32; 12];
-#[cfg(not(feature = "timestamps"))] pub type DefaultMsgBuffer = [u32; 10];
+/// # Buffer x2.
+pub const BUFFER2: usize = 4;
 
-/// # Table of Contents.
-pub trait ToC: Copy + Sized + Default {
-	/// # Length of part.
-	fn part_len(&self, idx: usize) -> u32 {
-		self.part_end(idx) - self.part_start(idx)
-	}
+/// # Buffer x3.
+pub const BUFFER3: usize = 6;
 
-	/// # Part is empty.
-	fn part_is_empty(&self, idx: usize) -> bool {
-		self.part_start(idx) == self.part_end(idx)
-	}
+/// # Buffer x4.
+pub const BUFFER4: usize = 8;
 
-	/// # Part range.
-	fn part_rng(&self, idx: usize) -> Range<usize> {
-		self.part_start(idx) as usize..self.part_end(idx) as usize
-	}
+/// # Buffer x5.
+pub const BUFFER5: usize = 10;
 
-	/// # Part start.
-	fn part_start(&self, idx: usize) -> u32;
+/// # Buffer x6.
+pub const BUFFER6: usize = 12;
 
-	/// # Part end.
-	fn part_end(&self, idx: usize) -> u32;
+/// # Buffer x7.
+pub const BUFFER7: usize = 14;
 
-	/// # Zero parts.
-	fn zero_parts(&mut self);
+/// # Buffer x8.
+pub const BUFFER8: usize = 16;
 
-	/// # Increment parts from.
-	fn raise_parts_from(&mut self, idx: usize, adj: u32);
+/// # Buffer x9.
+pub const BUFFER9: usize = 18;
 
-	/// # Decrease parts from.
-	fn lower_parts_from(&mut self, idx: usize, adj: u32);
-}
-
-/// # Helper: Generate `ToC` impls.
-macro_rules! impl_toc {
-	($Type:ident, $LEN:literal) => {
-		/// # Sized Message Buffer.
-		pub type $Type = [u32; $LEN];
-
-		impl ToC for [u32; $LEN] {
-			/// # Part start.
-			fn part_start(&self, idx: usize) -> u32 { self[idx << 1] }
-
-			/// # Part end.
-			fn part_end(&self, idx: usize) -> u32 { self[(idx << 1) + 1] }
-
-			/// # Zero parts.
-			fn zero_parts(&mut self) {
-				self.copy_from_slice(&[0_u32; $LEN]);
-			}
-
-			/// # Increment parts from.
-			fn raise_parts_from(&mut self, idx: usize, adj: u32) {
-				self.iter_mut().skip((idx << 1) + 1).for_each(|x| *x += adj);
-			}
-
-			/// # Decrease parts from.
-			fn lower_parts_from(&mut self, idx: usize, adj: u32) {
-				assert!(self.part_len(idx) >= adj);
-				self.iter_mut().skip((idx << 1) + 1).for_each(|x| *x -= adj);
-			}
-		}
-	};
-}
-
-impl_toc!(MsgBuffer2, 4);
-impl_toc!(MsgBuffer3, 6);
-impl_toc!(MsgBuffer4, 8);
-impl_toc!(MsgBuffer5, 10);
-impl_toc!(MsgBuffer6, 12);
-impl_toc!(MsgBuffer7, 14);
-impl_toc!(MsgBuffer8, 16);
-impl_toc!(MsgBuffer9, 18);
-impl_toc!(MsgBuffer10, 20);
+/// # Buffer x10.
+pub const BUFFER10: usize = 20;
 
 
 
-
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 /// # Message Buffer.
-pub struct MsgBuffer<T: ToC = DefaultMsgBuffer> {
+pub struct MsgBuffer<const N: usize> {
 	buf: Vec<u8>,
-	toc: T
+	toc: [u32; N]
 }
 
-impl<T: ToC> AsRef<[u8]> for MsgBuffer<T> {
+impl<const N: usize> Default for MsgBuffer<N> {
+	#[inline]
+	fn default() -> Self {
+		Self {
+			buf: Vec::new(),
+			toc: [0_u32; N],
+		}
+	}
+}
+
+impl<const N: usize> AsRef<[u8]> for MsgBuffer<N> {
 	#[inline]
 	fn as_ref(&self) -> &[u8] { &self.buf }
 }
 
-impl<T: ToC> Deref for MsgBuffer<T> {
+impl<const N: usize> Deref for MsgBuffer<N> {
 	type Target = [u8];
 	#[inline]
 	fn deref(&self) -> &Self::Target { &self.buf }
 }
 
-impl<T: ToC> fmt::Display for MsgBuffer<T> {
+impl<const N: usize> fmt::Display for MsgBuffer<N> {
 	#[inline]
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_str(std::str::from_utf8(self).map_err(|_| fmt::Error::default())?)
 	}
 }
 
-impl<T: ToC> Eq for MsgBuffer<T> {}
+impl<const N: usize> Eq for MsgBuffer<N> {}
 
-impl<T: ToC> Hash for MsgBuffer<T> {
+impl<const N: usize> Hash for MsgBuffer<N> {
 	#[inline]
 	fn hash<H: Hasher>(&self, state: &mut H) { self.buf.hash(state); }
 }
 
-impl<T: ToC> PartialEq for MsgBuffer<T> {
+impl<const N: usize> PartialEq for MsgBuffer<N> {
 	#[inline]
 	fn eq(&self, other: &Self) -> bool { self.buf == other.buf }
 }
 
-impl<T: ToC> PartialEq<[u8]> for MsgBuffer<T> {
+impl<const N: usize> PartialEq<[u8]> for MsgBuffer<N> {
 	#[inline]
 	fn eq(&self, other: &[u8]) -> bool { self.buf == other }
 }
 
-impl<T: ToC> PartialEq<Vec<u8>> for MsgBuffer<T> {
+impl<const N: usize> PartialEq<Vec<u8>> for MsgBuffer<N> {
 	#[inline]
 	fn eq(&self, other: &Vec<u8>) -> bool { self.buf == *other }
 }
 
 /// ## Instantiation.
-impl<T: ToC> MsgBuffer<T> {
+impl<const N: usize> MsgBuffer<N> {
 	#[must_use]
 	#[inline]
 	/// # Instantiate From Raw Parts.
@@ -173,13 +130,13 @@ impl<T: ToC> MsgBuffer<T> {
 	/// things will happen down the road.
 	///
 	/// The table of contents must be properly aligned and ordered.
-	pub fn from_raw_parts(buf: Vec<u8>, toc: T) -> Self {
+	pub fn from_raw_parts(buf: Vec<u8>, toc: [u32; N]) -> Self {
 		Self { buf, toc }
 	}
 }
 
 /// ## Casting.
-impl<T: ToC> MsgBuffer<T> {
+impl<const N: usize> MsgBuffer<N> {
 	#[must_use]
 	#[inline]
 	/// # As Bytes.
@@ -211,7 +168,7 @@ impl<T: ToC> MsgBuffer<T> {
 	///
 	/// This method returns the underlying vector as a string slice.
 	///
-	/// ## Panic
+	/// ## Panics
 	///
 	/// This method will panic if the contents are not valid UTF-8.
 	#[inline]
@@ -236,7 +193,7 @@ impl<T: ToC> MsgBuffer<T> {
 	///
 	/// Consume and return the underlying vector as a `String`.
 	///
-	/// ## Panic
+	/// ## Panics
 	///
 	/// This method will panic if the contents are not valid UTF-8.
 	pub fn into_string(self) -> String { String::from_utf8(self.buf).unwrap() }
@@ -251,78 +208,72 @@ impl<T: ToC> MsgBuffer<T> {
 }
 
 /// ## Whole Buffer Play.
-impl<T: ToC> MsgBuffer<T> {
+impl<const N: usize> MsgBuffer<N> {
 	#[must_use]
 	#[inline]
 	/// # Total Buffer Length.
 	///
 	/// Return the length of the entire buffer (rather than a single part).
-	pub fn total_len(&self) -> usize { self.buf.len() }
+	pub fn total_len(&self) -> u32 { self.buf.len() as u32 }
 
 	/// # Clear Buffer.
 	///
 	/// This will empty the buffer and reset the TOC.
 	pub fn clear(&mut self) {
 		self.buf.clear();
-		self.toc.zero_parts();
+		self.zero_parts();
 	}
 }
 
 /// ## Individual Parts.
-impl<T: ToC> MsgBuffer<T> {
-	#[must_use]
-	/// # Part Length.
-	pub fn len(&self, idx: usize) -> usize { self.toc.part_len(idx) as usize }
-
+impl<const N: usize> MsgBuffer<N> {
 	#[must_use]
 	/// # Part Length as `u32`.
-	pub fn len_u32(&self, idx: usize) -> u32 { self.toc.part_len(idx) }
+	pub const fn len(&self, idx: usize) -> u32 { self.end(idx) - self.start(idx) }
 
 	#[must_use]
 	/// # Part Start.
-	pub fn start(&self, idx: usize) -> usize {
-		self.toc.part_start(idx) as usize
-	}
+	pub const fn start(&self, idx: usize) -> u32 { self.toc[idx << 1] }
 
 	#[must_use]
 	/// # Part End.
-	pub fn end(&self, idx: usize) -> usize {
-		self.toc.part_end(idx) as usize
-	}
+	pub const fn end(&self, idx: usize) -> u32 { self.toc[(idx << 1) + 1] }
 
 	#[must_use]
 	/// # Part Range.
-	pub fn range(&self, idx: usize) -> Range<usize> { self.toc.part_rng(idx) }
+	pub const fn range(&self, idx: usize) -> Range<usize> {
+		self.start(idx) as usize..self.end(idx) as usize
+	}
 
 	#[must_use]
 	/// # Get Part.
-	pub fn get(&self, idx: usize) -> &[u8] { &self.buf[self.toc.part_rng(idx)] }
+	pub fn get(&self, idx: usize) -> &[u8] { &self.buf[self.range(idx)] }
 
 	#[must_use]
 	/// # Get Mutable Part.
 	pub fn get_mut(&mut self, idx: usize) -> &mut [u8] {
-		let rng = self.toc.part_rng(idx);
+		let rng = self.range(idx);
 		&mut self.buf[rng]
 	}
 
 	/// # Extend Part.
 	pub fn extend(&mut self, idx: usize, buf: &[u8]) {
-		let len = buf.len();
+		let len = buf.len() as u32;
 		if len != 0 {
 			let end = self.end(idx);
 
 			// End of buffer trick.
-			if end == self.buf.len() {
+			if end == self.total_len() {
 				self.buf.extend_from_slice(buf);
-				self.toc.raise_parts_from(idx, len as u32);
+				self.raise_parts_from(idx, len);
 			}
 			else {
 				self.resize_grow(idx, len);
 				unsafe {
 					std::ptr::copy_nonoverlapping(
 						buf.as_ptr(),
-						self.buf.as_mut_ptr().add(end),
-						len
+						self.buf.as_mut_ptr().add(end as usize),
+						len as usize
 					);
 				}
 			}
@@ -334,7 +285,7 @@ impl<T: ToC> MsgBuffer<T> {
 	pub fn replace(&mut self, idx: usize, buf: &[u8]) {
 		// Get the lengths.
 		let old_len = self.len(idx);
-		let new_len = buf.len();
+		let new_len = buf.len() as u32;
 
 		// Expand it.
 		if old_len < new_len {
@@ -350,15 +301,15 @@ impl<T: ToC> MsgBuffer<T> {
 			unsafe {
 				std::ptr::copy_nonoverlapping(
 					buf.as_ptr(),
-					self.buf.as_mut_ptr().add(self.start(idx)),
-					new_len
+					self.buf.as_mut_ptr().add(self.start(idx) as usize),
+					new_len as usize
 				);
 			}
 		}
 	}
 
 	/// # Truncate Part.
-	pub fn truncate(&mut self, idx: usize, len: usize) {
+	pub fn truncate(&mut self, idx: usize, len: u32) {
 		let old_len = self.len(idx);
 		if old_len > len {
 			self.resize_shrink(idx, old_len - len);
@@ -366,8 +317,8 @@ impl<T: ToC> MsgBuffer<T> {
 	}
 }
 
-/// # Misc.
-impl<T: ToC> MsgBuffer<T> {
+/// ## Internal.
+impl<const N: usize> MsgBuffer<N> {
 	/// # Grow.
 	///
 	/// ## Safety
@@ -376,48 +327,64 @@ impl<T: ToC> MsgBuffer<T> {
 	/// of the callers to ensure data is written before any access is
 	/// attempted. It is private, and the callers do do that, so it
 	/// should be safe in practice. ;)
-	fn resize_grow(&mut self, idx: usize, adj: usize) {
+	fn resize_grow(&mut self, idx: usize, adj: u32) {
 		// Quick short-circuit.
 		if adj == 0 { return; }
 
-		let end: usize = self.end(idx);
-		let len: usize = self.buf.len();
-		self.buf.reserve(adj);
+		let end: u32 = self.end(idx);
+		let len: u32 = self.total_len();
+		self.buf.reserve(adj as usize);
 
 		// We need to shift things over.
 		if end < len {
 			unsafe {
 				ptr::copy(
-					self.buf.as_ptr().add(end),
-					self.buf.as_mut_ptr().add(end + adj),
-					len - end
+					self.buf.as_ptr().add(end as usize),
+					self.buf.as_mut_ptr().add((end + adj) as usize),
+					(len - end) as usize
 				);
 
-				self.buf.set_len(len + adj);
+				self.buf.set_len((len + adj) as usize);
 			}
 		}
 		else {
-			unsafe { self.buf.set_len(len + adj); }
+			unsafe { self.buf.set_len((len + adj) as usize); }
 		}
 
-		self.toc.raise_parts_from(idx, adj as u32);
+		self.raise_parts_from(idx, adj);
 	}
 
 	/// # Shrink.
-	fn resize_shrink(&mut self, idx: usize, adj: usize) {
+	fn resize_shrink(&mut self, idx: usize, adj: u32) {
 		assert!(self.len(idx) >= adj);
 		let end = self.end(idx);
 
 		// End-of-buffer shortcut.
-		if end == self.buf.len() {
-			self.buf.truncate(end - adj);
+		if end == self.total_len() {
+			self.buf.truncate((end - adj) as usize);
 		}
 		// Middle incision.
 		else {
-			self.buf.drain(end - adj..end);
+			self.buf.drain((end - adj) as usize..end as usize);
 		}
 
-		self.toc.lower_parts_from(idx, adj as u32);
+		self.lower_parts_from(idx, adj);
+	}
+
+	/// # Increment parts from.
+	fn raise_parts_from(&mut self, idx: usize, adj: u32) {
+		self.toc.iter_mut().skip((idx << 1) + 1).for_each(|x| *x += adj);
+	}
+
+	/// # Decrease parts from.
+	fn lower_parts_from(&mut self, idx: usize, adj: u32) {
+		assert!(self.len(idx) >= adj);
+		self.toc.iter_mut().skip((idx << 1) + 1).for_each(|x| *x -= adj);
+	}
+
+	/// # Zero out parts.
+	fn zero_parts(&mut self) {
+		self.toc.copy_from_slice(&[0_u32; N]);
 	}
 }
 
@@ -429,7 +396,7 @@ mod tests {
 
 	#[test]
 	fn extend() {
-		let mut buf = MsgBuffer::<[u32; 6]>::from_raw_parts(
+		let mut buf = MsgBuffer::<BUFFER3>::from_raw_parts(
 			vec![0, 0, 1, 1, 0, 0],
 			[
 				2, 4,
@@ -455,7 +422,7 @@ mod tests {
 
 	#[test]
 	fn replace() {
-		let mut buf = MsgBuffer::<[u32; 6]>::from_raw_parts(
+		let mut buf = MsgBuffer::<BUFFER3>::from_raw_parts(
 			vec![0, 0, 1, 1, 0, 0],
 			[
 				2, 4,
@@ -507,7 +474,7 @@ mod tests {
 
 	#[test]
 	fn truncate() {
-		let mut buf = MsgBuffer::<[u32; 6]>::from_raw_parts(
+		let mut buf = MsgBuffer::<BUFFER3>::from_raw_parts(
 			vec![0, 0, 1, 1, 0, 0],
 			[
 				2, 4,

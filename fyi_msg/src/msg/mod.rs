@@ -24,6 +24,11 @@ use std::{
 
 
 
+#[cfg(feature = "timestamps")]      const MSGBUFFER: usize = crate::BUFFER6;
+#[cfg(not(feature = "timestamps"))] const MSGBUFFER: usize = crate::BUFFER5;
+
+
+
 /// # Helper: ToC Setup.
 #[cfg(feature = "timestamps")]
 macro_rules! new_toc {
@@ -134,7 +139,7 @@ pub const FLAG_NEWLINE: u8 =   0b0100;
 ///
 /// Take a look at the `examples/` directory for a rundown on the different
 /// message types and basic usage.
-pub struct Msg(MsgBuffer);
+pub struct Msg(MsgBuffer<MSGBUFFER>);
 
 impl AsRef<[u8]> for Msg {
 	#[inline]
@@ -348,6 +353,10 @@ impl Msg {
 impl Msg {
 	#[must_use]
 	/// # Plain Formatted.
+	///
+	/// ## Panics
+	///
+	/// This will panic if not well formed.
 	pub fn fmt(args: Arguments) -> Self {
 		use std::io::Write;
 
@@ -360,6 +369,10 @@ impl Msg {
 
 	#[must_use]
 	/// # Prefixed Formatted.
+	///
+	/// ## Panics
+	///
+	/// This will panic if not well formed.
 	pub fn fmt_prefixed(kind: MsgKind, args: Arguments) -> Self {
 		use std::io::Write;
 
@@ -374,6 +387,10 @@ impl Msg {
 
 	#[must_use]
 	/// # Prefixed Formatted.
+	///
+	/// ## Panics
+	///
+	/// This will panic if not well formed.
 	pub fn fmt_custom<S>(prefix: S, color: u8, args: Arguments) -> Self
 	where S: AsRef<str> {
 		use std::io::Write;
@@ -725,7 +742,7 @@ impl Msg {
 		#[cfg(feature = "timestamps")]
 		// If the fixed width bits are themselves too big, we can't fit print.
 		let fixed_width: usize =
-			self.0.len(PART_INDENT) +
+			self.0.len(PART_INDENT) as usize +
 			crate::width(self.0.get(PART_PREFIX)) +
 			crate::width(self.0.get(PART_SUFFIX)) +
 			if 0 == self.0.len(PART_TIMESTAMP) { 0 }
@@ -734,7 +751,7 @@ impl Msg {
 		#[cfg(not(feature = "timestamps"))]
 		// If the fixed width bits are themselves too big, we can't fit print.
 		let fixed_width: usize =
-			self.0.len(PART_INDENT) +
+			self.0.len(PART_INDENT) as usize +
 			crate::width(self.0.get(PART_PREFIX)) +
 			crate::width(self.0.get(PART_SUFFIX));
 
@@ -744,7 +761,7 @@ impl Msg {
 
 		// Check the length again; the fixed bits might just have a lot of
 		// ANSI.
-		let keep = crate::length_width(self.0.get(PART_MSG), width - fixed_width);
+		let keep = crate::length_width(self.0.get(PART_MSG), width - fixed_width) as u32;
 		if keep == 0 { Cow::Owned(Vec::new()) }
 		else if keep == self.0.len(PART_MSG) { Cow::Borrowed(self) }
 		else {
@@ -770,16 +787,16 @@ impl Msg {
 	/// # Length.
 	///
 	/// This returns the total length of the entire `Msg`, ANSI markup and all.
-	pub fn len(&self) -> usize {
+	pub const fn len(&self) -> usize {
 		// Because the buffers used by `Msg` end on partitioned space, we can
 		// infer the length given the ending index of the newline part, making
 		// this method `const`.
-		self.0.end(PART_NEWLINE)
+		self.0.end(PART_NEWLINE) as usize
 	}
 
 	#[must_use]
 	/// # Is Empty.
-	pub fn is_empty(&self) -> bool { self.len() == 0 }
+	pub const fn is_empty(&self) -> bool { self.len() == 0 }
 }
 
 /// ## Printing.
