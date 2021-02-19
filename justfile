@@ -273,8 +273,9 @@ version:
 
 # Init dependencies.
 @_init:
-	#rustup default nightly-2020-09-15
-	#rustup component add clippy --toolchain nightly-2020-09-15
+	rustup default nightly
+	rustup component add clippy --toolchain nightly
+
 	[ ! -f "{{ justfile_directory() }}/Cargo.lock" ] || rm "{{ justfile_directory() }}/Cargo.lock"
 	cargo update -w
 	cargo outdated -w

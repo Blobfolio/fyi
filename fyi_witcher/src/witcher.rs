@@ -387,28 +387,6 @@ impl Witcher {
 			.and_then(|x| x.into_inner().ok())
 			.unwrap_or_default()
 	}
-
-	#[cfg(feature = "witching")]
-	#[must_use]
-	/// # Build (into Progress)!
-	///
-	/// This is identical to [`build()`](Witcher::build), except a ready-to-go
-	/// [`Witching`] struct is returned instead of a vector.
-	///
-	/// This method requires the crate feature `witching` be enabled.
-	///
-	/// ## Examples
-	///
-	/// ```ignore
-	/// use fyi_witcher::Witcher;
-	///
-	/// let files = Witcher::default()
-	///     .with_ext(b".jpg")
-	///     .with_path("/my/dir")
-	///     .into_witching()
-	///     .run(|p| { ... });
-	/// ```
-	pub fn into_witching(self) -> crate::Witching { crate::Witching::from(self.build()) }
 }
 
 

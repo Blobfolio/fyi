@@ -8,6 +8,14 @@ license = "WTFPL"
 repository = "https://github.com/Blobfolio/fyi"
 publish = false
 
+[dependencies.ahash]
+version = "0.7.*"
+optional = true
+
+[dependencies.bytecount]
+version = "0.6.*"
+optional = true
+
 [dependencies.chrono]
 version = "0.4.*"
 default-features = false
@@ -18,6 +26,14 @@ optional = true
 git = "https://github.com/Blobfolio/dactyl.git"
 tag = "v0.1.0"
 
+[dependencies.num-integer]
+version = "0.1.*"
+optional = true
+
+[dependencies.term_size]
+version = "0.3.*"
+optional = true
+
 [dependencies.unicode-width]
 version = "0.1.*"
 optional = true
@@ -25,6 +41,9 @@ optional = true
 [dev-dependencies.brunch]
 git = "https://github.com/Blobfolio/brunch.git"
 tag = "v0.1.0"
+
+[dev-dependencies.rayon]
+version = "1.5.*"
 
 [[bench]]
 name = "fm_buffer"
@@ -53,6 +72,9 @@ harness = false
 [[example]]
 name = "msg"
 
+[[example]]
+name = "progless"
+
 [features]
 # This adds a few additional MsgKinds relevant only to the main FYI binary.
 # There is no point enabling this in other crates.
@@ -60,6 +82,9 @@ bin_kinds = []
 
 # Add width-fitting support to the Msg struct, i.e. Msg.fitted().
 fitted = [ "unicode-width" ]
+
+# Make use of the "progless" bar.
+progress = [ "ahash", "bytecount", "fitted", "num-integer", "term_size" ]
 
 # Add timestamp support to messages.
 timestamps = [ "chrono" ]

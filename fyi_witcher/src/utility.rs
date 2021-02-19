@@ -9,26 +9,6 @@ use std::path::{
 
 
 
-#[must_use]
-#[inline]
-/// # `AHash` Byte Hash.
-///
-/// This is a convenience method for quickly hashing bytes using the
-/// [`AHash`](https://crates.io/crates/ahash) crate. Check out that project's
-/// home page for more details. Otherwise, TL;DR it is very fast.
-///
-/// ## Examples
-///
-/// ```no_run
-/// let hash = fyi_witcher::utility::hash64(b"Hello World");
-/// ```
-pub fn hash64(src: &[u8]) -> u64 {
-	use std::hash::Hasher;
-	let mut hasher = ahash::AHasher::new_with_keys(1319, 2371);
-	hasher.write(src);
-	hasher.finish()
-}
-
 #[allow(trivial_casts)] // We need triviality!
 #[must_use]
 #[inline]
@@ -88,23 +68,6 @@ pub(crate) fn resolve_path(path: PathBuf, trusted: bool) -> Option<(u128, bool, 
 
 	let path = std::fs::canonicalize(path).ok()?;
 	Some((hash, dir, path))
-}
-
-#[cfg(feature = "witching")]
-#[must_use]
-#[inline]
-/// # Term Width.
-///
-/// This is a simple wrapper around `term_size::dimensions()` to provide
-/// the current terminal column width. We don't have any use for height,
-/// so that property is ignored.
-///
-/// Note: The width returned will be `1` less than the actual value to mitigate
-/// any whitespace weirdness that might be lurking at the edge.
-///
-/// This method requires the `witching` crate feature be enabled.
-pub fn term_width() -> u32 {
-	term_size::dimensions().map_or(0, |(w, _)| (w as u32).saturating_sub(1))
 }
 
 

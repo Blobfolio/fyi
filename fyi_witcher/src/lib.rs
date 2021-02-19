@@ -1,12 +1,9 @@
 /*!
 # FYI Witcher
 
-This crate provides two main components, both of them file-related:
+This crate provides [`Witcher`], a simple, minimally configurable file system traversal library.
 
-* [`Witcher`] is a simple, minimally configurable file system traversal library.
-* [`Witching`] is a lightweight, automatic progress bar wrapper that can be used while iterating through/operating on a set of paths.
-
-For simple get-all-files-recursively purposes, there's also [`witch`].
+For simple get-all-files-recursively purposes, there's also the method [`witch`], which avoids the filtering overhead and setup of [`Witcher`].
 
 
 
@@ -15,7 +12,6 @@ For simple get-all-files-recursively purposes, there's also [`witch`].
 | Feature | Description |
 | ------- | ----------- |
 | regexp | Enables the [`Witcher::with_regex`] path filter. |
-| witching | Enables the [`Witching`] progress struct. |
 
 
 
@@ -58,19 +54,10 @@ version.
 
 mod witch;
 mod witcher;
-#[cfg(feature = "witching")] mod witching;
 pub mod utility;
 
 pub use witch::witch;
 pub use witcher::Witcher;
-
-#[cfg(feature = "witching")]
-pub use witching::{
-	Witching,
-	WITCHING_DIFF,
-	WITCHING_QUIET,
-	WITCHING_SUMMARIZE,
-};
 
 
 

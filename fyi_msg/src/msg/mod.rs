@@ -817,7 +817,7 @@ impl Msg {
 
 		let writer = io::stdout();
 		let mut handle = writer.lock();
-		let _ = handle.write_all(&self.0)
+		let _res = handle.write_all(&self.0)
 			.and_then(|_| handle.flush());
 	}
 
@@ -837,7 +837,7 @@ impl Msg {
 
 		let writer = io::stderr();
 		let mut handle = writer.lock();
-		let _ = handle.write_all(&self.0)
+		let _res = handle.write_all(&self.0)
 			.and_then(|_| handle.flush());
 	}
 
@@ -917,6 +917,7 @@ impl Msg {
 mod tests {
 	use super::*;
 	use brunch as _;
+	use rayon as _;
 
 	#[test]
 	fn t_msg() {

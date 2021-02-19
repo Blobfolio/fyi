@@ -42,6 +42,7 @@ You can also prompt a confirmation with the following, which will return a `bool
 | Feature | Description |
 | ------- | ----------- |
 | fitted | Enables [`Msg::fitted`] for obtaining a slice trimmed to a specific display width. |
+| progress | Enables [`Progless`], a thread-safe CLI progress bar displayer.
 | timestamps | Enables timestamp-related methods and flags like [`Msg::with_timestamp`]. |
 
 
@@ -85,6 +86,7 @@ version.
 mod msg;
 
 #[cfg(feature = "fitted")] mod fitted;
+#[cfg(feature = "progress")] mod progress;
 
 pub use msg::{
 	buffer::BUFFER2,
@@ -108,6 +110,8 @@ pub use fitted::{
 	length_width,
 	width,
 };
+
+#[cfg(feature = "progress")] pub use progress::Progless;
 
 #[cfg(feature = "timestamps")]
 pub use msg::FLAG_TIMESTAMP;
