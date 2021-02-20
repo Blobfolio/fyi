@@ -151,9 +151,8 @@ label = "<MSG>"
 description = "The message!"
 subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "success", "task", "warning" ]
 
-[dependencies.argue]
-git = "https://github.com/Blobfolio/argue.git"
-tag = "v0.1.0"
+[dependencies]
+argyle = "0.1.*"
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"

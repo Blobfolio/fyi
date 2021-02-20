@@ -128,9 +128,9 @@ print a certain number of blank lines for you. Run
 
 
 
-use argue::{
+use argyle::{
 	Argue,
-	ArgueError,
+	ArgyleError,
 	FLAG_DYNAMIC_HELP,
 	FLAG_REQUIRED,
 	FLAG_SUBCOMMAND,
@@ -153,12 +153,12 @@ fn main() {
 	// Handle errors.
 	if let Err(e) = _main() {
 		match e {
-			ArgueError::Passthru(_) => {},
-			ArgueError::WantsDynamicHelp(x) => {
+			ArgyleError::Passthru(_) => {},
+			ArgyleError::WantsDynamicHelp(x) => {
 				helper(x);
 				return;
 			},
-			ArgueError::WantsVersion => {
+			ArgyleError::WantsVersion => {
 				fyi_msg::plain!(concat!("FYI v", env!("CARGO_PKG_VERSION")));
 				return;
 			},
@@ -177,7 +177,7 @@ fn main() {
 ///
 /// This lets us more easily bubble errors, which are printed and handled
 /// specially.
-fn _main() -> Result<(), ArgueError> {
+fn _main() -> Result<(), ArgyleError> {
 	// Parse CLI arguments.
 	let args = Argue::new(
 		FLAG_DYNAMIC_HELP | FLAG_REQUIRED | FLAG_SUBCOMMAND | FLAG_VERSION
@@ -188,7 +188,7 @@ fn _main() -> Result<(), ArgueError> {
 			blank(&args);
 			Ok(())
 		},
-		MsgKind::None => Err(ArgueError::NoSubCmd),
+		MsgKind::None => Err(ArgyleError::NoSubCmd),
 		kind => msg(kind, &args),
 	}
 }
@@ -215,7 +215,7 @@ fn blank(args: &Argue) {
 
 #[doc(hidden)]
 /// Basic Message.
-fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgueError> {
+fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgyleError> {
 	// Exit code.
 	let exit: i32 = args.option2(b"-e", b"--exit")
 		.and_then(|x| std::str::from_utf8(x).ok())
@@ -241,11 +241,11 @@ fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgueError> {
 					prefix,
 					color,
 					std::str::from_utf8(args.first_arg()?)
-						.map_err(|_| ArgueError::NoArg)?
+						.map_err(|_| ArgyleError::NoArg)?
 				)
 			}
 			else {
-				Msg::plain(std::str::from_utf8(args.first_arg()?).map_err(|_| ArgueError::NoArg)?)
+				Msg::plain(std::str::from_utf8(args.first_arg()?).map_err(|_| ArgyleError::NoArg)?)
 			}
 		}
 		// Built-in prefix.
@@ -253,7 +253,7 @@ fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgueError> {
 			Msg::new(
 				kind,
 				std::str::from_utf8(args.first_arg()?)
-					.map_err(|_| ArgueError::NoArg)?
+					.map_err(|_| ArgyleError::NoArg)?
 			)
 		}
 		.with_flags(flags);
@@ -261,7 +261,7 @@ fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgueError> {
 	// It's a prompt!
 	if MsgKind::Confirm == kind {
 		if msg.prompt() { return Ok(()); }
-		return Err(ArgueError::Passthru(1));
+		return Err(ArgyleError::Passthru(1));
 	}
 
 	// Print to `Stderr`.
@@ -271,7 +271,7 @@ fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgueError> {
 
 	// Special exit?
 	if 0 == exit { Ok(()) }
-	else { Err(ArgueError::Passthru(exit)) }
+	else { Err(ArgyleError::Passthru(exit)) }
 }
 
 #[doc(hidden)]

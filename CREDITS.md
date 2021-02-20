@@ -479,6 +479,7 @@ limitations under the License.
 
 **Used By:**
 
+* [argyle 0.1.0](https://github.com/Blobfolio/argyle)
 * [dactyl 0.1.2](https://github.com/Blobfolio/dactyl)
 
 
@@ -503,7 +504,6 @@ TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
 
 **Used By:**
 
-* [argue 0.1.0](https://github.com/Blobfolio/argue)
 * [fyi 0.6.3](https://github.com/Blobfolio/fyi)
 * [fyi_msg 0.6.3](https://github.com/Blobfolio/fyi)
 
