@@ -8,6 +8,9 @@ license = "WTFPL"
 repository = "https://github.com/Blobfolio/fyi"
 publish = false
 
+[dependencies]
+dactyl = "0.1.*"
+
 [dependencies.ahash]
 version = "0.7.*"
 optional = true
@@ -22,10 +25,6 @@ default-features = false
 features = [ "clock", "std" ]
 optional = true
 
-[dependencies.dactyl]
-git = "https://github.com/Blobfolio/dactyl.git"
-tag = "v0.1.0"
-
 [dependencies.num-integer]
 version = "0.1.*"
 optional = true
@@ -38,12 +37,9 @@ optional = true
 version = "0.1.*"
 optional = true
 
-[dev-dependencies.brunch]
-git = "https://github.com/Blobfolio/brunch.git"
-tag = "v0.1.0"
-
-[dev-dependencies.rayon]
-version = "1.5.*"
+[dev-dependencies]
+brunch = "0.1.*"
+rayon = "1.5.*"
 
 [[bench]]
 name = "fm_buffer"

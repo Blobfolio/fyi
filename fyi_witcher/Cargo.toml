@@ -16,9 +16,8 @@ rayon = "1.5.*"
 version = "1.4.*"
 optional = true
 
-[dev-dependencies.brunch]
-git = "https://github.com/Blobfolio/brunch.git"
-tag = "v0.1.0"
+[dev-dependencies]
+brunch = "0.1.*"
 
 [[bench]]
 name = "fw_witcher"
