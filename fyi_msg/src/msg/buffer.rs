@@ -149,7 +149,9 @@ impl<const N: usize> MsgBuffer<N> {
 	/// # As Pointer.
 	///
 	/// This method returns a read-only pointer to the underlying buffer.
-	pub fn as_ptr(&self) -> *const u8 { self.buf.as_ptr() }
+	pub(crate) unsafe fn as_ptr(&self, idx: u32) -> *const u8 {
+		self.buf.as_ptr().add(idx as usize)
+	}
 
 	#[must_use]
 	#[inline]
@@ -161,7 +163,9 @@ impl<const N: usize> MsgBuffer<N> {
 	///
 	/// Any changes written to the pointer must not affect the table of
 	/// contents or undefined things will happen!
-	pub unsafe fn as_mut_ptr(&mut self) -> *mut u8 { self.buf.as_mut_ptr() }
+	pub(crate) unsafe fn as_mut_ptr(&mut self, idx: u32) -> *mut u8 {
+		self.buf.as_mut_ptr().add(idx as usize)
+	}
 
 	#[must_use]
 	/// # As Str.
@@ -272,7 +276,7 @@ impl<const N: usize> MsgBuffer<N> {
 				unsafe {
 					std::ptr::copy_nonoverlapping(
 						buf.as_ptr(),
-						self.buf.as_mut_ptr().add(end as usize),
+						self.as_mut_ptr(end),
 						len as usize
 					);
 				}
@@ -301,7 +305,7 @@ impl<const N: usize> MsgBuffer<N> {
 			unsafe {
 				std::ptr::copy_nonoverlapping(
 					buf.as_ptr(),
-					self.buf.as_mut_ptr().add(self.start(idx) as usize),
+					self.as_mut_ptr(self.start(idx)),
 					new_len as usize
 				);
 			}
@@ -339,8 +343,8 @@ impl<const N: usize> MsgBuffer<N> {
 		if end < len {
 			unsafe {
 				ptr::copy(
-					self.buf.as_ptr().add(end as usize),
-					self.buf.as_mut_ptr().add((end + adj) as usize),
+					self.as_ptr(end),
+					self.as_mut_ptr(end + adj),
 					(len - end) as usize
 				);
 

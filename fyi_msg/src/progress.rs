@@ -749,12 +749,8 @@ impl ProglessInner {
 			let [h, m, s] = NiceElapsed::hms(secs);
 			unsafe {
 				let mut buf = mutex_ptr!(self.buf);
-				write_time(
-					buf.as_mut_ptr().add(buf.start(PART_ELAPSED) as usize),
-					h,
-					m,
-					s,
-				);
+				let start = buf.start(PART_ELAPSED);
+				write_time(buf.as_mut_ptr(start), h, m, s);
 			}
 
 			true
