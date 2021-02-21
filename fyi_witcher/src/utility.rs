@@ -2,12 +2,34 @@
 # FYI Witcher: Utility Methods.
 */
 
+use rayon::{
+	iter::ParallelIterator,
+	prelude::IntoParallelIterator,
+};
 use std::path::{
 	Path,
 	PathBuf,
 };
 
 
+
+#[must_use]
+/// # Disk Usage
+///
+/// This sums the provided file sizes in parallel.
+///
+/// ## Examples
+///
+/// ```no_run
+/// let paths = [ "/path/one", "path/two", "path/three" ];
+/// let size = fyi_witcher::utility::du(&paths);
+/// ```
+pub fn du<I, P>(src: I) -> u64
+where P: AsRef<Path>, I: IntoParallelIterator<Item=P> {
+	src.into_par_iter()
+		.map(|p| std::fs::metadata(p).map_or(0, |m| m.len()))
+		.sum()
+}
 
 #[allow(trivial_casts)] // We need triviality!
 #[must_use]
@@ -75,6 +97,21 @@ pub(crate) fn resolve_path(path: PathBuf, trusted: bool) -> Option<(u128, bool, 
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn t_du() {
+		let files = vec![
+			std::fs::canonicalize("./tests/assets/file.txt").unwrap(),
+			std::fs::canonicalize("./tests/assets/functioning.JPEG").unwrap(),
+			std::fs::canonicalize("./tests/assets/is-executable.sh").unwrap(),
+		];
+
+		let size = du(&files);
+		assert_eq!(size, 30_383_u64);
+
+		// Make sure ownership is still OK.
+		assert_eq!(files.len(), 3);
+	}
 
 	#[test]
 	fn t_resolve_path() {
