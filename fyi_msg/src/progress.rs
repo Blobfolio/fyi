@@ -93,9 +93,10 @@ let elapsed = pbar.finish();
 
 use ahash::AHashSet;
 use crate::{
+	BUFFER8,
 	Msg,
 	MsgBuffer,
-	BUFFER8,
+	MsgKind,
 };
 use dactyl::{
 	NiceElapsed,
@@ -870,6 +871,23 @@ pub struct Progless {
 	inner: Arc<ProglessInner>,
 }
 
+impl From<Progless> for Msg {
+	#[inline]
+	/// # Into [`Msg`]
+	///
+	/// This provides a simple way to convert a (finished) [`Progless`]
+	/// instance into a generic summary [`Msg`] that can e.g. be printed.
+	///
+	/// For a more advanced summary, use the [`Progless::summarize`] method.
+	fn from(src: Progless) -> Self {
+		Self::fmt_prefixed(
+			MsgKind::Done,
+			format_args!("Finished in {}.", NiceElapsed::from(src.inner.elapsed()).as_str())
+		)
+			.with_newline(true)
+	}
+}
+
 /// # Construction/Destruction.
 impl Progless {
 	#[must_use]
@@ -924,6 +942,34 @@ impl Progless {
 		self.inner.stop();
 		self.steady.stop();
 		NiceElapsed::from(self.inner.elapsed())
+	}
+
+	#[must_use]
+	/// # Summarize.
+	///
+	/// Generate a formatted [`Msg`] summary of the (finished) progress using
+	/// the supplied verb and noun.
+	///
+	/// If you just want a generic "Finished in X." message, use [`Msg::from`]
+	/// instead.
+	pub fn summary<S>(&self, verb: S, singular: S, plural: S) -> Msg
+	where S: AsRef<str> {
+		let done = self.inner.done();
+		let noun =
+			if done == 1 { singular.as_ref() }
+			else { plural.as_ref() };
+
+		Msg::fmt_prefixed(
+			MsgKind::Done,
+			format_args!(
+				"{} {} {} in {}.",
+				verb.as_ref(),
+				NiceU32::from(done).as_str(),
+				noun,
+				NiceElapsed::from(self.inner.elapsed())
+			)
+		)
+			.with_newline(true)
 	}
 }
 
