@@ -330,7 +330,7 @@ impl Msg {
 	/// ```no_run
 	/// use fyi_msg::{Msg, MsgKind};
 	/// assert_eq!(
-	///     Msg::new(MsgKind::Error, "Oh no!"),
+	///     Msg::new(MsgKind::Error, "Oh no!").with_newline(true),
 	///     Msg::error("Oh no!")
 	/// );
 	/// ```
