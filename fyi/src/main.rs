@@ -143,7 +143,6 @@ use fyi_msg::{
 	FLAG_NEWLINE,
 	FLAG_TIMESTAMP,
 };
-use std::borrow::Cow;
 
 
 
@@ -280,66 +279,43 @@ fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgyleError> {
 ///
 /// Print the appropriate help screen given the call details. Most of the sub-
 /// commands work the same way, but a few have their own distinct messages.
-fn helper(cmd: Option<Vec<u8>>) {
-	Msg::fmt(format_args!(
-		r#"
-                      ;\
-                     |' \
-  _                  ; : ;
- / `-.              /: : |
-|  ,-.`-.          ,': : |
-\  :  `. `.       ,'-. : |
- \ ;    ;  `-.__,'    `-.|         {}{}{}
-  \ ;   ;  :::  ,::'`:.  `.        Simple CLI status messages.
-   \ `-. :  `    :.    `.  \
-    \   \    ,   ;   ,:    (\
-     \   :., :.    ,'o)): ` `-.
-    ,/,' ;' ,::"'`.`---'   `.  `-._
-  ,/  :  ; '"      `;'          ,--`.
- ;/   :; ;             ,:'     (   ,:)
-   ,.,:.    ; ,:.,  ,-._ `.     \""'/
-   '::'     `:'`  ,'(  \`._____.-'"'
-      ;,   ;  `.  `. `._`-.  \\
-      ;:.  ;:       `-._`-.\  \`.
-       '`:. :        |' `. `\  ) \
-          ` ;:       |    `--\__,'
-            '`      ,'
-                 ,-'
-
-{}
-"#,
-		"\x1b[38;5;199mFYI\x1b[0;38;5;69m v",
-		env!("CARGO_PKG_VERSION"),
-		"\x1b[0m",
-		sub_helper(cmd),
-	))
-	.print();
-}
-
-#[doc(hidden)]
-#[cold]
-/// # Sub Help.
 ///
-/// This text varies by subcommand.
-fn sub_helper(cmd: Option<Vec<u8>>) -> Cow<'static, str> {
-	if let Some(cmd) = cmd {
-		match cmd.as_slice() {
-			b"blank" => return Cow::Borrowed(include_str!("../help/blank.txt")),
-			b"print" => return Cow::Borrowed(include_str!("../help/print.txt")),
-			b"confirm" | b"prompt" => return Cow::Borrowed(include_str!("../help/confirm.txt")),
-			x => {
-				let kind = MsgKind::from(x);
-				if kind != MsgKind::None {
-					return Cow::Owned(format!(
-						include_str!("../help/generic.txt"),
-						kind.title(),
-						Msg::new(kind, "Hello World").as_str(),
-						kind.title().to_lowercase(),
-					));
-				}
-			},
-		}
+/// The contents are generated via `build.rs`, which lowers the runtime cost
+/// and shrinks the binary a touch.
+fn helper(cmd: Option<Vec<u8>>) {
+	use std::io::Write;
+
+	let writer = std::io::stdout();
+	let mut handle = writer.lock();
+
+	// The top is always the same.
+	handle.write_all(include_bytes!("../help/generated/top.txt")).unwrap();
+
+	// The built-in message types have a variable part, and a static part.
+	macro_rules! write_generic {
+		($path:literal) => {
+			handle.write_all(include_bytes!($path))
+				.and_then(|_| handle.write_all(include_bytes!("../help/generated/generic-bottom.txt")))
+		};
 	}
 
-	Cow::Borrowed(include_str!("../help/help.txt"))
+	// The middle section varies by subcommand.
+	let cmd = cmd.unwrap_or_default();
+	match cmd.as_slice() {
+		b"blank" => handle.write_all(include_bytes!("../help/generated/blank.txt")),
+		b"confirm" | b"prompt" => handle.write_all(include_bytes!("../help/generated/confirm.txt")),
+		b"crunched" => write_generic!("../help/generated/crunched.txt"),
+		b"debug" => write_generic!("../help/generated/debug.txt"),
+		b"done" => write_generic!("../help/generated/done.txt"),
+		b"error" => write_generic!("../help/generated/error.txt"),
+		b"info" => write_generic!("../help/generated/info.txt"),
+		b"notice" => write_generic!("../help/generated/notice.txt"),
+		b"print" => handle.write_all(include_bytes!("../help/generated/print.txt")),
+		b"success" => write_generic!("../help/generated/success.txt"),
+		b"task" => write_generic!("../help/generated/task.txt"),
+		b"warning" => write_generic!("../help/generated/warning.txt"),
+		_ => handle.write_all(include_bytes!("../help/generated/help.txt")),
+	}.unwrap();
+
+	handle.flush().unwrap();
 }

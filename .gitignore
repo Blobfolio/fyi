@@ -1,10 +1,8 @@
 **.1.gz
 /Cargo.lock
 /doc/
+/fyi/help/generated/
 /fyi/target/
-/fyi_menu/target/
 /fyi_msg/target/
-/fyi_num/target/
-/fyi_witcher/target/
 /release/man/fyi.1.gz
 /target/

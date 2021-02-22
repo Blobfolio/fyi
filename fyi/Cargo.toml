@@ -151,6 +151,9 @@ label = "<MSG>"
 description = "The message!"
 subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "success", "task", "warning" ]
 
+[build-dependencies.fyi_msg]
+path = "../fyi_msg"
+
 [dependencies]
 argyle = "0.1.*"
 

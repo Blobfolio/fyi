@@ -1,13 +1,11 @@
-Ask a Yes/No question using the built-in prefix "confirm".
-The exit code corresponds to the positivity of the answer.
-
-USAGE:
-    fyi confirm [FLAGS] <MSG>
-
 FLAGS:
     -h, --help         Print this screen.
     -i, --indent       Indent the line.
+        --stderr       Print to STDERR instead of STDOUT.
     -t, --timestamp    Include a timestamp.
+
+OPTIONS:
+    -e, --exit <num>   Exit with this status code after printing. [default: 0]
 
 ARGS:
     <MSG>    The message!

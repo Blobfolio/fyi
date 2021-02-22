@@ -1,0 +1,7 @@
+Print a message using the built-in "{0}" prefix.
+
+EXAMPLE:
+    {1}
+
+USAGE:
+    fyi {2} [FLAGS] [OPTIONS] <MSG>

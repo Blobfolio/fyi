@@ -1,0 +1,13 @@
+Ask a Yes/No question using the built-in prefix "Confirm".
+The exit code corresponds to the positivity of the answer.
+
+USAGE:
+    fyi confirm [FLAGS] <MSG>
+
+FLAGS:
+    -h, --help         Print this screen.
+    -i, --indent       Indent the line.
+    -t, --timestamp    Include a timestamp.
+
+ARGS:
+    <MSG>    The message!

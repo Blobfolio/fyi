@@ -173,25 +173,6 @@ impl MsgKind {
 		}
 	}
 
-	#[must_use]
-	/// # Unformatted string.
-	pub const fn title(self) -> &'static str {
-		match self {
-			#[cfg(feature = "bin_kinds")] Self::None | Self::Blank | Self::Custom => "",
-			#[cfg(not(feature = "bin_kinds"))] Self::None => "",
-			Self::Confirm => "Confirm",
-			Self::Crunched => "Crunched",
-			Self::Debug => "Debug",
-			Self::Done => "Done",
-			Self::Error => "Error",
-			Self::Info => "Info",
-			Self::Notice => "Notice",
-			Self::Success => "Success",
-			Self::Task => "Task",
-			Self::Warning => "Warning",
-		}
-	}
-
 	#[inline]
 	/// # Into Message.
 	pub fn into_msg<S>(self, msg: S) -> Msg
