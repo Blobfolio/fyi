@@ -18,7 +18,7 @@ use std::path::{
 /// This generates text for the various help screens to avoid having to do that
 /// at runtime. The binary actually ends up slightly smaller this way, too.
 pub fn main() {
-	println!("cargo:rerun-if-changed=help/stock");
+	println!("cargo:rerun-if-changed=help");
 	println!("cargo:rerun-if-env-changed=CARGO_PKG_VERSION");
 
 	// Handle the top.
@@ -78,7 +78,7 @@ pub fn main() {
 		write_help(
 			out_path(&name.to_lowercase()),
 			format!(
-				include_str!("./help/stock/generic.txt"),
+				include_str!("./help/generic.txt"),
 				name,
 				Msg::new(kind, "Hello World").as_str(),
 				name.to_lowercase(),
@@ -90,17 +90,17 @@ pub fn main() {
 /// # Out path.
 fn copy_path(name: &str) {
 	let mut src = std::fs::canonicalize(env!("CARGO_MANIFEST_DIR")).expect("Missing Cargo Dir.");
-	src.push("help/stock");
-	src.push(format!("{}.txt", name));
+	src.push(format!("help/{}.txt", name));
 	write_help(out_path(name), &std::fs::read(src).expect("Failed to open file."));
 }
 
 /// # Out path.
 fn out_path(name: &str) -> PathBuf {
-	let mut out = std::fs::canonicalize(env!("CARGO_MANIFEST_DIR")).expect("Missing Cargo Dir.");
-	out.push("help/generated");
-	out.push(format!("{}.txt", name));
-	out
+	PathBuf::from(format!(
+		"{}/help-{}.txt",
+		std::env::var("OUT_DIR").expect("Missing OUT_DIR"),
+		name
+	))
 }
 
 /// # Write file.

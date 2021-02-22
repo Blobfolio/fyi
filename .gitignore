@@ -1,8 +1,6 @@
-**.1.gz
+**.gz
 /Cargo.lock
 /doc/
-/fyi/help/generated/
 /fyi/target/
 /fyi_msg/target/
-/release/man/fyi.1.gz
 /target/

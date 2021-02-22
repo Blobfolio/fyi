@@ -288,33 +288,35 @@ fn helper(cmd: Option<Vec<u8>>) {
 	let writer = std::io::stdout();
 	let mut handle = writer.lock();
 
-	// The top is always the same.
-	handle.write_all(include_bytes!("../help/generated/top.txt")).unwrap();
-
 	// The built-in message types have a variable part, and a static part.
-	macro_rules! write_generic {
+	macro_rules! write_help {
 		($path:literal) => {
-			handle.write_all(include_bytes!($path))
-				.and_then(|_| handle.write_all(include_bytes!("../help/generated/generic-bottom.txt")))
+			handle.write_all(include_bytes!(concat!(env!("OUT_DIR"), "/help-", $path, ".txt")))
+		};
+		($path:literal, true) => {
+			write_help!($path).and_then(|_| write_help!("generic-bottom"))
 		};
 	}
+
+	// The top is always the same.
+	write_help!("top").unwrap();
 
 	// The middle section varies by subcommand.
 	let cmd = cmd.unwrap_or_default();
 	match cmd.as_slice() {
-		b"blank" => handle.write_all(include_bytes!("../help/generated/blank.txt")),
-		b"confirm" | b"prompt" => handle.write_all(include_bytes!("../help/generated/confirm.txt")),
-		b"crunched" => write_generic!("../help/generated/crunched.txt"),
-		b"debug" => write_generic!("../help/generated/debug.txt"),
-		b"done" => write_generic!("../help/generated/done.txt"),
-		b"error" => write_generic!("../help/generated/error.txt"),
-		b"info" => write_generic!("../help/generated/info.txt"),
-		b"notice" => write_generic!("../help/generated/notice.txt"),
-		b"print" => handle.write_all(include_bytes!("../help/generated/print.txt")),
-		b"success" => write_generic!("../help/generated/success.txt"),
-		b"task" => write_generic!("../help/generated/task.txt"),
-		b"warning" => write_generic!("../help/generated/warning.txt"),
-		_ => handle.write_all(include_bytes!("../help/generated/help.txt")),
+		b"blank" => write_help!("blank"),
+		b"confirm" | b"prompt" => write_help!("confirm"),
+		b"crunched" => write_help!("crunched", true),
+		b"debug" => write_help!("debug", true),
+		b"done" => write_help!("done", true),
+		b"error" => write_help!("error", true),
+		b"info" => write_help!("info", true),
+		b"notice" => write_help!("notice", true),
+		b"print" => write_help!("print"),
+		b"success" => write_help!("success", true),
+		b"task" => write_help!("task", true),
+		b"warning" => write_help!("warning", true),
+		_ => write_help!("help"),
 	}.unwrap();
 
 	handle.flush().unwrap();
