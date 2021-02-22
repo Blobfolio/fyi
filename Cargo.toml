@@ -2,7 +2,6 @@
 members = [
 	"fyi",
     "fyi_msg",
-    "fyi_witcher",
 ]
 
 [profile.bench]
