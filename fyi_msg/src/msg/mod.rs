@@ -281,9 +281,9 @@ impl Msg {
 	///
 	/// ```no_run
 	/// use fyi_msg::{Msg, MsgKind};
-	/// let msg = Msg::custom_unchecked("Prefix:", "This message has an unformatted prefix.");
+	/// let msg = Msg::custom_preformatted("Prefix:", "This message has an unformatted prefix.");
 	/// ```
-	pub fn custom_unchecked<S>(prefix: S, msg: S) -> Self
+	pub fn custom_preformatted<S>(prefix: S, msg: S) -> Self
 	where S: AsRef<str> {
 		let prefix = prefix.as_ref().as_bytes();
 		let msg = msg.as_ref().as_bytes();
@@ -415,6 +415,65 @@ impl Msg {
 		let m_end: u32 = v.len() as u32;
 
 		Self(MsgBuffer::from_raw_parts(v, new_toc!(p_end, m_end)))
+	}
+}
+
+/// ## Unsafe Bytes Instantiation.
+///
+/// These methods can be used safely if and only if the slices are known to be
+/// valid UTF-8. If there's any doubt, use a string-based method instead.
+impl Msg {
+	#[must_use]
+	/// # New Message.
+	///
+	/// This creates a new message with a built-in prefix (which can be
+	/// [`MsgKind::None`](crate::MsgKind::None), though in that case, [`Msg::plain`] is better).
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::{Msg, MsgKind};
+	/// let msg = Msg::new(MsgKind::Info, "This is a message.");
+	/// ```
+	///
+	/// ## Safety
+	///
+	/// The message slice must be valid UTF-8 or undefined things will happen.
+	/// When in doubt, use the string-based [`Msg::new`] instead.
+	pub unsafe fn new_unchecked(kind: MsgKind, msg: &[u8]) -> Self {
+		let p_end = kind.len_32();
+		let m_end = p_end + msg.len() as u32;
+
+		Self(MsgBuffer::from_raw_parts(
+			[kind.as_bytes(), msg].concat(),
+			new_toc!(p_end, m_end)
+		))
+	}
+
+	#[must_use]
+	/// # New Message Without Prefix.
+	///
+	/// This is equivalent to [`Msg::new_unchecked`] with [`MsgKind::None`], but
+	/// streamlined.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::Msg;
+	/// let msg = Msg::plain("This message has no prefix.");
+	/// ```
+	///
+	/// ## Safety
+	///
+	/// The message slice must be valid UTF-8 or undefined things will happen.
+	/// When in doubt, use the string-based [`Msg::plain`] instead.
+	pub unsafe fn plain_unchecked(msg: &[u8]) -> Self {
+		let len = msg.len() as u32;
+
+		Self(MsgBuffer::from_raw_parts(
+			msg.to_vec(),
+			new_toc!(0, len)
+		))
 	}
 }
 

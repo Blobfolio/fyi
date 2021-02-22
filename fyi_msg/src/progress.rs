@@ -880,10 +880,17 @@ impl From<Progless> for Msg {
 	///
 	/// For a more advanced summary, use the [`Progless::summarize`] method.
 	fn from(src: Progless) -> Self {
-		Self::fmt_prefixed(
-			MsgKind::Done,
-			format_args!("Finished in {}.", NiceElapsed::from(src.inner.elapsed()).as_str())
-		)
+		// The content is all valid UTF-8; this is safe.
+		unsafe {
+			Self::new_unchecked(
+				MsgKind::Done,
+				&[
+					b"Finished in ",
+					NiceElapsed::from(src.inner.elapsed()).as_bytes(),
+					b".",
+				].concat()
+			)
+		}
 			.with_newline(true)
 	}
 }
@@ -959,16 +966,22 @@ impl Progless {
 			if done == 1 { singular.as_ref() }
 			else { plural.as_ref() };
 
-		Msg::fmt_prefixed(
-			MsgKind::Done,
-			format_args!(
-				"{} {} {} in {}.",
-				verb.as_ref(),
-				NiceU32::from(done).as_str(),
-				noun,
-				NiceElapsed::from(self.inner.elapsed())
+		// The content is all valid UTF-8; this is safe.
+		unsafe {
+			Msg::new_unchecked(
+				MsgKind::Done,
+				&[
+					verb.as_ref().as_bytes(),
+					b" ",
+					NiceU32::from(done).as_bytes(),
+					b" ",
+					noun.as_bytes(),
+					b" in ",
+					NiceElapsed::from(self.inner.elapsed()).as_bytes(),
+					b".",
+				].concat()
 			)
-		)
+		}
 			.with_newline(true)
 	}
 }
@@ -1062,7 +1075,7 @@ where S: AsRef<str> {
 	if txt.is_empty() { None }
 	else {
 		// This starts with a ↳.
-		Some(Msg::custom_unchecked("    \u{21b3} ", txt).with_newline(true))
+		Some(Msg::custom_preformatted("    \u{21b3} ", txt).with_newline(true))
 	}
 }
 
