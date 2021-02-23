@@ -73,6 +73,78 @@ macro_rules! new_toc {
 	);
 }
 
+/// # Helper: Built-in `MsgKind` Checked Methods.
+macro_rules! impl_builtin_checked {
+	($name:expr, $ex:expr, $fn:ident, $fn2:ident) => {
+		#[doc(inline)]
+		#[doc = $name]
+		///
+		/// This is a convenience method to create a thusly prefixed message
+		/// with a trailing line break.
+		///
+		/// This is equivalent to combining [`Msg::new`] with [`Msg::with_newline`],
+		/// but optimized for this specific prefix.
+		///
+		/// ## Examples
+		///
+		/// ```no_run
+		/// use fyi_msg::Msg;
+		#[doc = $ex]
+		/// ```
+		pub fn $fn<S>(msg: S) -> Self
+		where S: AsRef<str> {
+			unsafe { Self::$fn2(msg.as_ref().as_bytes()) }
+		}
+	};
+}
+
+/// # Helper: Built-in `MsgKind` Unchecked Methods.
+macro_rules! impl_builtin_unchecked {
+	($name:expr, $desc:expr, $fn:ident, $kind:expr, $p_len:literal) => {
+		#[must_use]
+		#[doc = $name]
+		///
+		#[doc = $desc]
+		///
+		/// ## Safety
+		///
+		/// The message must be valid UTF-8 or undefined things will happen.
+		/// If there is any doubt about the stringiness of the slice, just use
+		/// the safe version.
+		pub unsafe fn $fn(msg: &[u8]) -> Self {
+			let len = msg.len();
+			let m_end = len as u32 + $p_len;
+
+			let mut v = Vec::with_capacity($p_len + 1 + len);
+			v.extend_from_slice($kind.as_bytes());
+			v.extend_from_slice(msg);
+			v.push(b'\n');
+
+			Self(MsgBuffer::from_raw_parts(v, new_toc!($p_len, m_end, true)))
+		}
+	};
+}
+
+/// # Helper: Impl Built-in `MsgKind` Methods.
+macro_rules! impl_builtins {
+	($name:literal, $fn:ident, $fn2:ident, $kind:expr, $p_len:literal) => (
+		impl_builtin_checked!(
+			concat!("# New ", $name),
+			concat!("Msg::", stringify!($fn), r#"("Hello World").print(); // "#, $name, ": Hello World"),
+			$fn,
+			$fn2
+		);
+
+		impl_builtin_unchecked!(
+			concat!("# New ", $name, " (Unchecked)"),
+			concat!("This is equivalent to (the safe) [`Msg::", stringify!($fn), "`], except it takes a raw byte slice."),
+			$fn2,
+			$kind,
+			$p_len
+		);
+	);
+}
+
 
 
 // Buffer Indexes.
@@ -210,10 +282,16 @@ impl PartialEq<Vec<u8>> for Msg {
 
 /// ## Instantiation.
 impl Msg {
+	#[inline]
 	/// # New Message.
 	///
 	/// This creates a new message with a built-in prefix (which can be
 	/// [`MsgKind::None`](crate::MsgKind::None), though in that case, [`Msg::plain`] is better).
+	///
+	/// If your prefix choice is built-in and known at compile time and you
+	/// want the message to have a trailing line break, consider using the
+	/// corresponding dedicated method instead ([`Msg::error`], [`Msg::success`], etc.),
+	/// as it will be slightly faster.
 	///
 	/// ## Examples
 	///
@@ -223,14 +301,7 @@ impl Msg {
 	/// ```
 	pub fn new<S>(kind: MsgKind, msg: S) -> Self
 	where S: AsRef<str> {
-		let msg = msg.as_ref().as_bytes();
-		let p_end = kind.len_32();
-		let m_end = p_end + msg.len() as u32;
-
-		Self(MsgBuffer::from_raw_parts(
-			[kind.as_bytes(), msg].concat(),
-			new_toc!(p_end, m_end)
-		))
+		unsafe { Self::new_unchecked(kind, msg.as_ref().as_bytes()) }
 	}
 
 	/// # Custom Prefix.
@@ -294,6 +365,7 @@ impl Msg {
 		))
 	}
 
+	#[inline]
 	/// # New Message Without Prefix.
 	///
 	/// This is equivalent to [`Msg::new`] with [`MsgKind::None`], but
@@ -307,42 +379,7 @@ impl Msg {
 	/// ```
 	pub fn plain<S>(msg: S) -> Self
 	where S: AsRef<str> {
-		let msg = msg.as_ref().as_bytes();
-		let len = msg.len() as u32;
-
-		Self(MsgBuffer::from_raw_parts(
-			msg.to_vec(),
-			new_toc!(0, len)
-		))
-	}
-
-	/// # Error
-	///
-	/// This is a convenience method for quickly creating a new error with a
-	/// terminating line break. After creation, it is a normal [`Msg`] that can
-	/// be manipulated in the usual ways.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::{Msg, MsgKind};
-	/// assert_eq!(
-	///     Msg::new(MsgKind::Error, "Oh no!").with_newline(true),
-	///     Msg::error("Oh no!")
-	/// );
-	/// ```
-	pub fn error<S>(msg: S) -> Self
-	where S: AsRef<str> {
-		let msg = msg.as_ref().as_bytes();
-		let len = msg.len();
-		let mut v = Vec::with_capacity(19 + len);
-		v.extend_from_slice(MsgKind::Error.as_bytes());
-		v.extend_from_slice(msg);
-		v.extend_from_slice(b"\n");
-
-		let m_end = len as u32 + 18;
-
-		Self(MsgBuffer::from_raw_parts(v, new_toc!(18, m_end, true)))
+		unsafe { Self::plain_unchecked(msg.as_ref().as_bytes()) }
 	}
 }
 
@@ -403,6 +440,23 @@ impl Msg {
 			new_toc!(0, len)
 		))
 	}
+}
+
+/// # Built-ins.
+///
+/// This contains convenience methods for creating a new message with a
+/// built-in prefix and trailing line break. All of the stock kinds are covered
+/// except for [`MsgKind::Confirm`], which is normally used with its macro.
+impl Msg {
+	impl_builtins!("Crunched", crunched, crunched_unchecked, MsgKind::Crunched, 21);
+	impl_builtins!("Debug", debug, debug_unchecked, MsgKind::Debug, 18);
+	impl_builtins!("Done", done, done_unchecked, MsgKind::Done, 17);
+	impl_builtins!("Info", info, info_unchecked, MsgKind::Info, 17);
+	impl_builtins!("Error", error, error_unchecked, MsgKind::Error, 18);
+	impl_builtins!("Notice", notice, notice_unchecked, MsgKind::Notice, 19);
+	impl_builtins!("Success", success, success_unchecked, MsgKind::Success, 20);
+	impl_builtins!("Task", task, task_unchecked, MsgKind::Task, 23);
+	impl_builtins!("Warning", warning, warning_unchecked, MsgKind::Warning, 20);
 }
 
 /// ## Builders.

@@ -158,11 +158,11 @@ fn main() {
 				return;
 			},
 			ArgyleError::WantsVersion => {
-				fyi_msg::plain!(concat!("FYI v", env!("CARGO_PKG_VERSION")));
+				println!(concat!("FYI v", env!("CARGO_PKG_VERSION")));
 				return;
 			},
 			_ => {
-				fyi_msg::error!(&e);
+				Msg::error(&e).eprint();
 			},
 		}
 

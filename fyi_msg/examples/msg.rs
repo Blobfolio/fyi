@@ -6,21 +6,13 @@
 fn main() {
 	use fyi_msg::{
 		confirm,
-		crunched,
-		debug,
-		done,
-		error,
-		info,
 		Msg,
 		MsgKind,
-		notice,
-		plain,
-		success,
-		task,
-		warning,
 	};
 
-	plain!("This message has no prefix.");
+	Msg::plain("This message has no prefix.")
+		.with_newline(true)
+		.print();
 
 	println!();
 
@@ -34,74 +26,74 @@ fn main() {
 
 	println!();
 
-	notice!("So official!");
-	success!("Hurray! You did it!");
-	warning!("Hold it there, Sparky!");
-	error!("Oopsie.");
+	Msg::notice("So official!").print();
+	Msg::success("Hurray! You did it!").print();
+	Msg::warning("Hold it there, Sparky!").print();
+	Msg::error("Oopsie.").print();
 
 	println!();
 
-	debug!("The devil is in the details.");
-	info!("Details without the word 'bug'.");
-	task!("Let's get to work!");
+	Msg::debug("The devil is in the details.").print();
+	Msg::info("Details without the word 'bug'.").print();
+	Msg::task("Let's get to work!").print();
 
 	println!();
 
 	// This can be printed without actually confirming anything by building
-	// the message manually.
+	// the message manually. There is no direct `Msg::confirm()` method to
+	// avoid confusion with the `fyi_msg::confirm!()` macro.
 	MsgKind::Confirm.into_msg("Choose your own adventure.")
 		.with_newline(true)
 		.print();
 
 	println!();
 
-	crunched!("Some hard work just happened.");
-	done!("As the French say, «FIN».");
+	Msg::crunched("Some hard work just happened.").print();
+	Msg::done("As the French say, «FIN».").print();
 
 	println!();
 
 	#[cfg(feature = "timestamps")]
 	{
-		MsgKind::Info.into_msg("Messages can be timestamped.")
+		Msg::info("Messages can be timestamped.")
 			.with_timestamp(true)
-			.with_newline(true)
 			.print();
 
 		println!();
 	}
 
-	MsgKind::Info.into_msg("Messages can be indented (0).")
+	Msg::info("Messages can be indented (0).")
 		.with_indent(0)
-		.with_newline(true)
 		.print();
 
-	MsgKind::Info.into_msg("Messages can be indented (1).")
+	Msg::info("Messages can be indented (1).")
 		.with_indent(1)
-		.with_newline(true)
 		.print();
 
-	MsgKind::Info.into_msg("Messages can be indented (2).")
+	Msg::info("Messages can be indented (2).")
 		.with_indent(2)
-		.with_newline(true)
 		.print();
 
-	MsgKind::Info.into_msg("Messages can be indented (3).")
+	Msg::info("Messages can be indented (3).")
 		.with_indent(3)
-		.with_newline(true)
 		.print();
 
-	MsgKind::Info.into_msg("Messages can be indented (4).")
+	Msg::info("Messages can be indented (4).")
 		.with_indent(4)
-		.with_newline(true)
 		.print();
 
 	println!();
 
+	// Here's that macro we mentioned earlier.
 	if confirm!("Was this example useful?") {
-		plain!("Great!");
+		Msg::plain("Great!")
+			.with_newline(true)
+			.print();
 	}
 	else {
-		plain!("Oh well. Can't please 'em all!");
+		Msg::plain("Oh well. Can't please 'em all!")
+			.with_newline(true)
+			.print();
 	}
 
 	println!();

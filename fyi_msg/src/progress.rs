@@ -879,7 +879,7 @@ impl From<Progless> for Msg {
 	/// This provides a simple way to convert a (finished) [`Progless`]
 	/// instance into a generic summary [`Msg`] that can e.g. be printed.
 	///
-	/// For a more advanced summary, use the [`Progless::summarize`] method.
+	/// For a more advanced summary, use the [`Progless::summary`] method.
 	fn from(src: Progless) -> Self {
 		// The content is all valid UTF-8; this is safe.
 		unsafe {
@@ -969,21 +969,17 @@ impl Progless {
 
 		// The content is all valid UTF-8; this is safe.
 		unsafe {
-			Msg::new_unchecked(
-				MsgKind::Done,
-				&[
-					verb.as_ref().as_bytes(),
-					b" ",
-					NiceU32::from(done).as_bytes(),
-					b" ",
-					noun.as_bytes(),
-					b" in ",
-					NiceElapsed::from(self.inner.elapsed()).as_bytes(),
-					b".",
-				].concat()
-			)
+			Msg::done_unchecked(&[
+				verb.as_ref().as_bytes(),
+				b" ",
+				NiceU32::from(done).as_bytes(),
+				b" ",
+				noun.as_bytes(),
+				b" in ",
+				NiceElapsed::from(self.inner.elapsed()).as_bytes(),
+				b".",
+			].concat())
 		}
-			.with_newline(true)
 	}
 }
 
