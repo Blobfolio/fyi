@@ -282,7 +282,7 @@ fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgyleError> {
 ///
 /// The contents are generated via `build.rs`, which lowers the runtime cost
 /// and shrinks the binary a touch.
-fn helper(cmd: Option<Vec<u8>>) {
+fn helper(cmd: Option<Box<[u8]>>) {
 	use std::io::Write;
 
 	let writer = std::io::stdout();
@@ -302,22 +302,26 @@ fn helper(cmd: Option<Vec<u8>>) {
 	write_help!("top").unwrap();
 
 	// The middle section varies by subcommand.
-	let cmd = cmd.unwrap_or_default();
-	match cmd.as_slice() {
-		b"blank" => write_help!("blank"),
-		b"confirm" | b"prompt" => write_help!("confirm"),
-		b"crunched" => write_help!("crunched", true),
-		b"debug" => write_help!("debug", true),
-		b"done" => write_help!("done", true),
-		b"error" => write_help!("error", true),
-		b"info" => write_help!("info", true),
-		b"notice" => write_help!("notice", true),
-		b"print" => write_help!("print"),
-		b"success" => write_help!("success", true),
-		b"task" => write_help!("task", true),
-		b"warning" => write_help!("warning", true),
-		_ => write_help!("help"),
-	}.unwrap();
+	if let Some(cmd) = cmd {
+		match &*cmd {
+			b"blank" => write_help!("blank"),
+			b"confirm" | b"prompt" => write_help!("confirm"),
+			b"crunched" => write_help!("crunched", true),
+			b"debug" => write_help!("debug", true),
+			b"done" => write_help!("done", true),
+			b"error" => write_help!("error", true),
+			b"info" => write_help!("info", true),
+			b"notice" => write_help!("notice", true),
+			b"print" => write_help!("print"),
+			b"success" => write_help!("success", true),
+			b"task" => write_help!("task", true),
+			b"warning" => write_help!("warning", true),
+			_ => write_help!("help"),
+		}.unwrap();
+	}
+	else {
+		write_help!("help").unwrap();
+	}
 
 	handle.flush().unwrap();
 }

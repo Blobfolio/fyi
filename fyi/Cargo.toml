@@ -155,7 +155,7 @@ subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info"
 path = "../fyi_msg"
 
 [dependencies]
-argyle = "0.1.*"
+argyle = "0.2.*"
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"
