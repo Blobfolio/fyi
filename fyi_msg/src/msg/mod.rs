@@ -51,6 +51,7 @@ macro_rules! new_toc {
 	);
 }
 
+/// # Helper: ToC Setup.
 #[cfg(not(feature = "timestamps"))]
 macro_rules! new_toc {
 	($p_end:expr, $m_end:expr) => (
@@ -108,14 +109,18 @@ macro_rules! impl_builtin_unchecked {
 		///
 		/// ## Safety
 		///
-		/// The message must be valid UTF-8 or undefined things will happen.
-		/// If there is any doubt about the stringiness of the slice, just use
-		/// the safe version.
+		/// This method does not itself do unsafe things, however most of this
+		/// struct's methods rely on the stored message being valid UTF-8.
+		/// Because this method does not validate the inputs, it leaves the
+		/// door open for undefined behaviors, and as such, is labeled "unsafe".
+		///
+		/// With that in mind, the value of `msg` must be valid UTF-8, or later
+		/// use of the instance might panic or act out in undefined ways.
 		pub unsafe fn $fn(msg: &[u8]) -> Self {
 			let len = msg.len();
 			let m_end = len as u32 + $p_len;
 
-			let mut v = Vec::with_capacity($p_len + 1 + len);
+			let mut v: Vec<u8> = Vec::with_capacity($p_len + 1 + len);
 			v.extend_from_slice($kind.as_bytes());
 			v.extend_from_slice(msg);
 			v.push(b'\n');
@@ -446,7 +451,12 @@ impl Msg {
 ///
 /// This contains convenience methods for creating a new message with a
 /// built-in prefix and trailing line break. All of the stock kinds are covered
-/// except for [`MsgKind::Confirm`], which is normally used with its macro.
+/// except for [`MsgKind::Confirm`], which does not have trailing line breaks
+/// in its prompt form, and is kind of weird to use without a prompt.
+///
+/// Speaking of, there is a dedicated [`confirm`](crate::confirm) macro, that
+/// renders the message with the right prefix, pops the prompt, and returns the
+/// `bool`.
 impl Msg {
 	impl_builtins!("Crunched", crunched, crunched_unchecked, MsgKind::Crunched, 21);
 	impl_builtins!("Debug", debug, debug_unchecked, MsgKind::Debug, 18);
@@ -918,7 +928,7 @@ impl Msg {
 	/// use fyi_msg::Msg;
 	/// Msg::error("Oh no!").with_newline(true).die(1);
 	/// ```
-	pub fn die(&self, code: i32) {
+	pub fn die(&self, code: i32) -> ! {
 		self.eprint();
 		std::process::exit(code);
 	}
