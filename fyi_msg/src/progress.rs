@@ -91,7 +91,7 @@ let elapsed = pbar.finish();
 
 */
 
-use ahash::AHashSet;
+use ahash::RandomState;
 use crate::{
 	BUFFER8,
 	Msg,
@@ -106,6 +106,7 @@ use dactyl::{
 };
 use std::{
 	cmp::Ordering,
+	collections::HashSet,
 	sync::{
 		Arc,
 		Mutex,
@@ -134,7 +135,7 @@ use std::{
 /// static that would be used otherwise.
 ///
 /// For our purposes, the variability of truly random keys isn't really needed.
-const AHASH_STATE: ahash::RandomState = ahash::RandomState::with_seeds(13, 19, 23, 71);
+const AHASH_STATE: RandomState = RandomState::with_seeds(13, 19, 23, 71);
 
 
 
@@ -208,7 +209,7 @@ struct ProglessInner {
 	title: Mutex<Msg>,
 	elapsed: AtomicU32,
 	done: AtomicU32,
-	doing: Mutex<AHashSet<Msg>>,
+	doing: Mutex<HashSet<Msg, RandomState>>,
 	total: AtomicU32,
 }
 
@@ -287,7 +288,7 @@ impl Default for ProglessInner {
 			title: Mutex::new(Msg::default()),
 			elapsed: AtomicU32::new(0),
 			done: AtomicU32::new(0),
-			doing: Mutex::new(AHashSet::with_hasher(AHASH_STATE)),
+			doing: Mutex::new(HashSet::with_hasher(AHASH_STATE)),
 			total: AtomicU32::new(0),
 		}
 	}
