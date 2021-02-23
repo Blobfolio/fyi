@@ -94,6 +94,7 @@ let elapsed = pbar.finish();
 use ahash::RandomState;
 use crate::{
 	BUFFER8,
+	fitted,
 	Msg,
 	MsgBuffer,
 	MsgKind,
@@ -105,8 +106,14 @@ use dactyl::{
 	write_time,
 };
 use std::{
+	borrow::Borrow,
 	cmp::Ordering,
 	collections::HashSet,
+	convert::TryFrom,
+	hash::{
+		Hash,
+		Hasher,
+	},
 	sync::{
 		Arc,
 		Mutex,
@@ -177,6 +184,9 @@ const PART_DOING: usize = 7;
 const MIN_BARS_WIDTH: u32 = 10;
 const MIN_DRAW_WIDTH: u32 = 40;
 
+// This translates to:          •   •   •   •   ↳             •
+const TASK_PREFIX: &[u8; 8] = &[32, 32, 32, 32, 226, 134, 179, 32];
+
 
 
 /// # Helper: Mutex Unlock.
@@ -186,6 +196,69 @@ macro_rules! mutex_ptr {
 	($mutex:expr) => (
 		$mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 	);
+}
+
+
+
+#[derive(Debug, Clone)]
+/// # A Task.
+///
+/// This holds a boxed slice and the pre-calculated display width of said
+/// slice. Though stored as raw bytes, the value is valid UTF-8.
+struct ProglessTask {
+	task: Box<[u8]>,
+	width: u32,
+}
+
+impl TryFrom<&[u8]> for ProglessTask {
+	type Error = bool;
+
+	fn try_from(src: &[u8]) -> Result<Self, Self::Error> {
+		if src.is_empty() { Err(false) }
+		else {
+			Ok(Self {
+				task: Box::from(src),
+				width: fitted::width(src) as u32,
+			})
+		}
+	}
+}
+
+impl Borrow<[u8]> for ProglessTask {
+	#[inline]
+	fn borrow(&self) -> &[u8] { &self.task }
+}
+
+impl Eq for ProglessTask {}
+
+impl Hash for ProglessTask {
+	#[inline]
+	fn hash<H: Hasher>(&self, state: &mut H) { self.task.hash(state); }
+}
+
+impl PartialEq for ProglessTask {
+	#[inline]
+	fn eq(&self, other: &Self) -> bool { self.task == other.task }
+}
+
+impl ProglessTask {
+	/// # Push To.
+	fn push_to(&self, buf: &mut Vec<u8>, width: u32) {
+		let avail = width.saturating_sub(6);
+		if self.width > avail {
+			let end = fitted::length_width(&self.task, avail as usize);
+			if end > 0 {
+				buf.extend_from_slice(TASK_PREFIX);
+				buf.extend_from_slice(&self.task[..end]);
+				buf.push(b'\n');
+			}
+		}
+		else {
+			buf.extend_from_slice(TASK_PREFIX);
+			buf.extend_from_slice(&self.task);
+			buf.push(b'\n');
+		}
+	}
 }
 
 
@@ -200,16 +273,16 @@ struct ProglessInner {
 	buf: Mutex<MsgBuffer<BUFFER8>>,
 	flags: AtomicU8,
 
-	last_hash: AtomicU64,
-	last_lines: AtomicU16,
-	last_time: Mutex<Instant>,
-	last_width: AtomicU32,
+	last_hash: AtomicU64,  // A hash of what was last printed.
+	last_lines: AtomicU16, // The number of lines last printed.
+	last_time: AtomicU64,  // The time in milliseconds of the last print.
+	last_width: AtomicU32, // The screen width at the time of the last printing.
 
 	started: Mutex<Instant>,
 	title: Mutex<Msg>,
 	elapsed: AtomicU32,
 	done: AtomicU32,
-	doing: Mutex<HashSet<Msg, RandomState>>,
+	doing: Mutex<HashSet<ProglessTask, RandomState>>,
 	total: AtomicU32,
 }
 
@@ -281,7 +354,7 @@ impl Default for ProglessInner {
 
 			last_hash: AtomicU64::new(0),
 			last_lines: AtomicU16::new(0),
-			last_time: Mutex::new(Instant::now()),
+			last_time: AtomicU64::new(0),
 			last_width: AtomicU32::new(0),
 
 			started: Mutex::new(Instant::now()),
@@ -398,7 +471,7 @@ impl ProglessInner {
 	fn add<S>(&self, txt: S)
 	where S: AsRef<str> {
 		if self.running() {
-			if let Some(m) = task_msg(txt) {
+			if let Ok(m) = ProglessTask::try_from(txt.as_ref().as_bytes()) {
 				if mutex_ptr!(self.doing).insert(m)	{
 					self.flags.fetch_or(TICK_DOING | TICK_BAR, SeqCst);
 				}
@@ -422,13 +495,9 @@ impl ProglessInner {
 	/// in cases where you're triggering done changes manually.
 	fn remove<S>(&self, txt: S)
 	where S: AsRef<str> {
-		if self.running() {
-			if let Some(m) = task_msg(txt) {
-				if mutex_ptr!(self.doing).remove(&m)	{
-					self.flags.fetch_or(TICK_DOING | TICK_BAR, SeqCst);
-					self.increment();
-				}
-			}
+		if self.running() && mutex_ptr!(self.doing).remove(txt.as_ref().as_bytes())	{
+			self.flags.fetch_or(TICK_DOING | TICK_BAR, SeqCst);
+			self.increment();
 		}
 	}
 
@@ -585,13 +654,12 @@ impl ProglessInner {
 		}
 
 		// We don't want to tick too often... that will just look bad.
-		{
-			let mut last_time = mutex_ptr!(self.last_time);
-			if last_time.elapsed().as_millis() < 60 {
-				return true;
-			}
-			*last_time = Instant::now();
+		let n_elapsed = mutex_ptr!(self.started).elapsed().as_millis() as u64;
+		let o_elapsed = self.last_time.load(SeqCst);
+		if n_elapsed - o_elapsed < 60 {
+			return true;
 		}
+		self.last_time.store(n_elapsed, SeqCst);
 
 		// Check the terminal width first because it affects most of what
 		// follows.
@@ -701,12 +769,11 @@ impl ProglessInner {
 				mutex_ptr!(self.buf).truncate(PART_DOING, 0);
 			}
 			else {
-				let width: usize = self.last_width().saturating_sub(6) as usize;
+				let width: u32 = self.last_width().saturating_sub(6);
 				let tasks: Vec<u8> = {
 					let mut v = Vec::with_capacity(256);
 					v.extend_from_slice(b"\x1b[35m");
-					doing.iter()
-						.for_each(|x| v.extend_from_slice(&x.fitted(width)));
+					doing.iter().for_each(|x| x.push_to(&mut v, width));
 					v.extend_from_slice(b"\x1b[0m");
 					v
 				};
@@ -1055,25 +1122,9 @@ impl Progless {
 /// [`AHash`](https://crates.io/crates/ahash) crate. Check out that project's
 /// home page for more details. Otherwise, TL;DR it is very fast.
 fn hash64(src: &[u8]) -> u64 {
-	use std::hash::Hasher;
-
 	let mut hasher = ahash::AHasher::new_with_keys(1319, 2371);
 	hasher.write(src);
 	hasher.finish()
-}
-
-#[inline]
-/// # Format Task Into Message.
-///
-/// This makes the tasks a little prettier for list-like display.
-fn task_msg<S>(txt: S) -> Option<Msg>
-where S: AsRef<str> {
-	let txt = txt.as_ref();
-	if txt.is_empty() { None }
-	else {
-		// This starts with a ↳.
-		Some(Msg::custom_preformatted("    \u{21b3} ", txt).with_newline(true))
-	}
 }
 
 #[must_use]

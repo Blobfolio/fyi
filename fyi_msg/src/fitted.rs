@@ -219,6 +219,8 @@ mod tests {
 			("Hello", 4, 4),
 			("Hello\nWorld", 10, 11),
 			("Björk Guðmundsdóttir", 5, 6),
+			("Björk Guðmundsdóttir", 3, 4),
+			("Björk Guðmundsdóttir", 2, 2),
 			("\x1b[2mBjörk\x1b[0m Guðmundsdóttir", 5, 14),
 			("\x1b[2mHello\x1b[0m World", 5, 13),
 		] {
