@@ -4,7 +4,6 @@
 
 use fyi_msg::{
 	Msg,
-	MsgKind,
 	Progless,
 };
 use rayon::prelude::*;
@@ -199,10 +198,6 @@ fn main() {
 		});
 
 	// Print a simple summary.
-	Msg::fmt_prefixed(
-		MsgKind::Done,
-		format_args!("This demo finished in {}.", pbar.finish().as_str())
-	)
-		.with_newline(true)
-		.print();
+	let _ = pbar.finish();
+	Msg::from(pbar).print();
 }
