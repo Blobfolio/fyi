@@ -11,10 +11,7 @@ use crate::{
 };
 use dactyl::NiceU8;
 use std::{
-	fmt::{
-		self,
-		Arguments,
-	},
+	fmt,
 	hash,
 	io,
 	ops::Deref,
@@ -346,75 +343,6 @@ impl Msg {
 		let m_end = len as u32 + 18;
 
 		Self(MsgBuffer::from_raw_parts(v, new_toc!(18, m_end, true)))
-	}
-}
-
-/// ## Formatted Instantiation.
-impl Msg {
-	#[must_use]
-	/// # Plain Formatted.
-	///
-	/// ## Panics
-	///
-	/// This will panic if not well formed.
-	pub fn fmt(args: Arguments) -> Self {
-		use std::io::Write;
-
-		let mut v: Vec<u8> = Vec::new();
-		v.write_fmt(args).unwrap();
-
-		let len: u32 = v.len() as u32;
-		Self(MsgBuffer::from_raw_parts(v, new_toc!(0, len)))
-	}
-
-	#[must_use]
-	/// # Prefixed Formatted.
-	///
-	/// ## Panics
-	///
-	/// This will panic if not well formed.
-	pub fn fmt_prefixed(kind: MsgKind, args: Arguments) -> Self {
-		use std::io::Write;
-
-		let mut v: Vec<u8> = kind.as_bytes().to_vec();
-		v.write_fmt(args).unwrap();
-
-		let p_end = kind.len_32();
-		let m_end = v.len() as u32;
-
-		Self(MsgBuffer::from_raw_parts(v, new_toc!(p_end, m_end)))
-	}
-
-	#[must_use]
-	/// # Prefixed Formatted.
-	///
-	/// ## Panics
-	///
-	/// This will panic if not well formed.
-	pub fn fmt_custom<S>(prefix: S, color: u8, args: Arguments) -> Self
-	where S: AsRef<str> {
-		use std::io::Write;
-
-		let prefix = prefix.as_ref().as_bytes();
-		if prefix.is_empty() {
-			return Self::fmt(args);
-		}
-
-		// Start with the prefix.
-		let mut v: Vec<u8> = [
-			b"\x1b[1;38;5;",
-			&*NiceU8::from(color),
-			b"m",
-			prefix,
-			b":\x1b[0m ",
-		].concat();
-		let p_end: u32 = v.len() as u32;
-
-		// Add the message.
-		v.write_fmt(args).unwrap();
-		let m_end: u32 = v.len() as u32;
-
-		Self(MsgBuffer::from_raw_parts(v, new_toc!(p_end, m_end)))
 	}
 }
 
