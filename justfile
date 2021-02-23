@@ -185,6 +185,7 @@ bench BENCH="":
 	cargo +nightly doc \
 		--workspace \
 		--release \
+		--all-features \
 		--no-deps \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
