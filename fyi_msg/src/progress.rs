@@ -67,7 +67,8 @@ methods at the start and end of each iteration instead of manually incrementing
 the counts.
 
 Doing this, a list of active tasks will be maintained and printed along with
-the progress. Removing a task automatically increments the done count.
+the progress. Removing a task automatically increments the done count, so if
+you're tracking tasks, you should *not* call [`Progless::increment`].
 
 ```no_run
 use fyi_msg::Progless;
@@ -408,17 +409,20 @@ impl ProglessInner {
 
 /// # Getters.
 impl ProglessInner {
+	#[inline]
 	/// # Done.
 	///
 	/// The number of completed tasks.
 	fn done(&self) -> u32 { self.done.load(SeqCst) }
 
+	#[inline]
 	/// # Elapsed.
 	///
 	/// The elapsed time, in seconds, as it was when last updated. Dynamic
 	/// calculations just look at `started` directly.
 	fn elapsed(&self) -> u32 { self.elapsed.load(SeqCst) }
 
+	#[inline]
 	/// # Last Width.
 	///
 	/// The CLI screen width as it was when last checked. If this value
@@ -441,6 +445,7 @@ impl ProglessInner {
 		}
 	}
 
+	#[inline]
 	/// # Is Ticking.
 	///
 	/// This is `true` so long as `done` does not equal `total`, and `total`
@@ -448,10 +453,9 @@ impl ProglessInner {
 	///
 	/// For the most part, this struct's setter methods only work while
 	/// progress is happening; after that they're frozen.
-	fn running(&self) -> bool {
-		0 != self.flags.load(SeqCst) & TICKING
-	}
+	fn running(&self) -> bool { 0 != self.flags.load(SeqCst) & TICKING }
 
+	#[inline]
 	/// # Total.
 	///
 	/// The total number of tasks.
@@ -479,14 +483,13 @@ impl ProglessInner {
 		}
 	}
 
+	#[inline]
 	/// # Increment Done.
 	///
 	/// Increase the completed count by exactly one. This is safer to use than
 	/// `set_done()` in cases where multiple tasks are happening at once as it
 	/// will not accidentally decrease the value, etc.
-	fn increment(&self) {
-		self.set_done(self.done() + 1);
-	}
+	fn increment(&self) { self.set_done(self.done() + 1); }
 
 	/// # Remove a task.
 	///
@@ -1061,6 +1064,7 @@ impl Progless {
 
 /// # Passthrough Setters.
 impl Progless {
+	#[inline]
 	/// # Add a task.
 	///
 	/// The progress bar can optionally keep track of tasks that are actively
@@ -1070,55 +1074,48 @@ impl Progless {
 	/// Any `AsRef<str>` value will do. See the module documentation for
 	/// example usage.
 	pub fn add<S>(&self, txt: S)
-	where S: AsRef<str> {
-		self.inner.add(txt);
-	}
+	where S: AsRef<str> { self.inner.add(txt); }
 
+	#[inline]
 	/// # Increment Done.
 	///
 	/// Increase the completed count by exactly one. This is safer to use than
 	/// `set_done()` in cases where multiple tasks are happening at once as it
 	/// will not accidentally decrease the value, etc.
-	pub fn increment(&self) {
-		self.inner.increment();
-	}
+	pub fn increment(&self) { self.inner.increment(); }
 
+	#[inline]
 	/// # Remove a task.
 	///
 	/// This is the equal and opposite companion to [`Progless::add`]. Calling this
 	/// will automatically increment the done count by one, so should not be used
 	/// in cases where you're triggering done changes manually.
 	pub fn remove<S>(&self, txt: S)
-	where S: AsRef<str> {
-		self.inner.remove(txt);
-	}
+	where S: AsRef<str> { self.inner.remove(txt); }
 
+	#[inline]
 	/// # Set Done.
 	///
 	/// Set the done count to a specific value. Be careful in cases where
 	/// things are happening in parallel; in such cases `increment` is probably
 	/// better.
-	pub fn set_done(&self, done: u32) {
-		self.inner.set_done(done);
-	}
+	pub fn set_done(&self, done: u32) { self.inner.set_done(done); }
 
+	#[inline]
 	/// # Set Title.
 	///
 	/// Give the progress bar a title, which will be shown above the progress
 	/// bits while progress is progressing, and removed afterward with
 	/// everything else.
 	pub fn set_title<S>(&self, title: Option<S>)
-	where S: Into<Msg> {
-		self.inner.set_title(title);
-	}
+	where S: Into<Msg> { self.inner.set_title(title); }
 
+	#[inline]
 	/// # Tick.
 	///
 	/// Manually trigger a tick, which will paint any progress updates to
 	/// `STDERR` if the progress bar is running.
-	pub fn tick(&self) {
-		self.inner.tick();
-	}
+	pub fn tick(&self) { self.inner.tick(); }
 }
 
 
