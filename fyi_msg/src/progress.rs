@@ -473,7 +473,7 @@ impl ProglessInner {
 		if self.running() {
 			if let Ok(m) = ProglessTask::try_from(txt.as_ref().as_bytes()) {
 				if mutex_ptr!(self.doing).insert(m)	{
-					self.flags.fetch_or(TICK_DOING | TICK_BAR, SeqCst);
+					self.flags.fetch_or(TICK_DOING, SeqCst);
 				}
 			}
 		}
@@ -496,7 +496,7 @@ impl ProglessInner {
 	fn remove<S>(&self, txt: S)
 	where S: AsRef<str> {
 		if self.running() && mutex_ptr!(self.doing).remove(txt.as_ref().as_bytes())	{
-			self.flags.fetch_or(TICK_DOING | TICK_BAR, SeqCst);
+			self.flags.fetch_or(TICK_DOING, SeqCst);
 			self.increment();
 		}
 	}
