@@ -22,6 +22,8 @@ This optional module contains methods for counting the display width of byte str
 /// unless/until it finds a non-ASCII code, at which point it will shift to the
 /// heavier `length_width_unicode` method and finish counting there.
 ///
+/// **This requires the `fitted` crate feature.**
+///
 /// ## Safety.
 ///
 /// The byte sequence must be valid UTF-8 or undefined things will happen.
@@ -85,6 +87,8 @@ pub fn length_width(bytes: &[u8], stop: usize) -> usize {
 /// For performance reasons, this method will assume the byte sequence is ASCII
 /// unless/until it finds a non-ASCII code, at which point it will shift to the
 /// heavier `width_unicode` method and finish counting there.
+///
+/// **This requires the `fitted` crate feature.**
 ///
 /// ## Safety.
 ///

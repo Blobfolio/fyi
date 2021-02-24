@@ -1,7 +1,7 @@
 /*!
 # FYI Msg Example: Serial Progress Bar.
 
-This requires the `progress` crate feature.
+**This requires the `progress` crate feature.**
 */
 
 use fyi_msg::{

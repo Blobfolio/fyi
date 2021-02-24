@@ -4,6 +4,8 @@
 [`Progless`] is a simple, thread-safe CLI progress bar that can be used to
 entertain users while long jobs are running.
 
+To use it, enable the `progress` crate flag.
+
 There are two main ways to use it: manually or steady-ticked.
 
 Manual in this case means your code says when to increment the "done" count,

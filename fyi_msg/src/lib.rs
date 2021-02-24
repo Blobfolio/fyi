@@ -3,7 +3,26 @@
 
 This crate contains the objects providing the heart of the FYI command line
 application, namely [`Msg`], a simple struct for status-like messages that can be
-easily printed to `Stdout` or `Stderr`.
+easily printed to `STDOUT` or `STDERR`.
+
+
+
+## Examples
+
+```no_run
+use fyi_msg::{Msg, MsgKind};
+
+// One way.
+Msg::new(MsgKind::Success, "You did it!")
+    .with_newline(true)
+    .print();
+
+// Another equivalent way.
+Msg::success("You did it!").print();
+```
+
+For more usage examples, check out the `examples/msg` demo, which covers just
+about every common use case.
 
 
 
@@ -23,13 +42,6 @@ easily printed to `Stdout` or `Stderr`.
 | `progress` | Enables [`Progless`], a thread-safe CLI progress bar displayer.
 | `timestamps` | Enables timestamp-related methods and flags like [`Msg::with_timestamp`]. |
 
-
-
-## Stability
-
-Release versions of this library should be in a working state, but as this
-project is under perpetual development, code might change from version to
-version.
 */
 
 #![warn(clippy::filetype_is_file)]
@@ -62,10 +74,10 @@ version.
 
 
 mod msg;
-
-#[cfg(feature = "fitted")] mod fitted;
+#[cfg(feature = "fitted")]   mod fitted;
 #[cfg(feature = "progress")] mod progress;
 
+#[doc(hidden)]
 pub use msg::{
 	buffer::BUFFER2,
 	buffer::BUFFER3,
@@ -77,6 +89,9 @@ pub use msg::{
 	buffer::BUFFER9,
 	buffer::BUFFER10,
 	buffer::MsgBuffer,
+};
+
+pub use msg::{
 	FLAG_INDENT,
 	FLAG_NEWLINE,
 	kind::MsgKind,
@@ -89,15 +104,31 @@ pub use fitted::{
 	width,
 };
 
-#[cfg(feature = "progress")] pub use progress::Progless;
-
-#[cfg(feature = "timestamps")]
-pub use msg::FLAG_TIMESTAMP;
+#[cfg(feature = "progress")]   pub use progress::Progless;
+#[cfg(feature = "timestamps")] pub use msg::FLAG_TIMESTAMP;
 
 #[macro_use]
 mod macros {
 	#[macro_export(local_inner_macros)]
 	/// # Confirm.
+	///
+	/// This is a convenience macro for generating a confirmation message,
+	/// handling the prompting, and returning the response `bool`.
+	///
+	/// ## Example
+	///
+	/// ```no_run
+	/// use fyi_msg::{confirm, Msg, MsgKind};
+	///
+	/// // The manual way:
+	/// if Msg::new(MsgKind::Confirm, "Do you like chickens?").prompt() {
+	///     println!("That's great! They like you too!");
+	/// }
+	///
+	/// // The macro way:
+	/// if confirm!("Do you like chickens?") {
+	///     println!("That's great! They like you too!");
+	/// }
 	macro_rules! confirm {
 		($text:expr) => (
 			$crate::Msg::new($crate::MsgKind::Confirm, $text).prompt()

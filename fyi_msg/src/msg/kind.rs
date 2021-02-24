@@ -20,6 +20,13 @@ use std::ops::Deref;
 ///     MsgKind::Error.into_msg("Oh no!")
 /// );
 /// ```
+///
+/// When you know the prefix at compile time and want a trailing line break,
+/// it is more efficient to call the corresponding method on the [`Msg`]
+/// struct, like [`Msg::error`], [`Msg::success`], etc.
+///
+/// Alternatively, you can just call [`Msg::new`] with the prefix, which is
+/// what [`MsgKind::into_msg`] does anyway.
 pub enum MsgKind {
 	/// None.
 	None,
@@ -44,8 +51,8 @@ pub enum MsgKind {
 	/// Warning.
 	Warning,
 
-	#[cfg(feature = "bin_kinds")] Blank,
-	#[cfg(feature = "bin_kinds")] Custom,
+	#[cfg(feature = "bin_kinds")] #[doc(hidden)] Blank,
+	#[cfg(feature = "bin_kinds")] #[doc(hidden)] Custom,
 }
 
 impl Default for MsgKind {
@@ -60,6 +67,11 @@ impl Deref for MsgKind {
 }
 
 impl From<&[u8]> for MsgKind {
+	/// # From Bytes.
+	///
+	/// This is a reverse lookup that translates bytes back into the
+	/// corresponding enum variant. This method only really exists for the
+	/// benefit of the FYI binary.
 	fn from(txt: &[u8]) -> Self {
 		match txt {
 			b"confirm" | b"prompt" => Self::Confirm,
@@ -83,6 +95,9 @@ impl From<&[u8]> for MsgKind {
 impl MsgKind {
 	#[must_use]
 	/// # Length.
+	///
+	/// This returns the byte length of the prefix as a `u32`, worth mentioning
+	/// only because most length methods think in terms of `usize`.
 	pub const fn len_32(self) -> u32 {
 		match self {
 			#[cfg(feature = "bin_kinds")] Self::None | Self::Blank | Self::Custom => 0,
@@ -102,6 +117,8 @@ impl MsgKind {
 impl MsgKind {
 	#[must_use]
 	/// # As Bytes.
+	///
+	/// This is the same as dereferencing.
 	pub const fn as_bytes(self) -> &'static [u8] {
 		match self {
 			#[cfg(feature = "bin_kinds")] Self::None | Self::Blank | Self::Custom => &[],
@@ -121,6 +138,10 @@ impl MsgKind {
 
 	#[inline]
 	/// # Into Message.
+	///
+	/// This is a convenience method to generate a new message using this
+	/// prefix. It is equivalent to calling [`Msg::new`], and in fact, that's
+	/// what it does under the hood.
 	pub fn into_msg<S>(self, msg: S) -> Msg
 	where S: AsRef<str> { Msg::new(self, msg) }
 }

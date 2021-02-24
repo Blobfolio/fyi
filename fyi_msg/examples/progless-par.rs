@@ -1,7 +1,7 @@
 /*!
 # FYI Msg Example: Parallel Progress Bar w/ Task List.
 
-This requires the `progress` crate feature.
+**This requires the `progress` crate feature.**
 */
 
 use fyi_msg::{
