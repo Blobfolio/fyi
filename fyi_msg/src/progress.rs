@@ -770,13 +770,12 @@ impl ProglessInner {
 			}
 			else {
 				let width: u32 = self.last_width().saturating_sub(6);
-				let tasks: Vec<u8> = {
-					let mut v = Vec::with_capacity(256);
-					v.extend_from_slice(b"\x1b[35m");
-					doing.iter().for_each(|x| x.push_to(&mut v, width));
-					v.extend_from_slice(b"\x1b[0m");
-					v
-				};
+
+				let mut tasks = Vec::<u8>::with_capacity(256);
+				tasks.extend_from_slice(b"\x1b[35m");
+				doing.iter().for_each(|x| x.push_to(&mut tasks, width));
+				tasks.extend_from_slice(b"\x1b[0m");
+
 				mutex_ptr!(self.buf).replace(PART_DOING, &tasks);
 			}
 		}
