@@ -652,7 +652,7 @@ impl ProglessInner {
 		// We don't want to tick too often... that will just look bad.
 		let n_elapsed = mutex_ptr!(self.started).elapsed().as_millis() as u64;
 		let o_elapsed = self.last_time.load(SeqCst);
-		if n_elapsed - o_elapsed < 60 {
+		if n_elapsed.saturating_sub(o_elapsed) < 60 {
 			return true;
 		}
 		self.last_time.store(n_elapsed, SeqCst);
@@ -723,7 +723,7 @@ impl ProglessInner {
 		// Working on it!
 		else {
 			let o_done: u32 = num_integer::div_floor(done * space, total);
-			(o_done, space - o_done)
+			(o_done, space.saturating_sub(o_done))
 		}
 	}
 
