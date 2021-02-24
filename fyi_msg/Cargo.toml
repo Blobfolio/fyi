@@ -69,7 +69,10 @@ harness = false
 name = "msg"
 
 [[example]]
-name = "progless"
+name = "progless-par"
+
+[[example]]
+name = "progless-serial"
 
 [features]
 # This adds a few additional MsgKinds relevant only to the main FYI binary.

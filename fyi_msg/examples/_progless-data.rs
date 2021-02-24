@@ -1,17 +1,4 @@
-/*!
-# FYI Msg Example: Progress Bars.
-*/
-
-use fyi_msg::{
-	Msg,
-	Progless,
-};
-use rayon::prelude::*;
-use std::time::Duration;
-
-
-
-/// # Some test data.
+/// # Some test data for the Progless demos.
 const FILE_TYPES: &[&str] = &[
 	"application/a2l", "application/aml", "application/andrew-inset", "application/annodex", "application/applixware", "application/atf", "application/atfx", "application/atom+xml", "application/atomcat+xml", "application/atomdeleted+xml",
 	"application/atomserv+xml", "application/atomsvc+xml", "application/atsc-dwd+xml", "application/atsc-held+xml", "application/atsc-rsat+xml", "application/atxml", "application/auth-policy+xml", "application/bacnet-xdd+zip", "application/bizagi-modeler", "application/calendar+xml",
@@ -177,27 +164,3 @@ const FILE_TYPES: &[&str] = &[
 	"video/x-flv", "video/x-ivf", "video/x-javafx", "video/x-la-asf", "video/x-matroska", "video/x-mjpeg", "video/x-mng", "video/x-ms-asf", "video/x-ms-vob", "video/x-ms-wm",
 	"video/x-ms-wmv", "video/x-ms-wmx", "video/x-ms-wvx", "video/x-msvideo", "video/x-nsv", "video/x-sgi-movie", "video/x-smv", "x-conference/x-cooltalk",
 ];
-
-/// # Do it.
-fn main() {
-	// Initiate a progress bar.
-	let pbar = Progless::steady(FILE_TYPES.len() as u32)
-		.with_title(Some(Msg::custom("Scanning", 199, "Pretending to look at files…")));
-
-	FILE_TYPES.par_iter()
-		.map(|&t| (t, Duration::from_millis(t.len() as u64 * 3)))
-		.for_each(|(txt, delay)| {
-			// Start a new task.
-			pbar.add(txt);
-
-			// Simulate work.
-			std::thread::sleep(delay);
-
-			// Remove said task, which increments the "done" count by one.
-			pbar.remove(txt);
-		});
-
-	// Print a simple summary.
-	let _ = pbar.finish();
-	Msg::from(pbar).print();
-}
