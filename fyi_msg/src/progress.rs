@@ -279,7 +279,7 @@ struct ProglessInner {
 	last_width: AtomicU32, // The screen width at the time of the last printing.
 
 	started: Mutex<Instant>,
-	title: Mutex<Msg>,
+	title: Mutex<Option<Msg>>,
 	elapsed: AtomicU32,
 	done: AtomicU32,
 	doing: Mutex<HashSet<ProglessTask, RandomState>>,
@@ -358,7 +358,7 @@ impl Default for ProglessInner {
 			last_width: AtomicU32::new(0),
 
 			started: Mutex::new(Instant::now()),
-			title: Mutex::new(Msg::default()),
+			title: Mutex::new(None),
 			elapsed: AtomicU32::new(0),
 			done: AtomicU32::new(0),
 			doing: Mutex::new(HashSet::with_hasher(AHASH_STATE)),
@@ -526,21 +526,17 @@ impl ProglessInner {
 	/// Give the progress bar a title, which will be shown above the progress
 	/// bits while progress is progressing, and removed afterward with
 	/// everything else.
-	fn set_title<S>(&self, title: S)
+	fn set_title<S>(&self, title: Option<S>)
 	where S: Into<Msg> {
 		if self.running() {
-			let title: Msg = title.into();
-			let mut old_title = mutex_ptr!(self.title);
-			if title != *old_title {
-				if title.is_empty() {
-					*old_title = title;
-				}
-				else {
-					*old_title = title.with_newline(true);
-				}
-
-				self.flags.fetch_or(TICK_TITLE, SeqCst);
+			if let Some(title) = title.map(Into::into).filter(|x| ! x.is_empty()) {
+				mutex_ptr!(self.title).replace(title.with_newline(true));
 			}
+			else {
+				mutex_ptr!(self.title).take();
+			}
+
+			self.flags.fetch_or(TICK_TITLE, SeqCst);
 		}
 	}
 }
@@ -831,15 +827,14 @@ impl ProglessInner {
 	/// change. Long titles are lazy-cropped as needed.
 	fn tick_set_title(&self) {
 		if self.flag_toggle(TICK_TITLE) {
-			let title = mutex_ptr!(self.title);
-			if title.is_empty() {
-				mutex_ptr!(self.buf).truncate(PART_TITLE, 0);
-			}
-			else {
+			if let Some(title) = &*mutex_ptr!(self.title) {
 				mutex_ptr!(self.buf).replace(
 					PART_TITLE,
-					&title.fitted(self.last_width() as usize - 1),
+					&title.fitted(self.last_width().saturating_sub(1) as usize),
 				);
+			}
+			else {
+				mutex_ptr!(self.buf).truncate(PART_TITLE, 0);
 			}
 		}
 	}
@@ -997,7 +992,7 @@ impl Progless {
 	/// # With Title.
 	///
 	/// Add a title to the progress bar.
-	pub fn with_title<S>(self, title: S) -> Self
+	pub fn with_title<S>(self, title: Option<S>) -> Self
 	where S: Into<Msg> {
 		self.inner.set_title(title);
 		self
@@ -1097,7 +1092,7 @@ impl Progless {
 	/// Give the progress bar a title, which will be shown above the progress
 	/// bits while progress is progressing, and removed afterward with
 	/// everything else.
-	pub fn set_title<S>(&self, title: S)
+	pub fn set_title<S>(&self, title: Option<S>)
 	where S: Into<Msg> {
 		self.inner.set_title(title);
 	}

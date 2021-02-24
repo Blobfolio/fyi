@@ -182,7 +182,7 @@ const FILE_TYPES: &[&str] = &[
 fn main() {
 	// Initiate a progress bar.
 	let pbar = Progless::steady(FILE_TYPES.len() as u32)
-		.with_title(Msg::custom("Scanning", 199, "Pretending to look at files…"));
+		.with_title(Some(Msg::custom("Scanning", 199, "Pretending to look at files…")));
 
 	FILE_TYPES.par_iter()
 		.map(|&t| (t, Duration::from_millis(t.len() as u64 * 3)))
