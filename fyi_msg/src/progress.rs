@@ -914,11 +914,21 @@ impl ProglessSteady {
 	/// Make sure the steady ticker has actually aborted. This is called
 	/// automatically when [`Progless::finish`] is called.
 	fn stop(&self) {
-		self.enabled.store(false, SeqCst);
 		if let Some(handle) = mutex_ptr!(self.ticker).take() {
+			self.enabled.store(false, SeqCst);
 			handle.join().unwrap();
 		}
 	}
+}
+
+impl Drop for ProglessSteady {
+	#[inline]
+	/// # Drop.
+	///
+	/// Make sure the spawned steady tick thread has actually stopped. If the
+	/// caller forgot to run [`Progless::finish`] it might keep doing its
+	/// thing.
+	fn drop(&mut self) { self.stop(); }
 }
 
 
