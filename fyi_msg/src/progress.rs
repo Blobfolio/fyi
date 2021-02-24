@@ -983,6 +983,29 @@ impl Progless {
 	/// Create a new, manually-controlled progress bar instance. When made
 	/// this way, the implementing code needs to manually call [`Progless::tick`]
 	/// at regularish intervals in order for anything to actually display.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::Progless;
+	///
+	/// // Initialize with a `u32` total.
+	/// let pbar = Progless::new(1001_u32);
+	///
+	/// // Iterate your taskwork or whatever.
+	/// for i in 0..1001 {
+	///     // Do some work.
+	///     // ...
+	///
+	///     // Increment the done count.
+	///     pbar.increment();
+	///
+	///     // Call "tick" to render the change(s), if any.
+	///     pbar.tick();
+	/// }
+	///
+	/// let elapsed = pbar.finish();
+	/// ```
 	pub fn new(total: u32) -> Self {
 		Self {
 			steady: Arc::new(ProglessSteady::default()),
@@ -996,6 +1019,27 @@ impl Progless {
 	/// Create a new steady-ticking progress bar instance. When made this way,
 	/// implementing code should *not* call [`Progless::tick`] manually; that
 	/// will be handled automatically at regular intervals.
+	///
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::Progless;
+	///
+	/// // Initialize with a `u32` total.
+	/// let pbar = Progless::steady(1001_u32);
+	///
+	/// // Iterate your taskwork or whatever.
+	/// for i in 0..1001 {
+	///     // Do some work.
+	///     // ...
+	///
+	///     // Increment the done count.
+	///     pbar.increment();
+	/// }
+	///
+	/// let elapsed = pbar.finish();
+	/// ```
 	pub fn steady(total: u32) -> Self {
 		if total > 0 {
 			let inner = Arc::new(ProglessInner::new(total));
@@ -1009,7 +1053,38 @@ impl Progless {
 
 	/// # With Title.
 	///
-	/// Add a title to the progress bar.
+	/// Add a title to the progress bar. When present, this will print on its
+	/// own line immediately before the progress line.
+	///
+	/// Titles are formatted as [`Msg`] objects. You can pass a [`Msg`]
+	/// directly, or something that implements `AsRef<str>` or `Borrow<str>`.
+	///
+	/// As this takes an `Option`, you can pass `None` to unset the title
+	/// entirely.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::{Msg, Progless};
+	///
+	/// // Initialize with a `u32` total.
+	/// let pbar = Progless::new(1001_u32)
+	///     .with_title(Some(Msg::info("Doing things!")));
+	///
+	/// // Iterate your taskwork or whatever.
+	/// for i in 0..1001 {
+	///     // Do some work.
+	///     // ...
+	///
+	///     // Increment the done count.
+	///     pbar.increment();
+	///
+	///     // Call "tick" to render the change(s), if any.
+	///     pbar.tick();
+	/// }
+	///
+	/// let elapsed = pbar.finish();
+	/// ```
 	pub fn with_title<S>(self, title: Option<S>) -> Self
 	where S: Into<Msg> {
 		self.inner.set_title(title);
@@ -1025,6 +1100,31 @@ impl Progless {
 	///
 	/// Calling this method will also erase any previously-printed progress
 	/// information from the CLI screen.
+	///
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::Progless;
+	///
+	/// // Initialize with a `u32` total.
+	/// let pbar = Progless::new(1001_u32);
+	///
+	/// // Iterate your taskwork or whatever.
+	/// for i in 0..1001 {
+	///     // Do some work.
+	///     // ...
+	///
+	///     // Increment the done count.
+	///     pbar.increment();
+	///
+	///     // Call "tick" to render the change(s), if any.
+	///     pbar.tick();
+	/// }
+	///
+	/// // Finish it off!
+	/// let elapsed = pbar.finish();
+	/// ```
 	pub fn finish(&self) -> NiceElapsed {
 		self.inner.stop();
 		self.steady.stop();
@@ -1039,6 +1139,31 @@ impl Progless {
 	///
 	/// If you just want a generic "Finished in X." message, use [`Msg::from`]
 	/// instead.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::Progless;
+	///
+	/// // Initialize with a `u32` total.
+	/// let pbar = Progless::new(1001_u32);
+	///
+	/// // Iterate your taskwork or whatever.
+	/// for i in 0..1001 {
+	///     // Do some work.
+	///     // ...
+	///
+	///     // Increment the done count.
+	///     pbar.increment();
+	///
+	///     // Call "tick" to render the change(s), if any.
+	///     pbar.tick();
+	/// }
+	///
+	/// let _ = pbar.finish();
+	/// pbar.summary("Crunched", "file", "files").print();
+	/// // Will print something like "Crunched X files in Y seconds."
+	/// ```
 	pub fn summary<S>(&self, verb: S, singular: S, plural: S) -> Msg
 	where S: AsRef<str> {
 		let done = self.inner.done();
@@ -1073,6 +1198,27 @@ impl Progless {
 	///
 	/// Any `AsRef<str>` value will do. See the module documentation for
 	/// example usage.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::Progless;
+	///
+	/// // Initialize with a `u32` total.
+	/// let pbar = Progless::new(1001_u32);
+	///
+	/// // Iterate your taskwork or whatever.
+	/// for i in 0..1001 {
+	///     let task: String = format!("Task #{}.", i);
+    ///     pbar.add(&task);
+    ///
+    ///     // Do some work.
+    ///
+    ///     pbar.remove(&task);
+	/// }
+	///
+	/// let elapsed = pbar.finish();
+	/// ```
 	pub fn add<S>(&self, txt: S)
 	where S: AsRef<str> { self.inner.add(txt); }
 
@@ -1082,23 +1228,34 @@ impl Progless {
 	/// Increase the completed count by exactly one. This is safer to use than
 	/// `set_done()` in cases where multiple tasks are happening at once as it
 	/// will not accidentally decrease the value, etc.
+	///
+	/// See the various examples all over this page for more information.
 	pub fn increment(&self) { self.inner.increment(); }
 
 	#[inline]
 	/// # Remove a task.
 	///
-	/// This is the equal and opposite companion to [`Progless::add`]. Calling this
-	/// will automatically increment the done count by one, so should not be used
-	/// in cases where you're triggering done changes manually.
+	/// This is the equal and opposite companion to [`Progless::add`]. Calling
+	/// this will automatically increment the done count by one, so should not
+	/// be used in cases where you're triggering done changes manually.
+	///
+	/// See [`Progless::add`] for more details. If you use one, you must use
+	/// both.
 	pub fn remove<S>(&self, txt: S)
 	where S: AsRef<str> { self.inner.remove(txt); }
 
 	#[inline]
 	/// # Set Done.
 	///
-	/// Set the done count to a specific value. Be careful in cases where
-	/// things are happening in parallel; in such cases `increment` is probably
-	/// better.
+	/// Set the done count to a specific value.
+	///
+	/// In general, you should either use [`Progless::add`]/[`Progless::remove`]
+	/// or [`Progless::increment`] rather than this method, as they ensure any
+	/// changes made are *relative*.
+	///
+	/// This method *overrides* the done value instead, so can cause
+	/// regressions if you're doing task work in parallel and one thread
+	/// finishes before another, etc.
 	pub fn set_done(&self, done: u32) { self.inner.set_done(done); }
 
 	#[inline]
@@ -1107,6 +1264,8 @@ impl Progless {
 	/// Give the progress bar a title, which will be shown above the progress
 	/// bits while progress is progressing, and removed afterward with
 	/// everything else.
+	///
+	/// See [`Progless::with_title`] for more details.
 	pub fn set_title<S>(&self, title: Option<S>)
 	where S: Into<Msg> { self.inner.set_title(title); }
 
@@ -1115,6 +1274,11 @@ impl Progless {
 	///
 	/// Manually trigger a tick, which will paint any progress updates to
 	/// `STDERR` if the progress bar is running.
+	///
+	/// Do *not* use this method in combination with a steady ticker, as that
+	/// ticker will do the ticking for you.
+	///
+	/// See the example under [`Progless::new`] for more details.
 	pub fn tick(&self) { self.inner.tick(); }
 }
 
