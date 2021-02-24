@@ -744,11 +744,16 @@ impl ProglessInner {
 
 			// Update the parts!.
 			let mut buf = mutex_ptr!(self.buf);
-			if buf.len(PART_BAR_DONE) != w_done {
-				buf.replace(PART_BAR_DONE, &BAR[0..w_done as usize]);
-			}
+
+			// We're handling undone first — the reverse display order — as it
+			// will only ever shrink, leaving that much less to copy-right when
+			// extending the done portion.
 			if buf.len(PART_BAR_UNDONE) != w_undone {
 				buf.replace(PART_BAR_UNDONE, &DASH[0..w_undone as usize]);
+			}
+
+			if buf.len(PART_BAR_DONE) != w_done {
+				buf.replace(PART_BAR_DONE, &BAR[0..w_done as usize]);
 			}
 		}
 	}
