@@ -276,14 +276,29 @@ struct ProglessInner {
 	buf: Mutex<MsgBuffer<BUFFER8>>,
 	flags: AtomicU8,
 
-	last_hash: AtomicU64,  // A hash of what was last printed.
-	last_lines: AtomicU16, // The number of lines last printed.
-	last_time: AtomicU64,  // The time in milliseconds of the last print.
-	last_width: AtomicU32, // The screen width at the time of the last printing.
+	// A hash of what was last printed. Saves redundant work in cases where
+	// nothing has changed since the last print.
+	last_hash: AtomicU64,
 
+	// The number of lines last printed. Before printing new output, this many
+	// lines must be "erased".
+	last_lines: AtomicU16,
+
+	// The screen width from the last print. If this changes, all buffer parts
+	// are recalculated (even if their values haven't changed) to ensure they
+	// fit the new width.
+	last_width: AtomicU32,
+
+	// The instant the object was first created. All timings are derived from
+	// this value.
 	started: Mutex<Instant>,
-	title: Mutex<Option<Msg>>,
+
+	// This is the number of elapsed milliseconds as of the last tick. This
+	// gives us a reference to throttle back-to-back ticks as well as a cache
+	// of the seconds written to the `[00:00:00]` portion of the buffer.
 	elapsed: AtomicU32,
+
+	title: Mutex<Option<Msg>>,
 	done: AtomicU32,
 	doing: Mutex<HashSet<ProglessTask, RandomState>>,
 	total: AtomicU32,
@@ -357,12 +372,12 @@ impl Default for ProglessInner {
 
 			last_hash: AtomicU64::new(0),
 			last_lines: AtomicU16::new(0),
-			last_time: AtomicU64::new(0),
 			last_width: AtomicU32::new(0),
 
 			started: Mutex::new(Instant::now()),
-			title: Mutex::new(None),
 			elapsed: AtomicU32::new(0),
+
+			title: Mutex::new(None),
 			done: AtomicU32::new(0),
 			doing: Mutex::new(HashSet::with_hasher(AHASH_STATE)),
 			total: AtomicU32::new(0),
@@ -400,7 +415,7 @@ impl ProglessInner {
 			self.flags.store(0, SeqCst);
 			self.done.store(self.total(), SeqCst);
 			self.elapsed.store(
-				mutex_ptr!(self.started).elapsed().as_secs() as u32,
+				mutex_ptr!(self.started).elapsed().as_millis() as u32,
 				SeqCst
 			);
 			mutex_ptr!(self.doing).clear();
@@ -420,9 +435,11 @@ impl ProglessInner {
 	#[inline]
 	/// # Elapsed.
 	///
-	/// The elapsed time, in seconds, as it was when last updated. Dynamic
-	/// calculations just look at `started` directly.
-	fn elapsed(&self) -> u32 { self.elapsed.load(SeqCst) }
+	/// Return the last-recorded elapsed time in seconds. Realtime elapsed
+	/// values are pulled from the field directly.
+	fn elapsed(&self) -> u32 {
+		num_integer::div_floor(self.elapsed.load(SeqCst), 1000)
+	}
 
 	#[inline]
 	/// # Last Width.
@@ -655,12 +672,10 @@ impl ProglessInner {
 		}
 
 		// We don't want to tick too often... that will just look bad.
-		let n_elapsed = mutex_ptr!(self.started).elapsed().as_millis() as u64;
-		let o_elapsed = self.last_time.load(SeqCst);
-		if n_elapsed.saturating_sub(o_elapsed) < 60 {
-			return true;
-		}
-		self.last_time.store(n_elapsed, SeqCst);
+		let time_changed: bool = match self.tick_set_secs() {
+			None => return true,
+			Some(x) => x,
+		};
 
 		// Check the terminal width first because it affects most of what
 		// follows.
@@ -673,7 +688,7 @@ impl ProglessInner {
 
 		// If the time hasn't changed, and nothing else has changed, we can
 		// abort without all the tedious checking.
-		if ! self.tick_set_secs() && self.flags.load(SeqCst) == TICKING {
+		if ! time_changed && self.flags.load(SeqCst) == TICKING {
 			return true;
 		}
 
@@ -816,9 +831,18 @@ impl ProglessInner {
 	///
 	/// A value of `true` is returned if one or more seconds has elapsed since
 	/// the last tick, otherwise `false` is returned.
-	fn tick_set_secs(&self) -> bool {
-		let secs: u32 = mutex_ptr!(self.started).elapsed().as_secs() as u32;
-		if secs == self.elapsed.swap(secs, SeqCst) { false }
+	fn tick_set_secs(&self) -> Option<bool> {
+		let now: u32 = mutex_ptr!(self.started).elapsed().as_millis() as u32;
+		let before: u32 = self.elapsed.load(SeqCst);
+
+		// Throttle back-to-back ticks.
+		if now.saturating_sub(before) < 60 { return None; }
+
+		let secs: u32 = num_integer::div_floor(now, 1000);
+		self.elapsed.store(now, SeqCst);
+
+		// No change to the seconds bit.
+		if secs == num_integer::div_floor(before, 1000) { Some(false) }
 		else {
 			let [h, m, s] = NiceElapsed::hms(secs);
 			unsafe {
@@ -827,7 +851,7 @@ impl ProglessInner {
 				write_time(buf.as_mut_ptr(start), h, m, s);
 			}
 
-			true
+			Some(true)
 		}
 	}
 
