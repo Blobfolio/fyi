@@ -88,6 +88,10 @@ pub fn length_width(bytes: &[u8], stop: usize) -> usize {
 /// unless/until it finds a non-ASCII code, at which point it will shift to the
 /// heavier `width_unicode` method and finish counting there.
 ///
+/// Note: line breaks are ignored; the cummulative width of all lines is
+/// returned. If you're trying to calculate *line* widths, split the slice
+/// first and pass each chunk separately.
+///
 /// **This requires the `fitted` crate feature.**
 ///
 /// ## Safety.
