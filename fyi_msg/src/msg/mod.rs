@@ -345,6 +345,7 @@ impl Msg {
 		unsafe { Self::new_unchecked(kind, msg.as_ref().as_bytes()) }
 	}
 
+	#[allow(clippy::cast_possible_truncation)] // MsgBuffer checks fit.
 	#[must_use]
 	/// # New Message (Unchecked).
 	///
@@ -365,6 +366,7 @@ impl Msg {
 		))
 	}
 
+	#[allow(clippy::cast_possible_truncation)] // MsgBuffer checks fit.
 	/// # Custom Prefix.
 	///
 	/// This creates a new message with a user-defined prefix and color. See
@@ -406,6 +408,7 @@ impl Msg {
 		Self(MsgBuffer::from_raw_parts(v, new_toc!(p_end, m_end)))
 	}
 
+	#[allow(clippy::cast_possible_truncation)] // MsgBuffer checks fit.
 	/// # Custom Prefix (Pre-formatted)
 	///
 	/// Same as [`Msg::custom`], except no validation or formatting is applied
@@ -457,6 +460,7 @@ impl Msg {
 		unsafe { Self::plain_unchecked(msg.as_ref().as_bytes()) }
 	}
 
+	#[allow(clippy::cast_possible_truncation)] // MsgBuffer checks fit.
 	#[must_use]
 	/// # New Message Without Any Prefix (Unchecked).
 	///
@@ -698,6 +702,8 @@ impl Msg {
 	}
 
 	#[cfg(feature = "timestamps")]
+	#[allow(clippy::cast_possible_truncation)] // Date pieces have known values.
+	#[allow(clippy::cast_sign_loss)] // Date pieces have known values.
 	/// # Set Timestamp.
 	///
 	/// This is the setter companion to the [`Msg::with_timestamp`] builder
@@ -845,6 +851,7 @@ impl Msg {
 	}
 
 	#[cfg(feature = "fitted")]
+	#[allow(clippy::cast_possible_truncation)] // MsgBuffer checks fit.
 	#[must_use]
 	/// # Capped Width Slice.
 	///

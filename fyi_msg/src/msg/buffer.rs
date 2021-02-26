@@ -48,6 +48,13 @@ pub const BUFFER10: usize = 20;
 
 
 
+/// # Maximum size.
+const BUFFER_MAX_LEN: usize = 4_294_967_295;
+const BUFFER_OVERFLOW: &str = "Buffer lengths may not exceed u32::MAX.";
+const BUFFER_UNDERFLOW: &str = "Adjustment is larger than the part.";
+
+
+
 #[derive(Debug, Clone)]
 /// # Message Buffer.
 pub struct MsgBuffer<const N: usize> {
@@ -124,6 +131,14 @@ impl<const N: usize> MsgBuffer<N> {
 	/// order sequentially. For example, `[0, 2, 10, 15, …]` is fine,
 	/// but `[10, 15, 0, 2, …]` will panic.
 	///
+	/// ## Panics
+	///
+	/// The total buffer length may not exceed `u32::MAX` It will panic if
+	/// trying to go larger.
+	///
+	/// This will also panic if trying to create a buffer on a 16-bit platform
+	/// as that architecture is not supported.
+	///
 	/// ## Safety
 	///
 	/// No validation is performed; the data must make sense or undefined
@@ -131,6 +146,10 @@ impl<const N: usize> MsgBuffer<N> {
 	///
 	/// The table of contents must be properly aligned and ordered.
 	pub fn from_raw_parts(buf: Vec<u8>, toc: [u32; N]) -> Self {
+		#[cfg(target_pointer_width = "16")]
+		panic!("Message buffers do not support 16-bit platforms.");
+
+		assert!(buf.len() <= BUFFER_MAX_LEN, "{}", BUFFER_OVERFLOW);
 		Self { buf, toc }
 	}
 }
@@ -215,6 +234,7 @@ impl<const N: usize> MsgBuffer<N> {
 impl<const N: usize> MsgBuffer<N> {
 	#[must_use]
 	#[inline]
+	#[allow(clippy::cast_possible_truncation)] // We've previously asserted it fits.
 	/// # Total Buffer Length.
 	///
 	/// Return the length of the entire buffer (rather than a single part).
@@ -260,14 +280,24 @@ impl<const N: usize> MsgBuffer<N> {
 		&mut self.buf[rng]
 	}
 
+	#[allow(clippy::cast_possible_truncation)] // We've previously asserted it fits.
 	/// # Extend Part.
+	///
+	/// ## Panics
+	///
+	/// The total buffer length may not exceed `u32::MAX` It will panic if
+	/// trying to go larger.
 	pub fn extend(&mut self, idx: usize, buf: &[u8]) {
+		assert!(buf.len() <= BUFFER_MAX_LEN, "{}", BUFFER_OVERFLOW);
+
 		let len = buf.len() as u32;
 		if len != 0 {
 			let end = self.end(idx);
 
 			// End of buffer trick.
 			if end == self.total_len() {
+				assert!(buf.len() + self.buf.len() <= BUFFER_MAX_LEN, "{}", BUFFER_OVERFLOW);
+
 				self.buf.extend_from_slice(buf);
 				self.raise_parts_from(idx, len);
 			}
@@ -284,9 +314,17 @@ impl<const N: usize> MsgBuffer<N> {
 		}
 	}
 
+	#[allow(clippy::cast_possible_truncation)] // We've previously asserted it fits.
 	#[allow(clippy::comparison_chain)] // We're only matching 2/3.
 	/// # Replace Part.
+	///
+	/// ## Panics
+	///
+	/// The total buffer length may not exceed `u32::MAX` It will panic if
+	/// trying to go larger.
 	pub fn replace(&mut self, idx: usize, buf: &[u8]) {
+		assert!(buf.len() <= BUFFER_MAX_LEN, "{}", BUFFER_OVERFLOW);
+
 		// Get the lengths.
 		let old_len = self.len(idx);
 		let new_len = buf.len() as u32;
@@ -325,6 +363,11 @@ impl<const N: usize> MsgBuffer<N> {
 impl<const N: usize> MsgBuffer<N> {
 	/// # Grow.
 	///
+	/// ## Panics
+	///
+	/// The total buffer length may not exceed `u32::MAX` It will panic if
+	/// trying to go larger.
+	///
 	/// ## Safety
 	///
 	/// This method leaves data uninitialized! It is the responsibility
@@ -334,6 +377,8 @@ impl<const N: usize> MsgBuffer<N> {
 	fn resize_grow(&mut self, idx: usize, adj: u32) {
 		// Quick short-circuit.
 		if adj == 0 { return; }
+
+		assert!(self.buf.len() + adj as usize <= BUFFER_MAX_LEN, "{}", BUFFER_OVERFLOW);
 
 		let end: u32 = self.end(idx);
 		let len: u32 = self.total_len();
@@ -360,7 +405,8 @@ impl<const N: usize> MsgBuffer<N> {
 
 	/// # Shrink.
 	fn resize_shrink(&mut self, idx: usize, adj: u32) {
-		assert!(self.len(idx) >= adj);
+		assert!(self.len(idx) >= adj, "{}", BUFFER_UNDERFLOW);
+
 		let end = self.end(idx);
 
 		// End-of-buffer shortcut.
@@ -382,7 +428,7 @@ impl<const N: usize> MsgBuffer<N> {
 
 	/// # Decrease parts from.
 	fn lower_parts_from(&mut self, idx: usize, adj: u32) {
-		assert!(self.len(idx) >= adj);
+		assert!(self.len(idx) >= adj, "{}", BUFFER_UNDERFLOW);
 		self.toc.iter_mut().skip((idx << 1) + 1).for_each(|x| *x -= adj);
 	}
 

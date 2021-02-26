@@ -216,6 +216,7 @@ struct ProglessTask {
 impl TryFrom<&[u8]> for ProglessTask {
 	type Error = bool;
 
+	#[allow(clippy::cast_possible_truncation)] // We've previously asserted it fits.
 	fn try_from(src: &[u8]) -> Result<Self, Self::Error> {
 		// It has to fit in a u16.
 		if src.is_empty() || src.len() > 65_535 { Err(false) }
@@ -454,14 +455,14 @@ impl ProglessInner {
 	///
 	/// Return the value of `done / total`. The value will always be between
 	/// `0.0..=1.0`.
-	fn percent(&self) -> f32 {
+	fn percent(&self) -> f64 {
 		let done = self.done.load(SeqCst);
 		let total = self.total.load(SeqCst);
 
 		if total == 0 || done == 0 { 0.0 }
 		else if done == total { 1.0 }
 		else {
-			done as f32 / total as f32
+			f64::from(done) / f64::from(total)
 		}
 	}
 
@@ -748,6 +749,7 @@ impl ProglessInner {
 		}
 	}
 
+	#[allow(clippy::cast_possible_truncation)] // The parts have known constraints that will fit.
 	/// # Tick Bar.
 	///
 	/// This redraws the actual progress *bar* portion of the buffer, which is
