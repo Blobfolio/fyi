@@ -106,6 +106,7 @@ use dactyl::{
 	NiceElapsed,
 	NicePercent,
 	NiceU32,
+	traits::SaturatingFrom,
 	write_time,
 };
 use std::{
@@ -122,10 +123,9 @@ use std::{
 		Mutex,
 		atomic::{
 			AtomicBool,
-			AtomicU16,
+			AtomicU8,
 			AtomicU32,
 			AtomicU64,
-			AtomicU8,
 			Ordering::SeqCst,
 		},
 	},
@@ -184,8 +184,8 @@ const PART_DOING: usize = 7;
 
 
 /// # Misc Variables.
-const MIN_BARS_WIDTH: u32 = 10;
-const MIN_DRAW_WIDTH: u32 = 40;
+const MIN_BARS_WIDTH: u8 = 10;
+const MIN_DRAW_WIDTH: u8 = 40;
 
 // This translates to:          •   •   •   •   ↳             •
 const TASK_PREFIX: &[u8; 8] = &[32, 32, 32, 32, 226, 134, 179, 32];
@@ -210,18 +210,19 @@ macro_rules! mutex_ptr {
 /// slice. Though stored as raw bytes, the value is valid UTF-8.
 struct ProglessTask {
 	task: Box<[u8]>,
-	width: u32,
+	width: u16,
 }
 
 impl TryFrom<&[u8]> for ProglessTask {
 	type Error = bool;
 
 	fn try_from(src: &[u8]) -> Result<Self, Self::Error> {
-		if src.is_empty() { Err(false) }
+		// It has to fit in a u16.
+		if src.is_empty() || src.len() > 65_535 { Err(false) }
 		else {
 			Ok(Self {
 				task: Box::from(src),
-				width: fitted::width(src) as u32,
+				width: fitted::width(src) as u16,
 			})
 		}
 	}
@@ -246,10 +247,10 @@ impl PartialEq for ProglessTask {
 
 impl ProglessTask {
 	/// # Push To.
-	fn push_to(&self, buf: &mut Vec<u8>, width: u32) {
+	fn push_to(&self, buf: &mut Vec<u8>, width: u8) {
 		let avail = width.saturating_sub(6);
-		if self.width > avail {
-			let end = fitted::length_width(&self.task, avail as usize);
+		if self.width > u16::from(avail) {
+			let end = fitted::length_width(&self.task, usize::from(avail));
 			if end > 0 {
 				buf.extend_from_slice(TASK_PREFIX);
 				buf.extend_from_slice(&self.task[..end]);
@@ -282,12 +283,12 @@ struct ProglessInner {
 
 	// The number of lines last printed. Before printing new output, this many
 	// lines must be "erased".
-	last_lines: AtomicU16,
+	last_lines: AtomicU8,
 
 	// The screen width from the last print. If this changes, all buffer parts
 	// are recalculated (even if their values haven't changed) to ensure they
 	// fit the new width.
-	last_width: AtomicU32,
+	last_width: AtomicU8,
 
 	// The instant the object was first created. All timings are derived from
 	// this value.
@@ -371,8 +372,8 @@ impl Default for ProglessInner {
 			flags: AtomicU8::new(0),
 
 			last_hash: AtomicU64::new(0),
-			last_lines: AtomicU16::new(0),
-			last_width: AtomicU32::new(0),
+			last_lines: AtomicU8::new(0),
+			last_width: AtomicU8::new(0),
 
 			started: Mutex::new(Instant::now()),
 			elapsed: AtomicU32::new(0),
@@ -415,7 +416,7 @@ impl ProglessInner {
 			self.flags.store(0, SeqCst);
 			self.done.store(self.total(), SeqCst);
 			self.elapsed.store(
-				mutex_ptr!(self.started).elapsed().as_millis() as u32,
+				u32::saturating_from(mutex_ptr!(self.started).elapsed().as_millis()),
 				SeqCst
 			);
 			mutex_ptr!(self.doing).clear();
@@ -447,7 +448,7 @@ impl ProglessInner {
 	/// The CLI screen width as it was when last checked. If this value
 	/// happens to change between ticks, it will force redraw the content to
 	/// make sure it fits correctly.
-	fn last_width(&self) -> u32 { self.last_width.load(SeqCst) }
+	fn last_width(&self) -> u8 { self.last_width.load(SeqCst) }
 
 	/// # Percent.
 	///
@@ -588,7 +589,7 @@ impl ProglessInner {
 		self.print_cls();
 
 		// Update the line count and print!
-		self.last_lines.store(bytecount::count(&*buf, b'\n') as u16, SeqCst);
+		self.last_lines.store(u8::saturating_from(bytecount::count(&*buf, b'\n')), SeqCst);
 		Self::print(&*buf);
 	}
 
@@ -636,7 +637,7 @@ impl ProglessInner {
 				Ordering::Greater => {
 					Self::print(&[
 						&CLS10[..],
-						&CLS10[14..28].repeat(usize::from(last_lines) - 10),
+						&CLS10[14..28].repeat(usize::from(last_lines - 10)),
 					].concat());
 				},
 			}
@@ -716,7 +717,7 @@ impl ProglessInner {
 	///
 	/// If the total available space winds up being less than 10, all three
 	/// values are set to zero, indicating this component should be removed.
-	fn tick_bar_widths(&self) -> (u32, u32) {
+	fn tick_bar_widths(&self) -> (u8, u8) {
 		// The magic "11" is made up of the following hard-coded pieces:
 		// 2: braces around elapsed time;
 		// 2: spaces after elapsed time;
@@ -724,7 +725,7 @@ impl ProglessInner {
 		// 2: the spaces after total;
 		// 2: the braces around the bar itself (should there be one);
 		// 2: the spaces after the bar itself (should there be one);
-		let space: u32 = 255_u32.min(self.last_width().saturating_sub({
+		let space: u8 = self.last_width().saturating_sub(u8::saturating_from({
 			let buf = mutex_ptr!(self.buf);
 			11 +
 			buf.len(PART_ELAPSED) +
@@ -742,7 +743,7 @@ impl ProglessInner {
 		if done == total { (space, 0) }
 		// Working on it!
 		else {
-			let o_done: u32 = num_integer::div_floor(done * space, total);
+			let o_done: u8 = u8::saturating_from(num_integer::div_floor(done * u32::from(space), total));
 			(o_done, space.saturating_sub(o_done))
 		}
 	}
@@ -753,11 +754,11 @@ impl ProglessInner {
 	/// actually three different bars squished together: Done, Doing, and
 	/// Pending.
 	///
-	/// The combined width of the `###` will never exceed 255, and will never
-	/// be less than 10.
+	/// The entire line will never exceed 255 characters. The bars,
+	/// conservatively, cannot exceed 244, and will always be at least 10.
 	fn tick_set_bar(&self) {
-		static BAR: [u8; 255] = [b'#'; 255];
-		static DASH: [u8; 255] = [b'-'; 255];
+		static BAR: [u8; 244] = [b'#'; 244];
+		static DASH: [u8; 244] = [b'-'; 244];
 
 		if self.flag_toggle(TICK_BAR) {
 			let (w_done, w_undone) = self.tick_bar_widths();
@@ -768,12 +769,12 @@ impl ProglessInner {
 			// We're handling undone first — the reverse display order — as it
 			// will only ever shrink, leaving that much less to copy-right when
 			// extending the done portion.
-			if buf.len(PART_BAR_UNDONE) != w_undone {
-				buf.replace(PART_BAR_UNDONE, &DASH[0..w_undone as usize]);
+			if buf.len(PART_BAR_UNDONE) as u8 != w_undone {
+				buf.replace(PART_BAR_UNDONE, &DASH[0..usize::from(w_undone)]);
 			}
 
-			if buf.len(PART_BAR_DONE) != w_done {
-				buf.replace(PART_BAR_DONE, &BAR[0..w_done as usize]);
+			if buf.len(PART_BAR_DONE) as u8 != w_done {
+				buf.replace(PART_BAR_DONE, &BAR[0..usize::from(w_done)]);
 			}
 		}
 	}
@@ -790,7 +791,7 @@ impl ProglessInner {
 				mutex_ptr!(self.buf).truncate(PART_DOING, 0);
 			}
 			else {
-				let width: u32 = self.last_width().saturating_sub(6);
+				let width: u8 = self.last_width().saturating_sub(6);
 
 				let mut tasks = Vec::<u8>::with_capacity(256);
 				tasks.extend_from_slice(b"\x1b[35m");
@@ -832,7 +833,7 @@ impl ProglessInner {
 	/// A value of `true` is returned if one or more seconds has elapsed since
 	/// the last tick, otherwise `false` is returned.
 	fn tick_set_secs(&self) -> Option<bool> {
-		let now: u32 = mutex_ptr!(self.started).elapsed().as_millis() as u32;
+		let now: u32 = u32::saturating_from(mutex_ptr!(self.started).elapsed().as_millis());
 		let before: u32 = self.elapsed.load(SeqCst);
 
 		// Throttle back-to-back ticks.
@@ -864,7 +865,7 @@ impl ProglessInner {
 			if let Some(title) = &*mutex_ptr!(self.title) {
 				mutex_ptr!(self.buf).replace(
 					PART_TITLE,
-					&title.fitted(self.last_width().saturating_sub(1) as usize),
+					&title.fitted(usize::from(self.last_width().saturating_sub(1))),
 				);
 			}
 			else {
@@ -1333,6 +1334,9 @@ fn hash64(src: &[u8]) -> u64 {
 ///
 /// Note: The width returned will be `1` less than the actual value to mitigate
 /// any whitespace weirdness that might be lurking at the edge.
-fn term_width() -> u32 {
-	term_size::dimensions().map_or(0, |(w, _)| (w as u32).saturating_sub(1))
+fn term_width() -> u8 {
+	term_size::dimensions().map_or(
+		0,
+		|(w, _)| u8::saturating_from(w.saturating_sub(1))
+	)
 }
