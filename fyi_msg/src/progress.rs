@@ -214,9 +214,9 @@ struct ProglessTask {
 }
 
 impl TryFrom<&[u8]> for ProglessTask {
-	type Error = bool;
+	// We don't need to transmit error information beyond "it didn't work".
+	type Error = ();
 
-	#[allow(clippy::cast_possible_truncation)] // We've previously asserted it fits.
 	fn try_from(src: &[u8]) -> Result<Self, Self::Error> {
 		// It has to fit in a u16.
 		if src.is_empty() || src.len() > 65_535 { Err(false) }
