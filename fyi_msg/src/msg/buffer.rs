@@ -5,6 +5,7 @@
 */
 
 use std::{
+	convert::TryFrom,
 	fmt,
 	hash::{
 		Hash,
@@ -288,9 +289,7 @@ impl<const N: usize> MsgBuffer<N> {
 	/// The total buffer length may not exceed `u32::MAX` It will panic if
 	/// trying to go larger.
 	pub fn extend(&mut self, idx: usize, buf: &[u8]) {
-		assert!(buf.len() <= BUFFER_MAX_LEN, "{}", BUFFER_OVERFLOW);
-
-		let len = buf.len() as u32;
+		let len = u32::try_from(buf.len()).unwrap();
 		if len != 0 {
 			let end = self.end(idx);
 
@@ -314,7 +313,6 @@ impl<const N: usize> MsgBuffer<N> {
 		}
 	}
 
-	#[allow(clippy::cast_possible_truncation)] // We've previously asserted it fits.
 	#[allow(clippy::comparison_chain)] // We're only matching 2/3.
 	/// # Replace Part.
 	///
@@ -323,11 +321,9 @@ impl<const N: usize> MsgBuffer<N> {
 	/// The total buffer length may not exceed `u32::MAX` It will panic if
 	/// trying to go larger.
 	pub fn replace(&mut self, idx: usize, buf: &[u8]) {
-		assert!(buf.len() <= BUFFER_MAX_LEN, "{}", BUFFER_OVERFLOW);
-
 		// Get the lengths.
+		let new_len = u32::try_from(buf.len()).unwrap();
 		let old_len = self.len(idx);
-		let new_len = buf.len() as u32;
 
 		// Expand it.
 		if old_len < new_len {

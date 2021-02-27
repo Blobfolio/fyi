@@ -219,11 +219,11 @@ impl TryFrom<&[u8]> for ProglessTask {
 
 	fn try_from(src: &[u8]) -> Result<Self, Self::Error> {
 		// It has to fit in a u16.
-		if src.is_empty() || src.len() > 65_535 { Err(false) }
+		if src.is_empty() { Err(()) }
 		else {
 			Ok(Self {
 				task: Box::from(src),
-				width: fitted::width(src) as u16,
+				width: u16::try_from(fitted::width(src)).map_err(|_| ())?,
 			})
 		}
 	}
@@ -749,7 +749,7 @@ impl ProglessInner {
 		}
 	}
 
-	#[allow(clippy::cast_possible_truncation)] // The parts have known constraints that will fit.
+	#[allow(clippy::cast_possible_truncation)] // These parts are constrained to u8::MAX.
 	/// # Tick Bar.
 	///
 	/// This redraws the actual progress *bar* portion of the buffer, which is
