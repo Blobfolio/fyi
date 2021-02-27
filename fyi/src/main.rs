@@ -34,7 +34,7 @@ fyi error "Something broke!"
 
 This application is written in [Rust](https://www.rust-lang.org/) and can be installed using [Cargo](https://github.com/rust-lang/cargo).
 
-For stable Rust (>= `1.47.0`), run:
+For stable Rust (>= `1.51.0`), run:
 ```bash
 RUSTFLAGS="-C link-arg=-s" cargo install \
     --git https://github.com/Blobfolio/fyi.git \
@@ -140,7 +140,7 @@ use fyi_msg::{
 
 
 #[doc(hidden)]
-/// Main.
+/// # Main.
 fn main() {
 	// Handle errors.
 	if let Err(e) = _main() {
@@ -165,7 +165,7 @@ fn main() {
 
 #[doc(hidden)]
 #[inline]
-/// Actual Main.
+/// # Actual Main.
 ///
 /// This lets us more easily bubble errors, which are printed and handled
 /// specially.
@@ -181,15 +181,16 @@ fn _main() -> Result<(), ArgyleError> {
 			Ok(())
 		},
 		MsgKind::None => Err(ArgyleError::NoSubCmd),
+		MsgKind::Confirm => confirm(&args),
 		kind => msg(kind, &args),
 	}
 }
 
 #[doc(hidden)]
 #[cold]
-/// Shoot Blanks.
+/// # Shoot Blanks.
 ///
-/// Print one or more blank lines to `Stdout` or `Stderr`.
+/// Print one or more blank lines to `STDOUT` or `STDERR`.
 fn blank(args: &Argue) {
 	// How many lines should we print?
 	let msg = Msg::plain("\n".repeat(
@@ -206,39 +207,65 @@ fn blank(args: &Argue) {
 }
 
 #[doc(hidden)]
-/// Basic Message.
-fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgyleError> {
-	// Exit code.
-	let exit: i32 = args.option2(b"-e", b"--exit")
-		.and_then(|x| std::str::from_utf8(x).ok())
-		.and_then(|x| x.parse::<i32>().ok())
-		.unwrap_or(0);
+/// # Confirmation.
+///
+/// This prompts a message and exits with `0` or `1` depending on the
+/// positivity of the response.
+fn confirm(args: &Argue) -> Result<(), ArgyleError> {
+	if Msg::new(
+		MsgKind::Confirm,
+		std::str::from_utf8(args.first_arg()?).map_err(|_| ArgyleError::NoArg)?
+	)
+		.with_flags(parse_flags(args))
+		.prompt()
+	{
+		Ok(())
+	}
+	else {
+		Err(ArgyleError::Passthru(1))
+	}
+}
 
-	// Basic flags.
+#[doc(hidden)]
+/// # Parse Flags.
+///
+/// Most subcommands support the same two flags — indentation and timestamping.
+/// This parses those from the arguments, and adds the newline flag since all
+/// message types need a trailing line break.
+fn parse_flags(args: &Argue) -> u8 {
 	let mut flags: u8 = FLAG_NEWLINE;
 	if args.switch2(b"-i", b"--indent") { flags |= FLAG_INDENT; }
 	if args.switch2(b"-t", b"--timestamp") { flags |= FLAG_TIMESTAMP; }
+	flags
+}
 
-	// The main message.
-	let msg =
+#[doc(hidden)]
+/// # Basic Message.
+///
+/// This prints the message and exits accordingly.
+fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgyleError> {
+	// We need to discover the exit flag before forming the message as its
+	// position could affect Argyle's understanding of where the trailing args
+	// begin.
+	let exit: Option<i32> = args.option2(b"-e", b"--exit")
+		.and_then(|x| std::str::from_utf8(x).ok())
+		.and_then(|x| x.parse::<i32>().ok());
+
+	// Build the message.
+	let msg: Msg =
 		// Custom message prefix.
 		if MsgKind::Custom == kind {
-			if let Some(prefix) = args.option2(b"-p", b"--prefix").and_then(|x| std::str::from_utf8(x).ok()) {
-				let color: u8 = args.option2(b"-c", b"--prefix-color")
+			Msg::custom(
+				args.option2(b"-p", b"--prefix")
+					.and_then(|x| std::str::from_utf8(x).ok())
+					.unwrap_or_default(),
+				args.option2(b"-c", b"--prefix-color")
 					.and_then(|x| std::str::from_utf8(x).ok())
 					.and_then(|x| x.parse::<u8>().ok())
-					.unwrap_or(199);
-
-				Msg::custom(
-					prefix,
-					color,
-					std::str::from_utf8(args.first_arg()?)
-						.map_err(|_| ArgyleError::NoArg)?
-				)
-			}
-			else {
-				Msg::plain(std::str::from_utf8(args.first_arg()?).map_err(|_| ArgyleError::NoArg)?)
-			}
+					.unwrap_or(199_u8),
+				std::str::from_utf8(args.first_arg()?)
+					.map_err(|_| ArgyleError::NoArg)?
+			)
 		}
 		// Built-in prefix.
 		else {
@@ -248,27 +275,20 @@ fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgyleError> {
 					.map_err(|_| ArgyleError::NoArg)?
 			)
 		}
-		.with_flags(flags);
+		.with_flags(parse_flags(args));
 
-	// It's a prompt!
-	if MsgKind::Confirm == kind {
-		if msg.prompt() { return Ok(()); }
-		return Err(ArgyleError::Passthru(1));
-	}
-
-	// Print to `Stderr`.
+	// Print to `STDERR`.
 	if args.switch(b"--stderr") { msg.eprint(); }
-	// Print to `Stdout`.
+	// Print to `STDOUT`.
 	else { msg.print(); }
 
 	// Special exit?
-	if 0 == exit { Ok(()) }
-	else { Err(ArgyleError::Passthru(exit)) }
+	exit.map_or(Ok(()), |e| Err(ArgyleError::Passthru(e)))
 }
 
 #[doc(hidden)]
 #[cold]
-/// Help Page.
+/// # Help Page.
 ///
 /// Print the appropriate help screen given the call details. Most of the sub-
 /// commands work the same way, but a few have their own distinct messages.
