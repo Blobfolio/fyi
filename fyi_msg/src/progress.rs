@@ -1172,7 +1172,7 @@ impl Progless {
 	/// ## Examples
 	///
 	/// ```no_run
-	/// use fyi_msg::Progless;
+	/// use fyi_msg::{MsgKind, Progless};
 	///
 	/// // Initialize with a `u32` total.
 	/// let pbar = Progless::new(1001_u32);
@@ -1190,29 +1190,23 @@ impl Progless {
 	/// }
 	///
 	/// let _ = pbar.finish();
-	/// pbar.summary("Crunched", "file", "files").print();
+	/// pbar.summary(MsgKind::Crunched, "file", "files").print();
 	/// // Will print something like "Crunched X files in Y seconds."
 	/// ```
-	pub fn summary<S>(&self, verb: S, singular: S, plural: S) -> Msg
+	pub fn summary<S>(&self, kind: MsgKind, singular: S, plural: S) -> Msg
 	where S: AsRef<str> {
 		let done = self.inner.done();
 		let noun =
 			if done == 1 { singular.as_ref() }
 			else { plural.as_ref() };
 
-		// The content is all valid UTF-8; this is safe.
-		unsafe {
-			Msg::done_unchecked(&[
-				verb.as_ref().as_bytes(),
-				b" ",
-				NiceU32::from(done).as_bytes(),
-				b" ",
-				noun.as_bytes(),
-				b" in ",
-				NiceElapsed::from(self.inner.elapsed()).as_bytes(),
-				b".",
-			].concat())
-		}
+		Msg::new(kind, format!(
+			"{} {} in {}.",
+			NiceU32::from(done).as_str(),
+			noun,
+			NiceElapsed::from(self.inner.elapsed()).as_str(),
+		))
+			.with_newline(true)
 	}
 }
 
