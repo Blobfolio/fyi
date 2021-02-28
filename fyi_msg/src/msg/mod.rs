@@ -848,7 +848,7 @@ impl Msg {
 			);
 		}
 		else {
-			self.set_suffix(" \x1b[2m(No savings.)\x1b[0m");
+			self.0.replace(PART_SUFFIX, b" \x1b[2m(No savings.)\x1b[0m");
 		}
 
 		self
