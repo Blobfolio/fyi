@@ -1311,12 +1311,34 @@ impl Progless {
 #[derive(Debug, Copy, Clone)]
 /// # Before and After.
 ///
-/// This is a helper object for tracking arbitrary before and after states. It
-/// is independent of the [`Progless`] progress bar struct, but there are
-/// likely many situations where both could be useful together.
+/// This is a potentially useful companion to [`Progless`] that tracks an
+/// arbitrary non-zero before and after state. It was created to make it easire
+/// to track before/after file sizes from minification-type tasks, but it
+/// doesn't ascribe any particular meaning to the data it holds.
 ///
-/// While any `u64` data can be recorded, the situation this was first imagined
-/// for was file size tracking before and after minification.
+/// ## Examples
+///
+/// Usage is as simple as:
+///
+/// ```no_run
+/// use fyi_msg::BeforeAfter;
+///
+/// let mut ba = BeforeAfter::start(123_u64);
+///
+/// // Do some stuff.
+///
+/// ba.stop(50_u64);
+/// ```
+///
+/// Once before and after are set, you can use the getter methods [`BeforeAfter::before`]
+/// and [`BeforeAfter::after`] to obtain the values.
+///
+/// For relative changes where `after` is expected to be smaller than `before`,
+/// there is [`BeforeAfter::less`] and [`BeforeAfter::less_percent`] to obtain
+/// the relative difference.
+///
+/// For cases where `after` is expected to be larger, use [`BeforeAfter::more`]
+/// and [`BeforeAfter::more_percent`] instead.
 pub struct BeforeAfter {
 	before: Option<NonZeroU64>,
 	after: Option<NonZeroU64>,
@@ -1325,6 +1347,11 @@ pub struct BeforeAfter {
 impl BeforeAfter {
 	#[must_use]
 	/// # New Instance: Set Before.
+	///
+	/// This creates a new instance with the defined starting point.
+	///
+	/// A `before` value of `0_u64` is equivalent to `None`. The instance will
+	/// still be created, but the difference methods won't return any values.
 	pub const fn start(before: u64) -> Self {
 		Self {
 			before: NonZeroU64::new(before),
@@ -1333,16 +1360,25 @@ impl BeforeAfter {
 	}
 
 	/// # Finish Instance: Set After.
+	///
+	/// This sets the `after` value of an existing instance, closing it out.
+	///
+	/// An `after` value of `0_u64` is equivalent to `None`, meaning the
+	/// difference methods won't return any values.
 	pub fn stop(&mut self, after: u64) {
 		self.after = NonZeroU64::new(after);
 	}
 
 	/// # Get Before.
+	///
+	/// Return the `before` value if non-zero, otherwise `None`.
 	pub fn before(&self) -> Option<u64> {
 		self.before.map(NonZeroU64::get)
 	}
 
 	/// # Get After.
+	///
+	/// Return the `after` value if non-zero, otherwise `None`.
 	pub fn after(&self) -> Option<u64> {
 		self.after.map(NonZeroU64::get)
 	}
