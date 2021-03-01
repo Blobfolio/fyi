@@ -825,10 +825,10 @@ impl Msg {
 	/// A lot of our own programs using this lib crunch data and report the
 	/// savings as a suffix. This method just provides a quick way to generate
 	/// that.
-	pub fn with_bytes_saved(mut self, saved: u64, percent: Option<f64>) -> Self {
+	pub fn with_bytes_saved(mut self, saved: Option<u64>, percent: Option<f64>) -> Self {
 		use dactyl::{NicePercent, NiceU64};
 
-		if saved > 0 {
+		if let Some(saved) = saved {
 			self.0.replace(
 				PART_SUFFIX,
 				&percent.map_or_else(
