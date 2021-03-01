@@ -99,7 +99,12 @@ pub use fitted::{
 	width,
 };
 
-#[cfg(feature = "progress")]   pub use progress::Progless;
+#[cfg(feature = "progress")]
+pub use progress::{
+	BeforeAfter,
+	Progless,
+};
+
 #[cfg(feature = "timestamps")] pub use msg::FLAG_TIMESTAMP;
 
 #[macro_use]
