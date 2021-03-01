@@ -1325,7 +1325,7 @@ pub struct BeforeAfter {
 impl BeforeAfter {
 	#[must_use]
 	/// # New Instance: Set Before.
-	pub const fn new(before: u64) -> Self {
+	pub const fn start(before: u64) -> Self {
 		Self {
 			before: NonZeroU64::new(before),
 			after: None,
@@ -1333,7 +1333,7 @@ impl BeforeAfter {
 	}
 
 	/// # Finish Instance: Set After.
-	pub fn close(&mut self, after: u64) {
+	pub fn stop(&mut self, after: u64) {
 		self.after = NonZeroU64::new(after);
 	}
 
