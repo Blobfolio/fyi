@@ -298,7 +298,7 @@ struct ProglessInner {
 
 	// The instant the object was first created. All timings are derived from
 	// this value.
-	started: Mutex<Instant>,
+	started: Atomic<Instant>,
 
 	// This is the number of elapsed milliseconds as of the last tick. This
 	// gives us a reference to throttle back-to-back ticks as well as a cache
@@ -385,7 +385,7 @@ impl ProglessInner {
 			last_lines: AtomicU8::new(0),
 			last_width: AtomicU8::new(0),
 
-			started: Mutex::new(Instant::now()),
+			started: Atomic::new(Instant::now()),
 			elapsed: AtomicU32::new(0),
 
 			title: Mutex::new(None),
@@ -409,7 +409,7 @@ impl ProglessInner {
 			self.flags.store(0, SeqCst);
 			self.done.store(self.total(), SeqCst);
 			self.elapsed.store(
-				u32::saturating_from(mutex_ptr!(self.started).elapsed().as_millis()),
+				u32::saturating_from(self.started.load(SeqCst).elapsed().as_millis()),
 				SeqCst
 			);
 			mutex_ptr!(self.doing).clear();
@@ -827,7 +827,7 @@ impl ProglessInner {
 	/// A value of `true` is returned if one or more seconds has elapsed since
 	/// the last tick, otherwise `false` is returned.
 	fn tick_set_secs(&self) -> Option<bool> {
-		let now: u32 = u32::saturating_from(mutex_ptr!(self.started).elapsed().as_millis());
+		let now: u32 = u32::saturating_from(self.started.load(SeqCst).elapsed().as_millis());
 		let before: u32 = self.elapsed.load(SeqCst);
 
 		// Throttle back-to-back ticks.
