@@ -17,7 +17,7 @@ use fyi_msg::Progless;
 
 // Initialize with a `u32` total. Note, this variable does not need to be
 // mutable.
-let pbar = Progless::new(1001_u32);
+let pbar = Progless::new(1001_u32).unwrap();
 
 // Iterate your taskwork or whatever.
 for i in 0..1001 {
@@ -45,7 +45,7 @@ the need to tick yourself, you can use the steady-tick version:
 use fyi_msg::Progless;
 
 // Same as before, but using the "steady()" method.
-let pbar = Progless::steady(1001_u32);
+let pbar = Progless::steady(1001_u32).unwrap();
 
 // Iterate your taskwork or whatever.
 for i in 0..1001 {
@@ -77,7 +77,7 @@ use fyi_msg::Progless;
 use rayon::prelude::*;
 
 // Same as before, but using the "steady()" method.
-let pbar = Progless::steady(1001_u32);
+let pbar = Progless::steady(1001_u32).unwrap();
 
 // Iterate.
 for i in (0..1001).par_iter() {
@@ -95,6 +95,7 @@ let elapsed = pbar.finish();
 */
 
 use ahash::RandomState;
+use atomic::Atomic;
 use crate::{
 	BUFFER8,
 	fitted,
@@ -118,7 +119,10 @@ use std::{
 		Hash,
 		Hasher,
 	},
-	num::NonZeroU64,
+	num::{
+		NonZeroU32,
+		NonZeroU64,
+	},
 	sync::{
 		Arc,
 		Mutex,
@@ -304,12 +308,16 @@ struct ProglessInner {
 	title: Mutex<Option<Msg>>,
 	done: AtomicU32,
 	doing: Mutex<HashSet<ProglessTask, RandomState>>,
-	total: AtomicU32,
+	total: Atomic<NonZeroU32>,
 }
 
-impl Default for ProglessInner {
-	fn default() -> Self {
-		Self {
+/// # Construction/Destruction.
+impl ProglessInner {
+	/// # New.
+	///
+	/// Create a new instance with the specified total.
+	fn new(total: u32) -> Option<Self> {
+		Some(Self {
 			buf: Mutex::new(MsgBuffer::<BUFFER8>::from_raw_parts(
 				vec![
 					//  Title would go here.
@@ -371,7 +379,7 @@ impl Default for ProglessInner {
 					111, 111, // Current Tasks.
 				]
 			)),
-			flags: AtomicU8::new(0),
+			flags: AtomicU8::new(TICK_NEW),
 
 			last_hash: AtomicU64::new(0),
 			last_lines: AtomicU8::new(0),
@@ -383,25 +391,8 @@ impl Default for ProglessInner {
 			title: Mutex::new(None),
 			done: AtomicU32::new(0),
 			doing: Mutex::new(HashSet::with_hasher(AHASH_STATE)),
-			total: AtomicU32::new(0),
-		}
-	}
-}
-
-/// # Construction/Destruction.
-impl ProglessInner {
-	/// # New.
-	///
-	/// Create a new instance with the specified total.
-	fn new(total: u32) -> Self {
-		Self {
-			total: AtomicU32::new(total),
-			flags: AtomicU8::new(
-				if total > 0 { TICK_NEW }
-				else { 0 }
-			),
-			..Self::default()
-		}
+			total: Atomic::new(NonZeroU32::new(total)?),
+		})
 	}
 
 	/// # Stop.
@@ -458,9 +449,9 @@ impl ProglessInner {
 	/// `0.0..=1.0`.
 	fn percent(&self) -> f64 {
 		let done = self.done.load(SeqCst);
-		let total = self.total.load(SeqCst);
+		let total = self.total();
 
-		if total == 0 || done == 0 { 0.0 }
+		if done == 0 { 0.0 }
 		else if done == total { 1.0 }
 		else {
 			f64::from(done) / f64::from(total)
@@ -481,7 +472,7 @@ impl ProglessInner {
 	/// # Total.
 	///
 	/// The total number of tasks.
-	fn total(&self) -> u32 { self.total.load(SeqCst) }
+	fn total(&self) -> u32 { self.total.load(SeqCst).get() }
 }
 
 /// # Setters.
@@ -971,7 +962,7 @@ impl Drop for ProglessSteady {
 
 
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 /// # Progless.
 ///
 /// This here is the whole point. See the module documentation for more
@@ -1020,7 +1011,7 @@ impl Progless {
 	/// use fyi_msg::Progless;
 	///
 	/// // Initialize with a `u32` total.
-	/// let pbar = Progless::new(1001_u32);
+	/// let pbar = Progless::new(1001_u32).unwrap();
 	///
 	/// // Iterate your taskwork or whatever.
 	/// for i in 0..1001 {
@@ -1036,11 +1027,11 @@ impl Progless {
 	///
 	/// let elapsed = pbar.finish();
 	/// ```
-	pub fn new(total: u32) -> Self {
-		Self {
+	pub fn new(total: u32) -> Option<Self> {
+		Some(Self {
 			steady: Arc::new(ProglessSteady::default()),
-			inner: Arc::new(ProglessInner::new(total)),
-		}
+			inner: Arc::new(ProglessInner::new(total)?),
+		})
 	}
 
 	#[must_use]
@@ -1057,7 +1048,7 @@ impl Progless {
 	/// use fyi_msg::Progless;
 	///
 	/// // Initialize with a `u32` total.
-	/// let pbar = Progless::steady(1001_u32);
+	/// let pbar = Progless::steady(1001_u32).unwrap();
 	///
 	/// // Iterate your taskwork or whatever.
 	/// for i in 0..1001 {
@@ -1070,15 +1061,12 @@ impl Progless {
 	///
 	/// let elapsed = pbar.finish();
 	/// ```
-	pub fn steady(total: u32) -> Self {
-		if total > 0 {
-			let inner = Arc::new(ProglessInner::new(total));
-			Self {
-				steady: Arc::new(ProglessSteady::new(inner.clone())),
-				inner
-			}
-		}
-		else { Self::new(total) }
+	pub fn steady(total: u32) -> Option<Self> {
+		let inner = Arc::new(ProglessInner::new(total)?);
+		Some(Self {
+			steady: Arc::new(ProglessSteady::new(inner.clone())),
+			inner
+		})
 	}
 
 	/// # With Title.
@@ -1098,7 +1086,7 @@ impl Progless {
 	/// use fyi_msg::{Msg, Progless};
 	///
 	/// // Initialize with a `u32` total.
-	/// let pbar = Progless::new(1001_u32)
+	/// let pbar = Progless::new(1001_u32).unwrap()
 	///     .with_title(Some(Msg::info("Doing things!")));
 	///
 	/// // Iterate your taskwork or whatever.
@@ -1138,7 +1126,7 @@ impl Progless {
 	/// use fyi_msg::Progless;
 	///
 	/// // Initialize with a `u32` total.
-	/// let pbar = Progless::new(1001_u32);
+	/// let pbar = Progless::new(1001_u32).unwrap();
 	///
 	/// // Iterate your taskwork or whatever.
 	/// for i in 0..1001 {
@@ -1176,7 +1164,7 @@ impl Progless {
 	/// use fyi_msg::{MsgKind, Progless};
 	///
 	/// // Initialize with a `u32` total.
-	/// let pbar = Progless::new(1001_u32);
+	/// let pbar = Progless::new(1001_u32).unwrap();
 	///
 	/// // Iterate your taskwork or whatever.
 	/// for i in 0..1001 {
@@ -1229,7 +1217,7 @@ impl Progless {
 	/// use fyi_msg::Progless;
 	///
 	/// // Initialize with a `u32` total.
-	/// let pbar = Progless::new(1001_u32);
+	/// let pbar = Progless::new(1001_u32).unwrap();
 	///
 	/// // Iterate your taskwork or whatever.
 	/// for i in 0..1001 {

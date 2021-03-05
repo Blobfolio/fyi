@@ -18,7 +18,7 @@ include!("_progless-data.rs");
 /// # Do it.
 fn main() {
 	// Initiate a progress bar.
-	let pbar = Progless::steady(FILE_TYPES.len() as u32)
+	let pbar = Progless::steady(FILE_TYPES.len() as u32).unwrap()
 		.with_title(Some(Msg::custom("Scanning", 199, "Pretending to look at files…")));
 
 	FILE_TYPES.par_iter()

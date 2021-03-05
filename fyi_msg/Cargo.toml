@@ -15,6 +15,10 @@ dactyl = "0.1.*"
 version = "0.7.*"
 optional = true
 
+[dependencies.atomic]
+version = "0.5.*"
+optional = true
+
 [dependencies.bytecount]
 version = "0.6.*"
 optional = true
@@ -83,7 +87,7 @@ bin_kinds = []
 fitted = [ "unicode-width" ]
 
 # Make use of the "progless" bar.
-progress = [ "ahash", "bytecount", "fitted", "num-integer", "term_size" ]
+progress = [ "ahash", "atomic", "bytecount", "fitted", "num-integer", "term_size" ]
 
 # Add timestamp support to messages.
 timestamps = [ "chrono", "num-integer" ]
