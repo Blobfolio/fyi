@@ -115,6 +115,7 @@ use std::{
 	cmp::Ordering,
 	collections::HashSet,
 	convert::TryFrom,
+	fmt,
 	hash::{
 		Hash,
 		Hasher,
@@ -208,6 +209,43 @@ macro_rules! mutex_ptr {
 
 
 
+#[derive(Debug, Copy, Clone)]
+/// # Obligatory error type.
+pub enum ProglessError {
+	/// # Empty task.
+	Task0,
+	/// # Length (task) overflow.
+	TaskOverflow,
+	/// # Length (total) must be non-zero.
+	Total0,
+	/// # Length (total) overflow.
+	TotalOverflow,
+}
+
+impl fmt::Display for ProglessError {
+	#[inline]
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.write_str(self.as_str())
+	}
+}
+
+impl std::error::Error for ProglessError {}
+
+impl ProglessError {
+	#[must_use]
+	/// # As Str.
+	pub const fn as_str(self) -> &'static str {
+		match self {
+			Self::Task0 => "Task names cannot be empty.",
+			Self::TaskOverflow => "Task names cannot exceed 65,535 bytes.",
+			Self::Total0 => "At least one task is required.",
+			Self::TotalOverflow => "The total number of tasks cannot exceed 4,294,967,295.",
+		}
+	}
+}
+
+
+
 #[derive(Debug, Clone)]
 /// # A Task.
 ///
@@ -219,16 +257,15 @@ struct ProglessTask {
 }
 
 impl TryFrom<&[u8]> for ProglessTask {
-	// We don't need to transmit error information beyond "it didn't work".
-	type Error = ();
+	type Error = ProglessError;
 
 	fn try_from(src: &[u8]) -> Result<Self, Self::Error> {
 		// It has to fit in a u16.
-		if src.is_empty() { Err(()) }
+		if src.is_empty() { Err(ProglessError::Task0) }
 		else {
 			Ok(Self {
 				task: Box::from(src),
-				width: u16::try_from(fitted::width(src)).map_err(|_| ())?,
+				width: u16::try_from(fitted::width(src)).map_err(|_| ProglessError::TaskOverflow)?,
 			})
 		}
 	}
@@ -316,8 +353,12 @@ impl ProglessInner {
 	/// # New.
 	///
 	/// Create a new instance with the specified total.
-	fn new(total: u32) -> Option<Self> {
-		Some(Self {
+	///
+	/// ## Errors
+	///
+	/// This returns an error if total is zero.
+	fn new(total: u32) -> Result<Self, ProglessError> {
+		Ok(Self {
 			buf: Mutex::new(MsgBuffer::<BUFFER8>::from_raw_parts(
 				vec![
 					//  Title would go here.
@@ -391,7 +432,7 @@ impl ProglessInner {
 			title: Mutex::new(None),
 			done: AtomicU32::new(0),
 			doing: Mutex::new(HashSet::with_hasher(AHASH_STATE)),
-			total: Atomic::new(NonZeroU32::new(total)?),
+			total: Atomic::new(NonZeroU32::new(total).ok_or(ProglessError::Total0)?),
 		})
 	}
 
@@ -998,12 +1039,15 @@ impl From<Progless> for Msg {
 
 /// # Construction/Destruction.
 impl Progless {
-	#[must_use]
 	/// # New.
 	///
 	/// Create a new, manually-controlled progress bar instance. When made
 	/// this way, the implementing code needs to manually call [`Progless::tick`]
 	/// at regularish intervals in order for anything to actually display.
+	///
+	/// ## Errors
+	///
+	/// This returns an error if total is zero.
 	///
 	/// ## Examples
 	///
@@ -1027,20 +1071,22 @@ impl Progless {
 	///
 	/// let elapsed = pbar.finish();
 	/// ```
-	pub fn new(total: u32) -> Option<Self> {
-		Some(Self {
+	pub fn new(total: u32) -> Result<Self, ProglessError> {
+		Ok(Self {
 			steady: Arc::new(ProglessSteady::default()),
 			inner: Arc::new(ProglessInner::new(total)?),
 		})
 	}
 
-	#[must_use]
 	/// # New Steady.
 	///
 	/// Create a new steady-ticking progress bar instance. When made this way,
 	/// implementing code should *not* call [`Progless::tick`] manually; that
 	/// will be handled automatically at regular intervals.
 	///
+	/// ## Errors
+	///
+	/// This returns an error if total is zero.
 	///
 	/// ## Examples
 	///
@@ -1061,9 +1107,9 @@ impl Progless {
 	///
 	/// let elapsed = pbar.finish();
 	/// ```
-	pub fn steady(total: u32) -> Option<Self> {
+	pub fn steady(total: u32) -> Result<Self, ProglessError> {
 		let inner = Arc::new(ProglessInner::new(total)?);
-		Some(Self {
+		Ok(Self {
 			steady: Arc::new(ProglessSteady::new(inner.clone())),
 			inner
 		})

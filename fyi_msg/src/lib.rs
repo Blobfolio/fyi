@@ -103,6 +103,7 @@ pub use fitted::{
 pub use progress::{
 	BeforeAfter,
 	Progless,
+	ProglessError,
 };
 
 #[cfg(feature = "timestamps")] pub use msg::FLAG_TIMESTAMP;
