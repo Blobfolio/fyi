@@ -1,97 +1,5 @@
 /*!
 # FYI Msg - Progless
-
-[`Progless`] is a simple, thread-safe CLI progress bar that can be used to
-entertain users while long jobs are running.
-
-To use it, enable the `progress` crate flag.
-
-There are two main ways to use it: manually or steady-ticked.
-
-Manual in this case means your code says when to increment the "done" count,
-and when to "tick" (possibly render output). This works for both single- and
-multi-threaded tasks like so:
-
-```no_run
-use fyi_msg::Progless;
-
-// Initialize with a `u32` total. Note, this variable does not need to be
-// mutable.
-let pbar = Progless::new(1001_u32).unwrap();
-
-// Iterate your taskwork or whatever.
-for i in 0..1001 {
-    // Do some work.
-    // ...
-
-    // Increment the done count.
-    pbar.increment();
-
-    // Call "tick" to render the change(s), if any.
-    pbar.tick();
-}
-
-// Close it off and receive the elapsed time as a [`dactyl::NiceElapsed`],
-// which provides both [`dactyl::NiceElapsed::as_bytes`] and [`dactyl::NiceElapsed::as_str`]
-// methods for whatever you may want to do with it.
-let elapsed = pbar.finish();
-```
-
-Manual ticking is fine, but if tasks take a long time to complete, particularly
-in serial iterators, the elapsed time may appear frozen. To fix that and remove
-the need to tick yourself, you can use the steady-tick version:
-
-```no_run
-use fyi_msg::Progless;
-
-// Same as before, but using the "steady()" method.
-let pbar = Progless::steady(1001_u32).unwrap();
-
-// Iterate your taskwork or whatever.
-for i in 0..1001 {
-    // Do some work.
-    // ...
-
-    // You still need to increment the done count when you've finished a cycle.
-    pbar.increment();
-}
-
-// And again, same as before.
-let elapsed = pbar.finish();
-```
-
-[`Progless`] is thread-safe so can be called from parallel iterators like those
-from [`rayon`](https://crates.io/crates/rayon) without any special fuss.
-
-When doing parallel work, many tasks might be "in progress" simultaneously. To
-that end, you may wish to use the [`Progless::add`] and [`Progless::remove`]
-methods at the start and end of each iteration instead of manually incrementing
-the counts.
-
-Doing this, a list of active tasks will be maintained and printed along with
-the progress. Removing a task automatically increments the done count, so if
-you're tracking tasks, you should *not* call [`Progless::increment`].
-
-```no_run
-use fyi_msg::Progless;
-use rayon::prelude::*;
-
-// Same as before, but using the "steady()" method.
-let pbar = Progless::steady(1001_u32).unwrap();
-
-// Iterate.
-for i in (0..1001).par_iter() {
-    let task: String = format!("Task #{}.", i);
-    pbar.add(&task);
-
-    // Do some work.
-
-    pbar.remove(&task);
-}
-
-let elapsed = pbar.finish();
-```
-
 */
 
 use ahash::RandomState;
@@ -213,11 +121,11 @@ macro_rules! mutex_ptr {
 /// # Obligatory error type.
 pub enum ProglessError {
 	/// # Empty task.
-	Task0,
+	EmptyTask,
 	/// # Length (task) overflow.
 	TaskOverflow,
 	/// # Length (total) must be non-zero.
-	Total0,
+	EmptyTotal,
 	/// # Length (total) overflow.
 	TotalOverflow,
 }
@@ -236,9 +144,9 @@ impl ProglessError {
 	/// # As Str.
 	pub const fn as_str(self) -> &'static str {
 		match self {
-			Self::Task0 => "Task names cannot be empty.",
+			Self::EmptyTask => "Task names cannot be empty.",
 			Self::TaskOverflow => "Task names cannot exceed 65,535 bytes.",
-			Self::Total0 => "At least one task is required.",
+			Self::EmptyTotal => "At least one task is required.",
 			Self::TotalOverflow => "The total number of tasks cannot exceed 4,294,967,295.",
 		}
 	}
@@ -261,7 +169,7 @@ impl TryFrom<&[u8]> for ProglessTask {
 
 	fn try_from(src: &[u8]) -> Result<Self, Self::Error> {
 		// It has to fit in a u16.
-		if src.is_empty() { Err(ProglessError::Task0) }
+		if src.is_empty() { Err(ProglessError::EmptyTask) }
 		else {
 			Ok(Self {
 				task: Box::from(src),
@@ -290,6 +198,9 @@ impl PartialEq for ProglessTask {
 
 impl ProglessTask {
 	/// # Push To.
+	///
+	/// Push this task to the vector buffer, ensuring it fits the specified
+	/// width.
 	fn push_to(&self, buf: &mut Vec<u8>, width: u8) {
 		let avail = width.saturating_sub(6);
 		if self.width > u16::from(avail) {
@@ -348,17 +259,9 @@ struct ProglessInner {
 	total: Atomic<NonZeroU32>,
 }
 
-/// # Construction/Destruction.
-impl ProglessInner {
-	/// # New.
-	///
-	/// Create a new instance with the specified total.
-	///
-	/// ## Errors
-	///
-	/// This returns an error if total is zero.
-	fn new(total: u32) -> Result<Self, ProglessError> {
-		Ok(Self {
+impl From<NonZeroU32> for ProglessInner {
+	fn from(total: NonZeroU32) -> Self {
+		Self {
 			buf: Mutex::new(MsgBuffer::<BUFFER8>::from_raw_parts(
 				vec![
 					//  Title would go here.
@@ -432,10 +335,21 @@ impl ProglessInner {
 			title: Mutex::new(None),
 			done: AtomicU32::new(0),
 			doing: Mutex::new(HashSet::with_hasher(AHASH_STATE)),
-			total: Atomic::new(NonZeroU32::new(total).ok_or(ProglessError::Total0)?),
-		})
+			total: Atomic::new(total),
+		}
 	}
+}
 
+impl TryFrom<u32> for ProglessInner {
+	type Error = ProglessError;
+
+	fn try_from(total: u32) -> Result<Self, Self::Error> {
+		Ok(Self::from(NonZeroU32::new(total).ok_or(ProglessError::EmptyTotal)?))
+	}
+}
+
+/// # Construction/Destruction.
+impl ProglessInner {
 	/// # Stop.
 	///
 	/// Force an end to progress. This may be called manually to abort in the
@@ -950,35 +864,29 @@ struct ProglessSteady {
 	enabled: Arc<AtomicBool>,
 }
 
-impl ProglessSteady {
-	/// # New (Enabled).
-	///
-	/// Spawn a steady ticker, provided there is a running progress bar.
-	fn new(t_inner: Arc<ProglessInner>) -> Self {
-		// The inner has to be running or else there's no point in setting this
-		// up.
-		if t_inner.running() {
-			const SLEEP: Duration = Duration::from_millis(60);
-			let enabled = Arc::new(AtomicBool::new(true));
-			let t_enabled = enabled.clone();
+impl From<Arc<ProglessInner>> for ProglessSteady {
+	fn from(t_inner: Arc<ProglessInner>) -> Self {
+		const SLEEP: Duration = Duration::from_millis(60);
+		let enabled = Arc::new(AtomicBool::new(true));
+		let t_enabled = enabled.clone();
 
-			Self {
-				enabled,
-				ticker:  Mutex::new(Some(std::thread::spawn(move || loop {
-					// This will abort if we've manually shut off the "enabled"
-					// field, or if "inner" has reached 100%. Otherwise this will
-					// initiate a "tick", which may or may not paint an update to
-					// the CLI.
-					if ! t_enabled.load(SeqCst) || ! t_inner.tick() { break; }
+		Self {
+			enabled,
+			ticker:  Mutex::new(Some(std::thread::spawn(move || loop {
+				// This will abort if we've manually shut off the "enabled"
+				// field, or if "inner" has reached 100%. Otherwise this will
+				// initiate a "tick", which may or may not paint an update to
+				// the CLI.
+				if ! t_enabled.load(SeqCst) || ! t_inner.tick() { break; }
 
-					// Sleep for a short while before checking again.
-					std::thread::sleep(SLEEP);
-				}))),
-			}
+				// Sleep for a short while before checking again.
+				std::thread::sleep(SLEEP);
+			}))),
 		}
-		else { Self::default() }
 	}
+}
 
+impl ProglessSteady {
 	/// # Stop.
 	///
 	/// Make sure the steady ticker has actually aborted. This is called
@@ -1006,12 +914,131 @@ impl Drop for ProglessSteady {
 #[derive(Debug, Clone)]
 /// # Progless.
 ///
-/// This here is the whole point. See the module documentation for more
-/// details.
+/// This is a simple, thread-safe CLI progress bar that can be used to
+/// entertain users while long jobs are running.
+///
+/// To use it, enable the `progress` crate flag.
+///
+/// ## Examples
+///
+/// Initialize a steady-ticking progress instance as follows:
+///
+/// ```no_run
+/// use fyi_msg::Progless;
+/// use std::convert::TryFrom;
+///
+/// // You can use [`Progless::try_from`] for any unsigned integer type, or the
+/// // infallible [`Progless::from`] on an [`std::num::NonZeroU32`].
+/// let pbar = Progless::try_from(1001_u32).unwrap();
+///
+/// // Iterate your taskwork or whatever.
+/// for i in 0..1001 {
+///     // Do some work.
+///     // ...
+///
+///     // Increment the count.
+///     pbar.increment();
+/// }
+///
+/// // Close it off.
+/// pbar.finish();
+/// ```
+///
+/// [`Progless`] is thread-safe so can be called from parallel iterators like
+/// those from [`rayon`](https://crates.io/crates/rayon) without any special fuss.
+///
+/// When doing parallel work, many tasks might be "in progress" simultaneously.
+/// To that end, you may wish to use the [`Progless::add`] and [`Progless::remove`]
+/// methods at the start and end of each iteration instead of manually
+/// incrementing the counts.
+///
+/// Doing this, a list of active tasks will be maintained and printed along
+/// with the progress. Removing a task automatically increments the done count,
+/// so if you're tracking tasks, you should *not* call [`Progless::increment`].
+///
+/// ```ignore
+/// # use fyi_msg::Progless;
+/// # use rayon::prelude::*;
+/// # use std::convert::TryFrom;
+///
+/// # let pbar = Progless::try_from(1001_u32).unwrap();
+///
+/// // ... snip
+///
+/// // Iterate in Parallel.
+/// for i in (0..1001).par_iter() {
+///     let task: String = format!("Task #{}.", i);
+///     pbar.add(&task);
+///
+///     // Do some work.
+///
+///     pbar.remove(&task);
+/// }
+///
+/// // ... snip
+/// ```
 pub struct Progless {
 	steady: Arc<ProglessSteady>,
 	inner: Arc<ProglessInner>,
 }
+
+impl From<NonZeroU32> for Progless {
+	#[inline]
+	fn from(total: NonZeroU32) -> Self {
+		let inner = Arc::new(ProglessInner::from(total));
+		Self {
+			steady: Arc::new(ProglessSteady::from(inner.clone())),
+			inner
+		}
+	}
+}
+
+impl TryFrom<u32> for Progless {
+	type Error = ProglessError;
+
+	#[inline]
+	fn try_from(total: u32) -> Result<Self, Self::Error> {
+		Ok(Self::from(NonZeroU32::new(total).ok_or(ProglessError::EmptyTotal)?))
+	}
+}
+
+/// # Helper: TryFrom
+///
+/// This will generate TryFrom implementations for various integer types, both
+/// bigger and smaller than the target `u32`.
+macro_rules! impl_tryfrom {
+	// These types fit into u32.
+	(true, ($($from:ty),+)) => (
+		$(
+			impl TryFrom<$from> for Progless {
+				type Error = ProglessError;
+
+				#[inline]
+				fn try_from(total: $from) -> Result<Self, Self::Error> {
+					Self::try_from(u32::from(total))
+				}
+			}
+		)+
+	);
+
+	// These types don't necessarily fit.
+	(false, ($($from:ty),+)) => (
+		$(
+			impl TryFrom<$from> for Progless {
+				type Error = ProglessError;
+
+				#[inline]
+				fn try_from(total: $from) -> Result<Self, Self::Error> {
+					let total = u32::try_from(total).map_err(|_| ProglessError::TotalOverflow)?;
+					Self::try_from(total)
+				}
+			}
+		)+
+	);
+}
+
+impl_tryfrom!(true, (u8, u16));
+impl_tryfrom!(false, (u64, u128, usize));
 
 impl From<Progless> for Msg {
 	#[inline]
@@ -1039,82 +1066,6 @@ impl From<Progless> for Msg {
 
 /// # Construction/Destruction.
 impl Progless {
-	/// # New.
-	///
-	/// Create a new, manually-controlled progress bar instance. When made
-	/// this way, the implementing code needs to manually call [`Progless::tick`]
-	/// at regularish intervals in order for anything to actually display.
-	///
-	/// ## Errors
-	///
-	/// This returns an error if total is zero.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::Progless;
-	///
-	/// // Initialize with a `u32` total.
-	/// let pbar = Progless::new(1001_u32).unwrap();
-	///
-	/// // Iterate your taskwork or whatever.
-	/// for i in 0..1001 {
-	///     // Do some work.
-	///     // ...
-	///
-	///     // Increment the done count.
-	///     pbar.increment();
-	///
-	///     // Call "tick" to render the change(s), if any.
-	///     pbar.tick();
-	/// }
-	///
-	/// let elapsed = pbar.finish();
-	/// ```
-	pub fn new(total: u32) -> Result<Self, ProglessError> {
-		Ok(Self {
-			steady: Arc::new(ProglessSteady::default()),
-			inner: Arc::new(ProglessInner::new(total)?),
-		})
-	}
-
-	/// # New Steady.
-	///
-	/// Create a new steady-ticking progress bar instance. When made this way,
-	/// implementing code should *not* call [`Progless::tick`] manually; that
-	/// will be handled automatically at regular intervals.
-	///
-	/// ## Errors
-	///
-	/// This returns an error if total is zero.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::Progless;
-	///
-	/// // Initialize with a `u32` total.
-	/// let pbar = Progless::steady(1001_u32).unwrap();
-	///
-	/// // Iterate your taskwork or whatever.
-	/// for i in 0..1001 {
-	///     // Do some work.
-	///     // ...
-	///
-	///     // Increment the done count.
-	///     pbar.increment();
-	/// }
-	///
-	/// let elapsed = pbar.finish();
-	/// ```
-	pub fn steady(total: u32) -> Result<Self, ProglessError> {
-		let inner = Arc::new(ProglessInner::new(total)?);
-		Ok(Self {
-			steady: Arc::new(ProglessSteady::new(inner.clone())),
-			inner
-		})
-	}
-
 	/// # With Title.
 	///
 	/// Add a title to the progress bar. When present, this will print on its
@@ -1130,9 +1081,10 @@ impl Progless {
 	///
 	/// ```no_run
 	/// use fyi_msg::{Msg, Progless};
+	/// use std::convert::TryFrom;
 	///
 	/// // Initialize with a `u32` total.
-	/// let pbar = Progless::new(1001_u32).unwrap()
+	/// let pbar = Progless::try_from(1001_u32).unwrap()
 	///     .with_title(Some(Msg::info("Doing things!")));
 	///
 	/// // Iterate your taskwork or whatever.
@@ -1142,12 +1094,9 @@ impl Progless {
 	///
 	///     // Increment the done count.
 	///     pbar.increment();
-	///
-	///     // Call "tick" to render the change(s), if any.
-	///     pbar.tick();
 	/// }
 	///
-	/// let elapsed = pbar.finish();
+	/// pbar.finish();
 	/// ```
 	pub fn with_title<S>(self, title: Option<S>) -> Self
 	where S: Into<Msg> {
@@ -1155,12 +1104,9 @@ impl Progless {
 		self
 	}
 
-	#[must_use]
 	/// # Stop.
 	///
-	/// Finish the progress bar, shut down the steady ticker (if any), and
-	/// return the final elapsed count as a [`dactyl::NiceElapsed`]. Do with
-	/// it what you will.
+	/// Finish the progress bar and shut down the steady ticker.
 	///
 	/// Calling this method will also erase any previously-printed progress
 	/// information from the CLI screen.
@@ -1170,9 +1116,10 @@ impl Progless {
 	///
 	/// ```no_run
 	/// use fyi_msg::Progless;
+	/// use std::convert::TryFrom;
 	///
 	/// // Initialize with a `u32` total.
-	/// let pbar = Progless::new(1001_u32).unwrap();
+	/// let pbar = Progless::try_from(1001_u32).unwrap();
 	///
 	/// // Iterate your taskwork or whatever.
 	/// for i in 0..1001 {
@@ -1181,18 +1128,14 @@ impl Progless {
 	///
 	///     // Increment the done count.
 	///     pbar.increment();
-	///
-	///     // Call "tick" to render the change(s), if any.
-	///     pbar.tick();
 	/// }
 	///
 	/// // Finish it off!
-	/// let elapsed = pbar.finish();
+	/// pbar.finish();
 	/// ```
-	pub fn finish(&self) -> NiceElapsed {
+	pub fn finish(&self) {
 		self.inner.stop();
 		self.steady.stop();
-		NiceElapsed::from(self.inner.elapsed())
 	}
 
 	#[must_use]
@@ -1208,9 +1151,10 @@ impl Progless {
 	///
 	/// ```no_run
 	/// use fyi_msg::{MsgKind, Progless};
+	/// use std::convert::TryFrom;
 	///
 	/// // Initialize with a `u32` total.
-	/// let pbar = Progless::new(1001_u32).unwrap();
+	/// let pbar = Progless::try_from(1001_u32).unwrap();
 	///
 	/// // Iterate your taskwork or whatever.
 	/// for i in 0..1001 {
@@ -1219,14 +1163,12 @@ impl Progless {
 	///
 	///     // Increment the done count.
 	///     pbar.increment();
-	///
-	///     // Call "tick" to render the change(s), if any.
-	///     pbar.tick();
 	/// }
 	///
-	/// let _ = pbar.finish();
+	/// pbar.finish();
+	///
+	/// // Print something like "Crunched X files in Y seconds."
 	/// pbar.summary(MsgKind::Crunched, "file", "files").print();
-	/// // Will print something like "Crunched X files in Y seconds."
 	/// ```
 	pub fn summary<S>(&self, kind: MsgKind, singular: S, plural: S) -> Msg
 	where S: AsRef<str> {
@@ -1261,9 +1203,10 @@ impl Progless {
 	///
 	/// ```no_run
 	/// use fyi_msg::Progless;
+	/// use std::convert::TryFrom;
 	///
 	/// // Initialize with a `u32` total.
-	/// let pbar = Progless::new(1001_u32).unwrap();
+	/// let pbar = Progless::try_from(1001_u32).unwrap();
 	///
 	/// // Iterate your taskwork or whatever.
 	/// for i in 0..1001 {
@@ -1275,7 +1218,7 @@ impl Progless {
     ///     pbar.remove(&task);
 	/// }
 	///
-	/// let elapsed = pbar.finish();
+	/// pbar.finish();
 	/// ```
 	pub fn add<S>(&self, txt: S)
 	where S: AsRef<str> { self.inner.add(txt); }
@@ -1326,18 +1269,6 @@ impl Progless {
 	/// See [`Progless::with_title`] for more details.
 	pub fn set_title<S>(&self, title: Option<S>)
 	where S: Into<Msg> { self.inner.set_title(title); }
-
-	#[inline]
-	/// # Tick.
-	///
-	/// Manually trigger a tick, which will paint any progress updates to
-	/// `STDERR` if the progress bar is running.
-	///
-	/// Do *not* use this method in combination with a steady ticker, as that
-	/// ticker will do the ticking for you.
-	///
-	/// See the example under [`Progless::new`] for more details.
-	pub fn tick(&self) { self.inner.tick(); }
 }
 
 
@@ -1380,6 +1311,7 @@ pub struct BeforeAfter {
 
 impl BeforeAfter {
 	#[must_use]
+	#[inline]
 	/// # New Instance: Set Before.
 	///
 	/// This creates a new instance with the defined starting point.
@@ -1393,6 +1325,7 @@ impl BeforeAfter {
 		}
 	}
 
+	#[inline]
 	/// # Finish Instance: Set After.
 	///
 	/// This sets the `after` value of an existing instance, closing it out.
@@ -1403,6 +1336,7 @@ impl BeforeAfter {
 		self.after = NonZeroU64::new(after);
 	}
 
+	#[inline]
 	/// # Get Before.
 	///
 	/// Return the `before` value if non-zero, otherwise `None`.
@@ -1410,6 +1344,7 @@ impl BeforeAfter {
 		self.before.map(NonZeroU64::get)
 	}
 
+	#[inline]
 	/// # Get After.
 	///
 	/// Return the `after` value if non-zero, otherwise `None`.

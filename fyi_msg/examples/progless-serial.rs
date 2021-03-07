@@ -8,16 +8,19 @@ use fyi_msg::{
 	Msg,
 	Progless,
 };
-use std::time::Duration;
+use std::{
+	convert::TryFrom,
+	time::Duration,
+};
 
 
 
-include!("_progless-data.rs");
+include!("_progless-data.txt");
 
 /// # Do it.
 fn main() {
 	// Initiate a progress bar.
-	let pbar = Progless::steady(FILE_TYPES.len() as u32).unwrap()
+	let pbar = Progless::try_from(FILE_TYPES.len()).unwrap()
 		.with_title(Some(Msg::custom("Scanning", 199, "Pretending to look at files one by one…")));
 
 	FILE_TYPES.iter()
@@ -31,6 +34,6 @@ fn main() {
 		});
 
 	// Print a simple summary.
-	let _ = pbar.finish();
+	pbar.finish();
 	Msg::from(pbar).print();
 }
