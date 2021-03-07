@@ -69,15 +69,6 @@ harness = false
 name = "fm_msg_timestamps"
 harness = false
 
-[[example]]
-name = "msg"
-
-[[example]]
-name = "progless-par"
-
-[[example]]
-name = "progless-serial"
-
 [features]
 # This adds a few additional MsgKinds relevant only to the main FYI binary.
 # There is no point enabling this in other crates.
