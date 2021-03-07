@@ -914,14 +914,14 @@ impl Drop for ProglessSteady {
 #[derive(Debug, Clone)]
 /// # Progless.
 ///
-/// This is a simple, thread-safe CLI progress bar that can be used to
-/// entertain users while long jobs are running.
+/// This is a simple, thread-safe, steady-ticking CLI progress bar that can be
+/// used to entertain users while long jobs are running.
 ///
 /// To use it, enable the `progress` crate flag.
 ///
 /// ## Examples
 ///
-/// Initialize a steady-ticking progress instance as follows:
+/// Initialize and use as follows:
 ///
 /// ```no_run
 /// use fyi_msg::Progless;
