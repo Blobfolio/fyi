@@ -9,6 +9,9 @@ use crate::{
 	MsgKind,
 	MsgBuffer,
 };
+
+#[cfg(feature = "progress")] use crate::BeforeAfter;
+
 use dactyl::NiceU8;
 use std::{
 	borrow::Borrow,
@@ -814,6 +817,7 @@ impl Msg {
 	}
 }
 
+#[cfg(feature = "progress")]
 /// ## Bytes Saved Suffix.
 ///
 /// A lot of our own programs crunch data and report the savings as a suffix.
@@ -825,13 +829,13 @@ impl Msg {
 	/// A lot of our own programs using this lib crunch data and report the
 	/// savings as a suffix. This method just provides a quick way to generate
 	/// that.
-	pub fn with_bytes_saved(mut self, saved: Option<u64>, percent: Option<f64>) -> Self {
+	pub fn with_bytes_saved(mut self, state: BeforeAfter) -> Self {
 		use dactyl::{NicePercent, NiceU64};
 
-		if let Some(saved) = saved {
+		if let Some(saved) = state.less() {
 			self.0.replace(
 				PART_SUFFIX,
-				&percent.map_or_else(
+				&state.less_percent().map_or_else(
 					|| [
 						&b" \x1b[2m(Saved "[..],
 						NiceU64::from(saved).as_bytes(),
