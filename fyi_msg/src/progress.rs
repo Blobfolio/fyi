@@ -1336,21 +1336,19 @@ impl BeforeAfter {
 		self.after = NonZeroU64::new(after);
 	}
 
+	#[must_use]
 	#[inline]
 	/// # Get Before.
 	///
 	/// Return the `before` value if non-zero, otherwise `None`.
-	pub fn before(&self) -> Option<u64> {
-		self.before.map(NonZeroU64::get)
-	}
+	pub const fn before(&self) -> Option<NonZeroU64> { self.before }
 
+	#[must_use]
 	#[inline]
 	/// # Get After.
 	///
 	/// Return the `after` value if non-zero, otherwise `None`.
-	pub fn after(&self) -> Option<u64> {
-		self.after.map(NonZeroU64::get)
-	}
+	pub const fn after(&self) -> Option<NonZeroU64> { self.after }
 
 	#[must_use]
 	/// # Get Difference (After < Before).
@@ -1358,11 +1356,11 @@ impl BeforeAfter {
 	/// If the after state is expected to be smaller than the before state,
 	/// return the difference. If either state is unset/zero, or after is
 	/// larger, `None` is returned.
-	pub fn less(&self) -> Option<u64> {
+	pub fn less(&self) -> Option<NonZeroU64> {
 		let b: u64 = self.before?.get();
 		let a: u64 = self.after?.get();
 
-		(b > a).then(|| b - a)
+		NonZeroU64::new(b.saturating_sub(a))
 	}
 
 	#[must_use]
@@ -1371,7 +1369,7 @@ impl BeforeAfter {
 	/// This is the same as [`BeforeAfter::less`], but returns a percentage of
 	/// the difference over `before`.
 	pub fn less_percent(&self) -> Option<f64> {
-		self.less().and_then(|l| dactyl::int_div_float(l, self.before?.get()))
+		self.less().and_then(|l| dactyl::int_div_float(l.get(), self.before?.get()))
 	}
 
 	#[must_use]
@@ -1380,11 +1378,11 @@ impl BeforeAfter {
 	/// If the after state is expected to be larger than the before state,
 	/// return the difference. If either state is unset/zero, or after is
 	/// smaller, `None` is returned.
-	pub fn more(&self) -> Option<u64> {
+	pub fn more(&self) -> Option<NonZeroU64> {
 		let b: u64 = self.before?.get();
 		let a: u64 = self.after?.get();
 
-		(a > b).then(|| a - b)
+		NonZeroU64::new(a.saturating_sub(b))
 	}
 
 	#[must_use]
@@ -1393,7 +1391,7 @@ impl BeforeAfter {
 	/// This is the same as [`BeforeAfter::more`], but returns a percentage of
 	/// the difference over `before`.
 	pub fn more_percent(&self) -> Option<f64> {
-		self.more().and_then(|m| dactyl::int_div_float(m, self.before?.get()))
+		self.more().and_then(|m| dactyl::int_div_float(m.get(), self.before?.get()))
 	}
 }
 
