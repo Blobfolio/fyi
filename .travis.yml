@@ -4,3 +4,6 @@ os:
   - osx
 rust:
   - beta
+script:
+  - cargo build --all-features --verbose --workspace
+  - cargo test --all-features --verbose --workspace
