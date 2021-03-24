@@ -219,21 +219,14 @@ bench BENCH="":
 
 
 # Unit tests!
-test:
-	#!/usr/bin/env bash
-
+@test:
 	clear
-
 	cargo test \
-		--tests \
 		--release \
 		--all-features \
 		--workspace \
 		--target x86_64-unknown-linux-gnu \
-		--target-dir "{{ cargo_dir }}" -- \
-			--format terse
-
-	exit 0
+		--target-dir "{{ cargo_dir }}"
 
 
 # Get/Set version.
@@ -271,9 +264,8 @@ version:
 
 # Init dependencies.
 @_init:
-	# We need nightly until 1.51 is stable.
-	env RUSTUP_PERMIT_COPY_RENAME=true rustup default beta
-	env RUSTUP_PERMIT_COPY_RENAME=true rustup component add clippy
+	# env RUSTUP_PERMIT_COPY_RENAME=true rustup default beta
+	# env RUSTUP_PERMIT_COPY_RENAME=true rustup component add clippy
 
 
 # Fix file/directory permissions.
