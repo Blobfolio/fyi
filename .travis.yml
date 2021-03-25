@@ -5,5 +5,5 @@ os:
 rust:
   - beta
 script:
-  - cargo build --all-features --verbose --workspace
+  - cargo build --release --verbose --workspace
   - cargo test --all-features --verbose --workspace
