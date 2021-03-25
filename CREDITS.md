@@ -14,7 +14,7 @@ License details for project dependencies are listed below.
 
 **Used By:**
 
-* [libc 0.2.86](https://github.com/rust-lang/libc)
+* [libc 0.2.91](https://github.com/rust-lang/libc)
 * [num-integer 0.1.44](https://github.com/rust-num/num-integer)
 * [num-traits 0.2.14](https://github.com/rust-num/num-traits)
 
@@ -479,8 +479,8 @@ limitations under the License.
 
 **Used By:**
 
-* [argyle 0.1.0](https://github.com/Blobfolio/argyle)
-* [dactyl 0.1.2](https://github.com/Blobfolio/dactyl)
+* [argyle 0.3.1](https://github.com/Blobfolio/argyle)
+* [dactyl 0.1.7](https://github.com/Blobfolio/dactyl)
 
 
 ```
@@ -504,8 +504,8 @@ TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
 
 **Used By:**
 
-* [fyi 0.6.3](https://github.com/Blobfolio/fyi)
-* [fyi_msg 0.6.3](https://github.com/Blobfolio/fyi)
+* [fyi 0.7.0](https://github.com/Blobfolio/fyi)
+* [fyi_msg 0.7.0](https://github.com/Blobfolio/fyi)
 
 
 ```
