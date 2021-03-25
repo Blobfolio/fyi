@@ -18,8 +18,7 @@
 pkg_id      := "fyi"
 pkg_name    := "FYI"
 pkg_dir1    := justfile_directory() + "/fyi"
-pkg_dir3    := justfile_directory() + "/fyi_msg"
-pkg_dir4    := justfile_directory() + "/fyi_witcher"
+pkg_dir2    := justfile_directory() + "/fyi_msg"
 
 cargo_dir   := "/tmp/" + pkg_id + "-cargo"
 cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
@@ -150,8 +149,7 @@ bench BENCH="":
 	# they place *other* shit in the designated target dir. Haha.
 	[ ! -d "{{ justfile_directory() }}/target" ] || rm -rf "{{ justfile_directory() }}/target"
 	[ ! -d "{{ pkg_dir1 }}/target" ] || rm -rf "{{ pkg_dir1 }}/target"
-	[ ! -d "{{ pkg_dir3 }}/target" ] || rm -rf "{{ pkg_dir3 }}/target"
-	[ ! -d "{{ pkg_dir4 }}/target" ] || rm -rf "{{ pkg_dir4 }}/target"
+	[ ! -d "{{ pkg_dir2 }}/target" ] || rm -rf "{{ pkg_dir2 }}/target"
 
 	cargo update -w
 
@@ -180,13 +178,11 @@ bench BENCH="":
 
 # Build Docs.
 @doc:
-	# Make sure nightly is installed; this version generates better docs.
-	rustup install nightly
-
 	# Make the docs.
-	cargo +nightly doc \
+	cargo doc \
 		--workspace \
 		--release \
+		--all-features \
 		--no-deps \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
@@ -220,21 +216,14 @@ bench BENCH="":
 
 
 # Unit tests!
-test:
-	#!/usr/bin/env bash
-
+@test:
 	clear
-
-	RUST_TEST_THREADS=1 cargo test \
-		--tests \
+	cargo test \
 		--release \
 		--all-features \
 		--workspace \
 		--target x86_64-unknown-linux-gnu \
-		--target-dir "{{ cargo_dir }}" -- \
-			--format terse
-
-	exit 0
+		--target-dir "{{ cargo_dir }}"
 
 
 # Get/Set version.
@@ -257,8 +246,7 @@ version:
 
 	# Set the release version!
 	just _version "{{ pkg_dir1 }}" "$_ver2"
-	just _version "{{ pkg_dir3 }}" "$_ver2"
-	just _version "{{ pkg_dir4 }}" "$_ver2"
+	just _version "{{ pkg_dir2 }}" "$_ver2"
 
 
 # Set version for real.
@@ -273,11 +261,8 @@ version:
 
 # Init dependencies.
 @_init:
-	#rustup default nightly-2020-09-15
-	#rustup component add clippy --toolchain nightly-2020-09-15
-	[ ! -f "{{ justfile_directory() }}/Cargo.lock" ] || rm "{{ justfile_directory() }}/Cargo.lock"
-	cargo update -w
-	cargo outdated -w
+	# env RUSTUP_PERMIT_COPY_RENAME=true rustup default beta
+	# env RUSTUP_PERMIT_COPY_RENAME=true rustup component add clippy
 
 
 # Fix file/directory permissions.

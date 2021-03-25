@@ -34,7 +34,7 @@ fyi error "Something broke!"
 
 This application is written in [Rust](https://www.rust-lang.org/) and can be installed using [Cargo](https://github.com/rust-lang/cargo).
 
-For stable Rust (>= `1.47.0`), run:
+For stable Rust (>= `1.51.0`), run:
 ```bash
 RUSTFLAGS="-C link-arg=-s" cargo install \
     --git https://github.com/Blobfolio/fyi.git \
@@ -119,18 +119,11 @@ print a certain number of blank lines for you. Run
 #![warn(unused_extern_crates)]
 #![warn(unused_import_braces)]
 
-#![allow(clippy::cast_possible_truncation)]
-#![allow(clippy::cast_precision_loss)]
-#![allow(clippy::cast_sign_loss)]
-#![allow(clippy::map_err_ignore)]
-#![allow(clippy::missing_errors_doc)]
-#![allow(clippy::module_name_repetitions)]
 
 
-
-use argue::{
+use argyle::{
 	Argue,
-	ArgueError,
+	ArgyleError,
 	FLAG_DYNAMIC_HELP,
 	FLAG_REQUIRED,
 	FLAG_SUBCOMMAND,
@@ -143,27 +136,26 @@ use fyi_msg::{
 	FLAG_NEWLINE,
 	FLAG_TIMESTAMP,
 };
-use std::borrow::Cow;
 
 
 
 #[doc(hidden)]
-/// Main.
+/// # Main.
 fn main() {
 	// Handle errors.
 	if let Err(e) = _main() {
 		match e {
-			ArgueError::Passthru(_) => {},
-			ArgueError::WantsDynamicHelp(x) => {
+			ArgyleError::Passthru(_) => {},
+			ArgyleError::WantsDynamicHelp(x) => {
 				helper(x);
 				return;
 			},
-			ArgueError::WantsVersion => {
-				fyi_msg::plain!(concat!("FYI v", env!("CARGO_PKG_VERSION")));
+			ArgyleError::WantsVersion => {
+				println!(concat!("FYI v", env!("CARGO_PKG_VERSION")));
 				return;
 			},
 			_ => {
-				fyi_msg::error!(&e);
+				Msg::error(&e).eprint();
 			},
 		}
 
@@ -173,11 +165,11 @@ fn main() {
 
 #[doc(hidden)]
 #[inline]
-/// Actual Main.
+/// # Actual Main.
 ///
 /// This lets us more easily bubble errors, which are printed and handled
 /// specially.
-fn _main() -> Result<(), ArgueError> {
+fn _main() -> Result<(), ArgyleError> {
 	// Parse CLI arguments.
 	let args = Argue::new(
 		FLAG_DYNAMIC_HELP | FLAG_REQUIRED | FLAG_SUBCOMMAND | FLAG_VERSION
@@ -188,16 +180,17 @@ fn _main() -> Result<(), ArgueError> {
 			blank(&args);
 			Ok(())
 		},
-		MsgKind::None => Err(ArgueError::NoSubCmd),
+		MsgKind::None => Err(ArgyleError::NoSubCmd),
+		MsgKind::Confirm => confirm(&args),
 		kind => msg(kind, &args),
 	}
 }
 
 #[doc(hidden)]
 #[cold]
-/// Shoot Blanks.
+/// # Shoot Blanks.
 ///
-/// Print one or more blank lines to `Stdout` or `Stderr`.
+/// Print one or more blank lines to `STDOUT` or `STDERR`.
 fn blank(args: &Argue) {
 	// How many lines should we print?
 	let msg = Msg::plain("\n".repeat(
@@ -214,132 +207,134 @@ fn blank(args: &Argue) {
 }
 
 #[doc(hidden)]
-/// Basic Message.
-fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgueError> {
-	// Exit code.
-	let exit: i32 = args.option2(b"-e", b"--exit")
-		.and_then(|x| std::str::from_utf8(x).ok())
-		.and_then(|x| x.parse::<i32>().ok())
-		.unwrap_or(0);
+/// # Confirmation.
+///
+/// This prompts a message and exits with `0` or `1` depending on the
+/// positivity of the response.
+fn confirm(args: &Argue) -> Result<(), ArgyleError> {
+	if Msg::new(
+		MsgKind::Confirm,
+		std::str::from_utf8(args.first_arg()?).map_err(|_| ArgyleError::NoArg)?
+	)
+		.with_flags(parse_flags(args))
+		.prompt()
+	{
+		Ok(())
+	}
+	else {
+		Err(ArgyleError::Passthru(1))
+	}
+}
 
-	// Basic flags.
+#[doc(hidden)]
+/// # Parse Flags.
+///
+/// Most subcommands support the same two flags — indentation and timestamping.
+/// This parses those from the arguments, and adds the newline flag since all
+/// message types need a trailing line break.
+fn parse_flags(args: &Argue) -> u8 {
 	let mut flags: u8 = FLAG_NEWLINE;
 	if args.switch2(b"-i", b"--indent") { flags |= FLAG_INDENT; }
 	if args.switch2(b"-t", b"--timestamp") { flags |= FLAG_TIMESTAMP; }
+	flags
+}
 
-	// The main message.
-	let msg =
+#[doc(hidden)]
+/// # Basic Message.
+///
+/// This prints the message and exits accordingly.
+fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgyleError> {
+	// We need to discover the exit flag before forming the message as its
+	// position could affect Argyle's understanding of where the trailing args
+	// begin.
+	let exit: Option<i32> = args.option2(b"-e", b"--exit")
+		.and_then(|x| std::str::from_utf8(x).ok())
+		.and_then(|x| x.parse::<i32>().ok());
+
+	// Build the message.
+	let msg: Msg =
 		// Custom message prefix.
 		if MsgKind::Custom == kind {
-			if let Some(prefix) = args.option2(b"-p", b"--prefix").and_then(|x| std::str::from_utf8(x).ok()) {
-				let color: u8 = args.option2(b"-c", b"--prefix-color")
+			Msg::custom(
+				args.option2(b"-p", b"--prefix")
+					.and_then(|x| std::str::from_utf8(x).ok())
+					.unwrap_or_default(),
+				args.option2(b"-c", b"--prefix-color")
 					.and_then(|x| std::str::from_utf8(x).ok())
 					.and_then(|x| x.parse::<u8>().ok())
-					.unwrap_or(199);
-
-				Msg::custom(
-					prefix,
-					color,
-					std::str::from_utf8(args.first_arg()?)
-						.map_err(|_| ArgueError::NoArg)?
-				)
-			}
-			else {
-				Msg::plain(std::str::from_utf8(args.first_arg()?).map_err(|_| ArgueError::NoArg)?)
-			}
+					.unwrap_or(199_u8),
+				std::str::from_utf8(args.first_arg()?)
+					.map_err(|_| ArgyleError::NoArg)?
+			)
 		}
 		// Built-in prefix.
 		else {
 			Msg::new(
 				kind,
 				std::str::from_utf8(args.first_arg()?)
-					.map_err(|_| ArgueError::NoArg)?
+					.map_err(|_| ArgyleError::NoArg)?
 			)
 		}
-		.with_flags(flags);
+		.with_flags(parse_flags(args));
 
-	// It's a prompt!
-	if MsgKind::Confirm == kind {
-		if msg.prompt() { return Ok(()); }
-		return Err(ArgueError::Passthru(1));
-	}
-
-	// Print to `Stderr`.
+	// Print to `STDERR`.
 	if args.switch(b"--stderr") { msg.eprint(); }
-	// Print to `Stdout`.
+	// Print to `STDOUT`.
 	else { msg.print(); }
 
 	// Special exit?
-	if 0 == exit { Ok(()) }
-	else { Err(ArgueError::Passthru(exit)) }
+	exit.map_or(Ok(()), |e| Err(ArgyleError::Passthru(e)))
 }
 
 #[doc(hidden)]
 #[cold]
-/// Help Page.
+/// # Help Page.
 ///
 /// Print the appropriate help screen given the call details. Most of the sub-
 /// commands work the same way, but a few have their own distinct messages.
-fn helper(cmd: Option<Vec<u8>>) {
-	Msg::fmt(format_args!(
-		r#"
-                      ;\
-                     |' \
-  _                  ; : ;
- / `-.              /: : |
-|  ,-.`-.          ,': : |
-\  :  `. `.       ,'-. : |
- \ ;    ;  `-.__,'    `-.|         {}{}{}
-  \ ;   ;  :::  ,::'`:.  `.        Simple CLI status messages.
-   \ `-. :  `    :.    `.  \
-    \   \    ,   ;   ,:    (\
-     \   :., :.    ,'o)): ` `-.
-    ,/,' ;' ,::"'`.`---'   `.  `-._
-  ,/  :  ; '"      `;'          ,--`.
- ;/   :; ;             ,:'     (   ,:)
-   ,.,:.    ; ,:.,  ,-._ `.     \""'/
-   '::'     `:'`  ,'(  \`._____.-'"'
-      ;,   ;  `.  `. `._`-.  \\
-      ;:.  ;:       `-._`-.\  \`.
-       '`:. :        |' `. `\  ) \
-          ` ;:       |    `--\__,'
-            '`      ,'
-                 ,-'
-
-{}
-"#,
-		"\x1b[38;5;199mFYI\x1b[0;38;5;69m v",
-		env!("CARGO_PKG_VERSION"),
-		"\x1b[0m",
-		sub_helper(cmd),
-	))
-	.print();
-}
-
-#[doc(hidden)]
-#[cold]
-/// # Sub Help.
 ///
-/// This text varies by subcommand.
-fn sub_helper(cmd: Option<Vec<u8>>) -> Cow<'static, str> {
-	if let Some(cmd) = cmd {
-		match cmd.as_slice() {
-			b"blank" => return Cow::Borrowed(include_str!("../help/blank.txt")),
-			b"print" => return Cow::Borrowed(include_str!("../help/print.txt")),
-			b"confirm" | b"prompt" => return Cow::Borrowed(include_str!("../help/confirm.txt")),
-			x => {
-				let kind = MsgKind::from(x);
-				if kind != MsgKind::None {
-					return Cow::Owned(format!(
-						include_str!("../help/generic.txt"),
-						kind.title(),
-						Msg::new(kind, "Hello World").as_str(),
-						kind.title().to_lowercase(),
-					));
-				}
-			},
-		}
+/// The contents are generated via `build.rs`, which lowers the runtime cost
+/// and shrinks the binary a touch.
+fn helper(cmd: Option<Box<[u8]>>) {
+	use std::io::Write;
+
+	let writer = std::io::stdout();
+	let mut handle = writer.lock();
+
+	// The built-in message types have a variable part, and a static part.
+	macro_rules! write_help {
+		($path:literal) => {
+			handle.write_all(include_bytes!(concat!(env!("OUT_DIR"), "/help-", $path, ".txt")))
+		};
+		($path:literal, true) => {
+			write_help!($path).and_then(|_| write_help!("generic-bottom"))
+		};
 	}
 
-	Cow::Borrowed(include_str!("../help/help.txt"))
+	// The top is always the same.
+	write_help!("top").unwrap();
+
+	// The middle section varies by subcommand.
+	if let Some(cmd) = cmd {
+		match &*cmd {
+			b"blank" => write_help!("blank"),
+			b"confirm" | b"prompt" => write_help!("confirm"),
+			b"crunched" => write_help!("crunched", true),
+			b"debug" => write_help!("debug", true),
+			b"done" => write_help!("done", true),
+			b"error" => write_help!("error", true),
+			b"info" => write_help!("info", true),
+			b"notice" => write_help!("notice", true),
+			b"print" => write_help!("print"),
+			b"success" => write_help!("success", true),
+			b"task" => write_help!("task", true),
+			b"warning" => write_help!("warning", true),
+			_ => write_help!("help"),
+		}.unwrap();
+	}
+	else {
+		write_help!("help").unwrap();
+	}
+
+	handle.flush().unwrap();
 }

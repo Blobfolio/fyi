@@ -20,7 +20,9 @@ This optional module contains methods for counting the display width of byte str
 ///
 /// For performance reasons, this method will assume the byte sequence is ASCII
 /// unless/until it finds a non-ASCII code, at which point it will shift to the
-/// heavier [`length_width_unicode`] method and finish counting there.
+/// heavier `length_width_unicode` method and finish counting there.
+///
+/// **This requires the `fitted` crate feature.**
 ///
 /// ## Safety.
 ///
@@ -84,7 +86,13 @@ pub fn length_width(bytes: &[u8], stop: usize) -> usize {
 ///
 /// For performance reasons, this method will assume the byte sequence is ASCII
 /// unless/until it finds a non-ASCII code, at which point it will shift to the
-/// heavier [`width_unicode`] method and finish counting there.
+/// heavier `width_unicode` method and finish counting there.
+///
+/// Note: line breaks are ignored; the cummulative width of all lines is
+/// returned. If you're trying to calculate *line* widths, split the slice
+/// first and pass each chunk separately.
+///
+/// **This requires the `fitted` crate feature.**
 ///
 /// ## Safety.
 ///
@@ -219,6 +227,8 @@ mod tests {
 			("Hello", 4, 4),
 			("Hello\nWorld", 10, 11),
 			("Björk Guðmundsdóttir", 5, 6),
+			("Björk Guðmundsdóttir", 3, 4),
+			("Björk Guðmundsdóttir", 2, 2),
 			("\x1b[2mBjörk\x1b[0m Guðmundsdóttir", 5, 14),
 			("\x1b[2mHello\x1b[0m World", 5, 13),
 		] {
