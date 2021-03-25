@@ -178,11 +178,8 @@ bench BENCH="":
 
 # Build Docs.
 @doc:
-	# Make sure nightly is installed; this version generates better docs.
-	env RUSTUP_PERMIT_COPY_RENAME=true rustup install nightly
-
 	# Make the docs.
-	cargo +nightly doc \
+	cargo doc \
 		--workspace \
 		--release \
 		--all-features \
