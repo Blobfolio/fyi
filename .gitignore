@@ -1,7 +1,5 @@
 **.deb
 **.gz
+**/target/**
 /Cargo.lock
 /doc/
-/fyi/target/
-/fyi_msg/target/
-/target/
