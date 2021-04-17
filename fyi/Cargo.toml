@@ -154,8 +154,9 @@ subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info"
 [build-dependencies.fyi_msg]
 path = "../fyi_msg"
 
-[dependencies]
-argyle = "0.3.*"
+[dependencies.argyle]
+version = "0.4.*"
+features = [ "dynamic-help" ]
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"
