@@ -250,6 +250,7 @@ impl<const N: usize> MsgBuffer<N> {
 	}
 }
 
+#[allow(clippy::len_without_is_empty)] // We don't need it.
 /// ## Individual Parts.
 impl<const N: usize> MsgBuffer<N> {
 	#[must_use]
