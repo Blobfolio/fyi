@@ -78,10 +78,19 @@ macro_rules! new_toc {
 	);
 }
 
-/// # Helper: Built-in `MsgKind` Checked Methods.
-macro_rules! impl_builtin_checked {
-	($name:expr, $ex:expr, $fn:ident, $fn2:ident) => {
-		#[doc(inline)]
+/// # Helper: Impl Built-in `MsgKind` Methods.
+macro_rules! impl_builtins {
+	($name:literal, $fn:ident, $kind:expr, $p_len:literal) => (
+		impl_builtins!(
+			concat!("# New ", $name),
+			concat!("Msg::", stringify!($fn), r#"("Hello World").print(); // "#, $name, ": Hello World"),
+			$fn,
+			$kind,
+			$p_len
+		);
+	);
+
+	($name:expr, $ex:expr, $fn:ident, $kind:expr, $p_len:literal) => (
 		#[doc = $name]
 		///
 		/// This is a convenience method to create a thusly prefixed message
@@ -98,29 +107,7 @@ macro_rules! impl_builtin_checked {
 		/// ```
 		pub fn $fn<S>(msg: S) -> Self
 		where S: AsRef<str> {
-			unsafe { Self::$fn2(msg.as_ref().as_bytes()) }
-		}
-	};
-}
-
-/// # Helper: Built-in `MsgKind` Unchecked Methods.
-macro_rules! impl_builtin_unchecked {
-	($name:expr, $desc:expr, $fn:ident, $kind:expr, $p_len:literal) => {
-		#[must_use]
-		#[doc = $name]
-		///
-		#[doc = $desc]
-		///
-		/// ## Safety
-		///
-		/// This method does not itself do unsafe things, however most of this
-		/// struct's methods rely on the stored message being valid UTF-8.
-		/// Because this method does not validate the inputs, it leaves the
-		/// door open for undefined behaviors, and as such, is labeled "unsafe".
-		///
-		/// With that in mind, the value of `msg` must be valid UTF-8, or later
-		/// use of the instance might panic or act out in undefined ways.
-		pub unsafe fn $fn(msg: &[u8]) -> Self {
+			let msg = msg.as_ref().as_bytes();
 			let len = msg.len();
 			let m_end = len as u32 + $p_len;
 
@@ -131,26 +118,6 @@ macro_rules! impl_builtin_unchecked {
 
 			Self(MsgBuffer::from_raw_parts(v, new_toc!($p_len, m_end, true)))
 		}
-	};
-}
-
-/// # Helper: Impl Built-in `MsgKind` Methods.
-macro_rules! impl_builtins {
-	($name:literal, $fn:ident, $fn2:ident, $kind:expr, $p_len:literal) => (
-		impl_builtin_checked!(
-			concat!("# New ", $name),
-			concat!("Msg::", stringify!($fn), r#"("Hello World").print(); // "#, $name, ": Hello World"),
-			$fn,
-			$fn2
-		);
-
-		impl_builtin_unchecked!(
-			concat!("# New ", $name, " (Unchecked)"),
-			concat!("This is equivalent to (the safe) [`Msg::", stringify!($fn), "`], except it takes a raw byte slice."),
-			$fn2,
-			$kind,
-			$p_len
-		);
 	);
 }
 
@@ -325,7 +292,7 @@ impl PartialEq<Vec<u8>> for Msg {
 
 /// ## Instantiation.
 impl Msg {
-	#[inline]
+	#[allow(clippy::cast_possible_truncation)] // MsgBuffer checks fit.
 	/// # New Message.
 	///
 	/// This creates a new message with a built-in prefix (which can be
@@ -345,21 +312,7 @@ impl Msg {
 	/// ```
 	pub fn new<S>(kind: MsgKind, msg: S) -> Self
 	where S: AsRef<str> {
-		unsafe { Self::new_unchecked(kind, msg.as_ref().as_bytes()) }
-	}
-
-	#[allow(clippy::cast_possible_truncation)] // MsgBuffer checks fit.
-	#[must_use]
-	/// # New Message (Unchecked).
-	///
-	/// This is just like [`Msg::new`], except the message is passed as a raw
-	/// byte slice.
-	///
-	/// ## Safety
-	///
-	/// The message slice must be valid UTF-8 or undefined things will happen.
-	/// When in doubt, use the string-based [`Msg::new`] instead.
-	pub unsafe fn new_unchecked(kind: MsgKind, msg: &[u8]) -> Self {
+		let msg = msg.as_ref().as_bytes();
 		let p_end = kind.len_32();
 		let m_end = p_end + msg.len() as u32;
 
@@ -446,7 +399,7 @@ impl Msg {
 		))
 	}
 
-	#[inline]
+	#[allow(clippy::cast_possible_truncation)] // MsgBuffer checks fit.
 	/// # New Message Without Any Prefix.
 	///
 	/// This is a streamlined equivalent of calling [`Msg::new`] with a
@@ -460,21 +413,7 @@ impl Msg {
 	/// ```
 	pub fn plain<S>(msg: S) -> Self
 	where S: AsRef<str> {
-		unsafe { Self::plain_unchecked(msg.as_ref().as_bytes()) }
-	}
-
-	#[allow(clippy::cast_possible_truncation)] // MsgBuffer checks fit.
-	#[must_use]
-	/// # New Message Without Any Prefix (Unchecked).
-	///
-	/// This is just like [`Msg::plain`], except the message is passed as a raw
-	/// byte slice.
-	///
-	/// ## Safety
-	///
-	/// The message slice must be valid UTF-8 or undefined things will happen.
-	/// When in doubt, use the string-based [`Msg::plain`] instead.
-	pub unsafe fn plain_unchecked(msg: &[u8]) -> Self {
+		let msg = msg.as_ref().as_bytes();
 		let len = msg.len() as u32;
 
 		Self(MsgBuffer::from_raw_parts(
@@ -495,15 +434,15 @@ impl Msg {
 /// renders the message with the right prefix, pops the prompt, and returns the
 /// `bool`.
 impl Msg {
-	impl_builtins!("Crunched", crunched, crunched_unchecked, MsgKind::Crunched, 21);
-	impl_builtins!("Debug", debug, debug_unchecked, MsgKind::Debug, 18);
-	impl_builtins!("Done", done, done_unchecked, MsgKind::Done, 17);
-	impl_builtins!("Info", info, info_unchecked, MsgKind::Info, 17);
-	impl_builtins!("Error", error, error_unchecked, MsgKind::Error, 18);
-	impl_builtins!("Notice", notice, notice_unchecked, MsgKind::Notice, 19);
-	impl_builtins!("Success", success, success_unchecked, MsgKind::Success, 20);
-	impl_builtins!("Task", task, task_unchecked, MsgKind::Task, 23);
-	impl_builtins!("Warning", warning, warning_unchecked, MsgKind::Warning, 20);
+	impl_builtins!("Crunched", crunched, MsgKind::Crunched, 21);
+	impl_builtins!("Debug", debug, MsgKind::Debug, 18);
+	impl_builtins!("Done", done, MsgKind::Done, 17);
+	impl_builtins!("Info", info, MsgKind::Info, 17);
+	impl_builtins!("Error", error, MsgKind::Error, 18);
+	impl_builtins!("Notice", notice, MsgKind::Notice, 19);
+	impl_builtins!("Success", success, MsgKind::Success, 20);
+	impl_builtins!("Task", task, MsgKind::Task, 23);
+	impl_builtins!("Warning", warning, MsgKind::Warning, 20);
 }
 
 /// ## Builders.

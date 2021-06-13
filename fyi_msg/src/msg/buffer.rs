@@ -188,6 +188,7 @@ impl<const N: usize> MsgBuffer<N> {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # As Str.
 	///
 	/// This method returns the underlying vector as a string slice.
@@ -195,10 +196,10 @@ impl<const N: usize> MsgBuffer<N> {
 	/// ## Panics
 	///
 	/// This method will panic if the contents are not valid UTF-8.
-	#[inline]
 	pub fn as_str(&self) -> &str { std::str::from_utf8(&self.buf).unwrap() }
 
 	#[must_use]
+	#[inline]
 	/// # As Str (Unchecked).
 	///
 	/// This method returns the underlying vector as a string slice.
@@ -206,7 +207,6 @@ impl<const N: usize> MsgBuffer<N> {
 	/// ## Safety
 	///
 	/// The string must be valid UTF-8 or undefined things will happen.
-	#[inline]
 	pub unsafe fn as_str_unchecked(&self) -> &str {
 		std::str::from_utf8_unchecked(&self.buf)
 	}
