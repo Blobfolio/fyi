@@ -6,7 +6,12 @@ edition = "2018"
 description = "Simple ANSI-formatted, prefixed messages for console printing."
 license = "WTFPL"
 repository = "https://github.com/Blobfolio/fyi"
-publish = false
+readme = "README.md"
+exclude = ["examples"]
+
+[package.metadata.docs.rs]
+features = [ "fitted", "progress", "timestamps" ]
+default-target = "x86_64-unknown-linux-gnu"
 
 [dependencies]
 dactyl = "0.1.*"
