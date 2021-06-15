@@ -12,6 +12,7 @@ exclude = ["examples"]
 [package.metadata.docs.rs]
 features = [ "fitted", "progress", "timestamps" ]
 default-target = "x86_64-unknown-linux-gnu"
+targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
 [dependencies]
 dactyl = "0.1.*"
