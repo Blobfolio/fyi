@@ -1050,16 +1050,11 @@ impl From<Progless> for Msg {
 	/// For a more advanced summary, use the [`Progless::summary`] method.
 	fn from(src: Progless) -> Self {
 		// The content is all valid UTF-8; this is safe.
-		unsafe {
-			Self::new_unchecked(
-				MsgKind::Done,
-				&[
-					b"Finished in ",
-					NiceElapsed::from(src.inner.elapsed()).as_bytes(),
-					b".",
-				].concat()
-			)
-		}
+		Self::done([
+			"Finished in ",
+			NiceElapsed::from(src.inner.elapsed()).as_str(),
+			".",
+		].concat())
 			.with_newline(true)
 	}
 }

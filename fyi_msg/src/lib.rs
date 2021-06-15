@@ -1,15 +1,13 @@
 /*!
 # FYI Msg
 
-This crate contains the objects providing the heart of the FYI command line
-application, namely [`Msg`], a simple struct for status-like messages that can be
-easily printed to `STDOUT` or `STDERR`.
+This crate contains the objects providing the heart of the [FYI command line application](https://github.com/blobfolio/fyi), namely [`Msg`], a simple struct for status-like messages that can be easily printed to `STDOUT` or `STDERR`.
 
 
 
 ## Examples
 
-```no_run
+```
 use fyi_msg::{Msg, MsgKind};
 
 // One way.
@@ -21,8 +19,7 @@ Msg::new(MsgKind::Success, "You did it!")
 Msg::success("You did it!").print();
 ```
 
-For more usage examples, check out the `examples/msg` demo, which covers just
-about every common use case.
+For more usage examples, check out the `examples/msg` demo, which covers just about every common use case.
 
 
 

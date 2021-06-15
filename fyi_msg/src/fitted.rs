@@ -146,9 +146,16 @@ pub fn width(bytes: &[u8]) -> usize {
 fn length_width_unicode(bytes: &[u8], len: usize, width: usize, stop: usize) -> usize {
 	use unicode_width::UnicodeWidthChar;
 
+	// Build a string from the bytes so we can get access to the inner chars.
+	// This shouldn't fail, but if it does, it will return the length the call
+	// was seeded with.
+	let strung = match std::str::from_utf8(bytes) {
+		Ok(s) => s,
+		Err(_) => { return len; },
+	};
+
 	let mut in_ansi: bool = false;
-	match unsafe { std::str::from_utf8_unchecked(bytes) }
-		.chars()
+	match strung.chars()
 		.try_fold((len, width), |(l, w), c| {
 			// Find the "length" of this char.
 			let ch_len: usize = c.len_utf8();
@@ -191,9 +198,15 @@ fn length_width_unicode(bytes: &[u8], len: usize, width: usize, stop: usize) -> 
 fn width_unicode(bytes: &[u8], width: usize) -> usize {
 	use unicode_width::UnicodeWidthChar;
 
+	// Build a string from the bytes so we can get access to the inner chars.
+	// This shouldn't fail, but if it does, it will default to a byte count.
+	let strung = match std::str::from_utf8(bytes) {
+		Ok(s) => s,
+		Err(_) => { return width + bytes.len(); },
+	};
+
 	let mut in_ansi: bool = false;
-	unsafe { std::str::from_utf8_unchecked(bytes) }
-		.chars()
+	strung.chars()
 		.fold(width, |w, c|
 			// We're already inside an ANSI sequence and waiting for a
 			// terminator.
