@@ -9,7 +9,7 @@ This crate contains the objects providing the heart of the [FYI command line app
 
 ## Examples
 
-```no_run
+```rust
 use fyi_msg::{Msg, MsgKind};
 
 // One way.
