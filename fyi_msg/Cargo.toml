@@ -35,10 +35,6 @@ default-features = false
 features = [ "clock", "std" ]
 optional = true
 
-[dependencies.num-integer]
-version = "0.1.*"
-optional = true
-
 [dependencies.term_size]
 version = "0.3.*"
 optional = true
@@ -84,7 +80,7 @@ bin_kinds = []
 fitted = [ "unicode-width" ]
 
 # Make use of the "progless" bar.
-progress = [ "ahash", "atomic", "bytecount", "fitted", "num-integer", "term_size" ]
+progress = [ "ahash", "atomic", "bytecount", "fitted", "term_size" ]
 
 # Add timestamp support to messages.
-timestamps = [ "chrono", "num-integer" ]
+timestamps = [ "chrono" ]

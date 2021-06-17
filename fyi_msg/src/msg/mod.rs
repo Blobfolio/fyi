@@ -657,7 +657,7 @@ impl Msg {
 
 		if timestamp {
 			let now = Local::now();
-			let (y1, y2) = num_integer::div_mod_floor(now.year() as u16, 100);
+			let (y1, y2) = dactyl::div_mod_u16(now.year() as u16, 100);
 
 			// Running each datetime part through `NiceU8` looks a bit
 			// terrible, but is roughly twice as fast as issuing a single call

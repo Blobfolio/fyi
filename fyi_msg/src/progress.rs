@@ -387,7 +387,7 @@ impl ProglessInner {
 	/// Return the last-recorded elapsed time in seconds. Realtime elapsed
 	/// values are pulled from the field directly.
 	fn elapsed(&self) -> u32 {
-		num_integer::div_floor(self.elapsed.load(SeqCst), 1000)
+		dactyl::div_u32(self.elapsed.load(SeqCst), 1000)
 	}
 
 	#[inline]
@@ -691,7 +691,7 @@ impl ProglessInner {
 		if done == total { (space, 0) }
 		// Working on it!
 		else {
-			let o_done: u8 = u8::saturating_from(num_integer::div_floor(done * u32::from(space), total));
+			let o_done: u8 = u8::saturating_from(dactyl::div_u32(done * u32::from(space), total));
 			(o_done, space.saturating_sub(o_done))
 		}
 	}
@@ -788,11 +788,11 @@ impl ProglessInner {
 		// Throttle back-to-back ticks.
 		if now.saturating_sub(before) < 60 { return None; }
 
-		let secs: u32 = num_integer::div_floor(now, 1000);
+		let secs: u32 = dactyl::div_u32(now, 1000);
 		self.elapsed.store(now, SeqCst);
 
 		// No change to the seconds bit.
-		if secs == num_integer::div_floor(before, 1000) { Some(false) }
+		if secs == dactyl::div_u32(before, 1000) { Some(false) }
 		else {
 			let [h, m, s] = NiceElapsed::hms(secs);
 			unsafe {
