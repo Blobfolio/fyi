@@ -35,17 +35,24 @@ fyi error "Something broke!"
 
 ## Installation
 
-This application is written in [Rust](https://www.rust-lang.org/) and can be installed using [Cargo](https://github.com/rust-lang/cargo).
+Debian and Ubuntu users can just grab the pre-built `.deb` package from the [latest release](https://github.com/Blobfolio/fyi/releases/latest).
 
-For stable Rust (>= `1.51.0`), run:
+This application is written in [Rust](https://www.rust-lang.org/) and can alternatively be built from source using [Cargo](https://github.com/rust-lang/cargo):
+
 ```bash
-RUSTFLAGS="-C link-arg=-s" cargo install \
-    --git https://github.com/Blobfolio/fyi.git \
+# Clone the source.
+git clone https://github.com/Blobfolio/fyi.git
+
+# Go to it.
+cd fyi
+
+# Build as usual. Specify additional flags as desired.
+cargo build \
     --bin fyi \
-    --target x86_64-unknown-linux-gnu
+    --release
 ```
 
-Pre-built `.deb` packages are also added for each [release](https://github.com/Blobfolio/fyi/releases/latest). They should always work for the latest stable Debian and Ubuntu.
+(This should work under other 64-bit Unix environments too, like MacOS.)
 
 
 
