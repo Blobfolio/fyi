@@ -481,8 +481,8 @@ limitations under the License.
 
 * [argyle 0.4.2](https://github.com/Blobfolio/argyle)
 * [dactyl 0.1.8](https://github.com/Blobfolio/dactyl)
-* [fyi 0.8.0](https://github.com/Blobfolio/fyi)
-* [fyi_msg 0.8.0](https://github.com/Blobfolio/fyi)
+* [fyi 0.8.1](https://github.com/Blobfolio/fyi)
+* [fyi_msg 0.8.1](https://github.com/Blobfolio/fyi)
 
 
 ```
