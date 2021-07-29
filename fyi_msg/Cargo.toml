@@ -7,7 +7,7 @@ description = "Simple ANSI-formatted, prefixed messages for console printing."
 license = "WTFPL"
 repository = "https://github.com/Blobfolio/fyi"
 readme = "README.md"
-exclude = ["examples"]
+exclude = [ "examples" ]
 
 [package.metadata.docs.rs]
 features = [ "fitted", "progress", "timestamps" ]
