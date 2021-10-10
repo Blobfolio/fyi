@@ -30,7 +30,7 @@ use std::{
 
 
 
-/// # Helper: ToC Setup.
+/// # Helper: `ToC` Setup.
 #[cfg(feature = "timestamps")]
 macro_rules! new_toc {
 	($p_end:expr, $m_end:expr) => (

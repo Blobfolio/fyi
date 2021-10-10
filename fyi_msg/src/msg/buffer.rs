@@ -5,7 +5,6 @@
 */
 
 use std::{
-	convert::TryFrom,
 	fmt,
 	hash::{
 		Hash,

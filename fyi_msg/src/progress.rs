@@ -22,7 +22,6 @@ use std::{
 	borrow::Borrow,
 	cmp::Ordering,
 	collections::HashSet,
-	convert::TryFrom,
 	fmt,
 	hash::{
 		Hash,
@@ -925,7 +924,6 @@ impl Drop for ProglessSteady {
 ///
 /// ```no_run
 /// use fyi_msg::Progless;
-/// use std::convert::TryFrom;
 ///
 /// // You can use [`Progless::try_from`] for any unsigned integer type, or the
 /// // infallible [`Progless::from`] on an [`std::num::NonZeroU32`].
@@ -959,7 +957,6 @@ impl Drop for ProglessSteady {
 /// ```ignore
 /// # use fyi_msg::Progless;
 /// # use rayon::prelude::*;
-/// # use std::convert::TryFrom;
 ///
 /// # let pbar = Progless::try_from(1001_u32).unwrap();
 ///
@@ -1002,9 +999,9 @@ impl TryFrom<u32> for Progless {
 	}
 }
 
-/// # Helper: TryFrom
+/// # Helper: `TryFrom`
 ///
-/// This will generate TryFrom implementations for various integer types, both
+/// This will generate `TryFrom` implementations for various integer types, both
 /// bigger and smaller than the target `u32`.
 macro_rules! impl_tryfrom {
 	// These types fit into u32.
@@ -1076,7 +1073,6 @@ impl Progless {
 	///
 	/// ```no_run
 	/// use fyi_msg::{Msg, Progless};
-	/// use std::convert::TryFrom;
 	///
 	/// // Initialize with a `u32` total.
 	/// let pbar = Progless::try_from(1001_u32).unwrap()
@@ -1111,7 +1107,6 @@ impl Progless {
 	///
 	/// ```no_run
 	/// use fyi_msg::Progless;
-	/// use std::convert::TryFrom;
 	///
 	/// // Initialize with a `u32` total.
 	/// let pbar = Progless::try_from(1001_u32).unwrap();
@@ -1146,7 +1141,6 @@ impl Progless {
 	///
 	/// ```no_run
 	/// use fyi_msg::{MsgKind, Progless};
-	/// use std::convert::TryFrom;
 	///
 	/// // Initialize with a `u32` total.
 	/// let pbar = Progless::try_from(1001_u32).unwrap();
@@ -1198,7 +1192,6 @@ impl Progless {
 	///
 	/// ```no_run
 	/// use fyi_msg::Progless;
-	/// use std::convert::TryFrom;
 	///
 	/// // Initialize with a `u32` total.
 	/// let pbar = Progless::try_from(1001_u32).unwrap();
