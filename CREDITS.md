@@ -265,7 +265,7 @@ limitations under the License.
 
 **Used By:**
 
-* [libc 0.2.97](https://github.com/rust-lang/libc)
+* [libc 0.2.104](https://github.com/rust-lang/libc)
 * [num-integer 0.1.44](https://github.com/rust-num/num-integer)
 * [num-traits 0.2.14](https://github.com/rust-num/num-traits)
 
@@ -479,10 +479,10 @@ limitations under the License.
 
 **Used By:**
 
-* [argyle 0.4.2](https://github.com/Blobfolio/argyle)
-* [dactyl 0.1.8](https://github.com/Blobfolio/dactyl)
-* [fyi 0.8.1](https://github.com/Blobfolio/fyi)
-* [fyi_msg 0.8.1](https://github.com/Blobfolio/fyi)
+* [argyle 0.5.0](https://github.com/Blobfolio/argyle)
+* [dactyl 0.2.0](https://github.com/Blobfolio/dactyl)
+* [fyi 0.9.0](https://github.com/Blobfolio/fyi)
+* [fyi_msg 0.9.0](https://github.com/Blobfolio/fyi)
 
 
 ```
