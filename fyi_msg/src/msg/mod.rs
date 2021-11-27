@@ -653,37 +653,41 @@ impl Msg {
 	///
 	/// **This requires the `timestamps` crate feature.**
 	pub fn set_timestamp(&mut self, timestamp: bool) {
-		use chrono::{Datelike, Local, Timelike};
+		use time::OffsetDateTime;
 
 		if timestamp {
-			let now = Local::now();
-			let (y1, y2) = dactyl::div_mod_u16(now.year() as u16, 100);
+			if let Ok(now) = OffsetDateTime::now_local() {
+				let (y1, y2) = dactyl::div_mod_u16(now.year() as u16, 100);
 
-			// Running each datetime part through `NiceU8` looks a bit
-			// terrible, but is roughly twice as fast as issuing a single call
-			// to `DateTime::<Local>::format`, and shaves about 30KiB off FYI's
-			// binary size.
-			self.0.replace(
-				PART_TIMESTAMP,
-				&[
-					b"\x1b[2m[\x1b[0;34m",
-					NiceU8::from(y1 as u8).as_bytes2(),
-					NiceU8::from(y2 as u8).as_bytes2(),
-					b"-",
-					NiceU8::from(now.month() as u8).as_bytes2(),
-					b"-",
-					NiceU8::from(now.day() as u8).as_bytes2(),
-					b" ",
-					NiceU8::from(now.hour() as u8).as_bytes2(),
-					b":",
-					NiceU8::from(now.minute() as u8).as_bytes2(),
-					b":",
-					NiceU8::from(now.second() as u8).as_bytes2(),
-					b"\x1b[39;2m]\x1b[0m ",
-				].concat()
-			);
+				// Running each datetime part through `NiceU8` looks a bit
+				// terrible, but it moots the need to include `time`'s
+				// formatting feature.
+				self.0.replace(
+					PART_TIMESTAMP,
+					&[
+						b"\x1b[2m[\x1b[0;34m",
+						NiceU8::from(y1 as u8).as_bytes2(),
+						NiceU8::from(y2 as u8).as_bytes2(),
+						b"-",
+						NiceU8::from(u8::from(now.month())).as_bytes2(),
+						b"-",
+						NiceU8::from(now.day()).as_bytes2(),
+						b" ",
+						NiceU8::from(now.hour()).as_bytes2(),
+						b":",
+						NiceU8::from(now.minute()).as_bytes2(),
+						b":",
+						NiceU8::from(now.second()).as_bytes2(),
+						b"\x1b[39;2m]\x1b[0m ",
+					].concat()
+				);
+
+				return;
+			}
 		}
-		else if 0 != self.0.len(PART_TIMESTAMP) {
+
+		// Clear the timestamp if it exists.
+		if 0 != self.0.len(PART_TIMESTAMP) {
 			self.0.truncate(PART_TIMESTAMP, 0);
 		}
 	}

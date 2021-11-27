@@ -30,10 +30,10 @@ optional = true
 version = "0.6.*"
 optional = true
 
-[dependencies.chrono]
-version = "0.4.*"
+[dependencies.time]
+version = "0.3.*"
 default-features = false
-features = [ "clock", "std" ]
+features = [ "std", "local-offset" ]
 optional = true
 
 [dependencies.term_size]
@@ -84,4 +84,4 @@ fitted = [ "unicode-width" ]
 progress = [ "ahash", "atomic", "bytecount", "fitted", "term_size" ]
 
 # Add timestamp support to messages.
-timestamps = [ "chrono" ]
+timestamps = [ "time" ]
