@@ -3,7 +3,6 @@ use std::ops::Deref;
 
 
 
-#[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, Eq, Hash, PartialEq)]
 /// # Message Kind.
 ///
