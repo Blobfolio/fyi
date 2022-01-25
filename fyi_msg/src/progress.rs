@@ -1297,6 +1297,15 @@ pub struct BeforeAfter {
 	after: Option<NonZeroU64>,
 }
 
+impl From<(u64, u64)> for BeforeAfter {
+	fn from(src: (u64, u64)) -> Self {
+		Self {
+			before: NonZeroU64::new(src.0),
+			after: NonZeroU64::new(src.1),
+		}
+	}
+}
+
 impl BeforeAfter {
 	#[must_use]
 	#[inline]
