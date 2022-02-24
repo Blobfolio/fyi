@@ -4,7 +4,6 @@ _basher__fyi_blank() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -14,14 +13,11 @@ _basher__fyi_blank() {
 		opts+=("-c")
 		opts+=("--count")
 	fi
-
 	opts=" ${opts[@]} "
 	if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
 		COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 		return 0
 	fi
-
-
 	COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 	return 0
 }
@@ -31,7 +27,6 @@ _basher__fyi_confirm() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -44,14 +39,11 @@ _basher__fyi_confirm() {
 		opts+=("-t")
 		opts+=("--timestamp")
 	fi
-
 	opts=" ${opts[@]} "
 	if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
 		COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 		return 0
 	fi
-
-
 	COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 	return 0
 }
@@ -61,7 +53,6 @@ _basher__fyi_print() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -87,14 +78,11 @@ _basher__fyi_print() {
 		opts+=("-p")
 		opts+=("--prefix")
 	fi
-
 	opts=" ${opts[@]} "
 	if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
 		COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 		return 0
 	fi
-
-
 	COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 	return 0
 }
@@ -104,7 +92,6 @@ _basher__fyi_crunched() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -122,14 +109,11 @@ _basher__fyi_crunched() {
 		opts+=("-e")
 		opts+=("--exit")
 	fi
-
 	opts=" ${opts[@]} "
 	if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
 		COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 		return 0
 	fi
-
-
 	COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 	return 0
 }
@@ -139,7 +123,6 @@ _basher__fyi_debug() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -157,14 +140,11 @@ _basher__fyi_debug() {
 		opts+=("-e")
 		opts+=("--exit")
 	fi
-
 	opts=" ${opts[@]} "
 	if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
 		COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 		return 0
 	fi
-
-
 	COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 	return 0
 }
@@ -174,7 +154,6 @@ _basher__fyi_done() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -192,14 +171,11 @@ _basher__fyi_done() {
 		opts+=("-e")
 		opts+=("--exit")
 	fi
-
 	opts=" ${opts[@]} "
 	if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
 		COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 		return 0
 	fi
-
-
 	COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 	return 0
 }
@@ -209,7 +185,6 @@ _basher__fyi_error() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -227,14 +202,11 @@ _basher__fyi_error() {
 		opts+=("-e")
 		opts+=("--exit")
 	fi
-
 	opts=" ${opts[@]} "
 	if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
 		COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 		return 0
 	fi
-
-
 	COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 	return 0
 }
@@ -244,7 +216,6 @@ _basher__fyi_info() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -262,14 +233,11 @@ _basher__fyi_info() {
 		opts+=("-e")
 		opts+=("--exit")
 	fi
-
 	opts=" ${opts[@]} "
 	if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
 		COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 		return 0
 	fi
-
-
 	COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 	return 0
 }
@@ -279,7 +247,6 @@ _basher__fyi_notice() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -297,14 +264,11 @@ _basher__fyi_notice() {
 		opts+=("-e")
 		opts+=("--exit")
 	fi
-
 	opts=" ${opts[@]} "
 	if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
 		COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 		return 0
 	fi
-
-
 	COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 	return 0
 }
@@ -314,7 +278,6 @@ _basher__fyi_success() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -332,14 +295,11 @@ _basher__fyi_success() {
 		opts+=("-e")
 		opts+=("--exit")
 	fi
-
 	opts=" ${opts[@]} "
 	if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
 		COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 		return 0
 	fi
-
-
 	COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 	return 0
 }
@@ -349,7 +309,6 @@ _basher__fyi_task() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -367,14 +326,11 @@ _basher__fyi_task() {
 		opts+=("-e")
 		opts+=("--exit")
 	fi
-
 	opts=" ${opts[@]} "
 	if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
 		COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 		return 0
 	fi
-
-
 	COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 	return 0
 }
@@ -384,7 +340,6 @@ _basher__fyi_warning() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -402,14 +357,11 @@ _basher__fyi_warning() {
 		opts+=("-e")
 		opts+=("--exit")
 	fi
-
 	opts=" ${opts[@]} "
 	if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
 		COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 		return 0
 	fi
-
-
 	COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 	return 0
 }
@@ -419,7 +371,6 @@ _basher___fyi() {
 	cur="${COMP_WORDS[COMP_CWORD]}"
 	prev="${COMP_WORDS[COMP_CWORD-1]}"
 	opts=()
-
 	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
 		opts+=("-h")
 		opts+=("--help")
@@ -440,14 +391,11 @@ _basher___fyi() {
 	opts+=("success")
 	opts+=("task")
 	opts+=("warning")
-
 	opts=" ${opts[@]} "
 	if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
 		COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 		return 0
 	fi
-
-
 	COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 	return 0
 }
@@ -455,7 +403,6 @@ subcmd__basher___fyi() {
 	local i cmd
 	COMPREPLY=()
 	cmd=""
-
 	for i in ${COMP_WORDS[@]}; do
 		case "${i}" in
 			fyi)
@@ -497,20 +444,16 @@ subcmd__basher___fyi() {
 			warning)
 				cmd="warning"
 				;;
-
 			*)
 				;;
 		esac
 	done
-
 	echo "$cmd"
 }
-
 chooser__basher___fyi() {
 	local i cmd
 	COMPREPLY=()
 	cmd="$( subcmd__basher___fyi )"
-
 	case "${cmd}" in
 		fyi)
 			_basher___fyi
@@ -551,10 +494,8 @@ chooser__basher___fyi() {
 		warning)
 			_basher__fyi_warning
 			;;
-
 		*)
 			;;
 	esac
 }
-
 complete -F chooser__basher___fyi -o bashdefault -o default fyi

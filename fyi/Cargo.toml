@@ -1,6 +1,6 @@
 [package]
 name = "fyi"
-version = "0.9.2"
+version = "0.9.4"
 license = "WTFPL"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
@@ -14,8 +14,9 @@ maintainer = "Blobfolio, LLC. <hello@blobfolio.com>"
 copyright = "2022, Blobfolio, LLC <hello@blobfolio.com>"
 license-file = ["../LICENSE", "0"]
 revision = "1"
+extended-description = ""
 depends = "$auto"
-section = "utility"
+section = "utils"
 assets = [
     ["../target/x86_64-unknown-linux-gnu/release/fyi", "usr/bin/", "755"],
     ["../release/completions/fyi.bash", "etc/bash_completion.d/", "644"],
