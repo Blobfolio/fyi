@@ -491,6 +491,7 @@ impl ProglessInner {
 		}
 	}
 
+	#[allow(clippy::option_if_let_else)] // This is better.
 	/// # Set Title.
 	///
 	/// Give the progress bar a title, which will be shown above the progress
@@ -804,6 +805,7 @@ impl ProglessInner {
 		}
 	}
 
+	#[allow(clippy::option_if_let_else)] // This is better.
 	/// # Tick Title.
 	///
 	/// The title needs to be rewritten both on direct change and resolution
@@ -1058,6 +1060,7 @@ impl From<Progless> for Msg {
 
 /// # Construction/Destruction.
 impl Progless {
+	#[must_use]
 	/// # With Title.
 	///
 	/// Add a title to the progress bar. When present, this will print on its
