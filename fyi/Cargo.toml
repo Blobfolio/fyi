@@ -14,6 +14,7 @@ maintainer = "Blobfolio, LLC. <hello@blobfolio.com>"
 copyright = "2022, Blobfolio, LLC <hello@blobfolio.com>"
 license-file = ["../LICENSE", "0"]
 revision = "1"
+extended-description = ""
 depends = "$auto"
 section = "utils"
 assets = [
