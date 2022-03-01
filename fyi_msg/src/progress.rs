@@ -18,6 +18,10 @@ use dactyl::{
 	traits::SaturatingFrom,
 	write_time,
 };
+
+#[cfg(feature = "parking_lot_mutex")]
+use parking_lot::Mutex;
+
 use std::{
 	borrow::Borrow,
 	cmp::Ordering,
@@ -33,7 +37,6 @@ use std::{
 	},
 	sync::{
 		Arc,
-		Mutex,
 		atomic::{
 			AtomicBool,
 			AtomicU8,
@@ -48,6 +51,9 @@ use std::{
 		Duration,
 	},
 };
+
+#[cfg(not(feature = "parking_lot_mutex"))]
+use std::sync::Mutex;
 
 
 
@@ -105,6 +111,7 @@ const TASK_PREFIX: &[u8; 8] = &[32, 32, 32, 32, 226, 134, 179, 32];
 
 
 
+#[cfg(not(feature = "parking_lot_mutex"))]
 /// # Helper: Mutex Unlock.
 ///
 /// This just moves tedious code out of the way.
@@ -112,6 +119,14 @@ macro_rules! mutex_ptr {
 	($mutex:expr) => (
 		$mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 	);
+}
+
+#[cfg(feature = "parking_lot_mutex")]
+/// # Helper: Mutex Unlock.
+///
+/// This just moves tedious code out of the way.
+macro_rules! mutex_ptr {
+	($mutex:expr) => ( $mutex.lock() );
 }
 
 
