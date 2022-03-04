@@ -37,4 +37,10 @@ fn main() {
 	// Print a simple summary.
 	pbar.finish();
 	Msg::from(pbar).print();
+
+	#[cfg(not(feature = "parking_lot_mutex"))]
+	println!("\x1b[2m(Used default std::sync::Mutex)\x1b[0m");
+
+	#[cfg(feature = "parking_lot_mutex")]
+	println!("\x1b[2m(Used parking_lot::Mutex)\x1b[0m");
 }
