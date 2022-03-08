@@ -115,19 +115,15 @@ const TASK_PREFIX: &[u8; 8] = &[32, 32, 32, 32, 226, 134, 179, 32];
 /// # Helper: Mutex Unlock.
 ///
 /// This just moves tedious code out of the way.
-macro_rules! mutex_ptr {
-	($mutex:expr) => (
-		$mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
-	);
+macro_rules! mutex {
+	($var:expr) => ($var.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
 }
 
 #[cfg(feature = "parking_lot_mutex")]
 /// # Helper: Mutex Unlock.
 ///
 /// This just moves tedious code out of the way.
-macro_rules! mutex_ptr {
-	($mutex:expr) => ( $mutex.lock() );
-}
+macro_rules! mutex { ($var:expr) => ($var.lock()); }
 
 
 
@@ -381,7 +377,7 @@ impl ProglessInner {
 				u32::saturating_from(self.started.load(SeqCst).elapsed().as_millis()),
 				SeqCst
 			);
-			mutex_ptr!(self.doing).clear();
+			mutex!(self.doing).clear();
 			self.print_blank();
 		}
 	}
@@ -458,7 +454,7 @@ impl ProglessInner {
 	where S: AsRef<str> {
 		if self.running() {
 			if let Ok(m) = ProglessTask::try_from(txt.as_ref().as_bytes()) {
-				if mutex_ptr!(self.doing).insert(m)	{
+				if mutex!(self.doing).insert(m)	{
 					self.flags.fetch_or(TICK_DOING, SeqCst);
 				}
 			}
@@ -480,7 +476,7 @@ impl ProglessInner {
 	/// in cases where you're triggering done changes manually.
 	fn remove<S>(&self, txt: S)
 	where S: AsRef<str> {
-		if self.running() && mutex_ptr!(self.doing).remove(txt.as_ref().as_bytes())	{
+		if self.running() && mutex!(self.doing).remove(txt.as_ref().as_bytes())	{
 			self.flags.fetch_or(TICK_DOING, SeqCst);
 			self.increment();
 		}
@@ -516,10 +512,10 @@ impl ProglessInner {
 	where S: Into<Msg> {
 		if self.running() {
 			if let Some(title) = title.map(Into::into).filter(|x| ! x.is_empty()) {
-				mutex_ptr!(self.title).replace(title.with_newline(true));
+				mutex!(self.title).replace(title.with_newline(true));
 			}
 			else {
-				mutex_ptr!(self.title).take();
+				mutex!(self.title).take();
 			}
 
 			self.flags.fetch_or(TICK_TITLE, SeqCst);
@@ -535,7 +531,7 @@ impl ProglessInner {
 	/// for comparison with the last job. If unique, the previous output is
 	/// erased and replaced with the new output.
 	fn preprint(&self) {
-		let buf = mutex_ptr!(self.buf);
+		let buf = mutex!(self.buf);
 		if 0 == buf.total_len() {
 			self.print_blank();
 			return;
@@ -689,7 +685,7 @@ impl ProglessInner {
 		// 2: the braces around the bar itself (should there be one);
 		// 2: the spaces after the bar itself (should there be one);
 		let space: u8 = self.last_width().saturating_sub(u8::saturating_from({
-			let buf = mutex_ptr!(self.buf);
+			let buf = mutex!(self.buf);
 			11 +
 			buf.len(PART_ELAPSED) +
 			buf.len(PART_DONE) +
@@ -728,7 +724,7 @@ impl ProglessInner {
 			let (w_done, w_undone) = self.tick_bar_widths();
 
 			// Update the parts!.
-			let mut buf = mutex_ptr!(self.buf);
+			let mut buf = mutex!(self.buf);
 
 			// We're handling undone first — the reverse display order — as it
 			// will only ever shrink, leaving that much less to copy-right when
@@ -750,9 +746,9 @@ impl ProglessInner {
 	/// may require lazy cropping).
 	fn tick_set_doing(&self) {
 		if self.flag_toggle(TICK_DOING) {
-			let doing = mutex_ptr!(self.doing);
+			let doing = mutex!(self.doing);
 			if doing.is_empty() {
-				mutex_ptr!(self.buf).truncate(PART_DOING, 0);
+				mutex!(self.buf).truncate(PART_DOING, 0);
 			}
 			else {
 				let width: u8 = self.last_width().saturating_sub(6);
@@ -762,7 +758,7 @@ impl ProglessInner {
 				doing.iter().for_each(|x| x.push_to(&mut tasks, width));
 				tasks.extend_from_slice(b"\x1b[0m");
 
-				mutex_ptr!(self.buf).replace(PART_DOING, &tasks);
+				mutex!(self.buf).replace(PART_DOING, &tasks);
 			}
 		}
 	}
@@ -772,7 +768,7 @@ impl ProglessInner {
 	/// This updates the "done" portion of the buffer as needed.
 	fn tick_set_done(&self) {
 		if self.flag_toggle(TICK_DONE) {
-			mutex_ptr!(self.buf).replace(PART_DONE, &NiceU32::from(self.done()));
+			mutex!(self.buf).replace(PART_DONE, &NiceU32::from(self.done()));
 		}
 	}
 
@@ -781,7 +777,7 @@ impl ProglessInner {
 	/// This updates the "percent" portion of the buffer as needed.
 	fn tick_set_percent(&self) {
 		if self.flag_toggle(TICK_PERCENT) {
-			mutex_ptr!(self.buf).replace(PART_PERCENT, &NicePercent::from(self.percent()));
+			mutex!(self.buf).replace(PART_PERCENT, &NicePercent::from(self.percent()));
 		}
 	}
 
@@ -811,7 +807,7 @@ impl ProglessInner {
 		else {
 			let [h, m, s] = NiceElapsed::hms(secs);
 			unsafe {
-				let mut buf = mutex_ptr!(self.buf);
+				let mut buf = mutex!(self.buf);
 				let start = buf.start(PART_ELAPSED);
 				write_time(buf.as_mut_ptr(start), h, m, s);
 			}
@@ -827,14 +823,14 @@ impl ProglessInner {
 	/// change. Long titles are lazy-cropped as needed.
 	fn tick_set_title(&self) {
 		if self.flag_toggle(TICK_TITLE) {
-			if let Some(title) = &*mutex_ptr!(self.title) {
-				mutex_ptr!(self.buf).replace(
+			if let Some(title) = &*mutex!(self.title) {
+				mutex!(self.buf).replace(
 					PART_TITLE,
 					&title.fitted(usize::from(self.last_width().saturating_sub(1))),
 				);
 			}
 			else {
-				mutex_ptr!(self.buf).truncate(PART_TITLE, 0);
+				mutex!(self.buf).truncate(PART_TITLE, 0);
 			}
 		}
 	}
@@ -844,7 +840,7 @@ impl ProglessInner {
 	/// This updates the "total" portion of the buffer as needed.
 	fn tick_set_total(&self) {
 		if self.flag_toggle(TICK_TOTAL) {
-			mutex_ptr!(self.buf).replace(PART_TOTAL, &NiceU32::from(self.total()));
+			mutex!(self.buf).replace(PART_TOTAL, &NiceU32::from(self.total()));
 		}
 	}
 
@@ -908,7 +904,7 @@ impl ProglessSteady {
 	/// Make sure the steady ticker has actually aborted. This is called
 	/// automatically when [`Progless::finish`] is called.
 	fn stop(&self) {
-		if let Some(handle) = mutex_ptr!(self.ticker).take() {
+		if let Some(handle) = mutex!(self.ticker).take() {
 			self.enabled.store(false, SeqCst);
 			handle.join().unwrap();
 		}
