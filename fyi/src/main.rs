@@ -129,6 +129,7 @@ use argyle::{
 	FLAG_SUBCOMMAND,
 	FLAG_VERSION,
 };
+use dactyl::traits::BytesToUnsigned;
 use fyi_msg::{
 	Msg,
 	MsgKind,
@@ -195,8 +196,7 @@ fn blank(args: &Argue) {
 	// How many lines should we print?
 	let msg = Msg::plain("\n".repeat(
 		args.option2(b"-c", b"--count")
-			.and_then(|x| std::str::from_utf8(x).ok())
-			.and_then(|x| x.parse::<usize>().ok())
+			.and_then(usize::btou)
 			.map_or(1, |x| 1_usize.max(x))
 	));
 
@@ -260,8 +260,7 @@ fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgyleError> {
 					.and_then(|x| std::str::from_utf8(x).ok())
 					.unwrap_or_default(),
 				args.option2(b"-c", b"--prefix-color")
-					.and_then(|x| std::str::from_utf8(x).ok())
-					.and_then(|x| x.parse::<u8>().ok())
+					.and_then(u8::btou)
 					.unwrap_or(199_u8),
 				std::str::from_utf8(args.first_arg()?)
 					.map_err(|_| ArgyleError::NoArg)?
