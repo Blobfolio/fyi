@@ -392,15 +392,6 @@ impl ProglessInner {
 	fn done(&self) -> u32 { self.done.load(SeqCst) }
 
 	#[inline]
-	/// # Elapsed.
-	///
-	/// Return the last-recorded elapsed time in seconds. Realtime elapsed
-	/// values are pulled from the field directly.
-	fn elapsed(&self) -> u32 {
-		self.elapsed.load(SeqCst).wrapping_div(1000)
-	}
-
-	#[inline]
 	/// # Last Width.
 	///
 	/// The CLI screen width as it was when last checked. If this value
@@ -1062,7 +1053,7 @@ impl From<Progless> for Msg {
 		// The content is all valid UTF-8; this is safe.
 		Self::done([
 			"Finished in ",
-			NiceElapsed::from(src.inner.elapsed()).as_str(),
+			NiceElapsed::from(src.inner.started.load(SeqCst)).as_str(),
 			".",
 		].concat())
 			.with_newline(true)
@@ -1184,7 +1175,7 @@ impl Progless {
 			"{} {} in {}.",
 			NiceU32::from(done).as_str(),
 			noun,
-			NiceElapsed::from(self.inner.elapsed()).as_str(),
+			NiceElapsed::from(self.inner.started.load(SeqCst)).as_str(),
 		))
 			.with_newline(true)
 	}
