@@ -98,6 +98,16 @@ impl BeforeAfter {
 	/// If the after state is expected to be smaller than the before state,
 	/// return the difference. If either state is unset/zero, or after is
 	/// larger, `None` is returned.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::BeforeAfter;
+	/// use std::num::NonZeroU64;
+	///
+	/// let ba = BeforeAfter::from((100_u64, 90_u64));
+	/// assert_eq!(ba.less(), NonZeroU64::new(10));
+	/// ```
 	pub const fn less(&self) -> Option<NonZeroU64> {
 		if let Some(b) = self.before {
 			if let Some(a) = self.after {
@@ -122,6 +132,16 @@ impl BeforeAfter {
 	/// If the after state is expected to be larger than the before state,
 	/// return the difference. If either state is unset/zero, or after is
 	/// smaller, `None` is returned.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::BeforeAfter;
+	/// use std::num::NonZeroU64;
+	///
+	/// let ba = BeforeAfter::from((100_u64, 130_u64));
+	/// assert_eq!(ba.more(), NonZeroU64::new(30));
+	/// ```
 	pub const fn more(&self) -> Option<NonZeroU64> {
 		if let Some(b) = self.before {
 			if let Some(a) = self.after {
