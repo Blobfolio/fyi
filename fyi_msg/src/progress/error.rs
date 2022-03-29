@@ -12,10 +12,6 @@ use std::{
 #[derive(Debug, Copy, Clone)]
 /// # Obligatory error type.
 pub enum ProglessError {
-	/// # Empty task.
-	EmptyTask,
-	/// # Length (task) overflow.
-	TaskOverflow,
 	/// # Length (total) must be non-zero.
 	EmptyTotal,
 	/// # Length (total) overflow.
@@ -36,8 +32,6 @@ impl ProglessError {
 	/// # As Str.
 	pub const fn as_str(self) -> &'static str {
 		match self {
-			Self::EmptyTask => "Task names cannot be empty.",
-			Self::TaskOverflow => "Task names cannot exceed 65,535 bytes.",
 			Self::EmptyTotal => "At least one task is required.",
 			Self::TotalOverflow => "The total number of tasks cannot exceed 4,294,967,295.",
 		}

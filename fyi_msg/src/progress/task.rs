@@ -2,10 +2,7 @@
 # FYI Msg - Progless Tasks
 */
 
-use crate::{
-	fitted,
-	ProglessError,
-};
+use crate::fitted;
 use std::{
 	borrow::Borrow,
 	hash::{
@@ -27,21 +24,6 @@ pub(super) struct ProglessTask {
 	width: u16,
 }
 
-impl TryFrom<&[u8]> for ProglessTask {
-	type Error = ProglessError;
-
-	fn try_from(src: &[u8]) -> Result<Self, Self::Error> {
-		// It has to fit in a u16.
-		if src.is_empty() { Err(ProglessError::EmptyTask) }
-		else {
-			Ok(Self {
-				task: Box::from(src),
-				width: u16::try_from(fitted::width(src)).map_err(|_| ProglessError::TaskOverflow)?,
-			})
-		}
-	}
-}
-
 impl Borrow<[u8]> for ProglessTask {
 	#[inline]
 	fn borrow(&self) -> &[u8] { &self.task }
@@ -60,6 +42,24 @@ impl PartialEq for ProglessTask {
 }
 
 impl ProglessTask {
+	/// # New.
+	///
+	/// Create a new task from raw bytes.
+	///
+	/// This will return `None` if the source is empty or larger than `u16`.
+	pub(super) fn new<B>(src: B) -> Option<Self>
+	where B: AsRef<[u8]> {
+		let src = src.as_ref();
+		if src.is_empty() { None }
+		else if let Ok(width) = u16::try_from(fitted::width(src)) {
+			Some(Self {
+				task: Box::from(src),
+				width,
+			})
+		}
+		else { None }
+	}
+
 	/// # Push To.
 	///
 	/// Push this task to the vector buffer, ensuring it fits the specified

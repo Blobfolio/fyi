@@ -333,7 +333,7 @@ impl ProglessInner {
 	fn add<S>(&self, txt: S)
 	where S: AsRef<str> {
 		if self.running() {
-			if let Ok(m) = ProglessTask::try_from(txt.as_ref().as_bytes()) {
+			if let Some(m) = ProglessTask::new(txt.as_ref()) {
 				if mutex!(self.doing).insert(m)	{
 					self.flags.fetch_or(TICK_DOING, SeqCst);
 				}
