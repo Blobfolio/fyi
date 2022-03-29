@@ -98,11 +98,13 @@ impl BeforeAfter {
 	/// If the after state is expected to be smaller than the before state,
 	/// return the difference. If either state is unset/zero, or after is
 	/// larger, `None` is returned.
-	pub fn less(&self) -> Option<NonZeroU64> {
-		let b: u64 = self.before?.get();
-		let a: u64 = self.after?.get();
-
-		NonZeroU64::new(b.saturating_sub(a))
+	pub const fn less(&self) -> Option<NonZeroU64> {
+		if let Some(b) = self.before {
+			if let Some(a) = self.after {
+				return NonZeroU64::new(b.get().saturating_sub(a.get()));
+			}
+		}
+		None
 	}
 
 	#[must_use]
@@ -120,11 +122,13 @@ impl BeforeAfter {
 	/// If the after state is expected to be larger than the before state,
 	/// return the difference. If either state is unset/zero, or after is
 	/// smaller, `None` is returned.
-	pub fn more(&self) -> Option<NonZeroU64> {
-		let b: u64 = self.before?.get();
-		let a: u64 = self.after?.get();
-
-		NonZeroU64::new(a.saturating_sub(b))
+	pub const fn more(&self) -> Option<NonZeroU64> {
+		if let Some(b) = self.before {
+			if let Some(a) = self.after {
+				return NonZeroU64::new(a.get().saturating_sub(b.get()));
+			}
+		}
+		None
 	}
 
 	#[must_use]
