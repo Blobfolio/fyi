@@ -98,9 +98,9 @@ pub use fitted::{
 
 #[cfg(feature = "progress")]
 pub use progress::{
-	BeforeAfter,
+	ba::BeforeAfter,
 	Progless,
-	ProglessError,
+	error::ProglessError,
 };
 
 #[cfg(feature = "timestamps")] pub use msg::FLAG_TIMESTAMP;

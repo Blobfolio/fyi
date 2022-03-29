@@ -2,14 +2,21 @@
 # FYI Msg - Progless
 */
 
+pub(super) mod ba;
+pub(super) mod error;
+mod steady;
+mod task;
+
+
+
 use ahash::RandomState;
 use atomic::Atomic;
 use crate::{
 	BUFFER8,
-	fitted,
 	Msg,
 	MsgBuffer,
 	MsgKind,
+	ProglessError,
 };
 use dactyl::{
 	NiceElapsed,
@@ -18,42 +25,44 @@ use dactyl::{
 	traits::SaturatingFrom,
 	write_time,
 };
-
-#[cfg(feature = "parking_lot_mutex")]
-use parking_lot::Mutex;
-
+#[cfg(feature = "parking_lot_mutex")] use parking_lot::Mutex;
 use std::{
-	borrow::Borrow,
 	cmp::Ordering,
 	collections::HashSet,
-	fmt,
-	hash::{
-		Hash,
-		Hasher,
-	},
-	num::{
-		NonZeroU32,
-		NonZeroU64,
-	},
+	hash::Hasher,
+	num::NonZeroU32,
 	sync::{
 		Arc,
 		atomic::{
-			AtomicBool,
 			AtomicU8,
 			AtomicU32,
 			AtomicU64,
 			Ordering::SeqCst,
 		},
 	},
-	thread::JoinHandle,
-	time::{
-		Instant,
-		Duration,
-	},
+	time::Instant,
 };
+use steady::ProglessSteady;
+#[cfg(not(feature = "parking_lot_mutex"))] use std::sync::Mutex;
+use task::ProglessTask;
+
+
 
 #[cfg(not(feature = "parking_lot_mutex"))]
-use std::sync::Mutex;
+/// # Helper: Mutex Unlock.
+///
+/// This just moves tedious code out of the way.
+macro_rules! mutex {
+	($var:expr) => ($var.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
+}
+
+#[cfg(feature = "parking_lot_mutex")]
+/// # Helper: Mutex Unlock.
+///
+/// This just moves tedious code out of the way.
+macro_rules! mutex { ($var:expr) => ($var.lock()); }
+
+pub(self) use mutex;
 
 
 
@@ -108,126 +117,6 @@ const MIN_DRAW_WIDTH: u8 = 40;
 
 // This translates to:          •   •   •   •   ↳             •
 const TASK_PREFIX: &[u8; 8] = &[32, 32, 32, 32, 226, 134, 179, 32];
-
-
-
-#[cfg(not(feature = "parking_lot_mutex"))]
-/// # Helper: Mutex Unlock.
-///
-/// This just moves tedious code out of the way.
-macro_rules! mutex {
-	($var:expr) => ($var.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
-}
-
-#[cfg(feature = "parking_lot_mutex")]
-/// # Helper: Mutex Unlock.
-///
-/// This just moves tedious code out of the way.
-macro_rules! mutex { ($var:expr) => ($var.lock()); }
-
-
-
-#[derive(Debug, Copy, Clone)]
-/// # Obligatory error type.
-pub enum ProglessError {
-	/// # Empty task.
-	EmptyTask,
-	/// # Length (task) overflow.
-	TaskOverflow,
-	/// # Length (total) must be non-zero.
-	EmptyTotal,
-	/// # Length (total) overflow.
-	TotalOverflow,
-}
-
-impl fmt::Display for ProglessError {
-	#[inline]
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str(self.as_str())
-	}
-}
-
-impl std::error::Error for ProglessError {}
-
-impl ProglessError {
-	#[must_use]
-	/// # As Str.
-	pub const fn as_str(self) -> &'static str {
-		match self {
-			Self::EmptyTask => "Task names cannot be empty.",
-			Self::TaskOverflow => "Task names cannot exceed 65,535 bytes.",
-			Self::EmptyTotal => "At least one task is required.",
-			Self::TotalOverflow => "The total number of tasks cannot exceed 4,294,967,295.",
-		}
-	}
-}
-
-
-
-#[derive(Debug, Clone)]
-/// # A Task.
-///
-/// This holds a boxed slice and the pre-calculated display width of said
-/// slice. Though stored as raw bytes, the value is valid UTF-8.
-struct ProglessTask {
-	task: Box<[u8]>,
-	width: u16,
-}
-
-impl TryFrom<&[u8]> for ProglessTask {
-	type Error = ProglessError;
-
-	fn try_from(src: &[u8]) -> Result<Self, Self::Error> {
-		// It has to fit in a u16.
-		if src.is_empty() { Err(ProglessError::EmptyTask) }
-		else {
-			Ok(Self {
-				task: Box::from(src),
-				width: u16::try_from(fitted::width(src)).map_err(|_| ProglessError::TaskOverflow)?,
-			})
-		}
-	}
-}
-
-impl Borrow<[u8]> for ProglessTask {
-	#[inline]
-	fn borrow(&self) -> &[u8] { &self.task }
-}
-
-impl Eq for ProglessTask {}
-
-impl Hash for ProglessTask {
-	#[inline]
-	fn hash<H: Hasher>(&self, state: &mut H) { self.task.hash(state); }
-}
-
-impl PartialEq for ProglessTask {
-	#[inline]
-	fn eq(&self, other: &Self) -> bool { self.task == other.task }
-}
-
-impl ProglessTask {
-	/// # Push To.
-	///
-	/// Push this task to the vector buffer, ensuring it fits the specified
-	/// width.
-	fn push_to(&self, buf: &mut Vec<u8>, width: u8) {
-		let avail = width.saturating_sub(6);
-		if self.width > u16::from(avail) {
-			let end = fitted::length_width(&self.task, usize::from(avail));
-			if end > 0 {
-				buf.extend_from_slice(TASK_PREFIX);
-				buf.extend_from_slice(&self.task[..end]);
-				buf.push(b'\n');
-			}
-		}
-		else {
-			buf.extend_from_slice(TASK_PREFIX);
-			buf.extend_from_slice(&self.task);
-			buf.push(b'\n');
-		}
-	}
-}
 
 
 
@@ -849,71 +738,6 @@ impl ProglessInner {
 
 
 
-#[derive(Debug, Default)]
-/// # Steady Ticker.
-///
-/// Steady ticking is achieved by spawning a loop in a new thread that tries
-/// to tick the progress bar once every 60ms.
-///
-/// The struct itself exists to hold the handle from that thread so that it can
-/// run while it needs running, and stop once it needs to stop.
-///
-/// Stopping is triggered automatically in cases where the tick fails (because
-/// i.e. the progress has reached 100%), or manually when the `enabled` field
-/// is set to `false`. The latter is a failsafe for cases where the iterations
-/// fail to add up to the declared total.
-struct ProglessSteady {
-	ticker: Mutex<Option<JoinHandle<()>>>,
-	enabled: Arc<AtomicBool>,
-}
-
-impl From<Arc<ProglessInner>> for ProglessSteady {
-	fn from(t_inner: Arc<ProglessInner>) -> Self {
-		const SLEEP: Duration = Duration::from_millis(60);
-		let enabled = Arc::new(AtomicBool::new(true));
-		let t_enabled = enabled.clone();
-
-		Self {
-			enabled,
-			ticker:  Mutex::new(Some(std::thread::spawn(move || loop {
-				// This will abort if we've manually shut off the "enabled"
-				// field, or if "inner" has reached 100%. Otherwise this will
-				// initiate a "tick", which may or may not paint an update to
-				// the CLI.
-				if ! t_enabled.load(SeqCst) || ! t_inner.tick() { break; }
-
-				// Sleep for a short while before checking again.
-				std::thread::sleep(SLEEP);
-			}))),
-		}
-	}
-}
-
-impl ProglessSteady {
-	/// # Stop.
-	///
-	/// Make sure the steady ticker has actually aborted. This is called
-	/// automatically when [`Progless::finish`] is called.
-	fn stop(&self) {
-		if let Some(handle) = mutex!(self.ticker).take() {
-			self.enabled.store(false, SeqCst);
-			handle.join().unwrap();
-		}
-	}
-}
-
-impl Drop for ProglessSteady {
-	#[inline]
-	/// # Drop.
-	///
-	/// Make sure the spawned steady tick thread has actually stopped. If the
-	/// caller forgot to run [`Progless::finish`] it might keep doing its
-	/// thing.
-	fn drop(&mut self) { self.stop(); }
-}
-
-
-
 #[derive(Debug, Clone)]
 /// # Progless.
 ///
@@ -1262,139 +1086,6 @@ impl Progless {
 	/// See [`Progless::with_title`] for more details.
 	pub fn set_title<S>(&self, title: Option<S>)
 	where S: Into<Msg> { self.inner.set_title(title); }
-}
-
-
-
-#[derive(Debug, Copy, Clone)]
-/// # Before and After.
-///
-/// This is a potentially useful companion to [`Progless`] that tracks an
-/// arbitrary non-zero before and after state. It was created to make it easire
-/// to track before/after file sizes from minification-type tasks, but it
-/// doesn't ascribe any particular meaning to the data it holds.
-///
-/// ## Examples
-///
-/// Usage is as simple as:
-///
-/// ```no_run
-/// use fyi_msg::BeforeAfter;
-///
-/// let mut ba = BeforeAfter::start(123_u64);
-///
-/// // Do some stuff.
-///
-/// ba.stop(50_u64);
-/// ```
-///
-/// Once before and after are set, you can use the getter methods [`BeforeAfter::before`]
-/// and [`BeforeAfter::after`] to obtain the values.
-///
-/// For relative changes where `after` is expected to be smaller than `before`,
-/// there is [`BeforeAfter::less`] and [`BeforeAfter::less_percent`] to obtain
-/// the relative difference.
-///
-/// For cases where `after` is expected to be larger, use [`BeforeAfter::more`]
-/// and [`BeforeAfter::more_percent`] instead.
-pub struct BeforeAfter {
-	before: Option<NonZeroU64>,
-	after: Option<NonZeroU64>,
-}
-
-impl From<(u64, u64)> for BeforeAfter {
-	fn from(src: (u64, u64)) -> Self {
-		Self {
-			before: NonZeroU64::new(src.0),
-			after: NonZeroU64::new(src.1),
-		}
-	}
-}
-
-impl BeforeAfter {
-	#[must_use]
-	#[inline]
-	/// # New Instance: Set Before.
-	///
-	/// This creates a new instance with the defined starting point.
-	///
-	/// A `before` value of `0_u64` is equivalent to `None`. The instance will
-	/// still be created, but the difference methods won't return any values.
-	pub const fn start(before: u64) -> Self {
-		Self {
-			before: NonZeroU64::new(before),
-			after: None,
-		}
-	}
-
-	#[inline]
-	/// # Finish Instance: Set After.
-	///
-	/// This sets the `after` value of an existing instance, closing it out.
-	///
-	/// An `after` value of `0_u64` is equivalent to `None`, meaning the
-	/// difference methods won't return any values.
-	pub fn stop(&mut self, after: u64) {
-		self.after = NonZeroU64::new(after);
-	}
-
-	#[must_use]
-	#[inline]
-	/// # Get Before.
-	///
-	/// Return the `before` value if non-zero, otherwise `None`.
-	pub const fn before(&self) -> Option<NonZeroU64> { self.before }
-
-	#[must_use]
-	#[inline]
-	/// # Get After.
-	///
-	/// Return the `after` value if non-zero, otherwise `None`.
-	pub const fn after(&self) -> Option<NonZeroU64> { self.after }
-
-	#[must_use]
-	/// # Get Difference (After < Before).
-	///
-	/// If the after state is expected to be smaller than the before state,
-	/// return the difference. If either state is unset/zero, or after is
-	/// larger, `None` is returned.
-	pub fn less(&self) -> Option<NonZeroU64> {
-		let b: u64 = self.before?.get();
-		let a: u64 = self.after?.get();
-
-		NonZeroU64::new(b.saturating_sub(a))
-	}
-
-	#[must_use]
-	/// # Percentage Difference (After < Before).
-	///
-	/// This is the same as [`BeforeAfter::less`], but returns a percentage of
-	/// the difference over `before`.
-	pub fn less_percent(&self) -> Option<f64> {
-		self.less().and_then(|l| dactyl::int_div_float(l.get(), self.before?.get()))
-	}
-
-	#[must_use]
-	/// # Get Difference (After > Before).
-	///
-	/// If the after state is expected to be larger than the before state,
-	/// return the difference. If either state is unset/zero, or after is
-	/// smaller, `None` is returned.
-	pub fn more(&self) -> Option<NonZeroU64> {
-		let b: u64 = self.before?.get();
-		let a: u64 = self.after?.get();
-
-		NonZeroU64::new(a.saturating_sub(b))
-	}
-
-	#[must_use]
-	/// # Percentage Difference (After > Before).
-	///
-	/// This is the same as [`BeforeAfter::more`], but returns a percentage of
-	/// the difference over `before`.
-	pub fn more_percent(&self) -> Option<f64> {
-		self.more().and_then(|m| dactyl::int_div_float(m.get(), self.before?.get()))
-	}
 }
 
 
