@@ -21,7 +21,7 @@ use super::{
 
 
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 /// # Steady Ticker.
 ///
 /// Steady ticking is achieved by spawning a loop in a new thread that tries
