@@ -129,7 +129,10 @@ use argyle::{
 	FLAG_SUBCOMMAND,
 	FLAG_VERSION,
 };
-use dactyl::traits::BytesToUnsigned;
+use dactyl::traits::{
+	BytesToSigned,
+	BytesToUnsigned,
+};
 use fyi_msg::{
 	Msg,
 	MsgKind,
@@ -248,8 +251,7 @@ fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgyleError> {
 	// position could affect Argyle's understanding of where the trailing args
 	// begin.
 	let exit: Option<i32> = args.option2(b"-e", b"--exit")
-		.and_then(|x| std::str::from_utf8(x).ok())
-		.and_then(|x| x.parse::<i32>().ok());
+		.and_then(i32::btoi);
 
 	// Build the message.
 	let msg: Msg =

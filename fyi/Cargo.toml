@@ -1,6 +1,6 @@
 [package]
 name = "fyi"
-version = "0.9.6"
+version = "0.9.7"
 license = "WTFPL"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
@@ -158,7 +158,7 @@ subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info"
 path = "../fyi_msg"
 
 [dependencies]
-dactyl = "0.3.*"
+dactyl = "0.3.*, >=0.3.3"
 
 [dependencies.argyle]
 version = "0.5.*"

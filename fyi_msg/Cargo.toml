@@ -1,6 +1,6 @@
 [package]
 name = "fyi_msg"
-version = "0.9.6"
+version = "0.9.7"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
 rust-version = "1.56"
@@ -63,6 +63,7 @@ harness = false
 [[bench]]
 name = "fm_fitted"
 harness = false
+required-features = [ "fitted" ]
 
 [[bench]]
 name = "fm_msg"
@@ -71,10 +72,12 @@ harness = false
 [[bench]]
 name = "fm_msg_fitted"
 harness = false
+required-features = [ "fitted" ]
 
 [[bench]]
 name = "fm_msg_timestamps"
 harness = false
+required-features = [ "time" ]
 
 [features]
 # This adds a few additional MsgKinds relevant only to the main FYI binary.
