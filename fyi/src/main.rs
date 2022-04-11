@@ -140,6 +140,7 @@ use fyi_msg::{
 	FLAG_NEWLINE,
 	FLAG_TIMESTAMP,
 };
+use std::ffi::OsStr;
 
 
 
@@ -217,7 +218,10 @@ fn blank(args: &Argue) {
 fn confirm(args: &Argue) -> Result<(), ArgyleError> {
 	if Msg::new(
 		MsgKind::Confirm,
-		std::str::from_utf8(args.first_arg()?).map_err(|_| ArgyleError::NoArg)?
+		args.first_arg_os()
+			.ok()
+			.and_then(OsStr::to_str)
+			.ok_or(ArgyleError::NoArg)?
 	)
 		.with_flags(parse_flags(args))
 		.prompt()
@@ -258,22 +262,26 @@ fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgyleError> {
 		// Custom message prefix.
 		if MsgKind::Custom == kind {
 			Msg::custom(
-				args.option2(b"-p", b"--prefix")
-					.and_then(|x| std::str::from_utf8(x).ok())
+				args.option2_os(b"-p", b"--prefix")
+					.and_then(OsStr::to_str)
 					.unwrap_or_default(),
 				args.option2(b"-c", b"--prefix-color")
 					.and_then(u8::btou)
 					.unwrap_or(199_u8),
-				std::str::from_utf8(args.first_arg()?)
-					.map_err(|_| ArgyleError::NoArg)?
+				args.first_arg_os()
+					.ok()
+					.and_then(OsStr::to_str)
+					.ok_or(ArgyleError::NoArg)?
 			)
 		}
 		// Built-in prefix.
 		else {
 			Msg::new(
 				kind,
-				std::str::from_utf8(args.first_arg()?)
-					.map_err(|_| ArgyleError::NoArg)?
+				args.first_arg_os()
+					.ok()
+					.and_then(OsStr::to_str)
+					.ok_or(ArgyleError::NoArg)?
 			)
 		}
 		.with_flags(parse_flags(args));
