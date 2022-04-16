@@ -98,7 +98,7 @@ bench BENCH="":
 # Build Release!
 @build:
 	# First let's build the Rust bit.
-	RUSTFLAGS="--emit asm" cargo build \
+	cargo build \
 		--bin "{{ pkg_id }}" \
 		--release \
 		--target x86_64-unknown-linux-gnu \
