@@ -884,6 +884,33 @@ impl From<Progless> for Msg {
 	}
 }
 
+/// # Constants.
+impl Progless {
+	#[cfg(target_pointer_width = "16")]
+	/// # Max Total.
+	///
+	/// A [`Progless`] instance cannot have a total higher than this value.
+	/// This is technically `u32::MAX`, but in practice `usize` is used more
+	/// often, so this value reflects whichever of the two is smaller.
+	/// Regardless, it's an awful lot of tasks to try to visualize. Haha.
+	pub const MAX_TOTAL: usize = 65_535;
+
+	#[cfg(not(target_pointer_width = "16"))]
+	/// # Max Total.
+	///
+	/// A [`Progless`] instance cannot have a total higher than this value.
+	/// This is technically `u32::MAX`, but in practice `usize` is used more
+	/// often, so this value reflects whichever of the two is smaller.
+	/// Regardless, it's an awful lot of tasks to try to visualize. Haha.
+	pub const MAX_TOTAL: usize = 4_294_967_295;
+
+	/// # Total Error.
+	///
+	/// This is the error message that is returned when a total is too high for
+	/// a [`Progless`] instance.
+	pub const MAX_TOTAL_ERROR: ProglessError = ProglessError::TotalOverflow;
+}
+
 /// # Construction/Destruction.
 impl Progless {
 	#[must_use]
