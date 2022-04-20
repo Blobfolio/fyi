@@ -72,22 +72,24 @@ like: `fyi <PREFIX> [flags] [options] <MSG>`, where the prefix is one of:
 * ![#f1c40f](https://via.placeholder.com/15/f1c40f/000000?text=+) warning 
 
 The following flags and options are available.
-```bash
--e, --exit <num>   Exit with this status code after printing. [default: 0]
--h, --help         Print this screen.
--i, --indent       Indent the line.
-    --stderr       Print to STDERR instead of STDOUT.
--t, --timestamp    Include a timestamp.
-```
+
+| Short | Long | Value | Description | Default |
+| ----- | ---- | ----- | ----------- | ------- |
+| `-e` | `--exit` | `<num>` | Exit with this status code after printing. | 0 |
+| `-h` | `--help` | | Print help information and exit. | |
+| `-i` | `--indent` | | Indent the line. | |
+| | `--stderr` | | Print to STDERR instead of STDOUT. | |
+| `-t` | `--timestamp` | | Include a timestamp. | |
 
 ### Custom Prefix:
 
 To use a custom prefix (or no prefix), run `fyi print [flags] [options] <MSG>`,
 using the following additional options:
-```bash
--p, --prefix <txt>          Set a custom prefix. [default: ]
--c, --prefix-color <num>    Prefix color. [default: 199]
-```
+
+| Short | Long | Value | Description | Default |
+| ----- | ---- | ----- | ----------- | ------- |
+| `-p` | `--prefix` | `<txt>` | Set a custom prefix. | |
+| `-c` | `--prefix-color` | `<num>` | Prefix color. | 199 |
 
 The color should be a `u8` corresponding to a [BASH color number](https://misc.flogisoft.com/bash/tip_colors_and_formatting#colors1).
 Note: to avoid the cost of re-alignment, only values in the range of `1..=255` are supported.
@@ -103,11 +105,12 @@ the other built-in prefixes.
 And finally, there is a convenient `blank` subcommand that does nothing but
 print a certain number of blank lines for you. Run
 `fyi blank [flags] [options]`, which supports the following:
-```bash
--h, --help           Print this screen.
-    --stderr         Print to STDERR instead of STDOUT.
--c, --count <num>    Number of empty lines to print. [default: 1]
-```
+
+| Short | Long | Value | Description | Default |
+| ----- | ---- | ----- | ----------- | ------- |
+| `-h` | `--help` | | Print help information and exit. | |
+| | `--stderr` | | Print to STDERR instead of STDOUT. | |
+| `-c` | `--count` | `<num>` | Number of empty lines to print. | 1 |
 
 
 

@@ -93,6 +93,7 @@ const TICK_TITLE: u8 =   0b0001_0000;
 const TICK_TOTAL: u8 =   0b0010_0000;
 
 const TICKING: u8 =      0b0100_0000;
+const SIGINT: u8 =       0b1000_0000;
 
 
 
@@ -399,6 +400,25 @@ impl ProglessInner {
 			}
 
 			self.flags.fetch_or(TICK_TITLE, SeqCst);
+		}
+	}
+
+	/// # Set SIGINT.
+	///
+	/// This method is used to indicate that a SIGINT was received and that
+	/// the tasks are being wound down (early).
+	///
+	/// For the running [`Progless`], all this really means is that the title
+	/// will be changed to "Early shutdown in progress." (This is purely a
+	/// visual thing.)
+	///
+	/// The caller must still run [`Progless::finish`] to close everything up
+	/// when the early shutdown actually arrives.
+	fn sigint(&self) {
+		let flags = self.flags.load(SeqCst);
+		if (TICKING == flags & TICKING) && (0 == flags & SIGINT) {
+			self.flags.fetch_or(SIGINT, SeqCst);
+			self.set_title(Some(Msg::warning("Early shutdown in progress.")));
 		}
 	}
 }
@@ -884,6 +904,33 @@ impl From<Progless> for Msg {
 	}
 }
 
+/// # Constants.
+impl Progless {
+	#[cfg(target_pointer_width = "16")]
+	/// # Max Total.
+	///
+	/// A [`Progless`] instance cannot have a total higher than this value.
+	/// This is technically `u32::MAX`, but in practice `usize` is used more
+	/// often, so this value reflects whichever of the two is smaller.
+	/// Regardless, it's an awful lot of tasks to try to visualize. Haha.
+	pub const MAX_TOTAL: usize = 65_535;
+
+	#[cfg(not(target_pointer_width = "16"))]
+	/// # Max Total.
+	///
+	/// A [`Progless`] instance cannot have a total higher than this value.
+	/// This is technically `u32::MAX`, but in practice `usize` is used more
+	/// often, so this value reflects whichever of the two is smaller.
+	/// Regardless, it's an awful lot of tasks to try to visualize. Haha.
+	pub const MAX_TOTAL: usize = 4_294_967_295;
+
+	/// # Total Error.
+	///
+	/// This is the error message that is returned when a total is too high for
+	/// a [`Progless`] instance.
+	pub const MAX_TOTAL_ERROR: ProglessError = ProglessError::TotalOverflow;
+}
+
 /// # Construction/Destruction.
 impl Progless {
 	#[must_use]
@@ -921,6 +968,19 @@ impl Progless {
 	pub fn with_title<S>(self, title: Option<S>) -> Self
 	where S: Into<Msg> {
 		self.inner.set_title(title);
+		self
+	}
+
+	#[must_use]
+	/// # Set Title As X: Reticulating Splines…
+	///
+	/// This is simply shorthand for generating a "Reticulating Splines…"
+	/// title, where X is the value passed in (usually the app name).
+	///
+	/// It's a sort of default…
+	pub fn with_reticulating_splines<S>(self, app: S) -> Self
+	where S: AsRef<str> {
+		self.set_reticulating_splines(app);
 		self
 	}
 
@@ -1086,6 +1146,34 @@ impl Progless {
 	/// See [`Progless::with_title`] for more details.
 	pub fn set_title<S>(&self, title: Option<S>)
 	where S: Into<Msg> { self.inner.set_title(title); }
+
+	/// # Set Title As X: Reticulating Splines…
+	///
+	/// This is simply shorthand for generating a "Reticulating Splines…"
+	/// title, where X is the value passed in (usually the app name).
+	///
+	/// It's a sort of default…
+	pub fn set_reticulating_splines<S>(&self, app: S)
+	where S: AsRef<str> {
+		self.inner.set_title(Some(Msg::custom(
+			app.as_ref(),
+			199,
+			"Reticulating splines\u{2026}"
+		)));
+	}
+
+	/// # Set SIGINT.
+	///
+	/// This method is used to indicate that a SIGINT was received and that
+	/// the tasks are being wound down (early).
+	///
+	/// For the running [`Progless`], all this really means is that the title
+	/// will be changed to "Early shutdown in progress." (This is purely a
+	/// visual thing.)
+	///
+	/// The caller must still run [`Progless::finish`] to close everything up
+	/// when the early shutdown actually arrives.
+	pub fn sigint(&self) { self.inner.sigint(); }
 }
 
 

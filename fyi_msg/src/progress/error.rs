@@ -9,13 +9,18 @@ use std::{
 
 
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, Hash, PartialEq)]
 /// # Obligatory error type.
 pub enum ProglessError {
 	/// # Length (total) must be non-zero.
 	EmptyTotal,
 	/// # Length (total) overflow.
 	TotalOverflow,
+}
+
+impl AsRef<str> for ProglessError {
+	#[inline]
+	fn as_ref(&self) -> &str { self.as_str() }
 }
 
 impl fmt::Display for ProglessError {
@@ -33,7 +38,12 @@ impl ProglessError {
 	pub const fn as_str(self) -> &'static str {
 		match self {
 			Self::EmptyTotal => "At least one task is required.",
-			Self::TotalOverflow => "The total number of tasks cannot exceed 4,294,967,295.",
+
+			#[cfg(target_pointer_width = "16")]
+			Self::TotalOverflow => "Progress can only be displayed for up to 65,535 items.",
+
+			#[cfg(not(target_pointer_width = "16"))]
+			Self::TotalOverflow => "Progress can only be displayed for up to 4,294,967,295 items.",
 		}
 	}
 }

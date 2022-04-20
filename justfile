@@ -25,8 +25,6 @@ cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
 doc_dir     := justfile_directory() + "/doc"
 release_dir := justfile_directory() + "/release"
 
-rustflags   := "-C link-arg=-s"
-
 
 
 # Bench it!
@@ -35,14 +33,14 @@ bench BENCH="":
 
 	clear
 	if [ -z "{{ BENCH }}" ]; then
-		RUSTFLAGS="{{ rustflags }}" cargo bench \
+		cargo bench \
 			--benches \
 			--workspace \
 			--all-features \
 			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}"
 	else
-		RUSTFLAGS="{{ rustflags }}" cargo bench \
+		cargo bench \
 			--bench "{{ BENCH }}" \
 			--workspace \
 			--all-features \
@@ -100,7 +98,7 @@ bench BENCH="":
 # Build Release!
 @build:
 	# First let's build the Rust bit.
-	RUSTFLAGS="--emit asm {{ rustflags }}" cargo build \
+	cargo build \
 		--bin "{{ pkg_id }}" \
 		--release \
 		--target x86_64-unknown-linux-gnu \
@@ -130,7 +128,7 @@ bench BENCH="":
 # Check Release!
 @check:
 	# First let's build the Rust bit.
-	RUSTFLAGS="{{ rustflags }}" cargo check \
+	cargo check \
 		--release \
 		--target x86_64-unknown-linux-gnu \
 		--all-features \
@@ -154,7 +152,7 @@ bench BENCH="":
 # Clippy.
 @clippy:
 	clear
-	RUSTFLAGS="{{ rustflags }}" cargo clippy \
+	cargo clippy \
 		--workspace \
 		--release \
 		--all-features \
@@ -199,7 +197,7 @@ bench BENCH="":
 
 # Test Run.
 @run +ARGS:
-	RUSTFLAGS="{{ rustflags }}" cargo run \
+	cargo run \
 		--bin "{{ pkg_id }}" \
 		--release \
 		--target x86_64-unknown-linux-gnu \
