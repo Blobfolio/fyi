@@ -19,6 +19,7 @@ pub enum ProglessError {
 }
 
 impl AsRef<str> for ProglessError {
+	#[inline]
 	fn as_ref(&self) -> &str { self.as_str() }
 }
 
