@@ -93,6 +93,7 @@ const TICK_TITLE: u8 =   0b0001_0000;
 const TICK_TOTAL: u8 =   0b0010_0000;
 
 const TICKING: u8 =      0b0100_0000;
+const SIGINT: u8 =       0b1000_0000;
 
 
 
@@ -399,6 +400,25 @@ impl ProglessInner {
 			}
 
 			self.flags.fetch_or(TICK_TITLE, SeqCst);
+		}
+	}
+
+	/// # Set SIGINT.
+	///
+	/// This method is used to indicate that a SIGINT was received and that
+	/// the tasks are being wound down (early).
+	///
+	/// For the running [`Progless`], all this really means is that the title
+	/// will be changed to "Early shutdown in progress." (This is purely a
+	/// visual thing.)
+	///
+	/// The caller must still run [`Progless::finish`] to close everything up
+	/// when the early shutdown actually arrives.
+	fn sigint(&self) {
+		let flags = self.flags.load(SeqCst);
+		if (TICKING == flags & TICKING) && (0 == flags & SIGINT) {
+			self.flags.fetch_or(SIGINT, SeqCst);
+			self.set_title(Some(Msg::warning("Early shutdown in progress.")));
 		}
 	}
 }
@@ -1113,6 +1133,19 @@ impl Progless {
 	/// See [`Progless::with_title`] for more details.
 	pub fn set_title<S>(&self, title: Option<S>)
 	where S: Into<Msg> { self.inner.set_title(title); }
+
+	/// # Set SIGINT.
+	///
+	/// This method is used to indicate that a SIGINT was received and that
+	/// the tasks are being wound down (early).
+	///
+	/// For the running [`Progless`], all this really means is that the title
+	/// will be changed to "Early shutdown in progress." (This is purely a
+	/// visual thing.)
+	///
+	/// The caller must still run [`Progless::finish`] to close everything up
+	/// when the early shutdown actually arrives.
+	pub fn sigint(&self) { self.inner.sigint(); }
 }
 
 
