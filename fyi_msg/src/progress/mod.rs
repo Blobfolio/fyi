@@ -971,6 +971,19 @@ impl Progless {
 		self
 	}
 
+	#[must_use]
+	/// # Set Title As X: Reticulating Splines…
+	///
+	/// This is simply shorthand for generating a "Reticulating Splines…"
+	/// title, where X is the value passed in (usually the app name).
+	///
+	/// It's a sort of default…
+	pub fn with_reticulating_splines<S>(self, app: S) -> Self
+	where S: AsRef<str> {
+		self.set_reticulating_splines(app);
+		self
+	}
+
 	/// # Stop.
 	///
 	/// Finish the progress bar and shut down the steady ticker.
@@ -1133,6 +1146,21 @@ impl Progless {
 	/// See [`Progless::with_title`] for more details.
 	pub fn set_title<S>(&self, title: Option<S>)
 	where S: Into<Msg> { self.inner.set_title(title); }
+
+	/// # Set Title As X: Reticulating Splines…
+	///
+	/// This is simply shorthand for generating a "Reticulating Splines…"
+	/// title, where X is the value passed in (usually the app name).
+	///
+	/// It's a sort of default…
+	pub fn set_reticulating_splines<S>(&self, app: S)
+	where S: AsRef<str> {
+		self.inner.set_title(Some(Msg::custom(
+			app.as_ref(),
+			199,
+			"Reticulating splines\u{2026}"
+		)));
+	}
 
 	/// # Set SIGINT.
 	///
