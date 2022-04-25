@@ -812,6 +812,7 @@ impl Msg {
 	/// dereference the struct or use [`Msg::as_ref`] or [`Msg::borrow`].
 	pub fn as_bytes(&self) -> &[u8] { &self.0 }
 
+	#[allow(unsafe_code)]
 	#[must_use]
 	#[inline]
 	/// # As Str.
@@ -829,6 +830,7 @@ impl Msg {
 	/// Consume the message, returning an owned `Vec<u8>`.
 	pub fn into_vec(self) -> Vec<u8> { self.0.into_vec() }
 
+	#[allow(unsafe_code)]
 	#[must_use]
 	#[inline]
 	/// # Into String.

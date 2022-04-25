@@ -681,6 +681,7 @@ impl ProglessInner {
 		}
 	}
 
+	#[allow(unsafe_code)]
 	/// # Tick Elapsed Seconds.
 	///
 	/// The precision of `Instant` is greater than we need for printing

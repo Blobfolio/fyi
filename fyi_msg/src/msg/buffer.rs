@@ -163,6 +163,7 @@ impl<const N: usize> MsgBuffer<N> {
 	/// Return as a byte slice.
 	pub fn as_bytes(&self) -> &[u8] { &self.buf }
 
+	#[allow(unsafe_code)]
 	#[must_use]
 	#[inline]
 	/// # As Pointer.
@@ -172,6 +173,7 @@ impl<const N: usize> MsgBuffer<N> {
 		self.buf.as_ptr().add(idx as usize)
 	}
 
+	#[allow(unsafe_code)]
 	#[must_use]
 	#[inline]
 	/// # As Mut Pointer.
@@ -197,6 +199,7 @@ impl<const N: usize> MsgBuffer<N> {
 	/// This method will panic if the contents are not valid UTF-8.
 	pub fn as_str(&self) -> &str { std::str::from_utf8(&self.buf).unwrap() }
 
+	#[allow(unsafe_code)]
 	#[must_use]
 	#[inline]
 	/// # As Str (Unchecked).
@@ -282,6 +285,7 @@ impl<const N: usize> MsgBuffer<N> {
 	}
 
 	#[allow(clippy::cast_possible_truncation)] // We've previously asserted it fits.
+	#[allow(unsafe_code)]
 	/// # Extend Part.
 	///
 	/// ## Panics
@@ -314,6 +318,7 @@ impl<const N: usize> MsgBuffer<N> {
 	}
 
 	#[allow(clippy::comparison_chain)] // We're only matching 2/3.
+	#[allow(unsafe_code)]
 	/// # Replace Part.
 	///
 	/// ## Panics
@@ -357,6 +362,7 @@ impl<const N: usize> MsgBuffer<N> {
 
 /// ## Internal.
 impl<const N: usize> MsgBuffer<N> {
+	#[allow(unsafe_code)]
 	/// # Grow.
 	///
 	/// ## Panics
