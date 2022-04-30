@@ -656,37 +656,19 @@ impl Msg {
 	///
 	/// **This requires the `timestamps` crate feature.**
 	pub fn set_timestamp(&mut self, timestamp: bool) {
-		use time::OffsetDateTime;
+		use utc2k::FmtUtc2k;
 
 		if timestamp {
-			if let Ok(now) = OffsetDateTime::now_local() {
-				let (y1, y2) = dactyl::div_mod_u16(now.year() as u16, 100);
-
-				// Running each datetime part through `NiceU8` looks a bit
-				// terrible, but it moots the need to include `time`'s
-				// formatting feature.
-				self.0.replace(
-					PART_TIMESTAMP,
-					&[
-						b"\x1b[2m[\x1b[0;34m",
-						NiceU8::from(y1 as u8).as_bytes2(),
-						NiceU8::from(y2 as u8).as_bytes2(),
-						b"-",
-						NiceU8::from(u8::from(now.month())).as_bytes2(),
-						b"-",
-						NiceU8::from(now.day()).as_bytes2(),
-						b" ",
-						NiceU8::from(now.hour()).as_bytes2(),
-						b":",
-						NiceU8::from(now.minute()).as_bytes2(),
-						b":",
-						NiceU8::from(now.second()).as_bytes2(),
-						b"\x1b[39;2m]\x1b[0m ",
-					].concat()
-				);
-
-				return;
-			}
+			let now = FmtUtc2k::now_local();
+			self.0.replace(
+				PART_TIMESTAMP,
+				&[
+					b"\x1b[2m[\x1b[0;34m",
+					now.as_bytes(),
+					b"\x1b[39;2m]\x1b[0m ",
+				].concat()
+			);
+			return;
 		}
 
 		// Clear the timestamp if it exists.
