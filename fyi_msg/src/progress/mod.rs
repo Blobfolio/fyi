@@ -759,6 +759,7 @@ impl ProglessInner {
 
 
 
+#[cfg_attr(feature = "docsrs", doc(cfg(feature = "progress")))]
 #[derive(Debug, Clone)]
 /// # Progless.
 ///

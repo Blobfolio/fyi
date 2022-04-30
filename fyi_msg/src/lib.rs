@@ -67,6 +67,8 @@ For more usage examples, check out the `examples/msg` demo, which covers just ab
 
 #![allow(clippy::module_name_repetitions)] // This is fine.
 
+#![cfg_attr(feature = "docsrs", feature(doc_cfg))]
+
 
 
 mod msg;
@@ -95,19 +97,23 @@ pub use msg::{
 };
 
 #[cfg(feature = "fitted")]
+#[cfg_attr(feature = "docsrs", doc(cfg(feature = "fitted")))]
 pub use fitted::{
 	length_width,
 	width,
 };
 
 #[cfg(feature = "progress")]
+#[cfg_attr(feature = "docsrs", doc(cfg(feature = "progress")))]
 pub use progress::{
 	ba::BeforeAfter,
 	Progless,
 	error::ProglessError,
 };
 
-#[cfg(feature = "timestamps")] pub use msg::FLAG_TIMESTAMP;
+#[cfg(feature = "timestamps")]
+#[cfg_attr(feature = "docsrs", doc(cfg(feature = "timestamps")))]
+pub use msg::FLAG_TIMESTAMP;
 
 #[macro_use]
 mod macros {
