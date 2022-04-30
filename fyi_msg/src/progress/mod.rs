@@ -681,6 +681,7 @@ impl ProglessInner {
 		}
 	}
 
+	#[allow(unsafe_code)]
 	/// # Tick Elapsed Seconds.
 	///
 	/// The precision of `Instant` is greater than we need for printing
@@ -758,6 +759,7 @@ impl ProglessInner {
 
 
 
+#[cfg_attr(feature = "docsrs", doc(cfg(feature = "progress")))]
 #[derive(Debug, Clone)]
 /// # Progless.
 ///

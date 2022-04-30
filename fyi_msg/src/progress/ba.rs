@@ -6,10 +6,11 @@ use std::num::NonZeroU64;
 
 
 
+#[cfg_attr(feature = "docsrs", doc(cfg(feature = "progress")))]
 #[derive(Debug, Copy, Clone)]
 /// # Before and After.
 ///
-/// This is a potentially useful companion to [`Progless`] that tracks an
+/// This is a potentially useful companion to [`Progless`](crate::Progless) that tracks an
 /// arbitrary non-zero before and after state. It was created to make it easire
 /// to track before/after file sizes from minification-type tasks, but it
 /// doesn't ascribe any particular meaning to the data it holds.

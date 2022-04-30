@@ -20,6 +20,8 @@ pkg_name    := "FYI"
 pkg_dir1    := justfile_directory() + "/fyi"
 pkg_dir2    := justfile_directory() + "/fyi_msg"
 
+features    := "bin_kinds,fitted,parking_lot_mutex,progress,timestamps"
+
 cargo_dir   := "/tmp/" + pkg_id + "-cargo"
 cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
 doc_dir     := justfile_directory() + "/doc"
@@ -36,14 +38,14 @@ bench BENCH="":
 		cargo bench \
 			--benches \
 			--workspace \
-			--all-features \
+			--features "{{ features }}" \
 			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}"
 	else
 		cargo bench \
 			--bench "{{ BENCH }}" \
 			--workspace \
-			--all-features \
+			--features "{{ features }}" \
 			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}"
 	fi
@@ -155,7 +157,7 @@ bench BENCH="":
 	cargo clippy \
 		--workspace \
 		--release \
-		--all-features \
+		--features "{{ features }}" \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
@@ -169,10 +171,10 @@ bench BENCH="":
 # Build Docs.
 @doc:
 	# Make the docs.
-	cargo doc \
+	cargo +nightly doc \
 		--workspace \
 		--release \
-		--all-features \
+		--features "docsrs,{{ features }}" \
 		--no-deps \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
@@ -188,7 +190,7 @@ bench BENCH="":
 	clear
 	cargo run \
 		-q \
-		--all-features \
+		--features "{{ features }}" \
 		--release \
 		--example "{{ DEMO }}" \
 		--target x86_64-unknown-linux-gnu \
@@ -210,7 +212,7 @@ bench BENCH="":
 	clear
 	cargo test \
 		--release \
-		--all-features \
+		--features "{{ features }}" \
 		--workspace \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"

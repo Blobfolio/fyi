@@ -158,6 +158,7 @@ const PART_INDENT: usize = 0;
 pub const FLAG_INDENT: u8 =    0b0001;
 
 #[cfg(feature = "timestamps")]
+#[cfg_attr(feature = "docsrs", doc(cfg(feature = "timestamps")))]
 /// Enable Timestamp.
 pub const FLAG_TIMESTAMP: u8 = 0b0010;
 
@@ -504,6 +505,7 @@ impl Msg {
 	}
 
 	#[cfg(feature = "timestamps")]
+	#[cfg_attr(feature = "docsrs", doc(cfg(feature = "timestamps")))]
 	#[must_use]
 	/// # With Timestamp.
 	///
@@ -644,6 +646,7 @@ impl Msg {
 	}
 
 	#[cfg(feature = "timestamps")]
+	#[cfg_attr(feature = "docsrs", doc(cfg(feature = "timestamps")))]
 	#[allow(clippy::cast_possible_truncation)] // Date pieces have known values.
 	#[allow(clippy::cast_sign_loss)] // Date pieces have known values.
 	/// # Set Timestamp.
@@ -653,37 +656,19 @@ impl Msg {
 	///
 	/// **This requires the `timestamps` crate feature.**
 	pub fn set_timestamp(&mut self, timestamp: bool) {
-		use time::OffsetDateTime;
+		use utc2k::FmtUtc2k;
 
 		if timestamp {
-			if let Ok(now) = OffsetDateTime::now_local() {
-				let (y1, y2) = dactyl::div_mod_u16(now.year() as u16, 100);
-
-				// Running each datetime part through `NiceU8` looks a bit
-				// terrible, but it moots the need to include `time`'s
-				// formatting feature.
-				self.0.replace(
-					PART_TIMESTAMP,
-					&[
-						b"\x1b[2m[\x1b[0;34m",
-						NiceU8::from(y1 as u8).as_bytes2(),
-						NiceU8::from(y2 as u8).as_bytes2(),
-						b"-",
-						NiceU8::from(u8::from(now.month())).as_bytes2(),
-						b"-",
-						NiceU8::from(now.day()).as_bytes2(),
-						b" ",
-						NiceU8::from(now.hour()).as_bytes2(),
-						b":",
-						NiceU8::from(now.minute()).as_bytes2(),
-						b":",
-						NiceU8::from(now.second()).as_bytes2(),
-						b"\x1b[39;2m]\x1b[0m ",
-					].concat()
-				);
-
-				return;
-			}
+			let now = FmtUtc2k::now_local();
+			self.0.replace(
+				PART_TIMESTAMP,
+				&[
+					b"\x1b[2m[\x1b[0;34m",
+					now.as_bytes(),
+					b"\x1b[39;2m]\x1b[0m ",
+				].concat()
+			);
+			return;
 		}
 
 		// Clear the timestamp if it exists.
@@ -766,6 +751,7 @@ impl Msg {
 /// A lot of our own programs crunch data and report the savings as a suffix.
 /// This section just adds a quick helper for that.
 impl Msg {
+	#[cfg_attr(feature = "docsrs", doc(cfg(feature = "progress")))]
 	#[must_use]
 	/// # Bytes Saved Suffix.
 	///
@@ -812,6 +798,7 @@ impl Msg {
 	/// dereference the struct or use [`Msg::as_ref`] or [`Msg::borrow`].
 	pub fn as_bytes(&self) -> &[u8] { &self.0 }
 
+	#[allow(unsafe_code)]
 	#[must_use]
 	#[inline]
 	/// # As Str.
@@ -829,6 +816,7 @@ impl Msg {
 	/// Consume the message, returning an owned `Vec<u8>`.
 	pub fn into_vec(self) -> Vec<u8> { self.0.into_vec() }
 
+	#[allow(unsafe_code)]
 	#[must_use]
 	#[inline]
 	/// # Into String.
@@ -839,6 +827,7 @@ impl Msg {
 	}
 
 	#[cfg(feature = "fitted")]
+	#[cfg_attr(feature = "docsrs", doc(cfg(feature = "fitted")))]
 	#[allow(clippy::cast_possible_truncation)] // MsgBuffer checks fit.
 	#[must_use]
 	/// # Capped Width Slice.

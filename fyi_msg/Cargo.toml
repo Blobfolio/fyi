@@ -1,6 +1,6 @@
 [package]
 name = "fyi_msg"
-version = "0.9.8"
+version = "0.9.9"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
 rust-version = "1.59"
@@ -11,7 +11,7 @@ readme = "README.md"
 exclude = [ "examples" ]
 
 [package.metadata.docs.rs]
-features = [ "fitted", "progress", "timestamps" ]
+features = [ "docsrs", "fitted", "progress", "timestamps" ]
 default-target = "x86_64-unknown-linux-gnu"
 targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
@@ -38,14 +38,13 @@ optional = true
 version = "0.3.*"
 optional = true
 
-[dependencies.time]
-version = "0.3.*"
-default-features = false
-features = [ "std", "local-offset" ]
-optional = true
-
 [dependencies.unicode-width]
 version = "0.1.*"
+optional = true
+
+[dependencies.utc2k]
+version = "0.4.*, >=0.4.3"
+features = [ "local" ]
 optional = true
 
 [dev-dependencies]
@@ -77,12 +76,15 @@ required-features = [ "fitted" ]
 [[bench]]
 name = "fm_msg_timestamps"
 harness = false
-required-features = [ "time" ]
+required-features = [ "timestamps" ]
 
 [features]
 # This adds a few additional MsgKinds relevant only to the main FYI binary.
 # There is no point enabling this in other crates.
 bin_kinds = []
+
+# This is just a workaround for Docs.rs; don't enable this if you're a human!
+docsrs = []
 
 # Add width-fitting support to the Msg struct, i.e. Msg.fitted().
 fitted = [ "unicode-width" ]
@@ -94,4 +96,4 @@ parking_lot_mutex = [ "parking_lot" ]
 progress = [ "ahash", "atomic", "bytecount", "fitted", "term_size" ]
 
 # Add timestamp support to messages.
-timestamps = [ "time" ]
+timestamps = [ "utc2k" ]
