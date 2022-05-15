@@ -244,7 +244,9 @@ impl TryFrom<u32> for ProglessInner {
 	type Error = ProglessError;
 
 	fn try_from(total: u32) -> Result<Self, Self::Error> {
-		Ok(Self::from(NonZeroU32::new(total).ok_or(ProglessError::EmptyTotal)?))
+		NonZeroU32::new(total)
+			.ok_or(ProglessError::EmptyTotal)
+			.map(Self::from)
 	}
 }
 
@@ -845,7 +847,9 @@ impl TryFrom<u32> for Progless {
 
 	#[inline]
 	fn try_from(total: u32) -> Result<Self, Self::Error> {
-		Ok(Self::from(NonZeroU32::new(total).ok_or(ProglessError::EmptyTotal)?))
+		NonZeroU32::new(total)
+			.ok_or(ProglessError::EmptyTotal)
+			.map(Self::from)
 	}
 }
 
@@ -876,8 +880,9 @@ macro_rules! impl_tryfrom {
 
 				#[inline]
 				fn try_from(total: $from) -> Result<Self, Self::Error> {
-					let total = u32::try_from(total).map_err(|_| ProglessError::TotalOverflow)?;
-					Self::try_from(total)
+					u32::try_from(total)
+						.map_err(|_| ProglessError::TotalOverflow)
+						.and_then(Self::try_from)
 				}
 			}
 		)+
