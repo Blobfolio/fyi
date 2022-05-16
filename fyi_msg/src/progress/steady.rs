@@ -7,7 +7,10 @@ use std::{
 		Arc,
 		atomic::{
 			AtomicBool,
-			Ordering::SeqCst,
+			Ordering::{
+				Acquire,
+				Release,
+			},
 		},
 	},
 	thread::JoinHandle,
@@ -52,7 +55,7 @@ impl From<Arc<ProglessInner>> for ProglessSteady {
 				// field, or if "inner" has reached 100%. Otherwise this will
 				// initiate a "tick", which may or may not paint an update to
 				// the CLI.
-				if ! t_enabled.load(SeqCst) || ! t_inner.tick() { break; }
+				if ! t_enabled.load(Acquire) || ! t_inner.tick() { break; }
 
 				// Sleep for a short while before checking again.
 				std::thread::sleep(SLEEP);
@@ -68,7 +71,7 @@ impl ProglessSteady {
 	/// automatically when [`Progless::finish`] is called.
 	pub(super) fn stop(&self) {
 		if let Some(handle) = mutex!(self.ticker).take() {
-			self.enabled.store(false, SeqCst);
+			self.enabled.store(false, Release);
 			handle.join().unwrap();
 		}
 	}

@@ -511,13 +511,9 @@ impl ProglessInner {
 	/// # Tick Flag Toggle.
 	///
 	/// If a flag is set, unset it and return true. Otherwise false.
-	fn flag_toggle(&self, flag: u8) -> bool {
-		let flags = self.flags.load(SeqCst);
-		if 0 == flags & flag { false }
-		else {
-			self.flags.store(flags & ! flag, SeqCst);
-			true
-		}
+	fn flag_unset(&self, flag: u8) -> bool {
+		let old = self.flags.fetch_and(! flag, SeqCst);
+		0 != old & flag
 	}
 
 	/// # Tick.
@@ -622,7 +618,7 @@ impl ProglessInner {
 		static BAR: [u8; 244] = [b'#'; 244];
 		static DASH: [u8; 244] = [b'-'; 244];
 
-		if self.flag_toggle(TICK_BAR) {
+		if self.flag_unset(TICK_BAR) {
 			let (w_done, w_undone) = self.tick_bar_widths();
 
 			// Update the parts!.
@@ -647,7 +643,7 @@ impl ProglessInner {
 	/// changes to the task list as well as resoluation changes (as long values
 	/// may require lazy cropping).
 	fn tick_set_doing(&self) {
-		if self.flag_toggle(TICK_DOING) {
+		if self.flag_unset(TICK_DOING) {
 			let doing = mutex!(self.doing);
 			if doing.is_empty() {
 				mutex!(self.buf).truncate(PART_DOING, 0);
@@ -669,7 +665,7 @@ impl ProglessInner {
 	///
 	/// This updates the "done" portion of the buffer as needed.
 	fn tick_set_done(&self) {
-		if self.flag_toggle(TICK_DONE) {
+		if self.flag_unset(TICK_DONE) {
 			mutex!(self.buf).replace(PART_DONE, &NiceU32::from(self.done()));
 		}
 	}
@@ -678,7 +674,7 @@ impl ProglessInner {
 	///
 	/// This updates the "percent" portion of the buffer as needed.
 	fn tick_set_percent(&self) {
-		if self.flag_toggle(TICK_PERCENT) {
+		if self.flag_unset(TICK_PERCENT) {
 			mutex!(self.buf).replace(PART_PERCENT, &NicePercent::from(self.percent()));
 		}
 	}
@@ -725,7 +721,7 @@ impl ProglessInner {
 	/// The title needs to be rewritten both on direct change and resolution
 	/// change. Long titles are lazy-cropped as needed.
 	fn tick_set_title(&self) {
-		if self.flag_toggle(TICK_TITLE) {
+		if self.flag_unset(TICK_TITLE) {
 			if let Some(title) = &*mutex!(self.title) {
 				mutex!(self.buf).replace(
 					PART_TITLE,
@@ -742,7 +738,7 @@ impl ProglessInner {
 	///
 	/// This updates the "total" portion of the buffer as needed.
 	fn tick_set_total(&self) {
-		if self.flag_toggle(TICK_TOTAL) {
+		if self.flag_unset(TICK_TOTAL) {
 			mutex!(self.buf).replace(PART_TOTAL, &NiceU32::from(self.total()));
 		}
 	}
