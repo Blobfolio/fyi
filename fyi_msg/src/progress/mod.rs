@@ -537,8 +537,7 @@ impl ProglessInner {
 
 		// Check the terminal width first because it affects most of what
 		// follows.
-		self.tick_set_width();
-		if self.last_width() < MIN_DRAW_WIDTH {
+		if self.tick_set_width() < MIN_DRAW_WIDTH {
 			self.flags.store(TICKING, SeqCst);
 			self.print_blank();
 			return true;
@@ -747,11 +746,12 @@ impl ProglessInner {
 	///
 	/// Check to see if the terminal width has changed since the last run and
 	/// update values — i.e. the relevant tick flags — as necessary.
-	fn tick_set_width(&self) {
+	fn tick_set_width(&self) -> u8 {
 		let width = term_width();
 		if width != self.last_width.swap(width, SeqCst) {
 			self.flags.fetch_or(TICK_RESIZED, SeqCst);
 		}
+		width
 	}
 }
 
