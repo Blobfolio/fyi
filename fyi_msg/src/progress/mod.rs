@@ -10,7 +10,6 @@ mod task;
 
 
 use ahash::RandomState;
-use atomic::Atomic;
 use crate::{
 	BUFFER8,
 	Msg,
@@ -146,7 +145,7 @@ struct ProglessInner {
 
 	// The instant the object was first created. All timings are derived from
 	// this value.
-	started: Atomic<Instant>,
+	started: Instant,
 
 	// This is the number of elapsed milliseconds as of the last tick. This
 	// gives us a reference to throttle back-to-back ticks as well as a cache
@@ -156,7 +155,7 @@ struct ProglessInner {
 	title: Mutex<Option<Msg>>,
 	done: AtomicU32,
 	doing: Mutex<HashSet<ProglessTask, RandomState>>,
-	total: Atomic<NonZeroU32>,
+	total: NonZeroU32,
 }
 
 impl From<NonZeroU32> for ProglessInner {
@@ -229,13 +228,13 @@ impl From<NonZeroU32> for ProglessInner {
 			last_lines: AtomicU8::new(0),
 			last_width: AtomicU8::new(0),
 
-			started: Atomic::new(Instant::now()),
+			started: Instant::now(),
 			elapsed: AtomicU32::new(0),
 
 			title: Mutex::new(None),
 			done: AtomicU32::new(0),
 			doing: Mutex::new(HashSet::with_hasher(AHASH_STATE)),
-			total: Atomic::new(total),
+			total,
 		}
 	}
 }
@@ -264,9 +263,9 @@ impl ProglessInner {
 	fn stop(&self) {
 		if self.running() {
 			self.flags.store(0, SeqCst);
-			self.done.store(self.total(), SeqCst);
+			self.done.store(self.total.get(), SeqCst);
 			self.elapsed.store(
-				u32::saturating_from(self.started.load(SeqCst).elapsed().as_millis()),
+				u32::saturating_from(self.started.elapsed().as_millis()),
 				SeqCst
 			);
 			mutex!(self.doing).clear();
@@ -296,8 +295,8 @@ impl ProglessInner {
 	/// Return the value of `done / total`. The value will always be between
 	/// `0.0..=1.0`.
 	fn percent(&self) -> f64 {
-		let done = self.done.load(SeqCst);
-		let total = self.total();
+		let done = self.done();
+		let total = self.total.get();
 
 		if done == 0 { 0.0 }
 		else if done == total { 1.0 }
@@ -315,12 +314,6 @@ impl ProglessInner {
 	/// For the most part, this struct's setter methods only work while
 	/// progress is happening; after that they're frozen.
 	fn running(&self) -> bool { 0 != self.flags.load(SeqCst) & TICKING }
-
-	#[inline]
-	/// # Total.
-	///
-	/// The total number of tasks.
-	fn total(&self) -> u32 { self.total.load(SeqCst).get() }
 }
 
 /// # Setters.
@@ -372,7 +365,7 @@ impl ProglessInner {
 	/// better.
 	fn set_done(&self, mut done: u32) {
 		if self.running() {
-			let total = self.total();
+			let total = self.total.get();
 
 			done = total.min(done);
 			if done != self.done() {
@@ -591,7 +584,7 @@ impl ProglessInner {
 		}));
 		if space < MIN_BARS_WIDTH { return (0, 0); }
 
-		let total = self.total();
+		let total = self.total.get();
 		if 0 == total { return (0, 0); }
 
 		// Done!
@@ -691,7 +684,7 @@ impl ProglessInner {
 	/// A value of `true` is returned if one or more seconds has elapsed since
 	/// the last tick, otherwise `false` is returned.
 	fn tick_set_secs(&self) -> Option<bool> {
-		let now: u32 = u32::saturating_from(self.started.load(SeqCst).elapsed().as_millis());
+		let now: u32 = u32::saturating_from(self.started.elapsed().as_millis());
 		let before: u32 = self.elapsed.load(SeqCst);
 
 		// Throttle back-to-back ticks.
@@ -738,7 +731,7 @@ impl ProglessInner {
 	/// This updates the "total" portion of the buffer as needed.
 	fn tick_set_total(&self) {
 		if self.flag_unset(TICK_TOTAL) {
-			mutex!(self.buf).replace(PART_TOTAL, &NiceU32::from(self.total()));
+			mutex!(self.buf).replace(PART_TOTAL, &NiceU32::from(self.total.get()));
 		}
 	}
 
@@ -900,7 +893,7 @@ impl From<Progless> for Msg {
 		// The content is all valid UTF-8; this is safe.
 		Self::done([
 			"Finished in ",
-			NiceElapsed::from(src.inner.started.load(SeqCst)).as_str(),
+			NiceElapsed::from(src.inner.started).as_str(),
 			".",
 		].concat())
 			.with_newline(true)
@@ -1062,7 +1055,7 @@ impl Progless {
 			"{} {} in {}.",
 			NiceU32::from(done).as_str(),
 			noun,
-			NiceElapsed::from(self.inner.started.load(SeqCst)).as_str(),
+			NiceElapsed::from(self.inner.started).as_str(),
 		))
 			.with_newline(true)
 	}

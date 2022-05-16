@@ -22,10 +22,6 @@ dactyl = "0.3.*"
 version = "=0.7.6"
 optional = true
 
-[dependencies.atomic]
-version = "=0.5.1"
-optional = true
-
 [dependencies.bytecount]
 version = "=0.6.2"
 optional = true
@@ -93,7 +89,7 @@ fitted = [ "unicode-width" ]
 parking_lot_mutex = [ "parking_lot" ]
 
 # Make use of the "progless" bar.
-progress = [ "ahash", "atomic", "bytecount", "fitted", "term_size" ]
+progress = [ "ahash", "bytecount", "fitted", "term_size" ]
 
 # Add timestamp support to messages.
 timestamps = [ "utc2k" ]
