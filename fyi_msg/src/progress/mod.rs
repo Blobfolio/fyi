@@ -10,7 +10,6 @@ mod task;
 
 
 use ahash::RandomState;
-use atomic::Atomic;
 use crate::{
 	BUFFER8,
 	Msg,
@@ -146,7 +145,7 @@ struct ProglessInner {
 
 	// The instant the object was first created. All timings are derived from
 	// this value.
-	started: Atomic<Instant>,
+	started: Instant,
 
 	// This is the number of elapsed milliseconds as of the last tick. This
 	// gives us a reference to throttle back-to-back ticks as well as a cache
@@ -156,7 +155,7 @@ struct ProglessInner {
 	title: Mutex<Option<Msg>>,
 	done: AtomicU32,
 	doing: Mutex<HashSet<ProglessTask, RandomState>>,
-	total: Atomic<NonZeroU32>,
+	total: NonZeroU32,
 }
 
 impl From<NonZeroU32> for ProglessInner {
@@ -229,13 +228,13 @@ impl From<NonZeroU32> for ProglessInner {
 			last_lines: AtomicU8::new(0),
 			last_width: AtomicU8::new(0),
 
-			started: Atomic::new(Instant::now()),
+			started: Instant::now(),
 			elapsed: AtomicU32::new(0),
 
 			title: Mutex::new(None),
 			done: AtomicU32::new(0),
 			doing: Mutex::new(HashSet::with_hasher(AHASH_STATE)),
-			total: Atomic::new(total),
+			total,
 		}
 	}
 }
@@ -244,7 +243,9 @@ impl TryFrom<u32> for ProglessInner {
 	type Error = ProglessError;
 
 	fn try_from(total: u32) -> Result<Self, Self::Error> {
-		Ok(Self::from(NonZeroU32::new(total).ok_or(ProglessError::EmptyTotal)?))
+		NonZeroU32::new(total)
+			.ok_or(ProglessError::EmptyTotal)
+			.map(Self::from)
 	}
 }
 
@@ -262,9 +263,9 @@ impl ProglessInner {
 	fn stop(&self) {
 		if self.running() {
 			self.flags.store(0, SeqCst);
-			self.done.store(self.total(), SeqCst);
+			self.done.store(self.total.get(), SeqCst);
 			self.elapsed.store(
-				u32::saturating_from(self.started.load(SeqCst).elapsed().as_millis()),
+				u32::saturating_from(self.started.elapsed().as_millis()),
 				SeqCst
 			);
 			mutex!(self.doing).clear();
@@ -281,21 +282,13 @@ impl ProglessInner {
 	/// The number of completed tasks.
 	fn done(&self) -> u32 { self.done.load(SeqCst) }
 
-	#[inline]
-	/// # Last Width.
-	///
-	/// The CLI screen width as it was when last checked. If this value
-	/// happens to change between ticks, it will force redraw the content to
-	/// make sure it fits correctly.
-	fn last_width(&self) -> u8 { self.last_width.load(SeqCst) }
-
 	/// # Percent.
 	///
 	/// Return the value of `done / total`. The value will always be between
 	/// `0.0..=1.0`.
 	fn percent(&self) -> f64 {
-		let done = self.done.load(SeqCst);
-		let total = self.total();
+		let done = self.done();
+		let total = self.total.get();
 
 		if done == 0 { 0.0 }
 		else if done == total { 1.0 }
@@ -313,12 +306,6 @@ impl ProglessInner {
 	/// For the most part, this struct's setter methods only work while
 	/// progress is happening; after that they're frozen.
 	fn running(&self) -> bool { 0 != self.flags.load(SeqCst) & TICKING }
-
-	#[inline]
-	/// # Total.
-	///
-	/// The total number of tasks.
-	fn total(&self) -> u32 { self.total.load(SeqCst).get() }
 }
 
 /// # Setters.
@@ -348,7 +335,15 @@ impl ProglessInner {
 	/// Increase the completed count by exactly one. This is safer to use than
 	/// `set_done()` in cases where multiple tasks are happening at once as it
 	/// will not accidentally decrease the value, etc.
-	fn increment(&self) { self.set_done(self.done() + 1); }
+	fn increment(&self) {
+		if self.running() {
+			let done = self.done.fetch_add(1, SeqCst) + 1;
+			if done >= self.total.get() { self.stop() }
+			else {
+				self.flags.fetch_or(TICK_DONE | TICK_PERCENT | TICK_BAR, SeqCst);
+			}
+		}
+	}
 
 	/// # Remove a task.
 	///
@@ -368,17 +363,11 @@ impl ProglessInner {
 	/// Set the done count to a specific value. Be careful in cases where
 	/// things are happening in parallel; in such cases `increment` is probably
 	/// better.
-	fn set_done(&self, mut done: u32) {
-		if self.running() {
-			let total = self.total();
-
-			done = total.min(done);
-			if done != self.done() {
-				if done == total { self.stop(); }
-				else {
-					self.done.store(done, SeqCst);
-					self.flags.fetch_or(TICK_DONE | TICK_PERCENT | TICK_BAR, SeqCst);
-				}
+	fn set_done(&self, done: u32) {
+		if self.running() && done != self.done.swap(done, SeqCst) {
+			if done >= self.total.get() { self.stop(); }
+			else {
+				self.flags.fetch_or(TICK_DONE | TICK_PERCENT | TICK_BAR, SeqCst);
 			}
 		}
 	}
@@ -509,13 +498,9 @@ impl ProglessInner {
 	/// # Tick Flag Toggle.
 	///
 	/// If a flag is set, unset it and return true. Otherwise false.
-	fn flag_toggle(&self, flag: u8) -> bool {
-		let flags = self.flags.load(SeqCst);
-		if 0 == flags & flag { false }
-		else {
-			self.flags.store(flags & ! flag, SeqCst);
-			true
-		}
+	fn flag_unset(&self, flag: u8) -> bool {
+		let old = self.flags.fetch_and(! flag, SeqCst);
+		0 != old & flag
 	}
 
 	/// # Tick.
@@ -539,8 +524,8 @@ impl ProglessInner {
 
 		// Check the terminal width first because it affects most of what
 		// follows.
-		self.tick_set_width();
-		if self.last_width() < MIN_DRAW_WIDTH {
+		let width = self.tick_set_width();
+		if width < MIN_DRAW_WIDTH {
 			self.flags.store(TICKING, SeqCst);
 			self.print_blank();
 			return true;
@@ -553,15 +538,15 @@ impl ProglessInner {
 		}
 
 		// Handle the rest!
-		self.tick_set_doing();
+		self.tick_set_doing(width);
 		self.tick_set_done();
 		self.tick_set_percent();
-		self.tick_set_title();
+		self.tick_set_title(width);
 		self.tick_set_total();
 
 		// The bar's width depends on how much space remains after the other
 		// elements sharing its line so it needs to go last.
-		self.tick_set_bar();
+		self.tick_set_bar(width);
 
 		// Maybe we're printing, maybe we're not!
 		self.preprint();
@@ -576,7 +561,7 @@ impl ProglessInner {
 	///
 	/// If the total available space winds up being less than 10, all three
 	/// values are set to zero, indicating this component should be removed.
-	fn tick_bar_widths(&self) -> (u8, u8) {
+	fn tick_bar_widths(&self, width: u8) -> (u8, u8) {
 		// The magic "11" is made up of the following hard-coded pieces:
 		// 2: braces around elapsed time;
 		// 2: spaces after elapsed time;
@@ -584,7 +569,7 @@ impl ProglessInner {
 		// 2: the spaces after total;
 		// 2: the braces around the bar itself (should there be one);
 		// 2: the spaces after the bar itself (should there be one);
-		let space: u8 = self.last_width().saturating_sub(u8::saturating_from({
+		let space: u8 = width.saturating_sub(u8::saturating_from({
 			let buf = mutex!(self.buf);
 			11 +
 			buf.len(PART_ELAPSED) +
@@ -594,7 +579,7 @@ impl ProglessInner {
 		}));
 		if space < MIN_BARS_WIDTH { return (0, 0); }
 
-		let total = self.total();
+		let total = self.total.get();
 		if 0 == total { return (0, 0); }
 
 		// Done!
@@ -616,12 +601,12 @@ impl ProglessInner {
 	///
 	/// The entire line will never exceed 255 characters. The bars,
 	/// conservatively, cannot exceed 244, and will always be at least 10.
-	fn tick_set_bar(&self) {
+	fn tick_set_bar(&self, width: u8) {
 		static BAR: [u8; 244] = [b'#'; 244];
 		static DASH: [u8; 244] = [b'-'; 244];
 
-		if self.flag_toggle(TICK_BAR) {
-			let (w_done, w_undone) = self.tick_bar_widths();
+		if self.flag_unset(TICK_BAR) {
+			let (w_done, w_undone) = self.tick_bar_widths(width);
 
 			// Update the parts!.
 			let mut buf = mutex!(self.buf);
@@ -644,14 +629,14 @@ impl ProglessInner {
 	/// Update the task list portion of the buffer. This is triggered both by
 	/// changes to the task list as well as resoluation changes (as long values
 	/// may require lazy cropping).
-	fn tick_set_doing(&self) {
-		if self.flag_toggle(TICK_DOING) {
+	fn tick_set_doing(&self, width: u8) {
+		if self.flag_unset(TICK_DOING) {
 			let doing = mutex!(self.doing);
 			if doing.is_empty() {
 				mutex!(self.buf).truncate(PART_DOING, 0);
 			}
 			else {
-				let width: u8 = self.last_width().saturating_sub(6);
+				let width: u8 = width.saturating_sub(6);
 
 				let mut tasks = Vec::<u8>::with_capacity(256);
 				tasks.extend_from_slice(b"\x1b[35m");
@@ -667,7 +652,7 @@ impl ProglessInner {
 	///
 	/// This updates the "done" portion of the buffer as needed.
 	fn tick_set_done(&self) {
-		if self.flag_toggle(TICK_DONE) {
+		if self.flag_unset(TICK_DONE) {
 			mutex!(self.buf).replace(PART_DONE, &NiceU32::from(self.done()));
 		}
 	}
@@ -676,7 +661,7 @@ impl ProglessInner {
 	///
 	/// This updates the "percent" portion of the buffer as needed.
 	fn tick_set_percent(&self) {
-		if self.flag_toggle(TICK_PERCENT) {
+		if self.flag_unset(TICK_PERCENT) {
 			mutex!(self.buf).replace(PART_PERCENT, &NicePercent::from(self.percent()));
 		}
 	}
@@ -694,7 +679,7 @@ impl ProglessInner {
 	/// A value of `true` is returned if one or more seconds has elapsed since
 	/// the last tick, otherwise `false` is returned.
 	fn tick_set_secs(&self) -> Option<bool> {
-		let now: u32 = u32::saturating_from(self.started.load(SeqCst).elapsed().as_millis());
+		let now: u32 = u32::saturating_from(self.started.elapsed().as_millis());
 		let before: u32 = self.elapsed.load(SeqCst);
 
 		// Throttle back-to-back ticks.
@@ -722,12 +707,12 @@ impl ProglessInner {
 	///
 	/// The title needs to be rewritten both on direct change and resolution
 	/// change. Long titles are lazy-cropped as needed.
-	fn tick_set_title(&self) {
-		if self.flag_toggle(TICK_TITLE) {
+	fn tick_set_title(&self, width: u8) {
+		if self.flag_unset(TICK_TITLE) {
 			if let Some(title) = &*mutex!(self.title) {
 				mutex!(self.buf).replace(
 					PART_TITLE,
-					&title.fitted(usize::from(self.last_width().saturating_sub(1))),
+					&title.fitted(usize::from(width.saturating_sub(1))),
 				);
 			}
 			else {
@@ -740,8 +725,8 @@ impl ProglessInner {
 	///
 	/// This updates the "total" portion of the buffer as needed.
 	fn tick_set_total(&self) {
-		if self.flag_toggle(TICK_TOTAL) {
-			mutex!(self.buf).replace(PART_TOTAL, &NiceU32::from(self.total()));
+		if self.flag_unset(TICK_TOTAL) {
+			mutex!(self.buf).replace(PART_TOTAL, &NiceU32::from(self.total));
 		}
 	}
 
@@ -749,11 +734,12 @@ impl ProglessInner {
 	///
 	/// Check to see if the terminal width has changed since the last run and
 	/// update values — i.e. the relevant tick flags — as necessary.
-	fn tick_set_width(&self) {
+	fn tick_set_width(&self) -> u8 {
 		let width = term_width();
 		if width != self.last_width.swap(width, SeqCst) {
 			self.flags.fetch_or(TICK_RESIZED, SeqCst);
 		}
+		width
 	}
 }
 
@@ -845,7 +831,9 @@ impl TryFrom<u32> for Progless {
 
 	#[inline]
 	fn try_from(total: u32) -> Result<Self, Self::Error> {
-		Ok(Self::from(NonZeroU32::new(total).ok_or(ProglessError::EmptyTotal)?))
+		NonZeroU32::new(total)
+			.ok_or(ProglessError::EmptyTotal)
+			.map(Self::from)
 	}
 }
 
@@ -876,8 +864,9 @@ macro_rules! impl_tryfrom {
 
 				#[inline]
 				fn try_from(total: $from) -> Result<Self, Self::Error> {
-					let total = u32::try_from(total).map_err(|_| ProglessError::TotalOverflow)?;
-					Self::try_from(total)
+					u32::try_from(total)
+						.map_err(|_| ProglessError::TotalOverflow)
+						.and_then(Self::try_from)
 				}
 			}
 		)+
@@ -899,7 +888,7 @@ impl From<Progless> for Msg {
 		// The content is all valid UTF-8; this is safe.
 		Self::done([
 			"Finished in ",
-			NiceElapsed::from(src.inner.started.load(SeqCst)).as_str(),
+			NiceElapsed::from(src.inner.started).as_str(),
 			".",
 		].concat())
 			.with_newline(true)
@@ -1061,7 +1050,7 @@ impl Progless {
 			"{} {} in {}.",
 			NiceU32::from(done).as_str(),
 			noun,
-			NiceElapsed::from(self.inner.started.load(SeqCst)).as_str(),
+			NiceElapsed::from(self.inner.started).as_str(),
 		))
 			.with_newline(true)
 	}
