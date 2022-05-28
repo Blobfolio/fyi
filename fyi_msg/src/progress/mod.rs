@@ -24,7 +24,6 @@ use dactyl::{
 	traits::SaturatingFrom,
 	write_time,
 };
-#[cfg(feature = "parking_lot_mutex")] use parking_lot::Mutex;
 use std::{
 	cmp::Ordering,
 	collections::HashSet,
@@ -32,6 +31,7 @@ use std::{
 	num::NonZeroU32,
 	sync::{
 		Arc,
+		Mutex,
 		atomic::{
 			AtomicU8,
 			AtomicU32,
@@ -42,24 +42,16 @@ use std::{
 	time::Instant,
 };
 use steady::ProglessSteady;
-#[cfg(not(feature = "parking_lot_mutex"))] use std::sync::Mutex;
 use task::ProglessTask;
 
 
 
-#[cfg(not(feature = "parking_lot_mutex"))]
 /// # Helper: Mutex Unlock.
 ///
 /// This just moves tedious code out of the way.
 macro_rules! mutex {
-	($var:expr) => ($var.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
+	($m:expr) => ($m.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
 }
-
-#[cfg(feature = "parking_lot_mutex")]
-/// # Helper: Mutex Unlock.
-///
-/// This just moves tedious code out of the way.
-macro_rules! mutex { ($var:expr) => ($var.lock()); }
 
 pub(self) use mutex;
 

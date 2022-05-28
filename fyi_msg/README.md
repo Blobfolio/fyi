@@ -38,7 +38,6 @@ For more usage examples, check out the `examples/msg` demo, which covers just ab
 | Feature | Description |
 | ------- | ----------- |
 | `fitted` | Enables `Msg::fitted` for obtaining a slice trimmed to a specific display width. |
-| `parking_lot_mutex` | Uses `parking_lot::Mutex` instead of `std::sync::Mutex`. This only applies when `progress` is also enabled. |
 | `progress` | Enables `Progless`, a thread-safe CLI progress bar displayer.
 | `timestamps` | Enables timestamp-related methods and flags like `Msg::with_timestamp`. |
 
