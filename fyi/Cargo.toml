@@ -161,7 +161,7 @@ path = "../fyi_msg"
 dactyl = "0.3.*, >=0.3.3"
 
 [dependencies.argyle]
-version = "0.5.*"
+version = "0.6.*"
 features = [ "dynamic-help" ]
 
 [dependencies.fyi_msg]
