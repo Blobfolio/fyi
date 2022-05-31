@@ -20,7 +20,7 @@ pkg_name    := "FYI"
 pkg_dir1    := justfile_directory() + "/fyi"
 pkg_dir2    := justfile_directory() + "/fyi_msg"
 
-features    := "bin_kinds,fitted,parking_lot_mutex,progress,timestamps"
+features    := "bin_kinds,fitted,progress,timestamps"
 
 cargo_dir   := "/tmp/" + pkg_id + "-cargo"
 cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id

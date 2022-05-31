@@ -1,6 +1,6 @@
 [package]
 name = "fyi_msg"
-version = "0.9.10"
+version = "0.9.11"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
 rust-version = "1.59"
@@ -26,10 +26,6 @@ optional = true
 version = "=0.6.2"
 optional = true
 
-[dependencies.parking_lot]
-version = "=0.12.0"
-optional = true
-
 [dependencies.term_size]
 version = "=0.3.2"
 optional = true
@@ -39,7 +35,7 @@ version = "=0.1.9"
 optional = true
 
 [dependencies.utc2k]
-version = "0.4.*, >=0.4.3"
+version = "0.5.*"
 features = [ "local" ]
 optional = true
 
@@ -84,9 +80,6 @@ docsrs = []
 
 # Add width-fitting support to the Msg struct, i.e. Msg.fitted().
 fitted = [ "unicode-width" ]
-
-# This only applies when "progless" is also enabled.
-parking_lot_mutex = [ "parking_lot" ]
 
 # Make use of the "progless" bar.
 progress = [ "ahash", "bytecount", "fitted", "term_size" ]
