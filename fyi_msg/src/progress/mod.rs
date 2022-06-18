@@ -22,7 +22,6 @@ use dactyl::{
 	NicePercent,
 	NiceU32,
 	traits::SaturatingFrom,
-	write_time,
 };
 use std::{
 	cmp::Ordering,
@@ -45,6 +44,15 @@ use steady::ProglessSteady;
 use task::ProglessTask;
 
 
+
+/// # Double-Digit Times.
+///
+/// This holds pre-asciified double-digit numbers up to sixty for use by the
+/// `write_time` method. It doesn't need to hold anything larger than that.
+static DD: [u8; 120] = *b"\
+	000102030405060708091011121314151617181920212223242526272829\
+	303132333435363738394041424344454647484950515253545556575859\
+";
 
 /// # Helper: Mutex Unlock.
 ///
@@ -1189,4 +1197,29 @@ fn term_width() -> u8 {
 		0,
 		|(w, _)| u8::saturating_from(w.saturating_sub(1))
 	)
+}
+
+#[allow(unsafe_code)]
+/// # Write Time.
+///
+/// This writes HH:MM:SS to the provided pointer.
+///
+/// ## Panics
+///
+/// This method is only intended to cover values that fit in a day and will
+/// panic if `h`, `m`, or `s` is outside the range of `0..60`.
+///
+/// ## Safety
+///
+/// The pointer must have 8 bytes free or undefined things will happen.
+unsafe fn write_time(buf: *mut u8, h: u8, m: u8, s: u8) {
+	debug_assert!(h < 60 && m < 60 && s < 60, "BUG: Invalid progress time pieces.");
+
+	let src = DD.as_ptr();
+
+	std::ptr::copy_nonoverlapping(src.add((h << 1) as usize), buf, 2);
+	std::ptr::write(buf.add(2), b':');
+	std::ptr::copy_nonoverlapping(src.add((m << 1) as usize), buf.add(3), 2);
+	std::ptr::write(buf.add(5), b':');
+	std::ptr::copy_nonoverlapping(src.add((s << 1) as usize), buf.add(6), 2);
 }
