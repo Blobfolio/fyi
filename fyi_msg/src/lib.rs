@@ -65,7 +65,10 @@ For more usage examples, check out the `examples/msg` demo, which covers just ab
 	unused_import_braces,
 )]
 
-#![allow(clippy::module_name_repetitions)] // This is fine.
+#![allow(
+	clippy::module_name_repetitions,
+	clippy::redundant_pub_crate,
+)]
 
 #![cfg_attr(feature = "docsrs", feature(doc_cfg))]
 

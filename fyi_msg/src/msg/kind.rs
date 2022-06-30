@@ -3,7 +3,7 @@ use std::ops::Deref;
 
 
 
-#[derive(Debug, Copy, Clone, Eq, Hash, PartialEq)]
+#[derive(Debug, Copy, Clone, Default, Eq, Hash, PartialEq)]
 /// # Message Kind.
 ///
 /// This enum contains built-in prefixes for [`Msg`](crate::Msg). These are
@@ -27,6 +27,7 @@ use std::ops::Deref;
 /// Alternatively, you can just call [`Msg::new`] with the prefix, which is
 /// what [`MsgKind::into_msg`] does anyway.
 pub enum MsgKind {
+	#[default]
 	/// None.
 	None,
 	/// Confirm.
@@ -52,11 +53,6 @@ pub enum MsgKind {
 
 	#[cfg(feature = "bin_kinds")] #[doc(hidden)] Blank,
 	#[cfg(feature = "bin_kinds")] #[doc(hidden)] Custom,
-}
-
-impl Default for MsgKind {
-	#[inline]
-	fn default() -> Self { Self::None }
 }
 
 impl Deref for MsgKind {
