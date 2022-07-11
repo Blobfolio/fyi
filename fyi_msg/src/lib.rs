@@ -140,9 +140,21 @@ mod macros {
 	/// if confirm!("Do you like chickens?") {
 	///     println!("That's great! They like you too!");
 	/// }
+	///
+	/// // Indendation can be set with the macro too by appending a second
+	/// // argument:
+	/// if confirm!("Do you like chickens?", 1) {
+	///     println!("    That's great! They like you too!");
+	/// }
+	/// ```
 	macro_rules! confirm {
 		($text:expr) => (
 			$crate::Msg::new($crate::MsgKind::Confirm, $text).prompt()
+		);
+		($text:expr, $indent:expr) => (
+			$crate::Msg::new($crate::MsgKind::Confirm, $text)
+				.with_indent($indent)
+				.prompt()
 		);
 	}
 }
