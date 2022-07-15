@@ -96,5 +96,19 @@ fn main() {
 			.print();
 	}
 
+	// Test confirmation with indentation.
+	if confirm!("Is this confirmation indented?", 1) {
+		Msg::plain("Great!")
+			.with_indent(1)
+			.with_newline(true)
+			.print();
+	}
+	else {
+		Msg::plain("Are you sure?!")
+			.with_indent(1)
+			.with_newline(true)
+			.print();
+	}
+
 	println!();
 }
