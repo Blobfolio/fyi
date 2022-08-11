@@ -126,7 +126,7 @@ fn confirm(args: &Argue) -> Result<(), ArgyleError> {
 		MsgKind::Confirm,
 		args.arg(0)
 			.and_then(|x| std::str::from_utf8(x).ok())
-			.ok_or(ArgyleError::NoArg)?
+			.ok_or(ArgyleError::Empty)?
 	)
 		.with_flags(parse_flags(args))
 		.prompt()
@@ -175,7 +175,7 @@ fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgyleError> {
 					.unwrap_or(199_u8),
 				args.arg(0)
 					.and_then(|x| std::str::from_utf8(x).ok())
-					.ok_or(ArgyleError::NoArg)?
+					.ok_or(ArgyleError::Empty)?
 			)
 		}
 		// Built-in prefix.
@@ -184,7 +184,7 @@ fn msg(kind: MsgKind, args: &Argue) -> Result<(), ArgyleError> {
 				kind,
 				args.arg(0)
 					.and_then(|x| std::str::from_utf8(x).ok())
-					.ok_or(ArgyleError::NoArg)?
+					.ok_or(ArgyleError::Empty)?
 			)
 		}
 		.with_flags(parse_flags(args));
