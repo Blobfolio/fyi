@@ -6,6 +6,7 @@
 
 use fyi_msg::{
 	Msg,
+	MsgKind,
 	Progless,
 };
 use std::time::Duration;
@@ -32,5 +33,5 @@ fn main() {
 
 	// Print a simple summary.
 	pbar.finish();
-	Msg::from(pbar).print();
+	pbar.summary(MsgKind::Crunched, "file", "files").print();
 }

@@ -21,7 +21,10 @@ use dactyl::{
 	NiceElapsed,
 	NicePercent,
 	NiceU32,
-	traits::SaturatingFrom,
+	traits::{
+		NiceInflection,
+		SaturatingFrom,
+	},
 };
 use std::{
 	cmp::Ordering,
@@ -1041,17 +1044,12 @@ impl Progless {
 	/// ```
 	pub fn summary<S>(&self, kind: MsgKind, singular: S, plural: S) -> Msg
 	where S: AsRef<str> {
-		let done = self.inner.done();
-		let noun =
-			if done == 1 { singular.as_ref() }
-			else { plural.as_ref() };
-
-		Msg::new(kind, format!(
-			"{} {} in {}.",
-			NiceU32::from(done).as_str(),
-			noun,
+		Msg::new(kind, [
+			&self.inner.done().nice_inflect(singular, plural),
+			" in ",
 			NiceElapsed::from(self.inner.started).as_str(),
-		))
+			".",
+		].concat())
 			.with_newline(true)
 	}
 }

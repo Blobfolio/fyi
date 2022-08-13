@@ -16,7 +16,7 @@ default-target = "x86_64-unknown-linux-gnu"
 targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
 [dependencies]
-dactyl = "0.4.*"
+dactyl = "0.4.*, >= 0.4.2"
 
 [dependencies.ahash]
 version = "=0.8.0"
