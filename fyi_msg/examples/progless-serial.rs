@@ -4,19 +4,27 @@
 **This requires the `progress` crate feature.**
 */
 
-use fyi_msg::{
-	Msg,
-	MsgKind,
-	Progless,
-};
-use std::time::Duration;
+use fyi_msg::Msg;
 
 
 
+#[cfg(feature = "progress")]
 include!("_progless-data.txt");
 
+#[cfg(not(feature = "progress"))]
+fn main() {
+	Msg::error("This example requires the 'progress' feature.").die(1);
+}
+
+#[cfg(feature = "progress")]
 /// # Do it.
 fn main() {
+	use fyi_msg::{
+		MsgKind,
+		Progless,
+	};
+	use std::time::Duration;
+
 	// Initiate a progress bar.
 	let pbar = Progless::try_from(FILE_TYPES.len()).unwrap()
 		.with_title(Some(Msg::custom("Scanning", 199, "Pretending to look at files one by one…")));
