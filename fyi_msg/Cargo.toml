@@ -71,6 +71,8 @@ harness = false
 required-features = [ "timestamps" ]
 
 [features]
+default = []
+
 # This adds a few additional MsgKinds relevant only to the main FYI binary.
 # There is no point enabling this in other crates.
 bin_kinds = []
