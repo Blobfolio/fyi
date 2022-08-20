@@ -211,8 +211,13 @@ bench BENCH="":
 @test:
 	clear
 	cargo test \
-		--release \
 		--features "{{ features }}" \
+		--workspace \
+		--target x86_64-unknown-linux-gnu \
+		--target-dir "{{ cargo_dir }}"
+
+	cargo test \
+		--no-default-features \
 		--workspace \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
