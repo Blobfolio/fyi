@@ -156,7 +156,6 @@ bench BENCH="":
 	clear
 	cargo clippy \
 		--workspace \
-		--release \
 		--features "{{ features }}" \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
