@@ -26,9 +26,9 @@ adjtime_config.5.gz________deb-old.5.gz_______________devscripts.conf.5.gz______
 }
 
 benches!(
-	Bench::new("fyi_msg::MsgBuffer", "len(2)")
-		.with(|| test_data().len(2)),
+	Bench::new("fyi_msg::MsgBuffer::len(2)")
+		.run(|| test_data().len(2)),
 
-	Bench::new("fyi_msg::MsgBuffer", "range(2)")
-		.with(|| test_data().range(2))
+	Bench::new("fyi_msg::MsgBuffer::range(2)")
+		.run(|| test_data().range(2))
 );

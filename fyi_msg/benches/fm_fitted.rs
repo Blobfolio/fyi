@@ -9,8 +9,6 @@ use brunch::{
 
 #[cfg(feature = "fitted")] use fyi_msg::width;
 
-use std::time::Duration;
-
 // "This is an example message."
 const PLAIN: &[u8] = &[84, 104, 105, 115, 32, 105, 115, 32, 97, 110, 32, 101, 120, 97, 109, 112, 108, 101, 32, 109, 101, 115, 115, 97, 103, 101, 46];
 // "This \x1b[1mis\x1b[0m an example message."
@@ -22,21 +20,17 @@ const UNICODE_ANSI: &[u8] = &[84, 104, 105, 115, 32, 119, 111, 114, 108, 100, 32
 
 #[cfg(feature = "fitted")]
 benches!(
-	Bench::new("fyi_msg", "width(ASCII)")
-		.timed(Duration::from_secs(2))
-		.with(|| width(PLAIN)),
+	Bench::new("fyi_msg::width(ASCII)")
+		.run(|| width(PLAIN)),
 
-	Bench::new("fyi_msg", "width(ASCII + ANSI)")
-		.timed(Duration::from_secs(2))
-		.with(|| width(PLAIN_ANSI)),
+	Bench::new("fyi_msg::width(ASCII + ANSI)")
+		.run(|| width(PLAIN_ANSI)),
 
-	Bench::new("fyi_msg", "width(UNICODE)")
-		.timed(Duration::from_secs(2))
-		.with(|| width(UNICODE)),
+	Bench::new("fyi_msg::width(UNICODE)")
+		.run(|| width(UNICODE)),
 
-	Bench::new("fyi_msg", "width(UNICODE + ANSI)")
-		.timed(Duration::from_secs(2))
-		.with(|| width(UNICODE_ANSI))
+	Bench::new("fyi_msg::width(UNICODE + ANSI)")
+		.run(|| width(UNICODE_ANSI))
 );
 
 #[cfg(not(feature = "fitted"))]
