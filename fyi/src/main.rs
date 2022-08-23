@@ -238,6 +238,7 @@ fn helper(cmd: Option<Box<[u8]>>) {
 			b"info" => write_help!("info", true),
 			b"notice" => write_help!("notice", true),
 			b"print" => write_help!("print"),
+			b"review" => write_help!("review", true),
 			b"success" => write_help!("success", true),
 			b"task" => write_help!("task", true),
 			b"warning" => write_help!("warning", true),

@@ -441,6 +441,7 @@ impl Msg {
 	impl_builtins!("Info", info, MsgKind::Info, 17);
 	impl_builtins!("Error", error, MsgKind::Error, 18);
 	impl_builtins!("Notice", notice, MsgKind::Notice, 19);
+	impl_builtins!("Review", review, MsgKind::Review, 19);
 	impl_builtins!("Success", success, MsgKind::Success, 20);
 	impl_builtins!("Task", task, MsgKind::Task, 23);
 	impl_builtins!("Warning", warning, MsgKind::Warning, 20);
