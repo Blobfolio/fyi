@@ -272,6 +272,37 @@ _basher__fyi_notice() {
 	COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 	return 0
 }
+_basher__fyi_review() {
+	local cur prev opts
+	COMPREPLY=()
+	cur="${COMP_WORDS[COMP_CWORD]}"
+	prev="${COMP_WORDS[COMP_CWORD-1]}"
+	opts=()
+	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
+		opts+=("-h")
+		opts+=("--help")
+	fi
+	if [[ ! " ${COMP_LINE} " =~ " -i " ]] && [[ ! " ${COMP_LINE} " =~ " --indent " ]]; then
+		opts+=("-i")
+		opts+=("--indent")
+	fi
+	[[ " ${COMP_LINE} " =~ " --stderr " ]] || opts+=("--stderr")
+	if [[ ! " ${COMP_LINE} " =~ " -t " ]] && [[ ! " ${COMP_LINE} " =~ " --timestamp " ]]; then
+		opts+=("-t")
+		opts+=("--timestamp")
+	fi
+	if [[ ! " ${COMP_LINE} " =~ " -e " ]] && [[ ! " ${COMP_LINE} " =~ " --exit " ]]; then
+		opts+=("-e")
+		opts+=("--exit")
+	fi
+	opts=" ${opts[@]} "
+	if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
+		COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+		return 0
+	fi
+	COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+	return 0
+}
 _basher__fyi_success() {
 	local cur prev opts
 	COMPREPLY=()
@@ -388,6 +419,7 @@ _basher___fyi() {
 	opts+=("error")
 	opts+=("info")
 	opts+=("notice")
+	opts+=("review")
 	opts+=("success")
 	opts+=("task")
 	opts+=("warning")
@@ -434,6 +466,9 @@ subcmd__basher___fyi() {
 				;;
 			notice)
 				cmd="notice"
+				;;
+			review)
+				cmd="review"
 				;;
 			success)
 				cmd="success"
@@ -484,6 +519,9 @@ chooser__basher___fyi() {
 			;;
 		notice)
 			_basher__fyi_notice
+			;;
+		review)
+			_basher__fyi_review
 			;;
 		success)
 			_basher__fyi_success

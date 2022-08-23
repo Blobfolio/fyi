@@ -1,6 +1,6 @@
 [package]
 name = "fyi"
-version = "0.9.15"
+version = "0.10.0"
 license = "WTFPL"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
@@ -21,17 +21,18 @@ assets = [
     ["../target/x86_64-unknown-linux-gnu/release/fyi", "usr/bin/", "755"],
     ["../release/completions/fyi.bash", "etc/bash_completion.d/", "644"],
     ["../release/man/fyi.1.gz", "usr/share/man/man1/", "644"],
+    ["../release/man/fyi-blank.1.gz", "usr/share/man/man1/", "644"],
     ["../release/man/fyi-confirm.1.gz", "usr/share/man/man1/", "644"],
+    ["../release/man/fyi-crunched.1.gz", "usr/share/man/man1/", "644"],
     ["../release/man/fyi-debug.1.gz", "usr/share/man/man1/", "644"],
+    ["../release/man/fyi-done.1.gz", "usr/share/man/man1/", "644"],
     ["../release/man/fyi-error.1.gz", "usr/share/man/man1/", "644"],
     ["../release/man/fyi-info.1.gz", "usr/share/man/man1/", "644"],
-    ["../release/man/fyi-print.1.gz", "usr/share/man/man1/", "644"],
-    ["../release/man/fyi-task.1.gz", "usr/share/man/man1/", "644"],
-    ["../release/man/fyi-blank.1.gz", "usr/share/man/man1/", "644"],
-    ["../release/man/fyi-crunched.1.gz", "usr/share/man/man1/", "644"],
-    ["../release/man/fyi-done.1.gz", "usr/share/man/man1/", "644"],
     ["../release/man/fyi-notice.1.gz", "usr/share/man/man1/", "644"],
+    ["../release/man/fyi-print.1.gz", "usr/share/man/man1/", "644"],
+    ["../release/man/fyi-review.1.gz", "usr/share/man/man1/", "644"],
     ["../release/man/fyi-success.1.gz", "usr/share/man/man1/", "644"],
+    ["../release/man/fyi-task.1.gz", "usr/share/man/man1/", "644"],
     ["../release/man/fyi-warning.1.gz", "usr/share/man/man1/", "644"],
 ]
 
@@ -78,6 +79,10 @@ cmd = "notice"
 description="Notice: Hello World"
 
 [[package.metadata.bashman.subcommands]]
+cmd = "review"
+description="Review: Hello World"
+
+[[package.metadata.bashman.subcommands]]
 cmd = "success"
 description="Success: Hello World"
 
@@ -93,24 +98,24 @@ description="Warning: Hello World"
 short = "-h"
 long = "--help"
 description = "Print help information."
-subcommands = [ "", "blank", "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "success", "task", "warning" ]
+subcommands = [ "", "blank", "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "review", "success", "task", "warning" ]
 
 [[package.metadata.bashman.switches]]
 short = "-i"
 long = "--indent"
 description = "Indent the line."
-subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "success", "task", "warning" ]
+subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "review", "success", "task", "warning" ]
 
 [[package.metadata.bashman.switches]]
 long = "--stderr"
 description = "Print to STDERR instead of STDOUT."
-subcommands = [ "blank", "print", "crunched", "debug", "done", "error", "info", "notice", "success", "task", "warning" ]
+subcommands = [ "blank", "print", "crunched", "debug", "done", "error", "info", "notice", "review", "success", "task", "warning" ]
 
 [[package.metadata.bashman.switches]]
 short = "-t"
 long = "--timestamp"
 description = "Include a timestamp."
-subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "success", "task", "warning" ]
+subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "review", "success", "task", "warning" ]
 
 [[package.metadata.bashman.switches]]
 short = "-V"
@@ -131,7 +136,7 @@ long = "--exit"
 description = "Exit with this status code after printing. [default: 0]"
 label = "<NUM>"
 path = false
-subcommands = [ "print", "crunched", "debug", "done", "error", "info", "notice", "success", "task", "warning" ]
+subcommands = [ "print", "crunched", "debug", "done", "error", "info", "notice", "review", "success", "task", "warning" ]
 
 [[package.metadata.bashman.options]]
 short = "-c"
@@ -152,7 +157,7 @@ subcommands = [ "print" ]
 [[package.metadata.bashman.arguments]]
 label = "<MSG>"
 description = "The message!"
-subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "success", "task", "warning" ]
+subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "review", "success", "task", "warning" ]
 
 [build-dependencies.fyi_msg]
 path = "../fyi_msg"

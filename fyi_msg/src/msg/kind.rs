@@ -44,6 +44,8 @@ pub enum MsgKind {
 	Info,
 	/// Notice.
 	Notice,
+	/// Review
+	Review,
 	/// Success.
 	Success,
 	/// Task.
@@ -76,6 +78,7 @@ impl From<&[u8]> for MsgKind {
 			b"error" => Self::Error,
 			b"info" => Self::Info,
 			b"notice" => Self::Notice,
+			b"review" => Self::Review,
 			b"success" => Self::Success,
 			b"task" => Self::Task,
 			b"warning" => Self::Warning,
@@ -101,7 +104,7 @@ impl MsgKind {
 			Self::Crunched => 21,
 			Self::Done | Self::Info => 17,
 			Self::Debug | Self::Error => 18,
-			Self::Notice => 19,
+			Self::Notice | Self::Review => 19,
 			Self::Success | Self::Warning => 20,
 			Self::Task => 23,
 		}
@@ -125,6 +128,7 @@ impl MsgKind {
 			Self::Error => b"\x1b[91;1mError:\x1b[0m ",
 			Self::Info => b"\x1b[95;1mInfo:\x1b[0m ",
 			Self::Notice => b"\x1b[95;1mNotice:\x1b[0m ",
+			Self::Review => b"\x1b[96;1mReview:\x1b[0m ",
 			Self::Success => b"\x1b[92;1mSuccess:\x1b[0m ",
 			Self::Task => b"\x1b[1;38;5;199mTask:\x1b[0m ",
 			Self::Warning => b"\x1b[93;1mWarning:\x1b[0m ",
@@ -158,6 +162,7 @@ mod tests {
 			MsgKind::Info,
 			MsgKind::None,
 			MsgKind::Notice,
+			MsgKind::Review,
 			MsgKind::Success,
 			MsgKind::Task,
 			MsgKind::Warning,

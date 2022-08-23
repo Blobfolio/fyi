@@ -72,6 +72,7 @@ bench BENCH="":
 
 	"{{ cargo_bin }}" blank
 
+	"{{ cargo_bin }}" review "The total was such-and-such."
 	"{{ cargo_bin }}" debug "The devil is in the details."
 	"{{ cargo_bin }}" info "Details without the word 'bug'."
 	"{{ cargo_bin }}" task "Let's get to work!"
@@ -156,7 +157,6 @@ bench BENCH="":
 	clear
 	cargo clippy \
 		--workspace \
-		--release \
 		--features "{{ features }}" \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
@@ -211,8 +211,13 @@ bench BENCH="":
 @test:
 	clear
 	cargo test \
-		--release \
 		--features "{{ features }}" \
+		--workspace \
+		--target x86_64-unknown-linux-gnu \
+		--target-dir "{{ cargo_dir }}"
+
+	cargo test \
+		--no-default-features \
 		--workspace \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"

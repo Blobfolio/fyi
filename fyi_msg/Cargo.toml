@@ -1,6 +1,6 @@
 [package]
 name = "fyi_msg"
-version = "0.9.15"
+version = "0.10.0"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
 rust-version = "1.62"
@@ -16,7 +16,7 @@ default-target = "x86_64-unknown-linux-gnu"
 targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
 [dependencies]
-dactyl = "0.4.*"
+dactyl = "0.4.*, >= 0.4.2"
 
 [dependencies.ahash]
 version = "=0.8.0"
@@ -40,7 +40,7 @@ features = [ "local" ]
 optional = true
 
 [dev-dependencies]
-brunch = "0.2.*"
+brunch = "0.3.*"
 rayon = "1.5.*"
 
 [[bench]]
@@ -71,6 +71,8 @@ harness = false
 required-features = [ "timestamps" ]
 
 [features]
+default = []
+
 # This adds a few additional MsgKinds relevant only to the main FYI binary.
 # There is no point enabling this in other crates.
 bin_kinds = []

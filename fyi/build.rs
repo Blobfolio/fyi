@@ -71,6 +71,7 @@ pub fn main() {
 		("Error", MsgKind::Error),
 		("Info", MsgKind::Info),
 		("Notice", MsgKind::Notice),
+		("Review", MsgKind::Review),
 		("Success", MsgKind::Success),
 		("Task", MsgKind::Task),
 		("Warning", MsgKind::Warning),
