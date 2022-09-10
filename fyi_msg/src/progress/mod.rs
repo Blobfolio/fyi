@@ -85,6 +85,7 @@ const AHASH_STATE: RandomState = RandomState::with_seeds(13, 19, 23, 71);
 /// last tick, saving the overhead of recalculating the buffer values each time
 /// a value changes. (Instead they're only recalculated at most once per tick.)
 const TICK_NEW: u8 =     0b0110_0001;
+const TICK_RESET: u8 =   0b0110_1111;
 const TICK_RESIZED: u8 = 0b0001_0011;
 
 const TICK_BAR: u8 =     0b0000_0001;
@@ -158,7 +159,7 @@ struct ProglessInner {
 	title: Mutex<Option<Msg>>,
 	done: AtomicU32,
 	doing: Mutex<HashSet<ProglessTask, RandomState>>,
-	total: NonZeroU32,
+	total: AtomicU32,
 }
 
 impl From<NonZeroU32> for ProglessInner {
@@ -237,7 +238,7 @@ impl From<NonZeroU32> for ProglessInner {
 			title: Mutex::new(None),
 			done: AtomicU32::new(0),
 			doing: Mutex::new(HashSet::with_hasher(AHASH_STATE)),
-			total,
+			total: AtomicU32::new(total.get()),
 		}
 	}
 }
@@ -266,7 +267,7 @@ impl ProglessInner {
 	fn stop(&self) {
 		if self.running() {
 			self.flags.store(0, SeqCst);
-			self.done.store(self.total.get(), SeqCst);
+			self.done.store(self.total(), SeqCst);
 			self.elapsed.store(
 				u32::saturating_from(self.started.elapsed().as_millis()),
 				SeqCst
@@ -291,7 +292,7 @@ impl ProglessInner {
 	/// `0.0..=1.0`.
 	fn percent(&self) -> f64 {
 		let done = self.done();
-		let total = self.total.get();
+		let total = self.total();
 
 		if done == 0 { 0.0 }
 		else if done == total { 1.0 }
@@ -309,6 +310,12 @@ impl ProglessInner {
 	/// For the most part, this struct's setter methods only work while
 	/// progress is happening; after that they're frozen.
 	fn running(&self) -> bool { 0 != self.flags.load(SeqCst) & TICKING }
+
+	#[inline]
+	/// # Total.
+	///
+	/// The total number of tasks.
+	fn total(&self) -> u32 { self.total.load(SeqCst) }
 }
 
 /// # Setters.
@@ -341,7 +348,7 @@ impl ProglessInner {
 	fn increment(&self) {
 		if self.running() {
 			let done = self.done.fetch_add(1, SeqCst) + 1;
-			if done >= self.total.get() { self.stop() }
+			if done >= self.total() { self.stop() }
 			else {
 				self.flags.fetch_or(TICK_DONE | TICK_PERCENT | TICK_BAR, SeqCst);
 			}
@@ -361,6 +368,31 @@ impl ProglessInner {
 		}
 	}
 
+	/// # Reset.
+	///
+	/// Stop the current run (if any), clear the done/doing metrics, and assign
+	/// a new total so you can re-use the [`Progless`] instance for a new set
+	/// of tasks.
+	///
+	/// Note: the start/elapsed times for a given [`Progless`] instance are
+	/// _continuous_. If you need the time counter to reset to `[00:00:00]`,
+	/// you need start a brand new instance instead of resetting an existing
+	/// one.
+	///
+	/// ## Errors
+	///
+	/// This will return an error if the new total is zero.
+	fn reset(&self, total: u32) -> Result<(), ProglessError> {
+		self.stop();
+		if 0 == total { Err(ProglessError::EmptyTotal) }
+		else {
+			self.total.store(total, SeqCst);
+			self.done.store(0, SeqCst);
+			self.flags.store(TICK_RESET, SeqCst);
+			Ok(())
+		}
+	}
+
 	/// # Set Done.
 	///
 	/// Set the done count to a specific value. Be careful in cases where
@@ -368,7 +400,7 @@ impl ProglessInner {
 	/// better.
 	fn set_done(&self, done: u32) {
 		if self.running() && done != self.done.swap(done, SeqCst) {
-			if done >= self.total.get() { self.stop(); }
+			if done >= self.total() { self.stop(); }
 			else {
 				self.flags.fetch_or(TICK_DONE | TICK_PERCENT | TICK_BAR, SeqCst);
 			}
@@ -582,7 +614,7 @@ impl ProglessInner {
 		}));
 		if space < MIN_BARS_WIDTH { return (0, 0); }
 
-		let total = self.total.get();
+		let total = self.total();
 		if 0 == total { return (0, 0); }
 
 		// Done!
@@ -729,7 +761,7 @@ impl ProglessInner {
 	/// This updates the "total" portion of the buffer as needed.
 	fn tick_set_total(&self) {
 		if self.flag_unset(TICK_TOTAL) {
-			mutex!(self.buf).replace(PART_TOTAL, &NiceU32::from(self.total));
+			mutex!(self.buf).replace(PART_TOTAL, &NiceU32::from(self.total()));
 		}
 	}
 
@@ -793,7 +825,7 @@ impl ProglessInner {
 /// with the progress. Removing a task automatically increments the done count,
 /// so if you're tracking tasks, you should *not* call [`Progless::increment`].
 ///
-/// ```ignore
+/// ```no_run
 /// # use fyi_msg::Progless;
 /// # use rayon::prelude::*;
 ///
@@ -802,14 +834,14 @@ impl ProglessInner {
 /// // ... snip
 ///
 /// // Iterate in Parallel.
-/// for i in (0..1001).par_iter() {
+/// (0..1001).into_par_iter().for_each(|i| {
 ///     let task: String = format!("Task #{}.", i);
 ///     pbar.add(&task);
 ///
 ///     // Do some work.
 ///
 ///     pbar.remove(&task);
-/// }
+/// });
 ///
 /// // ... snip
 /// ```
@@ -1020,6 +1052,10 @@ impl Progless {
 	/// If you just want a generic "Finished in X." message, use [`Msg::from`]
 	/// instead.
 	///
+	/// Note: if you called [`Progless::reset`] anywhere along the way, this
+	/// won't include totals from the previous run(s). (The duration is the
+	/// only constant.)
+	///
 	/// ## Examples
 	///
 	/// ```no_run
@@ -1110,6 +1146,26 @@ impl Progless {
 	/// both.
 	pub fn remove<S>(&self, txt: S)
 	where S: AsRef<str> { self.inner.remove(txt); }
+
+	/// # Reset.
+	///
+	/// Stop the current run (if any), clear the done/doing metrics, and assign
+	/// a new total so you can re-use the [`Progless`] instance for a new set
+	/// of tasks.
+	///
+	/// Note: the start/elapsed times for a given [`Progless`] instance are
+	/// _continuous_. If you need the time counter to reset to `[00:00:00]`,
+	/// you need start a brand new instance instead of resetting an existing
+	/// one.
+	///
+	/// ## Errors
+	///
+	/// This will return an error if the new total is zero.
+	pub fn reset(&self, total: u32) -> Result<(), ProglessError> {
+		self.inner.reset(total)?;
+		self.steady.start(self.inner.clone());
+		Ok(())
+	}
 
 	#[inline]
 	/// # Set Done.

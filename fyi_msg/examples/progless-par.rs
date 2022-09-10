@@ -19,6 +19,7 @@ fn main() {
 #[cfg(feature = "progress")]
 /// # Do it.
 fn main() {
+	use dactyl::NiceU16;
 	use fyi_msg::Progless;
 	use rayon::prelude::*;
 	use std::time::Duration;
@@ -40,7 +41,33 @@ fn main() {
 			pbar.remove(txt);
 		});
 
-	// Print a simple summary.
+	// Let's do it again! We could start a new Progless, but let's keep the
+	// original one going instead.
+	let nums: Vec<u16> = (10_000_u16..11_000_u16).collect();
+
+	// This would only fail if the new total is zero, which we know is not the
+	// case here.
+	pbar.reset(nums.len() as u32).unwrap();
+
+	// Change the title.
+	pbar.set_title(Some(Msg::custom("Crunching", 199, "Playing with numbers now…")));
+
+	// Loop through the new tasks.
+	nums.into_par_iter()
+		.for_each(|n| {
+			let nice = NiceU16::from(n);
+			pbar.add(nice.as_str());
+
+			// Simulate work.
+			std::thread::sleep(Duration::from_millis(100));
+
+			pbar.remove(nice.as_str());
+		});
+
+	// We're really done now.
 	pbar.finish();
+
+	// Print a generic summary. The nicer `Progless::summary` summary would
+	// only reflect the last incarnation, which isn't helpful here.
 	Msg::from(pbar).print();
 }
