@@ -7,7 +7,10 @@ use std::{
 		Arc,
 		atomic::{
 			AtomicBool,
-			Ordering::Relaxed,
+			Ordering::{
+				Relaxed,
+				SeqCst,
+			},
 		},
 	},
 	thread::JoinHandle,
@@ -18,6 +21,10 @@ use super::{
 	mutex,
 	ProglessInner,
 };
+
+
+
+const SLEEP: Duration = Duration::from_millis(30);
 
 
 
@@ -41,17 +48,16 @@ pub(super) struct ProglessSteady {
 
 impl From<Arc<ProglessInner>> for ProglessSteady {
 	fn from(t_inner: Arc<ProglessInner>) -> Self {
-		const SLEEP: Duration = Duration::from_millis(30);
 		let dead = Arc::new(AtomicBool::new(false));
 		let t_dead = Arc::clone(&dead);
 
 		Self {
 			dead,
 			ticker:  Mutex::new(Some(std::thread::spawn(move || loop {
-				// This will abort if we've manually shut off the "enabled"
-				// field, or if "inner" has reached 100%. Otherwise this will
-				// initiate a "tick", which may or may not paint an update to
-				// the CLI.
+				// This will abort if we've manually turned "dead" on, or if
+				// "inner" has reached 100%. Until then, this will initiate a
+				// steady "tick", which may or may not paint an update to the
+				// CLI.
 				if t_dead.load(Relaxed) || ! t_inner.tick() { break; }
 
 				// Sleep for a short while before checking again.
@@ -64,13 +70,36 @@ impl From<Arc<ProglessInner>> for ProglessSteady {
 }
 
 impl ProglessSteady {
+	/// # Start.
+	///
+	/// Make sure the steady ticker is running.
+	pub(super) fn start(&self, t_inner: Arc<ProglessInner>) {
+		// Make sure the old steady ticker is dead.
+		self.stop();
+
+		// Reset!
+		self.dead.store(false, SeqCst);
+		let t_dead = self.dead.clone();
+		mutex!(self.ticker).replace(std::thread::spawn(move || loop {
+			// This will abort if we've manually turned "dead" on, or if
+			// "inner" has reached 100%. Until then, this will initiate a
+			// steady "tick", which may or may not paint an update to the CLI.
+			if t_dead.load(Relaxed) || ! t_inner.tick() { break; }
+
+			// Sleep for a short while before checking again.
+			std::thread::sleep(SLEEP);
+			if t_dead.load(Relaxed) { break; }
+			std::thread::sleep(SLEEP);
+		}));
+	}
+
 	/// # Stop.
 	///
 	/// Make sure the steady ticker has actually aborted. This is called
 	/// automatically when [`Progless::finish`] is called.
 	pub(super) fn stop(&self) {
 		if let Some(handle) = mutex!(self.ticker).take() {
-			self.dead.store(true, Relaxed);
+			self.dead.store(true, SeqCst);
 			handle.join().unwrap();
 		}
 	}
