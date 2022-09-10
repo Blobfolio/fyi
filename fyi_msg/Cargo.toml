@@ -20,6 +20,7 @@ dactyl = "0.4.*, >= 0.4.2"
 
 [dependencies.ahash]
 version = "=0.8.0"
+default-features = false
 optional = true
 
 [dependencies.bytecount]
