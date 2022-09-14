@@ -1,7 +1,8 @@
 # FYI
 
-[![Build Status](https://github.com/Blobfolio/fyi/workflows/Build/badge.svg)](https://github.com/Blobfolio/fyi/actions)
-[![Dependency Status](https://deps.rs/repo/github/blobfolio/fyi/status.svg)](https://deps.rs/repo/github/blobfolio/fyi)
+[![ci](https://img.shields.io/github/workflow/status/Blobfolio/fyi/Build.svg?style=flat-square&label=ci)](https://github.com/Blobfolio/fyi/actions)
+[![deps.rs](https://deps.rs/repo/github/blobfolio/fyi/status.svg?style=flat-square&label=deps.rs)](https://deps.rs/repo/github/blobfolio/fyi)
+[![license](https://img.shields.io/badge/license-wtfpl-ff1493?style=flat-square)](https://en.wikipedia.org/wiki/WTFPL)
 
 FYI is a simple CLI tool for x86-64 Linux machines that prints an arbitrary
 status-style message, optionally indented, timestamped, and/or prefixed.
