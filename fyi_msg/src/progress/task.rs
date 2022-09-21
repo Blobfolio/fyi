@@ -5,6 +5,7 @@
 use crate::fitted;
 use std::{
 	borrow::Borrow,
+	cmp::Ordering,
 	hash::{
 		Hash,
 		Hasher,
@@ -36,9 +37,17 @@ impl Hash for ProglessTask {
 	fn hash<H: Hasher>(&self, state: &mut H) { self.task.hash(state); }
 }
 
+impl Ord for ProglessTask {
+	fn cmp(&self, other: &Self) -> Ordering { self.task.cmp(&other.task) }
+}
+
 impl PartialEq for ProglessTask {
 	#[inline]
 	fn eq(&self, other: &Self) -> bool { self.task == other.task }
+}
+
+impl PartialOrd for ProglessTask {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
 }
 
 impl ProglessTask {

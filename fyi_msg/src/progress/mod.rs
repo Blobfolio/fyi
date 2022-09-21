@@ -9,7 +9,6 @@ mod task;
 
 
 
-use ahash::RandomState;
 use crate::{
 	BUFFER8,
 	Msg,
@@ -28,7 +27,7 @@ use dactyl::{
 };
 use std::{
 	cmp::Ordering,
-	collections::HashSet,
+	collections::BTreeSet,
 	hash::Hasher,
 	num::NonZeroU32,
 	sync::{
@@ -65,17 +64,6 @@ macro_rules! mutex {
 }
 
 pub(self) use mutex;
-
-
-
-/// # (Not) Random State.
-///
-/// Using a fixed seed value for `AHashSet` drops a few dependencies and
-/// stops Valgrind from complaining about 64 lingering bytes from the runtime
-/// static that would be used otherwise.
-///
-/// For our purposes, the variability of truly random keys isn't really needed.
-const AHASH_STATE: RandomState = RandomState::with_seeds(13, 19, 23, 71);
 
 
 
@@ -158,7 +146,7 @@ struct ProglessInner {
 
 	title: Mutex<Option<Msg>>,
 	done: AtomicU32,
-	doing: Mutex<HashSet<ProglessTask, RandomState>>,
+	doing: Mutex<BTreeSet<ProglessTask>>,
 	total: AtomicU32,
 }
 
@@ -237,7 +225,7 @@ impl From<NonZeroU32> for ProglessInner {
 
 			title: Mutex::new(None),
 			done: AtomicU32::new(0),
-			doing: Mutex::new(HashSet::with_hasher(AHASH_STATE)),
+			doing: Mutex::new(BTreeSet::default()),
 			total: AtomicU32::new(total.get()),
 		}
 	}
