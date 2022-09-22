@@ -1,9 +1,9 @@
 [package]
 name = "fyi_msg"
-version = "0.10.1"
+version = "0.10.2"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
-rust-version = "1.62"
+rust-version = "1.63"
 description = "Simple ANSI-formatted, prefixed messages for console printing."
 license = "WTFPL"
 repository = "https://github.com/Blobfolio/fyi"
@@ -32,7 +32,7 @@ version = "=0.3.2"
 optional = true
 
 [dependencies.unicode-width]
-version = "=0.1.9"
+version = "0.1.*"
 optional = true
 
 [dependencies.utc2k]
