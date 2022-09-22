@@ -451,7 +451,7 @@ impl ProglessInner {
 
 		// Make sure the content is unique, otherwise we can leave the old bits
 		// up.
-		let hash = hash64(&*buf);
+		let hash = hash64(&buf);
 		if hash == self.last_hash.swap(hash, SeqCst) {
 			return;
 		}
@@ -460,8 +460,8 @@ impl ProglessInner {
 		self.print_cls();
 
 		// Update the line count and print!
-		self.last_lines.store(u8::saturating_from(bytecount::count(&*buf, b'\n')), SeqCst);
-		Self::print(&*buf);
+		self.last_lines.store(u8::saturating_from(bytecount::count(&buf, b'\n')), SeqCst);
+		Self::print(&buf);
 	}
 
 	/// # Print Blank.
