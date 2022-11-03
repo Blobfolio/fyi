@@ -12,7 +12,7 @@ This optional module contains methods for counting the display width of byte str
 /// Return the maximum byte *length* for the slice that fits a given display
 /// *width*, such that `slice[0..len]` will be a valid substring likely to fit.
 /// This method is Unicode-safe, but Unicode character widths are at best
-/// aproximations, so actual results may vary plus or minus a few spaces.
+/// approximations, so actual results may vary plus or minus a few spaces.
 ///
 /// If no fit is possible, zero is returned.
 ///
@@ -88,7 +88,7 @@ pub fn length_width(bytes: &[u8], stop: usize) -> usize {
 /// unless/until it finds a non-ASCII code, at which point it will shift to the
 /// heavier `width_unicode` method and finish counting there.
 ///
-/// Note: line breaks are ignored; the cummulative width of all lines is
+/// Note: line breaks are ignored; the cumulative width of all lines is
 /// returned. If you're trying to calculate *line* widths, split the slice
 /// first and pass each chunk separately.
 ///
