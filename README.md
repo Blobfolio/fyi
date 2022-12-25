@@ -1,6 +1,6 @@
 # FYI
 
-[![ci](https://img.shields.io/github/workflow/status/Blobfolio/fyi/Build.svg?style=flat-square&label=ci)](https://github.com/Blobfolio/fyi/actions)
+[![ci](https://img.shields.io/github/actions/workflow/status/Blobfolio/fyi/ci.yaml?style=flat-square&label=ci)](https://github.com/Blobfolio/fyi/actions)
 [![deps.rs](https://deps.rs/repo/github/blobfolio/fyi/status.svg?style=flat-square&label=deps.rs)](https://deps.rs/repo/github/blobfolio/fyi)
 [![license](https://img.shields.io/badge/license-wtfpl-ff1493?style=flat-square)](https://en.wikipedia.org/wiki/WTFPL)
 
