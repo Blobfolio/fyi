@@ -93,7 +93,8 @@ bench BENCH="":
 
 	"{{ cargo_bin }}" blank
 
-	"{{ cargo_bin }}" confirm "Did this work for you?" || "{{ cargo_bin }}" error "Well that sucks."
+	"{{ cargo_bin }}" confirm "Does this default no?" || "{{ cargo_bin }}" error "Well that sucks."
+	"{{ cargo_bin }}" confirm -y "Did this work for you?" || "{{ cargo_bin }}" error "Well that sucks."
 
 	"{{ cargo_bin }}" blank
 

@@ -122,6 +122,12 @@ short = "-V"
 long = "--version"
 description = "Print program version."
 
+[[package.metadata.bashman.switches]]
+short = "-y"
+long = "--yes"
+description = "Default yes (rather than no)."
+subcommands = [ "confirm" ]
+
 [[package.metadata.bashman.options]]
 short = "-c"
 long = "--count"
