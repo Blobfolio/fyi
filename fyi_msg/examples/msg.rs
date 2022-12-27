@@ -86,7 +86,7 @@ fn main() {
 	println!();
 
 	// Here's that macro we mentioned earlier.
-	if confirm!("Was this example useful?") {
+	if confirm!(yes: "Was this example useful?") {
 		Msg::plain("Great!")
 			.with_newline(true)
 			.print();
@@ -98,7 +98,7 @@ fn main() {
 	}
 
 	// Test confirmation with indentation.
-	if confirm!("Is this confirmation indented?", 1) {
+	if confirm!(yes: "Is this confirmation indented?", 1) {
 		Msg::plain("Great!")
 			.with_indent(1)
 			.with_newline(true)
@@ -107,6 +107,19 @@ fn main() {
 	else {
 		Msg::plain("Are you sure?!")
 			.with_indent(1)
+			.with_newline(true)
+			.print();
+	}
+
+	if confirm!("Do you hate fun?", 2) {
+		Msg::plain("That's weird.")
+			.with_indent(2)
+			.with_newline(true)
+			.print();
+	}
+	else {
+		Msg::plain("Just checking…")
+			.with_indent(2)
 			.with_newline(true)
 			.print();
 	}

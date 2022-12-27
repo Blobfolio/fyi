@@ -148,13 +148,39 @@ mod macros {
 	///     println!("That's great! They like you too!");
 	/// }
 	///
+	/// // If you want to default to yes, prefix thusly:
+	/// if confirm!(yes: "Do you like chickens?") {
+	///     println!("That's great! They like you too!");
+	/// }
+	///
 	/// // Indentation can be set with the macro too by appending a second
 	/// // argument:
 	/// if confirm!("Do you like chickens?", 1) {
 	///     println!("    That's great! They like you too!");
 	/// }
+	///
+	/// // The "yes:" prefix also works here.
+	/// if confirm!(yes: "Do you like chickens?", 1) {
+	///     println!("    That's great! They like you too!");
+	/// }
 	/// ```
 	macro_rules! confirm {
+		(yes: $text:expr) => (
+			$crate::Msg::new($crate::MsgKind::Confirm, $text).prompt_with_default(true)
+		);
+		(yes: $text:expr, $indent:expr) => (
+			$crate::Msg::new($crate::MsgKind::Confirm, $text)
+				.with_indent($indent)
+				.prompt_with_default(true)
+		);
+		(no: $text:expr) => (
+			$crate::Msg::new($crate::MsgKind::Confirm, $text).prompt()
+		);
+		(no: $text:expr, $indent:expr) => (
+			$crate::Msg::new($crate::MsgKind::Confirm, $text)
+				.with_indent($indent)
+				.prompt()
+		);
 		($text:expr) => (
 			$crate::Msg::new($crate::MsgKind::Confirm, $text).prompt()
 		);
