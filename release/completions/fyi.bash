@@ -39,6 +39,10 @@ _basher__fyi_confirm() {
 		opts+=("-t")
 		opts+=("--timestamp")
 	fi
+	if [[ ! " ${COMP_LINE} " =~ " -y " ]] && [[ ! " ${COMP_LINE} " =~ " --yes " ]]; then
+		opts+=("-y")
+		opts+=("--yes")
+	fi
 	opts=" ${opts[@]} "
 	if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
 		COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )

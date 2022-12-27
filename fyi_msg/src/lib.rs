@@ -4,7 +4,7 @@
 [![docs.rs](https://img.shields.io/docsrs/fyi_msg.svg?style=flat-square&label=docs.rs)](https://docs.rs/fyi_msg/)
 <br>
 [![crates.io](https://img.shields.io/crates/v/fyi_msg.svg?style=flat-square&label=crates.io)](https://crates.io/crates/fyi_msg)
-[![ci](https://img.shields.io/github/workflow/status/Blobfolio/fyi/Build.svg?style=flat-square&label=ci)](https://github.com/Blobfolio/fyi/actions)
+[![ci](https://img.shields.io/github/actions/workflow/status/Blobfolio/fyi/ci.yaml?style=flat-square&label=ci)](https://github.com/Blobfolio/fyi/actions)
 [![deps.rs](https://deps.rs/repo/github/blobfolio/fyi/status.svg?style=flat-square&label=deps.rs)](https://deps.rs/repo/github/blobfolio/fyi)<br>
 [![license](https://img.shields.io/badge/license-wtfpl-ff1493?style=flat-square)](https://en.wikipedia.org/wiki/WTFPL)
 
@@ -148,13 +148,39 @@ mod macros {
 	///     println!("That's great! They like you too!");
 	/// }
 	///
+	/// // If you want to default to yes, prefix thusly:
+	/// if confirm!(yes: "Do you like chickens?") {
+	///     println!("That's great! They like you too!");
+	/// }
+	///
 	/// // Indentation can be set with the macro too by appending a second
 	/// // argument:
 	/// if confirm!("Do you like chickens?", 1) {
 	///     println!("    That's great! They like you too!");
 	/// }
+	///
+	/// // The "yes:" prefix also works here.
+	/// if confirm!(yes: "Do you like chickens?", 1) {
+	///     println!("    That's great! They like you too!");
+	/// }
 	/// ```
 	macro_rules! confirm {
+		(yes: $text:expr) => (
+			$crate::Msg::new($crate::MsgKind::Confirm, $text).prompt_with_default(true)
+		);
+		(yes: $text:expr, $indent:expr) => (
+			$crate::Msg::new($crate::MsgKind::Confirm, $text)
+				.with_indent($indent)
+				.prompt_with_default(true)
+		);
+		(no: $text:expr) => (
+			$crate::Msg::new($crate::MsgKind::Confirm, $text).prompt()
+		);
+		(no: $text:expr, $indent:expr) => (
+			$crate::Msg::new($crate::MsgKind::Confirm, $text)
+				.with_indent($indent)
+				.prompt()
+		);
 		($text:expr) => (
 			$crate::Msg::new($crate::MsgKind::Confirm, $text).prompt()
 		);

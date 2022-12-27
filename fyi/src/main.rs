@@ -122,6 +122,7 @@ fn blank(args: &Argue) {
 /// This prompts a message and exits with `0` or `1` depending on the
 /// positivity of the response.
 fn confirm(args: &Argue) -> Result<(), ArgyleError> {
+	let default = args.switch2(b"-y", b"--yes");
 	if Msg::new(
 		MsgKind::Confirm,
 		args.arg(0)
@@ -129,7 +130,7 @@ fn confirm(args: &Argue) -> Result<(), ArgyleError> {
 			.ok_or(ArgyleError::Empty)?
 	)
 		.with_flags(parse_flags(args))
-		.prompt()
+		.prompt_with_default(default)
 	{
 		Ok(())
 	}

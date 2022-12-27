@@ -981,6 +981,7 @@ impl Msg {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # Prompt.
 	///
 	/// This produces a simple y/N input prompt, requiring the user type "Y" or
@@ -1012,12 +1013,23 @@ impl Msg {
 	///     println!("That's great! They like you too!");
 	/// }
 	/// ```
-	pub fn prompt(&self) -> bool {
+	pub fn prompt(&self) -> bool { self.prompt_with_default(false) }
+
+	#[must_use]
+	/// # Prompt (w/ Default).
+	///
+	/// This is identical to [`Msg::prompt`], except you specify the default
+	/// return value — `true` for Yes, `false` for No — that is returned when
+	/// the user just hits `<ENTER>`.
+	pub fn prompt_with_default(&self, default: bool) -> bool {
 		// Clone the message and append a little [y/N] instructional bit to the
 		// end. This might not be necessary, but preserves the original message
 		// in case it is needed again.
 		let q = self.clone()
-			.with_suffix(" \x1b[2m[y/\x1b[4mN\x1b[0;2m]\x1b[0m ")
+			.with_suffix(
+				if default { " \x1b[2m[\x1b[4mY\x1b[0;2m/n]\x1b[0m " }
+				else       { " \x1b[2m[y/\x1b[4mN\x1b[0;2m]\x1b[0m " }
+			)
 			.with_newline(false);
 
 		// Ask and collect input, looping until a valid response is typed.
@@ -1028,7 +1040,8 @@ impl Msg {
 			if let Some(res) = io::stdin().read_line(&mut result)
 				.ok()
 				.and_then(|_| match result.to_lowercase().trim() {
-					"" | "n" | "no" => Some(false),
+					"" => Some(default),
+					"n" | "no" => Some(false),
 					"y" | "yes" => Some(true),
 					_ => None,
 				})

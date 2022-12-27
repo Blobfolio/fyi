@@ -8,6 +8,7 @@ FLAGS:
     -h, --help         Print this screen.
     -i, --indent       Indent the line.
     -t, --timestamp    Include a timestamp.
+    -y, --yes          Default yes (rather than no).
 
 ARGS:
     <MSG>    The message!
