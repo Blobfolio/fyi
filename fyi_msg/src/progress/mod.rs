@@ -40,7 +40,10 @@ use std::{
 			Ordering::SeqCst,
 		},
 	},
-	time::Instant,
+	time::{
+		Duration,
+		Instant,
+	},
 };
 use steady::ProglessSteady;
 use task::ProglessTask;
@@ -998,9 +1001,11 @@ impl Progless {
 		self
 	}
 
+	#[allow(clippy::must_use_candidate)]
 	/// # Stop.
 	///
-	/// Finish the progress bar and shut down the steady ticker.
+	/// Finish the progress bar, shut down the steady ticker, and return the
+	/// time elapsed.
 	///
 	/// Calling this method will also erase any previously-printed progress
 	/// information from the CLI screen.
@@ -1026,9 +1031,10 @@ impl Progless {
 	/// // Finish it off!
 	/// pbar.finish();
 	/// ```
-	pub fn finish(&self) {
+	pub fn finish(&self) -> Duration {
 		self.inner.stop();
 		self.steady.stop();
+		self.inner.started.elapsed()
 	}
 
 	#[must_use]
