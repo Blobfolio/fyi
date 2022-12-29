@@ -46,6 +46,15 @@ pub(super) struct ProglessSteady {
 	dead: Arc<AtomicBool>,
 }
 
+impl Default for ProglessSteady {
+	fn default() -> Self {
+		Self {
+			ticker: Mutex::new(None),
+			dead: Arc::new(AtomicBool::new(true)),
+		}
+	}
+}
+
 impl From<Arc<ProglessInner>> for ProglessSteady {
 	fn from(t_inner: Arc<ProglessInner>) -> Self {
 		let dead = Arc::new(AtomicBool::new(false));

@@ -153,8 +153,8 @@ struct ProglessInner {
 	total: AtomicU32,
 }
 
-impl From<NonZeroU32> for ProglessInner {
-	fn from(total: NonZeroU32) -> Self {
+impl Default for ProglessInner {
+	fn default() -> Self {
 		Self {
 			buf: Mutex::new(MsgBuffer::<BUFFER8>::from_raw_parts(
 				vec![
@@ -217,7 +217,7 @@ impl From<NonZeroU32> for ProglessInner {
 					111, 111, // Current Tasks.
 				]
 			)),
-			flags: AtomicU8::new(TICK_NEW),
+			flags: AtomicU8::new(0),
 
 			last_hash: AtomicU64::new(0),
 			last_lines: AtomicU8::new(0),
@@ -229,7 +229,17 @@ impl From<NonZeroU32> for ProglessInner {
 			title: Mutex::new(None),
 			done: AtomicU32::new(0),
 			doing: Mutex::new(BTreeSet::default()),
+			total: AtomicU32::new(1),
+		}
+	}
+}
+
+impl From<NonZeroU32> for ProglessInner {
+	fn from(total: NonZeroU32) -> Self {
+		Self {
+			flags: AtomicU8::new(TICK_NEW),
 			total: AtomicU32::new(total.get()),
+			..Self::default()
 		}
 	}
 }
@@ -772,7 +782,7 @@ impl ProglessInner {
 
 
 #[cfg_attr(feature = "docsrs", doc(cfg(feature = "progress")))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 /// # Progless.
 ///
 /// This is a simple, thread-safe, steady-ticking CLI progress bar that can be
