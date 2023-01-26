@@ -91,7 +91,7 @@ pub fn main() {
 /// # Out path.
 fn copy_path(name: &str) {
 	let mut src = std::fs::canonicalize(env!("CARGO_MANIFEST_DIR")).expect("Missing Cargo Dir.");
-	src.push(format!("help/{}.txt", name));
+	src.push(format!("help/{name}.txt"));
 	write_help(out_path(name), &std::fs::read(src).expect("Failed to open file."));
 }
 
