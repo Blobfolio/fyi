@@ -171,7 +171,7 @@ bench BENCH="":
 @doc:
 	# Make the docs.
 	cargo +nightly rustdoc \
-		--workspace \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
 		--release \
 		--all-features \
 		--target x86_64-unknown-linux-gnu \

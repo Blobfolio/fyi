@@ -986,7 +986,7 @@ impl Msg {
 	///
 	/// This produces a simple y/N input prompt, requiring the user type "Y" or
 	/// "N" to proceed. Positive values return `true`, negative values return
-	/// `false`. The default (if the user just hits <enter>) is "N".
+	/// `false`. The default (if the user just hits &lt;enter&gt;) is "N".
 	///
 	/// Note: the prompt normalizes the suffix and newline parts for display.
 	/// If your message contains these parts, they will be ignored by the
