@@ -20,8 +20,6 @@ pkg_name    := "FYI"
 pkg_dir1    := justfile_directory() + "/fyi"
 pkg_dir2    := justfile_directory() + "/fyi_msg"
 
-features    := "bin_kinds,fitted,progress,timestamps"
-
 cargo_dir   := "/tmp/" + pkg_id + "-cargo"
 cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
 doc_dir     := justfile_directory() + "/doc"
@@ -38,14 +36,14 @@ bench BENCH="":
 		cargo bench \
 			--benches \
 			--workspace \
-			--features "{{ features }}" \
+			--all-features \
 			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}"
 	else
 		cargo bench \
 			--bench "{{ BENCH }}" \
 			--workspace \
-			--features "{{ features }}" \
+			--all-features \
 			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}"
 	fi
@@ -158,7 +156,7 @@ bench BENCH="":
 	clear
 	cargo clippy \
 		--workspace \
-		--features "{{ features }}" \
+		--all-features \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
@@ -172,13 +170,14 @@ bench BENCH="":
 # Build Docs.
 @doc:
 	# Make the docs.
-	cargo +nightly doc \
+	cargo +nightly rustdoc \
 		--workspace \
 		--release \
-		--features "docsrs,{{ features }}" \
-		--no-deps \
+		--all-features \
 		--target x86_64-unknown-linux-gnu \
-		--target-dir "{{ cargo_dir }}"
+		--target-dir "{{ cargo_dir }}" \
+		-- \
+		--cfg docsrs
 
 	# Move the docs and clean up ownership.
 	[ ! -d "{{ doc_dir }}" ] || rm -rf "{{ doc_dir }}"
@@ -191,7 +190,7 @@ bench BENCH="":
 	clear
 	cargo run \
 		-q \
-		--features "{{ features }}" \
+		--all-features \
 		--release \
 		--example "{{ DEMO }}" \
 		--target x86_64-unknown-linux-gnu \
@@ -212,7 +211,7 @@ bench BENCH="":
 @test:
 	clear
 	cargo test \
-		--features "{{ features }}" \
+		--all-features \
 		--workspace \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"

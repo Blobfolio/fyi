@@ -52,8 +52,10 @@ jobs:
 
     - name: Clippy
       run: |
-        cargo clippy --release --features "fitted,progress,timestamps" --target ${{ matrix.target }}
+        cargo clippy --release --all-features --target ${{ matrix.target }}
+        cargo clippy --release --no-default-features --target ${{ matrix.target }}
 
     - name: Tests
       run: |
-        cargo test --release --features "fitted,progress,timestamps" --target ${{ matrix.target }}
+        cargo test --release --all-features --target ${{ matrix.target }}
+        cargo test --release --no-default-features --target ${{ matrix.target }}

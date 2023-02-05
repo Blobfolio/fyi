@@ -11,7 +11,9 @@ readme = "README.md"
 exclude = [ "examples" ]
 
 [package.metadata.docs.rs]
-features = [ "docsrs", "fitted", "progress", "timestamps" ]
+rustc-args = ["--cfg", "docsrs"]
+rustdoc-args = ["--cfg", "docsrs"]
+features = [ "fitted", "progress", "timestamps" ]
 default-target = "x86_64-unknown-linux-gnu"
 targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
@@ -77,9 +79,6 @@ default = []
 # This adds a few additional MsgKinds relevant only to the main FYI binary.
 # There is no point enabling this in other crates.
 bin_kinds = []
-
-# This is just a workaround for Docs.rs; don't enable this if you're a human!
-docsrs = []
 
 # Add width-fitting support to the Msg struct, i.e. Msg.fitted().
 fitted = [ "unicode-width" ]

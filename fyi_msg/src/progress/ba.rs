@@ -6,7 +6,7 @@ use std::num::NonZeroU64;
 
 
 
-#[cfg_attr(feature = "docsrs", doc(cfg(feature = "progress")))]
+#[cfg_attr(docsrs, doc(cfg(feature = "progress")))]
 #[derive(Debug, Copy, Clone)]
 /// # Before and After.
 ///
