@@ -9,7 +9,7 @@ use std::{
 
 
 
-#[cfg_attr(feature = "docsrs", doc(cfg(feature = "progress")))]
+#[cfg_attr(docsrs, doc(cfg(feature = "progress")))]
 #[derive(Debug, Copy, Clone, Eq, Hash, PartialEq)]
 /// # Obligatory error type.
 pub enum ProglessError {

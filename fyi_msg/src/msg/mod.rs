@@ -158,7 +158,7 @@ const PART_INDENT: usize = 0;
 pub const FLAG_INDENT: u8 =    0b0001;
 
 #[cfg(feature = "timestamps")]
-#[cfg_attr(feature = "docsrs", doc(cfg(feature = "timestamps")))]
+#[cfg_attr(docsrs, doc(cfg(feature = "timestamps")))]
 /// Enable Timestamp.
 pub const FLAG_TIMESTAMP: u8 = 0b0010;
 
@@ -506,7 +506,7 @@ impl Msg {
 	}
 
 	#[cfg(feature = "timestamps")]
-	#[cfg_attr(feature = "docsrs", doc(cfg(feature = "timestamps")))]
+	#[cfg_attr(docsrs, doc(cfg(feature = "timestamps")))]
 	#[must_use]
 	/// # With Timestamp.
 	///
@@ -647,7 +647,7 @@ impl Msg {
 	}
 
 	#[cfg(feature = "timestamps")]
-	#[cfg_attr(feature = "docsrs", doc(cfg(feature = "timestamps")))]
+	#[cfg_attr(docsrs, doc(cfg(feature = "timestamps")))]
 	#[allow(clippy::cast_possible_truncation)] // Date pieces have known values.
 	#[allow(clippy::cast_sign_loss)] // Date pieces have known values.
 	/// # Set Timestamp.
@@ -752,7 +752,7 @@ impl Msg {
 /// A lot of our own programs crunch data and report the savings as a suffix.
 /// This section just adds a quick helper for that.
 impl Msg {
-	#[cfg_attr(feature = "docsrs", doc(cfg(feature = "progress")))]
+	#[cfg_attr(docsrs, doc(cfg(feature = "progress")))]
 	#[must_use]
 	/// # Bytes Saved Suffix.
 	///
@@ -828,7 +828,7 @@ impl Msg {
 	}
 
 	#[cfg(feature = "fitted")]
-	#[cfg_attr(feature = "docsrs", doc(cfg(feature = "fitted")))]
+	#[cfg_attr(docsrs, doc(cfg(feature = "fitted")))]
 	#[allow(clippy::cast_possible_truncation)] // MsgBuffer checks fit.
 	#[must_use]
 	/// # Capped Width Slice.

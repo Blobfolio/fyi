@@ -77,7 +77,7 @@ For more usage examples, check out the `examples/msg` demo, which covers just ab
 	clippy::redundant_pub_crate,
 )]
 
-#![cfg_attr(feature = "docsrs", feature(doc_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 
 
@@ -107,14 +107,14 @@ pub use msg::{
 };
 
 #[cfg(feature = "fitted")]
-#[cfg_attr(feature = "docsrs", doc(cfg(feature = "fitted")))]
+#[cfg_attr(docsrs, doc(cfg(feature = "fitted")))]
 pub use fitted::{
 	length_width,
 	width,
 };
 
 #[cfg(feature = "progress")]
-#[cfg_attr(feature = "docsrs", doc(cfg(feature = "progress")))]
+#[cfg_attr(docsrs, doc(cfg(feature = "progress")))]
 pub use progress::{
 	ba::BeforeAfter,
 	Progless,
@@ -122,7 +122,7 @@ pub use progress::{
 };
 
 #[cfg(feature = "timestamps")]
-#[cfg_attr(feature = "docsrs", doc(cfg(feature = "timestamps")))]
+#[cfg_attr(docsrs, doc(cfg(feature = "timestamps")))]
 pub use msg::FLAG_TIMESTAMP;
 
 #[macro_use]
