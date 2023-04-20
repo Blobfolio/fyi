@@ -1,6 +1,6 @@
 [package]
 name = "fyi_msg"
-version = "0.10.7"
+version = "0.10.8"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
 rust-version = "1.63"
@@ -44,7 +44,7 @@ optional = true
 
 [dev-dependencies]
 brunch = "0.4.*"
-rayon = "1.6.*"
+rayon = "1.7.*"
 
 [[bench]]
 name = "fm_buffer"
