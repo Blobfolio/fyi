@@ -14,7 +14,6 @@ use std::{
 		Deref,
 		Range,
 	},
-	ptr,
 };
 
 
@@ -163,31 +162,6 @@ impl<const N: usize> MsgBuffer<N> {
 	/// Return as a byte slice.
 	pub fn as_bytes(&self) -> &[u8] { &self.buf }
 
-	#[allow(unsafe_code)]
-	#[must_use]
-	#[inline]
-	/// # As Pointer.
-	///
-	/// This method returns a read-only pointer to the underlying buffer.
-	pub(crate) unsafe fn as_ptr(&self, idx: u32) -> *const u8 {
-		self.buf.as_ptr().add(idx as usize)
-	}
-
-	#[allow(unsafe_code)]
-	#[must_use]
-	#[inline]
-	/// # As Mut Pointer.
-	///
-	/// This method returns a mutable pointer to the underlying buffer.
-	///
-	/// ## Safety
-	///
-	/// Any changes written to the pointer must not affect the table of
-	/// contents or undefined things will happen!
-	pub(crate) unsafe fn as_mut_ptr(&mut self, idx: u32) -> *mut u8 {
-		self.buf.as_mut_ptr().add(idx as usize)
-	}
-
 	#[must_use]
 	#[inline]
 	/// # As Str.
@@ -285,7 +259,6 @@ impl<const N: usize> MsgBuffer<N> {
 	}
 
 	#[allow(clippy::cast_possible_truncation)] // We've previously asserted it fits.
-	#[allow(unsafe_code)]
 	/// # Extend Part.
 	///
 	/// ## Panics
@@ -306,19 +279,13 @@ impl<const N: usize> MsgBuffer<N> {
 			}
 			else {
 				self.resize_grow(idx, len);
-				unsafe {
-					std::ptr::copy_nonoverlapping(
-						buf.as_ptr(),
-						self.as_mut_ptr(end),
-						len as usize
-					);
-				}
+				let end = end as usize;
+				self.buf[end..end + buf.len()].copy_from_slice(buf);
 			}
 		}
 	}
 
 	#[allow(clippy::comparison_chain)] // We're only matching 2/3.
-	#[allow(unsafe_code)]
 	/// # Replace Part.
 	///
 	/// ## Panics
@@ -341,13 +308,8 @@ impl<const N: usize> MsgBuffer<N> {
 
 		// Write it!
 		if 0 != new_len {
-			unsafe {
-				std::ptr::copy_nonoverlapping(
-					buf.as_ptr(),
-					self.as_mut_ptr(self.start(idx)),
-					new_len as usize
-				);
-			}
+			let from = self.start(idx) as usize;
+			self.buf[from..from + buf.len()].copy_from_slice(buf);
 		}
 	}
 
@@ -362,7 +324,6 @@ impl<const N: usize> MsgBuffer<N> {
 
 /// ## Internal.
 impl<const N: usize> MsgBuffer<N> {
-	#[allow(unsafe_code)]
 	/// # Grow.
 	///
 	/// ## Panics
@@ -384,22 +345,11 @@ impl<const N: usize> MsgBuffer<N> {
 
 		let end: u32 = self.end(idx);
 		let len: u32 = self.total_len();
-		self.buf.reserve(adj as usize);
+		self.buf.resize((len + adj) as usize, b' ');
 
 		// We need to shift things over.
 		if end < len {
-			unsafe {
-				ptr::copy(
-					self.as_ptr(end),
-					self.as_mut_ptr(end + adj),
-					(len - end) as usize
-				);
-
-				self.buf.set_len((len + adj) as usize);
-			}
-		}
-		else {
-			unsafe { self.buf.set_len((len + adj) as usize); }
+			self.buf.copy_within(end as usize..len as usize, (end + adj) as usize);
 		}
 
 		self.raise_parts_from(idx, adj);
