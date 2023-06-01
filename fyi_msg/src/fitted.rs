@@ -149,10 +149,7 @@ fn length_width_unicode(bytes: &[u8], len: usize, width: usize, stop: usize) -> 
 	// Build a string from the bytes so we can get access to the inner chars.
 	// This shouldn't fail, but if it does, it will return the length the call
 	// was seeded with.
-	let strung = match std::str::from_utf8(bytes) {
-		Ok(s) => s,
-		Err(_) => { return len; },
-	};
+	let Ok(strung) = std::str::from_utf8(bytes) else { return len; };
 
 	let mut in_ansi: bool = false;
 	match strung.chars()
@@ -200,10 +197,7 @@ fn width_unicode(bytes: &[u8], width: usize) -> usize {
 
 	// Build a string from the bytes so we can get access to the inner chars.
 	// This shouldn't fail, but if it does, it will default to a byte count.
-	let strung = match std::str::from_utf8(bytes) {
-		Ok(s) => s,
-		Err(_) => { return width + bytes.len(); },
-	};
+	let Ok(strung) = std::str::from_utf8(bytes) else { return width + bytes.len(); };
 
 	let mut in_ansi: bool = false;
 	strung.chars()
