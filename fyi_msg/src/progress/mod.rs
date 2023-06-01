@@ -335,12 +335,11 @@ impl ProglessInner {
 	/// example usage.
 	fn add<S>(&self, txt: S)
 	where S: AsRef<str> {
-		if self.running() {
-			if let Some(m) = ProglessTask::new(txt.as_ref()) {
-				if mutex!(self.doing).insert(m)	{
-					self.flags.fetch_or(TICK_DOING, SeqCst);
-				}
-			}
+		if
+			self.running() &&
+			ProglessTask::new(txt.as_ref()).is_some_and(|m| mutex!(self.doing).insert(m))
+		{
+			self.flags.fetch_or(TICK_DOING, SeqCst);
 		}
 	}
 
