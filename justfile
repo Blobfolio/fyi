@@ -127,16 +127,6 @@ bench BENCH="":
 	mv "{{ justfile_directory() }}/target" "{{ cargo_dir }}"
 
 
-# Check Release!
-@check:
-	# First let's build the Rust bit.
-	cargo check \
-		--release \
-		--target x86_64-unknown-linux-gnu \
-		--all-features \
-		--target-dir "{{ cargo_dir }}"
-
-
 # Clean Cargo crap.
 @clean:
 	# Most things go here.
@@ -213,12 +203,24 @@ bench BENCH="":
 	cargo test \
 		--all-features \
 		--workspace \
+		--release \
+		--target x86_64-unknown-linux-gnu \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--all-features \
+		--workspace \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
 	cargo test \
 		--no-default-features \
 		--workspace \
+		--target x86_64-unknown-linux-gnu \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--no-default-features \
+		--workspace \
+		--release \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 

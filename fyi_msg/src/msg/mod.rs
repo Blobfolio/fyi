@@ -807,6 +807,7 @@ impl Msg {
 	/// Return the entire message as a string slice. Alternatively, you could
 	/// use [`Msg::as_ref`] or [`Msg::borrow`].
 	pub fn as_str(&self) -> &str {
+		debug_assert!(std::str::from_utf8(&self.0).is_ok(), "Bug: Message is not UTF8.");
 		unsafe { std::str::from_utf8_unchecked(&self.0) }
 	}
 
@@ -817,14 +818,13 @@ impl Msg {
 	/// Consume the message, returning an owned `Vec<u8>`.
 	pub fn into_vec(self) -> Vec<u8> { self.0.into_vec() }
 
-	#[allow(unsafe_code)]
 	#[must_use]
 	#[inline]
 	/// # Into String.
 	///
 	/// Consume the message, returning an owned string.
 	pub fn into_string(self) -> String {
-		unsafe { String::from_utf8_unchecked(self.0.into_vec()) }
+		String::from_utf8(self.0.into_vec()).unwrap_or_else(|_| String::new())
 	}
 
 	#[cfg(feature = "fitted")]

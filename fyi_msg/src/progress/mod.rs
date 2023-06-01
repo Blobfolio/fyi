@@ -54,10 +54,14 @@ use task::ProglessTask;
 ///
 /// This holds pre-asciified double-digit numbers up to sixty for use by the
 /// `write_time` method. It doesn't need to hold anything larger than that.
-static DD: [u8; 120] = *b"\
-	000102030405060708091011121314151617181920212223242526272829\
-	303132333435363738394041424344454647484950515253545556575859\
-";
+static DD: [[u8; 2]; 60] = [
+	[48, 48], [48, 49], [48, 50], [48, 51], [48, 52], [48, 53], [48, 54], [48, 55], [48, 56], [48, 57],
+	[49, 48], [49, 49], [49, 50], [49, 51], [49, 52], [49, 53], [49, 54], [49, 55], [49, 56], [49, 57],
+	[50, 48], [50, 49], [50, 50], [50, 51], [50, 52], [50, 53], [50, 54], [50, 55], [50, 56], [50, 57],
+	[51, 48], [51, 49], [51, 50], [51, 51], [51, 52], [51, 53], [51, 54], [51, 55], [51, 56], [51, 57],
+	[52, 48], [52, 49], [52, 50], [52, 51], [52, 52], [52, 53], [52, 54], [52, 55], [52, 56], [52, 57],
+	[53, 48], [53, 49], [53, 50], [53, 51], [53, 52], [53, 53], [53, 54], [53, 55], [53, 56], [53, 57],
+];
 
 /// # Helper: Mutex Unlock.
 ///
@@ -331,12 +335,11 @@ impl ProglessInner {
 	/// example usage.
 	fn add<S>(&self, txt: S)
 	where S: AsRef<str> {
-		if self.running() {
-			if let Some(m) = ProglessTask::new(txt.as_ref()) {
-				if mutex!(self.doing).insert(m)	{
-					self.flags.fetch_or(TICK_DOING, SeqCst);
-				}
-			}
+		if
+			self.running() &&
+			ProglessTask::new(txt.as_ref()).is_some_and(|m| mutex!(self.doing).insert(m))
+		{
+			self.flags.fetch_or(TICK_DOING, SeqCst);
 		}
 	}
 
@@ -702,7 +705,6 @@ impl ProglessInner {
 		}
 	}
 
-	#[allow(unsafe_code)]
 	/// # Tick Elapsed Seconds.
 	///
 	/// The precision of `Instant` is greater than we need for printing
@@ -728,12 +730,7 @@ impl ProglessInner {
 		if secs == before.wrapping_div(1000) { Some(false) }
 		else {
 			let [h, m, s] = NiceElapsed::hms(secs);
-			unsafe {
-				let mut buf = mutex!(self.buf);
-				let start = buf.start(PART_ELAPSED);
-				write_time(buf.as_mut_ptr(start), h, m, s);
-			}
-
+			write_time(mutex!(self.buf).get_mut(PART_ELAPSED), h, m, s);
 			Some(true)
 		}
 	}
@@ -1257,7 +1254,6 @@ fn term_width() -> u8 {
 	)
 }
 
-#[allow(unsafe_code)]
 /// # Write Time.
 ///
 /// This writes HH:MM:SS to the provided pointer.
@@ -1270,14 +1266,19 @@ fn term_width() -> u8 {
 /// ## Safety
 ///
 /// The pointer must have 8 bytes free or undefined things will happen.
-unsafe fn write_time(buf: *mut u8, h: u8, m: u8, s: u8) {
-	debug_assert!(h < 60 && m < 60 && s < 60, "BUG: Invalid progress time pieces.");
+fn write_time(buf: &mut [u8], h: u8, m: u8, s: u8) {
+	assert!(
+		h < 60 &&
+		m < 60 &&
+		s < 60 &&
+		8 <= buf.len(),
+		"BUG: Invalid progress time pieces."
+	);
 
-	let src = DD.as_ptr();
-
-	std::ptr::copy_nonoverlapping(src.add((h << 1) as usize), buf, 2);
-	std::ptr::write(buf.add(2), b':');
-	std::ptr::copy_nonoverlapping(src.add((m << 1) as usize), buf.add(3), 2);
-	std::ptr::write(buf.add(5), b':');
-	std::ptr::copy_nonoverlapping(src.add((s << 1) as usize), buf.add(6), 2);
+	// Write 'em.
+	buf[..2].copy_from_slice(DD[usize::from(h)].as_slice());
+	buf[2] = b':';
+	buf[3..5].copy_from_slice(DD[usize::from(m)].as_slice());
+	buf[5] = b':';
+	buf[6..8].copy_from_slice(DD[usize::from(s)].as_slice());
 }
