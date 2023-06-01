@@ -169,7 +169,7 @@ subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info"
 path = "../fyi_msg"
 
 [dependencies]
-dactyl = "0.4.*"
+dactyl = "0.5.*"
 
 [dependencies.argyle]
 version = "0.6.*"
