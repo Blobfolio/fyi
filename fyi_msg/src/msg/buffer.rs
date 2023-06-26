@@ -235,11 +235,11 @@ impl<const N: usize> MsgBuffer<N> {
 
 	#[must_use]
 	/// # Part Start.
-	pub const fn start(&self, idx: usize) -> u32 { self.toc[idx << 1] }
+	pub const fn start(&self, idx: usize) -> u32 { self.toc[idx * 2] }
 
 	#[must_use]
 	/// # Part End.
-	pub const fn end(&self, idx: usize) -> u32 { self.toc[(idx << 1) + 1] }
+	pub const fn end(&self, idx: usize) -> u32 { self.toc[idx * 2 + 1] }
 
 	#[must_use]
 	/// # Part Range.
@@ -375,13 +375,13 @@ impl<const N: usize> MsgBuffer<N> {
 
 	/// # Increment parts from.
 	fn raise_parts_from(&mut self, idx: usize, adj: u32) {
-		self.toc.iter_mut().skip((idx << 1) + 1).for_each(|x| *x += adj);
+		self.toc.iter_mut().skip(idx * 2 + 1).for_each(|x| *x += adj);
 	}
 
 	/// # Decrease parts from.
 	fn lower_parts_from(&mut self, idx: usize, adj: u32) {
 		assert!(self.len(idx) >= adj, "{}", BUFFER_UNDERFLOW);
-		self.toc.iter_mut().skip((idx << 1) + 1).for_each(|x| *x -= adj);
+		self.toc.iter_mut().skip(idx * 2 + 1).for_each(|x| *x -= adj);
 	}
 
 	/// # Zero out parts.
