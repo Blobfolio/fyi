@@ -85,7 +85,7 @@ impl<const N: usize> Deref for MsgBuffer<N> {
 impl<const N: usize> fmt::Display for MsgBuffer<N> {
 	#[inline]
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str(std::str::from_utf8(self).map_err(|_| fmt::Error::default())?)
+		f.write_str(std::str::from_utf8(self).map_err(|_| fmt::Error)?)
 	}
 }
 
