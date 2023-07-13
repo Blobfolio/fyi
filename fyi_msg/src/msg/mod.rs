@@ -643,7 +643,7 @@ impl Msg {
 	/// method. Refer to that documentation for more information.
 	pub fn set_indent(&mut self, indent: u8) {
 		static SPACES: [u8; 16] = [32_u8; 16];
-		self.0.replace(PART_INDENT, &SPACES[0..4.min(usize::from(indent)) << 2]);
+		self.0.replace(PART_INDENT, &SPACES[0..4.min(usize::from(indent)) * 4]);
 	}
 
 	#[cfg(feature = "timestamps")]
