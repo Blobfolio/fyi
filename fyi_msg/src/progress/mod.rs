@@ -70,7 +70,7 @@ macro_rules! mutex {
 	($m:expr) => ($m.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
 }
 
-pub(self) use mutex;
+use mutex;
 
 
 
@@ -453,6 +453,7 @@ impl ProglessInner {
 
 /// # Render.
 impl ProglessInner {
+	#[allow(clippy::significant_drop_tightening)]
 	/// # Preprint.
 	///
 	/// This method accepts a completed buffer ready for printing, hashing it
@@ -680,6 +681,7 @@ impl ProglessInner {
 				let mut tasks = Vec::<u8>::with_capacity(256);
 				tasks.extend_from_slice(b"\x1b[35m");
 				doing.iter().for_each(|x| x.push_to(&mut tasks, width));
+				drop(doing); // Release the lock a few ns early.
 				tasks.extend_from_slice(b"\x1b[0m");
 
 				mutex!(self.buf).replace(PART_DOING, &tasks);
