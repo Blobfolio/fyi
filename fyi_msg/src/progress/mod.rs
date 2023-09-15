@@ -359,6 +359,21 @@ impl ProglessInner {
 		}
 	}
 
+	#[inline]
+	/// # Increment Done by N.
+	///
+	/// Increase the completed count by `n`. This is safer to use than `set_done()`
+	/// and more efficient than calling `increment()` a million times in a row.
+	fn increment_n(&self, n: u32) {
+		if self.running() {
+			let done = self.done.fetch_add(n, SeqCst) + n;
+			if done >= self.total() { self.stop() }
+			else {
+				self.flags.fetch_or(TICK_DONE | TICK_PERCENT | TICK_BAR, SeqCst);
+			}
+		}
+	}
+
 	/// # Remove a task.
 	///
 	/// This is the equal and opposite companion to `add`. Calling this will
@@ -1137,6 +1152,13 @@ impl Progless {
 	///
 	/// See the various examples all over this page for more information.
 	pub fn increment(&self) { self.inner.increment(); }
+
+	#[inline]
+	/// # Increment Done by N.
+	///
+	/// Increase the completed count by `n`. This is safer to use than `set_done()`
+	/// and more efficient than calling `increment()` a million times in a row.
+	pub fn increment_n(&self, n: u32) { self.inner.increment_n(n); }
 
 	#[inline]
 	/// # Remove a task.
