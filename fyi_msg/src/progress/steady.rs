@@ -67,7 +67,7 @@ impl From<Arc<ProglessInner>> for ProglessSteady {
 				// "inner" has reached 100%. Until then, this will initiate a
 				// steady "tick", which may or may not paint an update to the
 				// CLI.
-				if t_dead.load(Relaxed) || ! t_inner.tick() { break; }
+				if t_dead.load(Relaxed) || ! t_inner.tick(false) { break; }
 
 				// Sleep for a short while before checking again.
 				std::thread::sleep(SLEEP);
@@ -93,7 +93,7 @@ impl ProglessSteady {
 			// This will abort if we've manually turned "dead" on, or if
 			// "inner" has reached 100%. Until then, this will initiate a
 			// steady "tick", which may or may not paint an update to the CLI.
-			if t_dead.load(Relaxed) || ! t_inner.tick() { break; }
+			if t_dead.load(Relaxed) || ! t_inner.tick(false) { break; }
 
 			// Sleep for a short while before checking again.
 			std::thread::sleep(SLEEP);
