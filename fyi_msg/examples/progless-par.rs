@@ -26,13 +26,21 @@ fn main() {
 
 	// Initiate a progress bar.
 	let pbar = Progless::try_from(FILE_TYPES.len()).unwrap()
-		.with_title(Some(Msg::custom("Scanning", 199, "Pretending to look at files…")));
+		.with_title(Some(Msg::custom("Scanning", 199, "Pretending to look for \"message\" file types…")));
 
 	FILE_TYPES.par_iter()
 		.map(|&t| (t, Duration::from_millis(t.len() as u64 * 3)))
 		.for_each(|(txt, delay)| {
 			// Start a new task.
 			pbar.add(txt);
+
+			// Example `push_msg` usage.
+			if txt.starts_with("message/") {
+				pbar.push_msg(
+					Msg::custom("Found", 199, txt),
+					true,
+				);
+			}
 
 			// Simulate work.
 			std::thread::sleep(delay);
@@ -69,5 +77,5 @@ fn main() {
 
 	// Print a generic summary. The nicer `Progless::summary` summary would
 	// only reflect the last incarnation, which isn't helpful here.
-	Msg::from(pbar).print();
+	Msg::from(pbar).eprint();
 }

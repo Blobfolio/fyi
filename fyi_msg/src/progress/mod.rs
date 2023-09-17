@@ -374,6 +374,26 @@ impl ProglessInner {
 		}
 	}
 
+	/// # Push Message.
+	///
+	/// "Insert" (print) a line before the running progress bar, useful for
+	/// debug logs, warnings, etc., that would otherwise have to wait for the
+	/// [`Progless`] instance to finish hogging the display.
+	///
+	/// Note: This will add a `\n` to the end of the string.
+	///
+	/// The message will be printed to STDERR if `stderr`, otherwise STDOUT.
+	fn push_msg<S>(&self, msg: S, stderr: bool)
+	where S: Into<Msg> {
+		self.print_cls();
+
+		let msg = msg.into().with_newline(true);
+		if stderr { msg.eprint(); }
+		else { msg.print(); }
+
+		if self.running() { self.tick(true); }
+	}
+
 	/// # Remove a task.
 	///
 	/// This is the equal and opposite companion to `add`. Calling this will
@@ -565,7 +585,7 @@ impl ProglessInner {
 	///
 	/// To help keep repeated calls to this from overloading the system, work
 	/// only takes place if it has been at least 60ms from the last tick.
-	fn tick(&self) -> bool {
+	fn tick(&self, force: bool) -> bool {
 		// We aren't running!
 		if ! self.running() {
 			return false;
@@ -573,7 +593,7 @@ impl ProglessInner {
 
 		// We don't want to tick too often... that will just look bad.
 		let time_changed: bool = match self.tick_set_secs() {
-			None => return true,
+			None => if force { true } else { return true; },
 			Some(x) => x,
 		};
 
@@ -1159,6 +1179,19 @@ impl Progless {
 	/// Increase the completed count by `n`. This is safer to use than `set_done()`
 	/// and more efficient than calling `increment()` a million times in a row.
 	pub fn increment_n(&self, n: u32) { self.inner.increment_n(n); }
+
+	#[inline]
+	/// # Push Message.
+	///
+	/// "Insert" (print) a line before the running progress bar, useful for
+	/// debug logs, warnings, etc., that would otherwise have to wait for the
+	/// [`Progless`] instance to finish hogging the display.
+	///
+	/// Note: This will add a `\n` to the end of the string.
+	///
+	/// The message will be printed to STDERR if `stderr`, otherwise STDOUT.
+	pub fn push_msg<S>(&self, msg: S, stderr: bool)
+	where S: Into<Msg> { self.inner.push_msg(msg, stderr); }
 
 	#[inline]
 	/// # Remove a task.
