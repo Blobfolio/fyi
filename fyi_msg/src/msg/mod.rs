@@ -1016,12 +1016,37 @@ impl Msg {
 	pub fn prompt(&self) -> bool { self.prompt_with_default(false) }
 
 	#[must_use]
+	#[inline]
 	/// # Prompt (w/ Default).
 	///
 	/// This is identical to [`Msg::prompt`], except you specify the default
 	/// return value — `true` for Yes, `false` for No — that is returned when
 	/// the user just hits `<ENTER>`.
 	pub fn prompt_with_default(&self, default: bool) -> bool {
+		self._prompt(default, false)
+	}
+
+	#[must_use]
+	#[inline]
+	/// # Prompt (STDERR).
+	///
+	/// Same as [`Msg::prompt`], but printed to STDERR instead of STDOUT.
+	pub fn eprompt(&self) -> bool { self.eprompt_with_default(false) }
+
+	#[must_use]
+	#[inline]
+	/// # Prompt (w/ Default, STDERR).
+	///
+	/// Same as [`Msg::prompt_with_default`], but printed to STDERR instead of
+	/// STDOUT.
+	pub fn eprompt_with_default(&self, default: bool) -> bool {
+		self._prompt(default, true)
+	}
+
+	/// # Internal Prompt Handling.
+	///
+	/// This prints the prompt, handling the desired default and output.
+	fn _prompt(&self, default: bool, stderr: bool) -> bool {
 		// Clone the message and append a little [y/N] instructional bit to the
 		// end. This might not be necessary, but preserves the original message
 		// in case it is needed again.
@@ -1035,7 +1060,8 @@ impl Msg {
 		// Ask and collect input, looping until a valid response is typed.
 		let mut result = String::new();
 		loop {
-			q.print();
+			if stderr { q.eprint(); }
+			else { q.print(); }
 
 			if let Some(res) = io::stdin().read_line(&mut result)
 				.ok()
@@ -1049,8 +1075,9 @@ impl Msg {
 
 			// Print an error and do it all over again.
 			result.truncate(0);
-			Self::error("Invalid input; enter \x1b[91mN\x1b[0m or \x1b[92mY\x1b[0m.")
-				.print();
+			let err = Self::error("Invalid input; enter \x1b[91mN\x1b[0m or \x1b[92mY\x1b[0m.");
+			if stderr { err.eprint(); }
+			else { err.print(); }
 		}
 	}
 }
