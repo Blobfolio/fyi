@@ -85,6 +85,18 @@ fn main() {
 
 	println!();
 
+	// A prompt to STDERR.
+	if Msg::new(MsgKind::Confirm, "Did this print to STDERR?").eprompt_with_default(true) {
+		Msg::plain("Great!")
+			.with_newline(true)
+			.print();
+	}
+	else {
+		Msg::plain("Are you sure?!")
+			.with_newline(true)
+			.print();
+	}
+
 	// Here's that macro we mentioned earlier.
 	if confirm!(yes: "Was this example useful?") {
 		Msg::plain("Great!")
