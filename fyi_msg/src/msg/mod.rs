@@ -934,7 +934,7 @@ impl Msg {
 
 		let writer = io::stdout();
 		let mut handle = writer.lock();
-		let _res = handle.write_all(&self.0).and_then(|_| handle.flush());
+		let _res = handle.write_all(&self.0).and_then(|()| handle.flush());
 	}
 
 	/// # Locked Print to `STDERR`.
@@ -956,7 +956,7 @@ impl Msg {
 
 		let writer = io::stderr();
 		let mut handle = writer.lock();
-		let _res = handle.write_all(&self.0).and_then(|_| handle.flush());
+		let _res = handle.write_all(&self.0).and_then(|()| handle.flush());
 	}
 
 	/// # Print and Die.

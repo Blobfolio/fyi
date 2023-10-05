@@ -220,7 +220,7 @@ fn helper(cmd: Option<Box<[u8]>>) {
 			handle.write_all(include_bytes!(concat!(env!("OUT_DIR"), "/help-", $path, ".txt")))
 		};
 		($path:literal, true) => {
-			write_help!($path).and_then(|_| write_help!("generic-bottom"))
+			write_help!($path).and_then(|()| write_help!("generic-bottom"))
 		};
 	}
 

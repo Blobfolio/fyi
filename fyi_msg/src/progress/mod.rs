@@ -532,7 +532,7 @@ impl ProglessInner {
 
 		let writer = std::io::stderr();
 		let mut handle = writer.lock();
-		let _res = handle.write_all(buf).and_then(|_| handle.flush());
+		let _res = handle.write_all(buf).and_then(|()| handle.flush());
 	}
 
 	/// # Erase Output.
