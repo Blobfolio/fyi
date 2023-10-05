@@ -365,7 +365,7 @@ impl ProglessInner {
 	/// Increase the completed count by `n`. This is safer to use than `set_done()`
 	/// and more efficient than calling `increment()` a million times in a row.
 	fn increment_n(&self, n: u32) {
-		if self.running() {
+		if n != 0 && self.running() {
 			let done = self.done.fetch_add(n, SeqCst) + n;
 			if done >= self.total() { self.stop() }
 			else {
@@ -532,7 +532,7 @@ impl ProglessInner {
 
 		let writer = std::io::stderr();
 		let mut handle = writer.lock();
-		let _res = handle.write_all(buf).and_then(|_| handle.flush());
+		let _res = handle.write_all(buf).and_then(|()| handle.flush());
 	}
 
 	/// # Erase Output.
