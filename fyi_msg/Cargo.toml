@@ -1,6 +1,6 @@
 [package]
 name = "fyi_msg"
-version = "0.11.7"
+version = "0.11.8"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
 rust-version = "1.70"
@@ -26,7 +26,7 @@ default-features = false
 optional = true
 
 [dependencies.bytecount]
-version = "=0.6.4"
+version = "=0.6.7"
 optional = true
 
 [dependencies.term_size]
