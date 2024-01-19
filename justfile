@@ -25,6 +25,8 @@ cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
 doc_dir     := justfile_directory() + "/doc"
 release_dir := justfile_directory() + "/release"
 
+export RUSTFLAGS := "-C target-cpu=x86-64-v3"
+
 
 
 # Bench it!
