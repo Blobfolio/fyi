@@ -21,7 +21,7 @@ pkg_dir1    := justfile_directory() + "/fyi"
 pkg_dir2    := justfile_directory() + "/fyi_msg"
 
 cargo_dir   := "/tmp/" + pkg_id + "-cargo"
-cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
+cargo_bin   := cargo_dir + "/release/" + pkg_id
 doc_dir     := justfile_directory() + "/doc"
 release_dir := justfile_directory() + "/release"
 
@@ -39,14 +39,12 @@ bench BENCH="":
 			--benches \
 			--workspace \
 			--all-features \
-			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}"
 	else
 		cargo bench \
 			--bench "{{ BENCH }}" \
 			--workspace \
 			--all-features \
-			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}"
 	fi
 	exit 0
@@ -105,7 +103,6 @@ bench BENCH="":
 	cargo build \
 		--bin "{{ pkg_id }}" \
 		--release \
-		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
 	# Fix ownership, etc.
@@ -149,7 +146,6 @@ bench BENCH="":
 	cargo clippy \
 		--workspace \
 		--all-features \
-		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
 
@@ -166,14 +162,13 @@ bench BENCH="":
 		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
 		--release \
 		--all-features \
-		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}" \
 		-- \
 		--cfg docsrs
 
 	# Move the docs and clean up ownership.
 	[ ! -d "{{ doc_dir }}" ] || rm -rf "{{ doc_dir }}"
-	mv "{{ cargo_dir }}/x86_64-unknown-linux-gnu/doc" "{{ justfile_directory() }}"
+	mv "{{ cargo_dir }}/doc" "{{ justfile_directory() }}"
 	just _fix-chown "{{ doc_dir }}"
 
 
@@ -185,7 +180,6 @@ bench BENCH="":
 		--all-features \
 		--release \
 		--example "{{ DEMO }}" \
-		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
 
@@ -194,7 +188,6 @@ bench BENCH="":
 	cargo run \
 		--bin "{{ pkg_id }}" \
 		--release \
-		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}" \
 		-- {{ ARGS }}
 
@@ -206,24 +199,20 @@ bench BENCH="":
 		--all-features \
 		--workspace \
 		--release \
-		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 	cargo test \
 		--all-features \
 		--workspace \
-		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
 	cargo test \
 		--no-default-features \
 		--workspace \
-		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 	cargo test \
 		--no-default-features \
 		--workspace \
 		--release \
-		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
 
