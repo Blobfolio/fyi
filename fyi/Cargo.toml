@@ -1,6 +1,6 @@
 [package]
 name = "fyi"
-version = "0.11.8"
+version = "0.12.0"
 license = "WTFPL"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
@@ -11,14 +11,14 @@ publish = false
 
 [package.metadata.deb]
 maintainer = "Blobfolio, LLC. <hello@blobfolio.com>"
-copyright = "2022, Blobfolio, LLC <hello@blobfolio.com>"
+copyright = "2024, Blobfolio, LLC <hello@blobfolio.com>"
 license-file = ["../LICENSE", "0"]
 revision = "1"
 extended-description = ""
 depends = "$auto"
 section = "utils"
 assets = [
-    ["../target/x86_64-unknown-linux-gnu/release/fyi", "usr/bin/", "755"],
+    ["../target/release/fyi", "usr/bin/", "755"],
     ["../release/completions/fyi.bash", "etc/bash_completion.d/", "644"],
     ["../release/man/fyi.1.gz", "usr/share/man/man1/", "644"],
     ["../release/man/fyi-blank.1.gz", "usr/share/man/man1/", "644"],
@@ -169,10 +169,10 @@ subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info"
 path = "../fyi_msg"
 
 [dependencies]
-dactyl = "0.6.*"
+dactyl = "0.7.*"
 
 [dependencies.argyle]
-version = "0.6.*"
+version = "0.7.*"
 features = [ "dynamic-help" ]
 
 [dependencies.fyi_msg]

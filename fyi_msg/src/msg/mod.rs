@@ -211,7 +211,7 @@ pub const FLAG_NEWLINE: u8 =   0b0100;
 ///
 /// While [`Msg`] objects are perfectly usable as-is, they can be easily
 /// converted to other formats. They dereference to a byte slice and implement
-/// `AsRef<[u8]>` and `Borrow<[u8]>`. They also implement `AsRef<str>` and
+/// `AsRef<[u8]>`. They also implement `AsRef<str>` and
 /// `Borrow<str>` for stringy situations. And if you want to consume the struct
 /// into an owned type, there's also [`Msg::into_vec`] and [`Msg::into_string`].
 pub struct Msg(MsgBuffer<MSGBUFFER>);
@@ -224,11 +224,6 @@ impl AsRef<[u8]> for Msg {
 impl AsRef<str> for Msg {
 	#[inline]
 	fn as_ref(&self) -> &str { self.as_str() }
-}
-
-impl Borrow<[u8]> for Msg {
-	#[inline]
-	fn borrow(&self) -> &[u8] { self }
 }
 
 impl Borrow<str> for Msg {
