@@ -48,7 +48,7 @@ For more usage examples, check out the `examples/msg` demo, which covers just ab
 
 */
 
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 
 #![warn(
 	clippy::filetype_is_file,

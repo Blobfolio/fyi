@@ -791,20 +791,16 @@ impl Msg {
 	/// # As Bytes.
 	///
 	/// Return the entire message as a byte slice. Alternatively, you could
-	/// dereference the struct or use [`Msg::as_ref`] or [`Msg::borrow`].
+	/// dereference the struct or use [`Msg::as_ref`].
 	pub fn as_bytes(&self) -> &[u8] { &self.0 }
 
-	#[allow(unsafe_code)]
 	#[must_use]
 	#[inline]
 	/// # As Str.
 	///
 	/// Return the entire message as a string slice. Alternatively, you could
 	/// use [`Msg::as_ref`] or [`Msg::borrow`].
-	pub fn as_str(&self) -> &str {
-		debug_assert!(std::str::from_utf8(&self.0).is_ok(), "Bug: Message is not UTF8.");
-		unsafe { std::str::from_utf8_unchecked(&self.0) }
-	}
+	pub fn as_str(&self) -> &str { self.0.as_str() }
 
 	#[must_use]
 	#[inline]
