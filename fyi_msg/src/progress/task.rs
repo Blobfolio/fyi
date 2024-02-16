@@ -140,3 +140,31 @@ impl<I: Iterator<Item=u8>> NoAnsi<I> {
 	/// # New.
 	const fn new(inner: I) -> Self { Self { inner, in_ansi: false } }
 }
+
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn t_no_ansi() {
+		// No ansi should come through unchanged.
+		assert_eq!(
+			NoAnsi::new(b"hello".iter().copied()).collect::<Vec<u8>>(),
+			b"hello",
+		);
+
+		// Basic ansi should get stripped.
+		assert_eq!(
+			NoAnsi::new(b"\x1b[1;30mhello\x1b[0m".iter().copied()).collect::<Vec<u8>>(),
+			b"hello",
+		);
+
+		// All ansi should strip everything.
+		assert_eq!(
+			NoAnsi::new(b"\x1b[1m".iter().copied()).collect::<Vec<u8>>(),
+			Vec::<u8>::new(),
+		);
+	}
+}
