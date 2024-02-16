@@ -30,5 +30,5 @@ benches!(
 		.run(|| Msg::new(MsgKind::Error, TEXT)),
 
 	Bench::new("fyi_msg::MsgKind::into_msg()")
-		.run(|| MsgKind::Error.into_msg(TEXT))
+		.run(|| MsgKind::Error.into_msg(TEXT)),
 );

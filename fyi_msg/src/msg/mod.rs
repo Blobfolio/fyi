@@ -628,6 +628,30 @@ impl Msg {
 		self.set_suffix(suffix);
 		self
 	}
+
+	#[must_use]
+	/// # Without ANSI Formatting.
+	///
+	/// Strip any ANSI formatting from the message.
+	///
+	/// Note that subsequent changes might re-introduce ANSI formatting, so
+	/// this should generally be the last operation before display.
+	///
+	/// For unchained usage, see [`Msg::strip_ansi`].
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::Msg;
+	///
+	/// Msg::info("5,000 matching files were found.")
+	///     .without_ansi()
+	///     .print();
+	/// ```
+	pub fn without_ansi(mut self) -> Self {
+		self.strip_ansi();
+		self
+	}
 }
 
 /// ## Setters.
@@ -738,6 +762,44 @@ impl Msg {
 	pub fn set_suffix<S>(&mut self, suffix: S)
 	where S: AsRef<str> {
 		self.0.replace(PART_SUFFIX, suffix.as_ref().as_bytes());
+	}
+
+	/// # Strip ANSI Formatting.
+	///
+	/// Remove colors, bold, etc. from the message.
+	///
+	/// Note that subsequent changes might re-introduce ANSI formatting, so
+	/// this should generally be the last operation before display.
+	///
+	/// See also [`Msg::without_ansi`].
+	///
+	/// Returns true if the content was modified.
+	pub fn strip_ansi(&mut self) -> bool {
+		// Iterate through all the parts (except indent and newline), replacing
+		// the content as needed.
+		let mut changed = false;
+		for i in 1..=PART_SUFFIX {
+			let old = self.0.get(i);
+			if old.contains(&b'\x1b') {
+				let mut new = old.to_vec();
+				let mut in_ansi = false;
+				new.retain(|&b|
+					if in_ansi {
+						if matches!(b, b'm' | b'A' | b'K') { in_ansi = false; }
+						false
+					}
+					else if b == b'\x1b' {
+						in_ansi = true;
+						false
+					}
+					else { true }
+				);
+				self.0.replace(i, &new);
+				changed = true;
+			}
+		}
+
+		changed
 	}
 }
 
@@ -1104,6 +1166,27 @@ mod tests {
 
 		msg.set_msg("My dear aunt");
 		assert!(msg.ends_with(b"My dear aunt"));
+	}
+
+	#[test]
+	fn t_strip_ansi() {
+		let mut msg = Msg::info("Hello \x1b[1mWorld!\x1b[0m")
+			.with_suffix(" \x1b[2m(foo)\x1b[0m");
+
+		// Strip it.
+		assert!(msg.strip_ansi());
+		assert_eq!(msg.as_str(), "Info: Hello World! (foo)\n");
+
+		// Already stripped!
+		assert!(! msg.strip_ansi());
+
+		// Test that without comes out the same.
+		assert_eq!(
+			msg,
+			Msg::info("Hello \x1b[1mWorld!\x1b[0m")
+				.with_suffix(" \x1b[2m(foo)\x1b[0m")
+				.without_ansi(),
+		);
 	}
 
 	#[cfg(feature = "fitted")]
