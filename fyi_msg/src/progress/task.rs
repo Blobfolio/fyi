@@ -23,6 +23,7 @@ use super::TASK_PREFIX;
 pub(super) struct ProglessTask {
 	task: Box<[u8]>,
 	width: u16,
+	ansi: bool,
 }
 
 impl Borrow<[u8]> for ProglessTask {
@@ -61,9 +62,11 @@ impl ProglessTask {
 		let src = src.as_ref();
 		if src.is_empty() { None }
 		else if let Ok(width) = u16::try_from(fitted::width(src)) {
+			let ansi = src.contains(&b'\x1b');
 			Some(Self {
 				task: Box::from(src),
 				width,
+				ansi,
 			})
 		}
 		else { None }
@@ -79,14 +82,61 @@ impl ProglessTask {
 			let end = fitted::length_width(&self.task, usize::from(avail));
 			if end > 0 {
 				buf.extend_from_slice(TASK_PREFIX);
-				buf.extend_from_slice(&self.task[..end]);
+				if self.ansi {
+					// Only push non-ANSI characters.
+					buf.extend(NoAnsi::new(self.task.iter().take(end).copied()));
+				}
+				else { buf.extend_from_slice(&self.task[..end]); }
 				buf.push(b'\n');
 			}
 		}
 		else {
 			buf.extend_from_slice(TASK_PREFIX);
-			buf.extend_from_slice(&self.task);
+			if self.ansi {
+				// Only push non-ANSI characters.
+				buf.extend(NoAnsi::new(self.task.iter().copied()));
+			}
+			else { buf.extend_from_slice(&self.task); }
 			buf.push(b'\n');
 		}
 	}
+}
+
+
+
+/// # No ANSI Iterator.
+///
+/// This wrapper omits any ANSI formatting blocks within a byte slice while
+/// returning everything else.
+struct NoAnsi<I: Iterator<Item=u8>> {
+	inner: I,
+	in_ansi: bool,
+}
+
+impl<I: Iterator<Item=u8>> Iterator for NoAnsi<I> {
+	type Item = u8;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		loop {
+			let next = self.inner.next()?;
+			if self.in_ansi {
+				if matches!(next, b'm' | b'A' | b'K') { self.in_ansi = false; }
+			}
+			else if next == b'\x1b' { self.in_ansi = true; }
+			else {
+				return Some(next);
+			}
+		}
+	}
+
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		let (_, max) = self.inner.size_hint();
+		(0, max)
+	}
+}
+
+impl<I: Iterator<Item=u8>> NoAnsi<I> {
+	#[inline]
+	/// # New.
+	const fn new(inner: I) -> Self { Self { inner, in_ansi: false } }
 }
