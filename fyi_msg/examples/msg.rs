@@ -85,6 +85,18 @@ fn main() {
 
 	println!();
 
+	Msg::info("The formatting can be stripped too.")
+		.without_ansi()
+		.print();
+
+	#[cfg(feature = "timestamps")]
+	Msg::info("So pale! Ew!")
+		.with_timestamp(true)
+		.without_ansi()
+		.print();
+
+	println!();
+
 	// A prompt to STDERR.
 	if Msg::new(MsgKind::Confirm, "Did this print to STDERR?").eprompt_with_default(true) {
 		Msg::plain("Great!")

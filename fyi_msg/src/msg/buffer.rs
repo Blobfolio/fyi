@@ -168,24 +168,9 @@ impl<const N: usize> MsgBuffer<N> {
 	///
 	/// This method returns the underlying vector as a string slice.
 	///
-	/// ## Panics
-	///
-	/// This method will panic if the contents are not valid UTF-8.
-	pub fn as_str(&self) -> &str { std::str::from_utf8(&self.buf).unwrap() }
-
-	#[allow(unsafe_code)]
-	#[must_use]
-	#[inline]
-	/// # As Str (Unchecked).
-	///
-	/// This method returns the underlying vector as a string slice.
-	///
-	/// ## Safety
-	///
-	/// The string must be valid UTF-8 or undefined things will happen.
-	pub unsafe fn as_str_unchecked(&self) -> &str {
-		std::str::from_utf8_unchecked(&self.buf)
-	}
+	/// If the buffer contains invalid UTF-8, an empty string slice will be
+	/// returned instead.
+	pub fn as_str(&self) -> &str { std::str::from_utf8(&self.buf).unwrap_or_default() }
 
 	#[must_use]
 	#[inline]
@@ -193,10 +178,9 @@ impl<const N: usize> MsgBuffer<N> {
 	///
 	/// Consume and return the underlying vector as a `String`.
 	///
-	/// ## Panics
-	///
-	/// This method will panic if the contents are not valid UTF-8.
-	pub fn into_string(self) -> String { String::from_utf8(self.buf).unwrap() }
+	/// If the buffer contains invalid UTF-8, an empty string will be returned
+	/// instead.
+	pub fn into_string(self) -> String { String::from_utf8(self.buf).unwrap_or_default() }
 
 	#[allow(clippy::missing_const_for_fn)] // Doesn't work.
 	#[must_use]
@@ -395,6 +379,23 @@ impl<const N: usize> MsgBuffer<N> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn as_str() {
+		let mut buf = MsgBuffer::<BUFFER3>::from_raw_parts(
+			vec![b'h', b'e', b'l', b'l', b'o'],
+			[
+				0, 5,
+				5, 5,
+				5, 5,
+			]
+		);
+		assert_eq!(buf.as_str(), "hello");
+
+		// Invalid UTF-8.
+		buf.replace(0, b"Hello \xF0\x90\x80World");
+		assert_eq!(buf.as_str(), "");
+	}
 
 	#[test]
 	fn extend() {
