@@ -401,9 +401,13 @@ impl ProglessInner {
 	/// in cases where you're triggering done changes manually.
 	fn remove<S>(&self, txt: S)
 	where S: AsRef<str> {
-		if self.running() && mutex!(self.doing).remove(txt.as_ref().as_bytes())	{
-			self.flags.fetch_or(TICK_DOING, SeqCst);
-			self.increment();
+		if self.running() {
+			if let Some(txt) = ProglessTask::fmt(txt) {
+				if mutex!(self.doing).remove(txt.as_bytes()) {
+					self.flags.fetch_or(TICK_DOING, SeqCst);
+					self.increment();
+				}
+			}
 		}
 	}
 
