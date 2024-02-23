@@ -6,6 +6,7 @@ pub(super) mod buffer;
 pub(super) mod kind;
 
 use crate::{
+	iter::NoAnsi,
 	MsgKind,
 	MsgBuffer,
 };
@@ -781,19 +782,7 @@ impl Msg {
 		for i in 1..=PART_SUFFIX {
 			let old = self.0.get(i);
 			if old.contains(&b'\x1b') {
-				let mut new = old.to_vec();
-				let mut in_ansi = false;
-				new.retain(|&b|
-					if in_ansi {
-						if matches!(b, b'm' | b'A' | b'K') { in_ansi = false; }
-						false
-					}
-					else if b == b'\x1b' {
-						in_ansi = true;
-						false
-					}
-					else { true }
-				);
+				let new: Vec<u8> = NoAnsi::<u8, _>::new(old.iter().copied()).collect();
 				self.0.replace(i, &new);
 				changed = true;
 			}

@@ -81,6 +81,7 @@ For more usage examples, check out the `examples/msg` demo, which covers just ab
 
 
 
+pub mod iter;
 mod msg;
 #[cfg(feature = "fitted")]   mod fitted;
 #[cfg(feature = "progress")] mod progress;
