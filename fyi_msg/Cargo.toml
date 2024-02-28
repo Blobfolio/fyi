@@ -44,7 +44,7 @@ optional = true
 
 [dev-dependencies]
 brunch = "0.5.*"
-rayon = "1.8.*"
+rayon = "1.9.*"
 
 [[bench]]
 name = "fm_buffer"
