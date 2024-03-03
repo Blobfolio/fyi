@@ -1309,9 +1309,10 @@ fn hash64(src: &[u8]) -> u64 {
 /// Note: The width returned will be `1` less than the actual value to mitigate
 /// any whitespace weirdness that might be lurking at the edge.
 fn term_width() -> u8 {
-	term_size::dimensions().map_or(
+	use terminal_size::Width;
+	terminal_size::terminal_size().map_or(
 		0,
-		|(w, _)| u8::saturating_from(w.saturating_sub(1))
+		|(Width(w), _)| u8::saturating_from(w.saturating_sub(1))
 	)
 }
 

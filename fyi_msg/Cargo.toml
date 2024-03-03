@@ -29,8 +29,8 @@ optional = true
 version = "=0.6.7"
 optional = true
 
-[dependencies.term_size]
-version = "=0.3.2"
+[dependencies.terminal_size]
+version = "=0.3.0"
 optional = true
 
 [dependencies.unicode-width]
@@ -84,7 +84,7 @@ bin_kinds = []
 fitted = [ "unicode-width" ]
 
 # Make use of the "progless" bar.
-progress = [ "ahash", "bytecount", "fitted", "term_size" ]
+progress = [ "ahash", "bytecount", "fitted", "terminal_size" ]
 
 # Add timestamp support to messages.
 timestamps = [ "utc2k" ]
