@@ -1,6 +1,6 @@
 [package]
 name = "fyi_msg"
-version = "0.13.1"
+version = "0.13.2"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
 rust-version = "1.72"
@@ -29,8 +29,8 @@ optional = true
 version = "=0.6.7"
 optional = true
 
-[dependencies.term_size]
-version = "=0.3.2"
+[dependencies.terminal_size]
+version = "=0.3.0"
 optional = true
 
 [dependencies.unicode-width]
@@ -44,7 +44,7 @@ optional = true
 
 [dev-dependencies]
 brunch = "0.5.*"
-rayon = "1.8.*"
+rayon = "1.9.*"
 
 [[bench]]
 name = "fm_buffer"
@@ -84,7 +84,7 @@ bin_kinds = []
 fitted = [ "unicode-width" ]
 
 # Make use of the "progless" bar.
-progress = [ "ahash", "bytecount", "fitted", "term_size" ]
+progress = [ "ahash", "bytecount", "fitted", "terminal_size" ]
 
 # Add timestamp support to messages.
 timestamps = [ "utc2k" ]
