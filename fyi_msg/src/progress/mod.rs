@@ -1298,16 +1298,29 @@ fn hash64(src: &[u8]) -> u64 {
 	hasher.finish()
 }
 
+#[cfg(unix)]
 #[must_use]
 #[inline]
 /// # Term Width.
 ///
-/// This is a simple wrapper around [`term_size::dimensions`] to provide
-/// the current terminal column width. We don't have any use for height,
-/// so that property is ignored.
+/// Return the column width of STDERR, if any, minus one to mitigate any
+/// whitespace weirdness at the edge.
+fn term_width() -> u8 {
+	use std::os::fd::AsRawFd;
+	use terminal_size::Width;
+	terminal_size::terminal_size_using_fd(std::io::stderr().as_raw_fd()).map_or(
+		0,
+		|(Width(w), _)| u8::saturating_from(w.saturating_sub(1))
+	)
+}
+
+#[cfg(not(unix))]
+#[must_use]
+#[inline]
+/// # Term Width.
 ///
-/// Note: The width returned will be `1` less than the actual value to mitigate
-/// any whitespace weirdness that might be lurking at the edge.
+/// Return the terminal column width, if any, minus one to mitigate any
+/// whitespace weirdness at the edge.
 fn term_width() -> u8 {
 	use terminal_size::Width;
 	terminal_size::terminal_size().map_or(
