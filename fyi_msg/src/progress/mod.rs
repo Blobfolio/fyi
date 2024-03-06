@@ -761,8 +761,8 @@ impl ProglessInner {
 		let now: u32 = u32::saturating_from(self.started.elapsed().as_millis());
 		let before: u32 = self.elapsed.load(SeqCst);
 
-		// Throttle back-to-back ticks.
-		if now.saturating_sub(before) < 60 { return None; }
+		// Try not to exceed the steady tick rate.
+		if now.saturating_sub(before) < steady::TICK_RATE { return None; }
 
 		let secs: u32 = now.wrapping_div(1000);
 		self.elapsed.store(now, SeqCst);
