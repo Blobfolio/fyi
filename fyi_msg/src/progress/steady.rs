@@ -24,7 +24,17 @@ use super::{
 
 
 
-const SLEEP: Duration = Duration::from_millis(30);
+/// # Tick Rate.
+///
+/// Delay between ticks in milliseconds.
+pub(super) const TICK_RATE: u32 = 100;
+
+#[allow(clippy::integer_division)]
+/// # Sleep Duration.
+///
+/// `ProglessSteady` nap duration. This is half the value of the desired
+/// `TICK_RATE` because there are two such naps per cycle.
+const SLEEP: Duration = Duration::from_millis((TICK_RATE / 2) as u64);
 
 
 
