@@ -483,6 +483,7 @@ impl Msg {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # With Indent.
 	///
 	/// Indent the message using four spaces per `indent`. To remove
@@ -504,6 +505,7 @@ impl Msg {
 	#[cfg(feature = "timestamps")]
 	#[cfg_attr(docsrs, doc(cfg(feature = "timestamps")))]
 	#[must_use]
+	#[inline]
 	/// # With Timestamp.
 	///
 	/// Disable, enable, and/or recalculate the timestamp prefix for the
@@ -524,6 +526,7 @@ impl Msg {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # With Linebreak.
 	///
 	/// Add a trailing linebreak to the end of the message. This is either one
@@ -546,6 +549,7 @@ impl Msg {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # With Prefix.
 	///
 	/// Set or reset the message prefix.
@@ -585,6 +589,7 @@ impl Msg {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # With Message.
 	///
 	/// Set or reset the message portion of the message.
@@ -605,6 +610,7 @@ impl Msg {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # With Suffix.
 	///
 	/// Set or reset the message suffix.
@@ -957,6 +963,7 @@ impl Msg {
 
 /// ## Printing.
 impl Msg {
+	#[inline]
 	/// # Locked Print to `STDOUT`.
 	///
 	/// This is equivalent to calling either `print!()` or `println()`
@@ -979,6 +986,7 @@ impl Msg {
 		let _res = handle.write_all(&self.0).and_then(|()| handle.flush());
 	}
 
+	#[inline]
 	/// # Locked Print to `STDERR`.
 	///
 	/// This is equivalent to calling either `eprint!()` or `eprintln()`
@@ -1001,6 +1009,7 @@ impl Msg {
 		let _res = handle.write_all(&self.0).and_then(|()| handle.flush());
 	}
 
+	#[inline]
 	/// # Print and Die.
 	///
 	/// This is a convenience method for printing a message to `STDERR` and

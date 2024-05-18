@@ -35,6 +35,7 @@ impl Error for ProglessError {}
 
 impl ProglessError {
 	#[must_use]
+	#[inline]
 	/// # As Str.
 	pub const fn as_str(self) -> &'static str {
 		match self {

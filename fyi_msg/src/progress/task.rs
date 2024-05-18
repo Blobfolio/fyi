@@ -41,6 +41,7 @@ impl Hash for ProglessTask {
 }
 
 impl Ord for ProglessTask {
+	#[inline]
 	fn cmp(&self, other: &Self) -> Ordering { self.inner.cmp(&other.inner) }
 }
 
@@ -50,6 +51,7 @@ impl PartialEq for ProglessTask {
 }
 
 impl PartialOrd for ProglessTask {
+	#[inline]
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
 }
 

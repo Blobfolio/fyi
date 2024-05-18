@@ -251,6 +251,7 @@ impl From<NonZeroU32> for ProglessInner {
 impl TryFrom<u32> for ProglessInner {
 	type Error = ProglessError;
 
+	#[inline]
 	fn try_from(total: u32) -> Result<Self, Self::Error> {
 		NonZeroU32::new(total)
 			.ok_or(ProglessError::EmptyTotal)
@@ -999,6 +1000,7 @@ impl Progless {
 /// # Construction/Destruction.
 impl Progless {
 	#[must_use]
+	#[inline]
 	/// # With Title.
 	///
 	/// Add a title to the progress bar. When present, this will print on its
@@ -1037,6 +1039,7 @@ impl Progless {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # Set Title As X: Reticulating Splines…
 	///
 	/// This is simply shorthand for generating a "Reticulating Splines…"
@@ -1050,6 +1053,7 @@ impl Progless {
 	}
 
 	#[allow(clippy::must_use_candidate)]
+	#[inline]
 	/// # Stop.
 	///
 	/// Finish the progress bar, shut down the steady ticker, and return the
@@ -1254,6 +1258,7 @@ impl Progless {
 	pub fn set_title<S>(&self, title: Option<S>)
 	where S: Into<Msg> { self.inner.set_title(title); }
 
+	#[inline]
 	/// # Set Title As X: Reticulating Splines…
 	///
 	/// This is simply shorthand for generating a "Reticulating Splines…"
@@ -1269,6 +1274,7 @@ impl Progless {
 		)));
 	}
 
+	#[inline]
 	/// # Set SIGINT.
 	///
 	/// This method is used to indicate that a SIGINT was received and that
