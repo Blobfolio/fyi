@@ -41,6 +41,7 @@ impl Hash for ProglessTask {
 }
 
 impl Ord for ProglessTask {
+	#[inline]
 	fn cmp(&self, other: &Self) -> Ordering { self.inner.cmp(&other.inner) }
 }
 
@@ -50,6 +51,7 @@ impl PartialEq for ProglessTask {
 }
 
 impl PartialOrd for ProglessTask {
+	#[inline]
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
 }
 
@@ -61,16 +63,20 @@ impl ProglessTask {
 	/// This will return `None` if the source is empty or larger than `u16`.
 	pub(super) fn new<S>(src: S) -> Option<Self>
 	where S: AsRef<str> {
-		let inner = Self::fmt(src)?.into_bytes();
-		let width = u16::try_from(fitted::width(&inner)).ok()?;
+		fn build(src: &str) -> Option<ProglessTask> {
+			let inner = ProglessTask::fmt(src)?.into_bytes();
+			let width = u16::try_from(fitted::width(&inner)).ok()?;
 
-		if width != 0 {
-			Some(Self {
-				inner: inner.into_boxed_slice(),
-				width
-			})
+			if width != 0 {
+				Some(ProglessTask {
+					inner: inner.into_boxed_slice(),
+					width
+				})
+			}
+			else { None }
 		}
-		else { None }
+
+		build(src.as_ref())
 	}
 
 	/// # Format String.
@@ -81,15 +87,19 @@ impl ProglessTask {
 	/// If the result is empty, `None` is returned.
 	pub(super) fn fmt<S>(src: S) -> Option<String>
 	where S: AsRef<str> {
-		let out = NoAnsi::<char, _>::new(src.as_ref().trim_end().chars())
-			.filter_map(|c|
-				if c == '\n' { Some(' ') }
-				else if c.is_control() { None }
-				else { Some(c) }
-			)
-			.collect::<String>();
-		if out.is_empty() { None }
-		else { Some(out) }
+		fn build(src: &str) -> Option<String> {
+			let out = NoAnsi::<char, _>::new(src.trim_end().chars())
+				.filter_map(|c|
+					if c == '\n' { Some(' ') }
+					else if c.is_control() { None }
+					else { Some(c) }
+				)
+				.collect::<String>();
+			if out.is_empty() { None }
+			else { Some(out) }
+		}
+
+		build(src.as_ref())
 	}
 
 	/// # Push To.

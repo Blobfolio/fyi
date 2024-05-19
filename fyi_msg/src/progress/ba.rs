@@ -45,6 +45,7 @@ pub struct BeforeAfter {
 }
 
 impl From<(u64, u64)> for BeforeAfter {
+	#[inline]
 	fn from(src: (u64, u64)) -> Self {
 		Self {
 			before: NonZeroU64::new(src.0),
@@ -95,6 +96,7 @@ impl BeforeAfter {
 	pub const fn after(&self) -> Option<NonZeroU64> { self.after }
 
 	#[must_use]
+	#[inline]
 	/// # Get Difference (After < Before).
 	///
 	/// If the after state is expected to be smaller than the before state,
@@ -120,6 +122,7 @@ impl BeforeAfter {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # Percentage Difference (After < Before).
 	///
 	/// This is the same as [`BeforeAfter::less`], but returns a percentage of
@@ -130,6 +133,7 @@ impl BeforeAfter {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # Get Difference (After > Before).
 	///
 	/// If the after state is expected to be larger than the before state,
@@ -155,6 +159,7 @@ impl BeforeAfter {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # Percentage Difference (After > Before).
 	///
 	/// This is the same as [`BeforeAfter::more`], but returns a percentage of

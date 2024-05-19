@@ -57,6 +57,7 @@ pub(super) struct ProglessSteady {
 }
 
 impl Default for ProglessSteady {
+	#[inline]
 	fn default() -> Self {
 		Self {
 			ticker: Mutex::new(None),
@@ -112,6 +113,7 @@ impl ProglessSteady {
 		}));
 	}
 
+	#[inline]
 	/// # Stop.
 	///
 	/// Make sure the steady ticker has actually aborted. This is called
