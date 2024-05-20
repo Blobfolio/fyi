@@ -331,14 +331,10 @@ impl ProglessInner {
 	/// The progress bar can optionally keep track of tasks that are actively
 	/// "in progress", which can be particularly useful when operating in
 	/// parallel.
-	///
-	/// Any `AsRef<str>` value will do. See the module documentation for
-	/// example usage.
-	fn add<S>(&self, txt: S)
-	where S: AsRef<str> {
+	fn add(&self, txt: &str) {
 		if
 			self.running() &&
-			ProglessTask::new(txt.as_ref()).is_some_and(|m| mutex!(self.doing).insert(m))
+			ProglessTask::new(txt).is_some_and(|m| mutex!(self.doing).insert(m))
 		{
 			self.flags.fetch_or(TICK_DOING, SeqCst);
 		}
@@ -384,11 +380,10 @@ impl ProglessInner {
 	/// Note: This will add a `\n` to the end of the string.
 	///
 	/// The message will be printed to STDERR if `stderr`, otherwise STDOUT.
-	fn push_msg<S>(&self, msg: S, stderr: bool)
-	where S: Into<Msg> {
+	fn push_msg(&self, msg: Msg, stderr: bool) {
 		self.print_cls();
 
-		let msg = msg.into().with_newline(true);
+		let msg = msg.with_newline(true);
 		if stderr { msg.eprint(); }
 		else { msg.print(); }
 
@@ -400,8 +395,7 @@ impl ProglessInner {
 	/// This is the equal and opposite companion to `add`. Calling this will
 	/// automatically increment the done count by one, so should not be used
 	/// in cases where you're triggering done changes manually.
-	fn remove<S>(&self, txt: S)
-	where S: AsRef<str> {
+	fn remove(&self, txt: &str) {
 		if self.running() {
 			if let Some(txt) = ProglessTask::fmt(txt) {
 				if mutex!(self.doing).remove(txt.as_bytes()) {
@@ -457,10 +451,9 @@ impl ProglessInner {
 	/// Give the progress bar a title, which will be shown above the progress
 	/// bits while progress is progressing, and removed afterward with
 	/// everything else.
-	fn set_title<S>(&self, title: Option<S>)
-	where S: Into<Msg> {
+	fn set_title(&self, title: Option<Msg>) {
 		if self.running() {
-			if let Some(title) = title.map(Into::into).filter(|x| ! x.is_empty()) {
+			if let Some(title) = title {
 				mutex!(self.title).replace(title.with_newline(true));
 			}
 			else {
@@ -1034,6 +1027,11 @@ impl Progless {
 	/// ```
 	pub fn with_title<S>(self, title: Option<S>) -> Self
 	where S: Into<Msg> {
+		let title = title.and_then(|m| {
+			let m = m.into();
+			if m.is_empty() { None }
+			else { Some(m) }
+		});
 		self.inner.set_title(title);
 		self
 	}
@@ -1127,7 +1125,7 @@ impl Progless {
 	pub fn summary<S>(&self, kind: MsgKind, singular: S, plural: S) -> Msg
 	where S: AsRef<str> {
 		Msg::new(kind, [
-			&self.inner.done().nice_inflect(singular, plural),
+			&self.inner.done().nice_inflect(singular.as_ref(), plural.as_ref()),
 			" in ",
 			NiceElapsed::from(self.inner.started).as_str(),
 			".",
@@ -1169,7 +1167,7 @@ impl Progless {
 	/// pbar.finish();
 	/// ```
 	pub fn add<S>(&self, txt: S)
-	where S: AsRef<str> { self.inner.add(txt); }
+	where S: AsRef<str> { self.inner.add(txt.as_ref()); }
 
 	#[inline]
 	/// # Increment Done.
@@ -1199,7 +1197,7 @@ impl Progless {
 	///
 	/// The message will be printed to STDERR if `stderr`, otherwise STDOUT.
 	pub fn push_msg<S>(&self, msg: S, stderr: bool)
-	where S: Into<Msg> { self.inner.push_msg(msg, stderr); }
+	where S: Into<Msg> { self.inner.push_msg(msg.into(), stderr); }
 
 	#[inline]
 	/// # Remove a task.
@@ -1211,7 +1209,7 @@ impl Progless {
 	/// See [`Progless::add`] for more details. If you use one, you must use
 	/// both.
 	pub fn remove<S>(&self, txt: S)
-	where S: AsRef<str> { self.inner.remove(txt); }
+	where S: AsRef<str> { self.inner.remove(txt.as_ref()); }
 
 	/// # Reset.
 	///
@@ -1256,7 +1254,14 @@ impl Progless {
 	///
 	/// See [`Progless::with_title`] for more details.
 	pub fn set_title<S>(&self, title: Option<S>)
-	where S: Into<Msg> { self.inner.set_title(title); }
+	where S: Into<Msg> {
+		let title = title.and_then(|m| {
+			let m = m.into();
+			if m.is_empty() { None }
+			else { Some(m) }
+		});
+		self.inner.set_title(title);
+	}
 
 	#[inline]
 	/// # Set Title As X: Reticulating Splines…
