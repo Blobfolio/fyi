@@ -309,18 +309,14 @@ impl Msg {
 	/// ```
 	pub fn new<S>(kind: MsgKind, msg: S) -> Self
 	where S: AsRef<str> {
-		fn build(kind: MsgKind, msg: &str) -> Msg {
-			let msg = msg.as_bytes();
-			let p_end = kind.len_32();
-			let m_end = p_end + msg.len() as u32;
+		let msg = msg.as_ref().as_bytes();
+		let p_end = kind.len_32();
+		let m_end = p_end + msg.len() as u32;
 
-			Msg(MsgBuffer::from_raw_parts(
-				[kind.as_bytes(), msg].concat(),
-				new_toc!(p_end, m_end)
-			))
-		}
-
-		build(kind, msg.as_ref())
+		Self(MsgBuffer::from_raw_parts(
+			[kind.as_bytes(), msg].concat(),
+			new_toc!(p_end, m_end)
+		))
 	}
 
 	#[allow(clippy::cast_possible_truncation)] // MsgBuffer checks fit.
@@ -343,30 +339,24 @@ impl Msg {
 	/// ```
 	pub fn custom<S>(prefix: S, color: u8, msg: S) -> Self
 	where S: AsRef<str> {
-		fn build(prefix: &str, color: u8, msg: &str) -> Msg {
-			let prefix = prefix.as_bytes();
-			if prefix.is_empty() {
-				return Msg::plain(msg);
-			}
+		let prefix = prefix.as_ref().as_bytes();
+		if prefix.is_empty() { return Self::plain(msg); }
 
-			// Start a vector with the prefix bits.
-			let msg = msg.as_bytes();
-			let v = [
-				b"\x1b[1;38;5;",
-				&*NiceU8::from(color),
-				b"m",
-				prefix,
-				b":\x1b[0m ",
-				msg,
-			].concat();
+		// Start a vector with the prefix bits.
+		let msg = msg.as_ref().as_bytes();
+		let v = [
+			b"\x1b[1;38;5;",
+			&*NiceU8::from(color),
+			b"m",
+			prefix,
+			b":\x1b[0m ",
+			msg,
+		].concat();
 
-			let m_end = v.len() as u32;
-			let p_end = m_end - msg.len() as u32;
+		let m_end = v.len() as u32;
+		let p_end = m_end - msg.len() as u32;
 
-			Msg(MsgBuffer::from_raw_parts(v, new_toc!(p_end, m_end)))
-		}
-
-		build(prefix.as_ref(), color, msg.as_ref())
+		Self(MsgBuffer::from_raw_parts(v, new_toc!(p_end, m_end)))
 	}
 
 	#[allow(clippy::cast_possible_truncation)] // MsgBuffer checks fit.
