@@ -61,22 +61,17 @@ impl ProglessTask {
 	/// Create a new task from raw bytes.
 	///
 	/// This will return `None` if the source is empty or larger than `u16`.
-	pub(super) fn new<S>(src: S) -> Option<Self>
-	where S: AsRef<str> {
-		fn build(src: &str) -> Option<ProglessTask> {
-			let inner = ProglessTask::fmt(src)?.into_bytes();
-			let width = u16::try_from(fitted::width(&inner)).ok()?;
+	pub(super) fn new(src: &str) -> Option<Self> {
+		let inner = Self::fmt(src)?.into_bytes();
+		let width = u16::try_from(fitted::width(&inner)).ok()?;
 
-			if width != 0 {
-				Some(ProglessTask {
-					inner: inner.into_boxed_slice(),
-					width
-				})
-			}
-			else { None }
+		if width != 0 {
+			Some(Self {
+				inner: inner.into_boxed_slice(),
+				width
+			})
 		}
-
-		build(src.as_ref())
+		else { None }
 	}
 
 	/// # Format String.
@@ -85,21 +80,16 @@ impl ProglessTask {
 	/// lines to spaces to improve display consistency.
 	///
 	/// If the result is empty, `None` is returned.
-	pub(super) fn fmt<S>(src: S) -> Option<String>
-	where S: AsRef<str> {
-		fn build(src: &str) -> Option<String> {
-			let out = NoAnsi::<char, _>::new(src.trim_end().chars())
-				.filter_map(|c|
-					if c == '\n' { Some(' ') }
-					else if c.is_control() { None }
-					else { Some(c) }
-				)
-				.collect::<String>();
-			if out.is_empty() { None }
-			else { Some(out) }
-		}
-
-		build(src.as_ref())
+	pub(super) fn fmt(src: &str) -> Option<String> {
+		let out = NoAnsi::<char, _>::new(src.trim_end().chars())
+			.filter_map(|c|
+				if c == '\n' { Some(' ') }
+				else if c.is_control() { None }
+				else { Some(c) }
+			)
+			.collect::<String>();
+		if out.is_empty() { None }
+		else { Some(out) }
 	}
 
 	/// # Push To.
