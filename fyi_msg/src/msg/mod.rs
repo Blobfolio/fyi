@@ -92,6 +92,7 @@ macro_rules! impl_builtins {
 	);
 
 	($name:expr, $ex:expr, $fn:ident, $kind:expr, $p_len:literal) => (
+		#[allow(clippy::cast_possible_truncation)]
 		#[doc = $name]
 		///
 		/// This is a convenience method to create a thusly prefixed message
