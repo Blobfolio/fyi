@@ -1,3 +1,7 @@
+/*!
+# FYI Msg: Kinds
+*/
+
 use super::Msg;
 use std::ops::Deref;
 

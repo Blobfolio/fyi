@@ -24,7 +24,10 @@ use super::TASK_PREFIX;
 /// This holds a boxed slice and the pre-calculated display width of said
 /// slice. Though stored as raw bytes, the value is valid UTF-8.
 pub(super) struct ProglessTask {
+	/// # Task (as bytes, but valid UTF-8).
 	inner: Box<[u8]>,
+
+	/// # Display Width.
 	width: u16,
 }
 

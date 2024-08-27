@@ -29,12 +29,11 @@ use super::{
 /// Delay between ticks in milliseconds.
 pub(super) const TICK_RATE: u32 = 100;
 
-#[allow(clippy::integer_division)]
 /// # Sleep Duration.
 ///
 /// `ProglessSteady` nap duration. This is half the value of the desired
 /// `TICK_RATE` because there are two such naps per cycle.
-const SLEEP: Duration = Duration::from_millis((TICK_RATE / 2) as u64);
+const SLEEP: Duration = Duration::from_millis(TICK_RATE.wrapping_div(2) as u64);
 
 
 
@@ -52,7 +51,10 @@ const SLEEP: Duration = Duration::from_millis((TICK_RATE / 2) as u64);
 /// is set to `false`. The latter is a failsafe for cases where the iterations
 /// fail to add up to the declared total.
 pub(super) struct ProglessSteady {
+	/// # Ticker Handle.
 	ticker: Mutex<Option<JoinHandle<()>>>,
+
+	/// # Is It Dead?
 	dead: Arc<AtomicBool>,
 }
 
@@ -99,7 +101,7 @@ impl ProglessSteady {
 
 		// Reset!
 		self.dead.store(false, SeqCst);
-		let t_dead = self.dead.clone();
+		let t_dead = Arc::clone(&self.dead);
 		mutex!(self.ticker).replace(std::thread::spawn(move || loop {
 			// This will abort if we've manually turned "dead" on, or if
 			// "inner" has reached 100%. Until then, this will initiate a
@@ -119,7 +121,8 @@ impl ProglessSteady {
 	/// Make sure the steady ticker has actually aborted. This is called
 	/// automatically when [`Progless::finish`] is called.
 	pub(super) fn stop(&self) {
-		if let Some(handle) = mutex!(self.ticker).take() {
+		let handle = mutex!(self.ticker).take();
+		if let Some(handle) = handle {
 			self.dead.store(true, SeqCst);
 			handle.join().unwrap();
 		}

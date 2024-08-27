@@ -15,7 +15,7 @@ const TEXT: &str = "This is an example message.";
 
 benches!(
 	Bench::new("fyi_msg::Msg::default()")
-		.run(|| Msg::default()),
+		.run(Msg::default),
 
 	Bench::new("fyi_msg::Msg::plain()")
 		.run(|| Msg::plain(TEXT)),

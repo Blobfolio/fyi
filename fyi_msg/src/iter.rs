@@ -15,8 +15,17 @@ use std::fmt;
 /// Note that other types of (less common) ANSI sequences and miscellaneous
 /// control characters may remain.
 pub struct NoAnsi<U: Copy + fmt::Debug, I: Iterator<Item=U>> {
+	/// # Iterator.
 	iter: I,
+
+	/// # Ansi Match State.
+	///
+	/// This keeps track of whether and where we are inside an ANSI sequence.
 	state: NoAnsiState<U>,
+
+	/// # Byte Position.
+	///
+	/// The current position inside the original source.
 	pos: usize,
 }
 
@@ -277,15 +286,27 @@ enum NoAnsiState<U: Copy + fmt::Debug> {
 }
 
 impl NoAnsiState<char> {
+	/// # Escape Character.
 	const ESCAPE: char = '\x1b';
+
+	/// # Bell Character.
 	const BELL: char = '\x07';
+
+	/// # OE Character.
 	const OE: char = '\u{0153}';
 }
 
 impl NoAnsiState<u8> {
+	/// # Escape Character.
 	const ESCAPE: u8 = b'\x1b';
+
+	/// # Bell Character.
 	const BELL: u8 = b'\x07';
+
+	/// # OE Character (part one).
 	const OE_1: u8 = 197;
+
+	/// # OE Character (part two).
 	const OE_2: u8 = 147;
 }
 
@@ -340,7 +361,7 @@ mod test {
 			[b'A', NoAnsiState::<u8>::ESCAPE, b']', b'B', NoAnsiState::<u8>::OE_1, NoAnsiState::<u8>::OE_1, NoAnsiState::<u8>::OE_2, b'C'].as_slice(),
 		] {
 			let stripped: Vec<u8> = NoAnsi::<u8, _>::new(i.iter().copied()).collect();
-			assert_eq!(stripped, b"AC", "Bytes: {:?}", i);
+			assert_eq!(stripped, b"AC", "Bytes: {i:?}");
 		}
 	}
 
