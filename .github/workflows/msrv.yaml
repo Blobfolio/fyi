@@ -50,5 +50,4 @@ jobs:
 
     - name: MSRV
       run: |
-        cargo msrv --path fyi verify
         cargo msrv --path fyi_msg verify -- cargo check --all-features
