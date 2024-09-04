@@ -29,7 +29,14 @@ use std::{
 	cmp::Ordering,
 	collections::BTreeSet,
 	hash::Hasher,
-	num::NonZeroU32,
+	num::{
+		NonZeroU8,
+		NonZeroU16,
+		NonZeroU32,
+		NonZeroU64,
+		NonZeroUsize,
+		NonZeroU128,
+	},
 	sync::{
 		Arc,
 		Mutex,
@@ -297,6 +304,7 @@ impl Default for ProglessInner {
 }
 
 impl From<NonZeroU32> for ProglessInner {
+	#[inline]
 	fn from(total: NonZeroU32) -> Self {
 		Self {
 			flags: AtomicU8::new(TICK_NEW),
@@ -305,6 +313,68 @@ impl From<NonZeroU32> for ProglessInner {
 		}
 	}
 }
+
+/// # Helper: generate `From` for small non-zero types.
+macro_rules! inner_nz_from {
+	($($ty:ty),+ $(,)?) => ($(
+		impl From<$ty> for ProglessInner {
+			#[inline]
+			fn from(total: $ty) -> Self {
+				Self {
+					flags: AtomicU8::new(TICK_NEW),
+					total: AtomicU32::new(u32::from(total.get())),
+					..Self::default()
+				}
+			}
+		}
+	)+)
+}
+inner_nz_from!(NonZeroU8, NonZeroU16);
+
+/// # Helper: generate `TryFrom` for large non-zero types.
+macro_rules! inner_nz_tryfrom {
+	($($ty:ty),+ $(,)?) => ($(
+		impl TryFrom<$ty> for ProglessInner {
+			type Error = ProglessError;
+
+			#[inline]
+			#[expect(clippy::cast_possible_truncation, reason = "We're checking for fit.")]
+			fn try_from(total: $ty) -> Result<Self, Self::Error> {
+				let total = total.get();
+				if total <= 4_294_967_295 {
+					Ok(Self {
+						flags: AtomicU8::new(TICK_NEW),
+						total: AtomicU32::new(total as u32),
+						..Self::default()
+					})
+				}
+				else { Err(ProglessError::TotalOverflow) }
+			}
+		}
+	)+)
+}
+inner_nz_tryfrom!(NonZeroU64, NonZeroUsize, NonZeroU128);
+
+/// # Helper: generate `TryFrom` for all non-`u32` integer types.
+macro_rules! inner_tryfrom {
+	($($ty:ty),+ $(,)?) => ($(
+		impl TryFrom<$ty> for ProglessInner {
+			type Error = ProglessError;
+
+			#[inline]
+			fn try_from(total: $ty) -> Result<Self, Self::Error> {
+				u32::try_from(total)
+					.map_err(|_| ProglessError::TotalOverflow)
+					.and_then(Self::try_from)
+			}
+		}
+	)+)
+}
+
+inner_tryfrom!(
+	u8, u16,      u64, usize, u128,
+	i8, i16, i32, i64, isize, i128,
+);
 
 impl TryFrom<u32> for ProglessInner {
 	type Error = ProglessError;
@@ -944,9 +1014,10 @@ pub struct Progless {
 	inner: Arc<ProglessInner>,
 }
 
-impl From<NonZeroU32> for Progless {
+impl<T> From<T> for Progless
+where ProglessInner: From<T> {
 	#[inline]
-	fn from(total: NonZeroU32) -> Self {
+	fn from(total: T) -> Self {
 		let inner = Arc::new(ProglessInner::from(total));
 		Self {
 			steady: Arc::new(ProglessSteady::from(Arc::clone(&inner))),
@@ -954,56 +1025,6 @@ impl From<NonZeroU32> for Progless {
 		}
 	}
 }
-
-impl TryFrom<u32> for Progless {
-	type Error = ProglessError;
-
-	#[inline]
-	fn try_from(total: u32) -> Result<Self, Self::Error> {
-		NonZeroU32::new(total)
-			.ok_or(ProglessError::EmptyTotal)
-			.map(Self::from)
-	}
-}
-
-/// # Helper: `TryFrom`
-///
-/// This will generate `TryFrom` implementations for various integer types, both
-/// bigger and smaller than the target `u32`.
-macro_rules! impl_tryfrom {
-	// These types fit into u32.
-	(true, ($($from:ty),+)) => (
-		$(
-			impl TryFrom<$from> for Progless {
-				type Error = ProglessError;
-
-				#[inline]
-				fn try_from(total: $from) -> Result<Self, Self::Error> {
-					Self::try_from(u32::from(total))
-				}
-			}
-		)+
-	);
-
-	// These types don't necessarily fit.
-	(false, ($($from:ty),+)) => (
-		$(
-			impl TryFrom<$from> for Progless {
-				type Error = ProglessError;
-
-				#[inline]
-				fn try_from(total: $from) -> Result<Self, Self::Error> {
-					u32::try_from(total)
-						.map_err(|_| ProglessError::TotalOverflow)
-						.and_then(Self::try_from)
-				}
-			}
-		)+
-	);
-}
-
-impl_tryfrom!(true, (u8, u16));
-impl_tryfrom!(false, (u64, u128, usize));
 
 impl From<Progless> for Msg {
 	#[inline]
@@ -1023,6 +1044,32 @@ impl From<Progless> for Msg {
 			.with_newline(true)
 	}
 }
+
+/// # Helper: generate `TryFrom for Progless` for all the
+/// `TryFrom for ProglessInner` types since we can't use generics for this
+/// trait.
+macro_rules! outer_tryfrom {
+	($($ty:ty),+ $(,)?) => ($(
+		impl TryFrom<$ty> for Progless {
+			type Error = ProglessError;
+
+			#[inline]
+			fn try_from(total: $ty) -> Result<Self, Self::Error> {
+				let inner = Arc::new(ProglessInner::try_from(total)?);
+				Ok(Self {
+					steady: Arc::new(ProglessSteady::from(Arc::clone(&inner))),
+					inner
+				})
+			}
+		}
+	)+)
+}
+
+outer_tryfrom!(
+	u8, u16, u32, u64, usize, u128,
+	i8, i16, i32, i64, isize, i128,
+	NonZeroU64, NonZeroUsize, NonZeroU128,
+);
 
 /// # Constants.
 impl Progless {
