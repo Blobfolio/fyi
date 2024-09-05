@@ -40,7 +40,10 @@ use std::num::NonZeroU64;
 /// For cases where `after` is expected to be larger, use [`BeforeAfter::more`]
 /// and [`BeforeAfter::more_percent`] instead.
 pub struct BeforeAfter {
+	/// # Size Before.
 	before: Option<NonZeroU64>,
+
+	/// # Size After.
 	after: Option<NonZeroU64>,
 }
 

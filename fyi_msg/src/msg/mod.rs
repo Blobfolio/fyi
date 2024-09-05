@@ -26,8 +26,13 @@ use std::{
 
 
 
-#[cfg(feature = "timestamps")]      const MSGBUFFER: usize = crate::BUFFER6;
-#[cfg(not(feature = "timestamps"))] const MSGBUFFER: usize = crate::BUFFER5;
+#[cfg(feature = "timestamps")]
+/// # Message Buffer Length.
+const MSGBUFFER: usize = crate::BUFFER6;
+
+#[cfg(not(feature = "timestamps"))]
+/// # Message Buffer Length.
+const MSGBUFFER: usize = crate::BUFFER5;
 
 
 
@@ -92,6 +97,7 @@ macro_rules! impl_builtins {
 	);
 
 	($name:expr, $ex:expr, $fn:ident, $kind:expr, $p_len:literal) => (
+		#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 		#[doc = $name]
 		///
 		/// This is a convenience method to create a thusly prefixed message
@@ -289,7 +295,7 @@ impl PartialEq<Vec<u8>> for Msg {
 
 /// ## Instantiation.
 impl Msg {
-	#[allow(clippy::cast_possible_truncation)] // MsgBuffer checks fit.
+	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 	/// # New Message.
 	///
 	/// This creates a new message with a built-in prefix (which can be
@@ -319,7 +325,7 @@ impl Msg {
 		))
 	}
 
-	#[allow(clippy::cast_possible_truncation)] // MsgBuffer checks fit.
+	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 	/// # Custom Prefix.
 	///
 	/// This creates a new message with a user-defined prefix and color. See
@@ -359,7 +365,7 @@ impl Msg {
 		Self(MsgBuffer::from_raw_parts(v, new_toc!(p_end, m_end)))
 	}
 
-	#[allow(clippy::cast_possible_truncation)] // MsgBuffer checks fit.
+	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 	/// # Custom Prefix (Pre-formatted)
 	///
 	/// Same as [`Msg::custom`], except no validation or formatting is applied
@@ -394,7 +400,7 @@ impl Msg {
 		))
 	}
 
-	#[allow(clippy::cast_possible_truncation)] // MsgBuffer checks fit.
+	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 	/// # New Message Without Any Prefix.
 	///
 	/// This is a streamlined equivalent of calling [`Msg::new`] with a
@@ -666,14 +672,14 @@ impl Msg {
 	/// This is the setter companion to the [`Msg::with_indent`] builder
 	/// method. Refer to that documentation for more information.
 	pub fn set_indent(&mut self, indent: u8) {
+		/// # Sixteen Spaces.
 		static SPACES: [u8; 16] = [32_u8; 16];
+
 		self.0.replace(PART_INDENT, &SPACES[0..4.min(usize::from(indent)) * 4]);
 	}
 
 	#[cfg(feature = "timestamps")]
 	#[cfg_attr(docsrs, doc(cfg(feature = "timestamps")))]
-	#[allow(clippy::cast_possible_truncation)] // Date pieces have known values.
-	#[allow(clippy::cast_sign_loss)] // Date pieces have known values.
 	/// # Set Timestamp.
 	///
 	/// This is the setter companion to the [`Msg::with_timestamp`] builder
@@ -875,7 +881,7 @@ impl Msg {
 
 	#[cfg(feature = "fitted")]
 	#[cfg_attr(docsrs, doc(cfg(feature = "fitted")))]
-	#[allow(clippy::cast_possible_truncation)] // MsgBuffer checks fit.
+	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 	#[must_use]
 	/// # Capped Width Slice.
 	///

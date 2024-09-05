@@ -29,7 +29,14 @@ use std::{
 	cmp::Ordering,
 	collections::BTreeSet,
 	hash::Hasher,
-	num::NonZeroU32,
+	num::{
+		NonZeroU8,
+		NonZeroU16,
+		NonZeroU32,
+		NonZeroU64,
+		NonZeroUsize,
+		NonZeroU128,
+	},
 	sync::{
 		Arc,
 		Mutex,
@@ -74,47 +81,85 @@ use mutex;
 
 
 
-/// # Tick Flags.
-///
-/// These flags indicate whether or not a given component has changed since the
-/// last tick, saving the overhead of recalculating the buffer values each time
-/// a value changes. (Instead they're only recalculated at most once per tick.)
+// Tick Flags.
+// These flags indicate whether or not a given component has changed since the
+// last tick, saving the overhead of recalculating the buffer values each time
+// a value changes. (Instead they're only recalculated at most once per tick.)
+
+/// # Flag: Initial State.
 const TICK_NEW: u8 =     0b0110_0001;
+
+/// # Flag: Reset.
 const TICK_RESET: u8 =   0b0110_1111;
+
+/// # Flag: Terminal Resized.
 const TICK_RESIZED: u8 = 0b0001_0011;
 
+/// # Flag: Repaint Bar.
 const TICK_BAR: u8 =     0b0000_0001;
+
+/// # Flag: Repaint Task List.
 const TICK_DOING: u8 =   0b0000_0010;
+
+/// # Flag: Repaint Done Value.
 const TICK_DONE: u8 =    0b0000_0100;
+
+/// # Flag: Repaint Percent.
 const TICK_PERCENT: u8 = 0b0000_1000;
+
+/// # Flag: Repaint Title.
 const TICK_TITLE: u8 =   0b0001_0000;
+
+/// # Flag: Repaint Total Value.
 const TICK_TOTAL: u8 =   0b0010_0000;
 
+/// # Flag: Is Ticking?
 const TICKING: u8 =      0b0100_0000;
+
+/// # Flag: SIGINT Received?
 const SIGINT: u8 =       0b1000_0000;
 
 
 
-/// # Buffer Indexes.
-///
-/// The start and end points of the malleable progress components are stored in
-/// an array for easy access. These are their indexes.
+// Buffer Indexes.
+// The start and end points of the malleable progress components are stored in
+// an array for easy access. These are their indexes.
+
+/// # Buffer Index: Title.
 const PART_TITLE: usize = 0;
+
+/// # Buffer Index: Title.
 const PART_ELAPSED: usize = 1;
+
+/// # Buffer Index: Bar Done.
 const PART_BAR_DONE: usize = 2;
+
+/// # Buffer Index: Bar Remaining.
 const PART_BAR_UNDONE: usize = 3;
+
+/// # Buffer Index: Done Value.
 const PART_DONE: usize = 4;
+
+/// # Buffer Index: Total Value.
 const PART_TOTAL: usize = 5;
+
+/// # Buffer Index: Percent.
 const PART_PERCENT: usize = 6;
+
+/// # Buffer Index: Task List.
 const PART_DOING: usize = 7;
 
 
 
-/// # Misc Variables.
+/// # Minimum Bar Width.
 const MIN_BARS_WIDTH: u8 = 10;
+
+/// # Minimum Draw Width.
 const MIN_DRAW_WIDTH: u8 = 40;
 
-// This translates to:          •   •   •   •   ↳             •
+/// # Task Prefix.
+///
+/// This translates to:         •   •   •   •   ↳             •
 const TASK_PREFIX: &[u8; 8] = &[32, 32, 32, 32, 226, 134, 179, 32];
 
 
@@ -126,34 +171,54 @@ const TASK_PREFIX: &[u8; 8] = &[32, 32, 32, 32, 226, 134, 179, 32];
 /// struct holds an instance of this behind an [`std::sync::Arc`] for easier
 /// thread-sharing.
 struct ProglessInner {
+	/// # Buffer.
 	buf: Mutex<MsgBuffer<BUFFER8>>,
+
+	/// # Flags.
 	flags: AtomicU8,
 
-	// A hash of what was last printed. Saves redundant work in cases where
-	// nothing has changed since the last print.
+	/// # Last Hash.
+	///
+	/// A hash of what was last printed. Saves redundant work in cases where
+	/// nothing has changed since the last print.
 	last_hash: AtomicU64,
 
-	// The number of lines last printed. Before printing new output, this many
-	// lines must be "erased".
+	/// # Last Printed Line Count.
+	///
+	/// The number of lines last printed. Before printing new output, this many
+	/// lines must be "erased".
 	last_lines: AtomicU8,
 
-	// The screen width from the last print. If this changes, all buffer parts
-	// are recalculated (even if their values haven't changed) to ensure they
-	// fit the new width.
+	/// # Last Width.
+	///
+	/// The screen width from the last print. If this changes, all buffer parts
+	/// are recalculated (even if their values haven't changed) to ensure they
+	/// fit the new width.
 	last_width: AtomicU8,
 
-	// The instant the object was first created. All timings are derived from
-	// this value.
+	/// # Start Time.
+	///
+	/// The instant the object was first created. All timings are derived from
+	/// this value.
 	started: Instant,
 
-	// This is the number of elapsed milliseconds as of the last tick. This
-	// gives us a reference to throttle back-to-back ticks as well as a cache
-	// of the seconds written to the `[00:00:00]` portion of the buffer.
+	/// # Elapsed Seconds.
+	///
+	/// This is the number of elapsed milliseconds as of the last tick. This
+	/// gives us a reference to throttle back-to-back ticks as well as a cache
+	/// of the seconds written to the `[00:00:00]` portion of the buffer.
 	elapsed: AtomicU32,
 
+	/// # Title.
 	title: Mutex<Option<Msg>>,
+
+	/// # Finished Tasks.
 	done: AtomicU32,
+
+	/// # Active Task List.
 	doing: Mutex<BTreeSet<ProglessTask>>,
+
+	/// # Total Tasks.
 	total: AtomicU32,
 }
 
@@ -239,6 +304,7 @@ impl Default for ProglessInner {
 }
 
 impl From<NonZeroU32> for ProglessInner {
+	#[inline]
 	fn from(total: NonZeroU32) -> Self {
 		Self {
 			flags: AtomicU8::new(TICK_NEW),
@@ -247,6 +313,68 @@ impl From<NonZeroU32> for ProglessInner {
 		}
 	}
 }
+
+/// # Helper: generate `From` for small non-zero types.
+macro_rules! inner_nz_from {
+	($($ty:ty),+ $(,)?) => ($(
+		impl From<$ty> for ProglessInner {
+			#[inline]
+			fn from(total: $ty) -> Self {
+				Self {
+					flags: AtomicU8::new(TICK_NEW),
+					total: AtomicU32::new(u32::from(total.get())),
+					..Self::default()
+				}
+			}
+		}
+	)+)
+}
+inner_nz_from!(NonZeroU8, NonZeroU16);
+
+/// # Helper: generate `TryFrom` for large non-zero types.
+macro_rules! inner_nz_tryfrom {
+	($($ty:ty),+ $(,)?) => ($(
+		impl TryFrom<$ty> for ProglessInner {
+			type Error = ProglessError;
+
+			#[inline]
+			#[expect(clippy::cast_possible_truncation, reason = "We're checking for fit.")]
+			fn try_from(total: $ty) -> Result<Self, Self::Error> {
+				let total = total.get();
+				if total <= 4_294_967_295 {
+					Ok(Self {
+						flags: AtomicU8::new(TICK_NEW),
+						total: AtomicU32::new(total as u32),
+						..Self::default()
+					})
+				}
+				else { Err(ProglessError::TotalOverflow) }
+			}
+		}
+	)+)
+}
+inner_nz_tryfrom!(NonZeroU64, NonZeroUsize, NonZeroU128);
+
+/// # Helper: generate `TryFrom` for all non-`u32` integer types.
+macro_rules! inner_tryfrom {
+	($($ty:ty),+ $(,)?) => ($(
+		impl TryFrom<$ty> for ProglessInner {
+			type Error = ProglessError;
+
+			#[inline]
+			fn try_from(total: $ty) -> Result<Self, Self::Error> {
+				u32::try_from(total)
+					.map_err(|_| ProglessError::TotalOverflow)
+					.and_then(Self::try_from)
+			}
+		}
+	)+)
+}
+
+inner_tryfrom!(
+	u8, u16,      u64, usize, u128,
+	i8, i16, i32, i64, isize, i128,
+);
 
 impl TryFrom<u32> for ProglessInner {
 	type Error = ProglessError;
@@ -445,7 +573,6 @@ impl ProglessInner {
 		}
 	}
 
-	#[allow(clippy::option_if_let_else)] // This is better.
 	/// # Set Title.
 	///
 	/// Give the progress bar a title, which will be shown above the progress
@@ -486,7 +613,7 @@ impl ProglessInner {
 
 /// # Render.
 impl ProglessInner {
-	#[allow(clippy::significant_drop_tightening)]
+	#[expect(clippy::significant_drop_tightening, reason = "False positive.")]
 	/// # Preprint.
 	///
 	/// This method accepts a completed buffer ready for printing, hashing it
@@ -502,9 +629,7 @@ impl ProglessInner {
 		// Make sure the content is unique, otherwise we can leave the old bits
 		// up.
 		let hash = hash64(&buf);
-		if hash == self.last_hash.swap(hash, SeqCst) {
-			return;
-		}
+		if hash == self.last_hash.swap(hash, SeqCst) { return; }
 
 		// Erase old lines if needed.
 		self.print_cls();
@@ -538,10 +663,11 @@ impl ProglessInner {
 	/// This method "erases" any prior output so that new output can be written
 	/// in the same place. That's CLI animation, folks!
 	fn print_cls(&self) {
-		// Buffer 10 Line Clears.
-		// 0..10 moves the cursor left. This is done only once per reset.
-		// 14 is the length of each subsequent command, which moves the cursor up.
-		// To clear "n" lines, then, slice [0..(10 + 14 * n)].
+		/// # Buffer 10 Line Clears.
+		///
+		/// 0..10 moves the cursor left. This is done only once per reset.
+		/// 14 is the length of each subsequent command, which moves the cursor up.
+		/// To clear "n" lines, then, slice [0..(10 + 14 * n)].
 		static CLS10: [u8; 150] = [27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75];
 
 		let last_lines = self.last_lines.swap(0, SeqCst);
@@ -665,7 +791,7 @@ impl ProglessInner {
 		}
 	}
 
-	#[allow(clippy::cast_possible_truncation)] // These parts are constrained to u8::MAX.
+	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 	/// # Tick Bar.
 	///
 	/// This redraws the actual progress *bar* portion of the buffer, which is
@@ -675,7 +801,10 @@ impl ProglessInner {
 	/// The entire line will never exceed 255 characters. The bars,
 	/// conservatively, cannot exceed 244, and will always be at least 10.
 	fn tick_set_bar(&self, width: u8) {
+		/// # Bar Filler.
 		static BAR: [u8; 244] = [b'#'; 244];
+
+		/// # Dash Filler.
 		static DASH: [u8; 244] = [b'-'; 244];
 
 		if self.flag_unset(TICK_BAR) {
@@ -770,7 +899,6 @@ impl ProglessInner {
 		}
 	}
 
-	#[allow(clippy::option_if_let_else)] // This is better.
 	/// # Tick Title.
 	///
 	/// The title needs to be rewritten both on direct change and resolution
@@ -879,70 +1007,24 @@ impl ProglessInner {
 /// // ... snip
 /// ```
 pub struct Progless {
+	/// # Steady Ticker.
 	steady: Arc<ProglessSteady>,
+
+	/// # Progress Data.
 	inner: Arc<ProglessInner>,
 }
 
-impl From<NonZeroU32> for Progless {
+impl<T> From<T> for Progless
+where ProglessInner: From<T> {
 	#[inline]
-	fn from(total: NonZeroU32) -> Self {
+	fn from(total: T) -> Self {
 		let inner = Arc::new(ProglessInner::from(total));
 		Self {
-			steady: Arc::new(ProglessSteady::from(inner.clone())),
+			steady: Arc::new(ProglessSteady::from(Arc::clone(&inner))),
 			inner
 		}
 	}
 }
-
-impl TryFrom<u32> for Progless {
-	type Error = ProglessError;
-
-	#[inline]
-	fn try_from(total: u32) -> Result<Self, Self::Error> {
-		NonZeroU32::new(total)
-			.ok_or(ProglessError::EmptyTotal)
-			.map(Self::from)
-	}
-}
-
-/// # Helper: `TryFrom`
-///
-/// This will generate `TryFrom` implementations for various integer types, both
-/// bigger and smaller than the target `u32`.
-macro_rules! impl_tryfrom {
-	// These types fit into u32.
-	(true, ($($from:ty),+)) => (
-		$(
-			impl TryFrom<$from> for Progless {
-				type Error = ProglessError;
-
-				#[inline]
-				fn try_from(total: $from) -> Result<Self, Self::Error> {
-					Self::try_from(u32::from(total))
-				}
-			}
-		)+
-	);
-
-	// These types don't necessarily fit.
-	(false, ($($from:ty),+)) => (
-		$(
-			impl TryFrom<$from> for Progless {
-				type Error = ProglessError;
-
-				#[inline]
-				fn try_from(total: $from) -> Result<Self, Self::Error> {
-					u32::try_from(total)
-						.map_err(|_| ProglessError::TotalOverflow)
-						.and_then(Self::try_from)
-				}
-			}
-		)+
-	);
-}
-
-impl_tryfrom!(true, (u8, u16));
-impl_tryfrom!(false, (u64, u128, usize));
 
 impl From<Progless> for Msg {
 	#[inline]
@@ -962,6 +1044,32 @@ impl From<Progless> for Msg {
 			.with_newline(true)
 	}
 }
+
+/// # Helper: generate `TryFrom for Progless` for all the
+/// `TryFrom for ProglessInner` types since we can't use generics for this
+/// trait.
+macro_rules! outer_tryfrom {
+	($($ty:ty),+ $(,)?) => ($(
+		impl TryFrom<$ty> for Progless {
+			type Error = ProglessError;
+
+			#[inline]
+			fn try_from(total: $ty) -> Result<Self, Self::Error> {
+				let inner = Arc::new(ProglessInner::try_from(total)?);
+				Ok(Self {
+					steady: Arc::new(ProglessSteady::from(Arc::clone(&inner))),
+					inner
+				})
+			}
+		}
+	)+)
+}
+
+outer_tryfrom!(
+	u8, u16, u32, u64, usize, u128,
+	i8, i16, i32, i64, isize, i128,
+	NonZeroU64, NonZeroUsize, NonZeroU128,
+);
 
 /// # Constants.
 impl Progless {
@@ -1050,7 +1158,7 @@ impl Progless {
 		self
 	}
 
-	#[allow(clippy::must_use_candidate)]
+	#[expect(clippy::must_use_candidate, reason = "Caller might not care.")]
 	#[inline]
 	/// # Stop.
 	///
@@ -1227,7 +1335,7 @@ impl Progless {
 	/// This will return an error if the new total is zero.
 	pub fn reset(&self, total: u32) -> Result<(), ProglessError> {
 		self.inner.reset(total)?;
-		self.steady.start(self.inner.clone());
+		self.steady.start(Arc::clone(&self.inner));
 		Ok(())
 	}
 

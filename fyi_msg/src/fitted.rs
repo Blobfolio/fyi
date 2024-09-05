@@ -154,9 +154,7 @@ mod tests {
 			assert_eq!(
 				length_width(slice.as_bytes(), stop),
 				expected,
-				"Invalid length/width for {:?} fit to {}.",
-				slice,
-				stop
+				"Invalid length/width for {slice:?} fit to {stop}."
 			);
 		}
 	}
@@ -174,7 +172,7 @@ mod tests {
 		] {
 			assert_eq!(
 				width(slice.as_bytes()), expected,
-				"Invalid width for {:?}.", slice
+				"Invalid width for {slice:?}."
 			);
 		}
 	}

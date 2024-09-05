@@ -1,10 +1,9 @@
 [package]
 name = "fyi"
-version = "0.13.6"
+version = "0.14.0"
 license = "WTFPL"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
-rust-version = "1.72"
 description = "A dead-simple CLI status message printer for use in BASH scripts, etc."
 repository = "https://github.com/Blobfolio/fyi"
 publish = false
@@ -172,7 +171,7 @@ path = "../fyi_msg"
 dactyl = "0.7.*"
 
 [dependencies.argyle]
-version = "0.7.*"
+version = "0.8.*"
 features = [ "dynamic-help" ]
 
 [dependencies.fyi_msg]

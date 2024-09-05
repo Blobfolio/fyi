@@ -49,7 +49,11 @@ pub const BUFFER10: usize = 20;
 
 /// # Maximum size.
 const BUFFER_MAX_LEN: usize = 4_294_967_295;
+
+/// # Overflow Error.
 const BUFFER_OVERFLOW: &str = "Buffer lengths may not exceed u32::MAX.";
+
+/// # Underflow Error.
 const BUFFER_UNDERFLOW: &str = "Adjustment is larger than the part.";
 
 
@@ -57,7 +61,10 @@ const BUFFER_UNDERFLOW: &str = "Adjustment is larger than the part.";
 #[derive(Debug, Clone)]
 /// # Message Buffer.
 pub struct MsgBuffer<const N: usize> {
+	/// # Buffer.
 	buf: Vec<u8>,
+
+	/// # Table of Contents.
 	toc: [u32; N]
 }
 
@@ -182,7 +189,6 @@ impl<const N: usize> MsgBuffer<N> {
 	/// instead.
 	pub fn into_string(self) -> String { String::from_utf8(self.buf).unwrap_or_default() }
 
-	#[allow(clippy::missing_const_for_fn)] // Doesn't work.
 	#[must_use]
 	#[inline]
 	/// # Into Vec.
@@ -195,7 +201,7 @@ impl<const N: usize> MsgBuffer<N> {
 impl<const N: usize> MsgBuffer<N> {
 	#[must_use]
 	#[inline]
-	#[allow(clippy::cast_possible_truncation)] // We've previously asserted it fits.
+	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 	/// # Total Buffer Length.
 	///
 	/// Return the length of the entire buffer (rather than a single part).
@@ -210,7 +216,6 @@ impl<const N: usize> MsgBuffer<N> {
 	}
 }
 
-#[allow(clippy::len_without_is_empty)] // We don't need it.
 /// ## Individual Parts.
 impl<const N: usize> MsgBuffer<N> {
 	#[must_use]
@@ -242,7 +247,6 @@ impl<const N: usize> MsgBuffer<N> {
 		&mut self.buf[rng]
 	}
 
-	#[allow(clippy::cast_possible_truncation)] // We've previously asserted it fits.
 	/// # Extend Part.
 	///
 	/// ## Panics
@@ -269,7 +273,7 @@ impl<const N: usize> MsgBuffer<N> {
 		}
 	}
 
-	#[allow(clippy::comparison_chain)] // We're only matching 2/3.
+	#[expect(clippy::comparison_chain, reason = "We're only comparing 2 of 3.")]
 	/// # Replace Part.
 	///
 	/// ## Panics
