@@ -1425,9 +1425,8 @@ fn hash64(src: &[u8]) -> u64 {
 /// Return the column width of STDERR, if any, minus one to mitigate any
 /// whitespace weirdness at the edge.
 fn term_width() -> u8 {
-	use std::os::fd::AsRawFd;
 	use terminal_size::Width;
-	terminal_size::terminal_size_using_fd(std::io::stderr().as_raw_fd()).map_or(
+	terminal_size::terminal_size_of(std::io::stderr()).map_or(
 		0,
 		|(Width(w), _)| u8::saturating_from(w.saturating_sub(1))
 	)
