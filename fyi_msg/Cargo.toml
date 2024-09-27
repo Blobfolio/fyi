@@ -34,7 +34,7 @@ version = "=0.4.0"
 optional = true
 
 [dependencies.unicode-width]
-version = "0.1.*"
+version = "0.2.*"
 optional = true
 
 [dependencies.utc2k]
