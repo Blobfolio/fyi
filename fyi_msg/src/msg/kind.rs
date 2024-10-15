@@ -95,6 +95,30 @@ impl From<&[u8]> for MsgKind {
 
 /// ## Details.
 impl MsgKind {
+	#[cfg(feature = "bin_kinds")]
+	#[must_use]
+	/// # Command.
+	///
+	/// Return the corresponding CLI (sub)command that triggers this kind.
+	pub const fn command(self) -> &'static str {
+		match self {
+			Self::Blank => "blank",
+			Self::Confirm => "confirm",
+			Self::Crunched => "crunched",
+			Self::Custom => "print",
+			Self::Debug => "debug",
+			Self::Done => "done",
+			Self::Error => "error",
+			Self::Info => "info",
+			Self::None => "",
+			Self::Notice => "notice",
+			Self::Review => "review",
+			Self::Success => "success",
+			Self::Task => "task",
+			Self::Warning => "warning",
+		}
+	}
+
 	#[must_use]
 	/// # Length.
 	///
