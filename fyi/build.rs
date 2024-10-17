@@ -2,6 +2,7 @@
 # FYI: Build
 */
 
+use argyle::KeyWordsBuilder;
 use fyi_msg::{
 	Msg,
 	MsgKind,
@@ -13,17 +14,23 @@ use std::path::{
 
 
 
-/// # Build Help Screens
+/// # Build Arguments and Help Screens
 ///
 /// This generates text for the various help screens to avoid having to do that
 /// at runtime. The binary actually ends up slightly smaller this way, too.
+///
+/// It also generates the keywords used for CLI parsing, again to save some
+/// runtime overhead.
 pub fn main() {
 	println!("cargo:rerun-if-changed=help");
 	println!("cargo:rerun-if-env-changed=CARGO_PKG_VERSION");
 
+	// Build the CLI arguments.
+	write_cli();
+
 	// Handle the top.
 	write_help(
-		out_path("top"),
+		help_path("top"),
 		format!(
 			r#"
                       ;\
@@ -77,7 +84,7 @@ pub fn main() {
 		("Warning", MsgKind::Warning),
 	] {
 		write_help(
-			out_path(&name.to_lowercase()),
+			help_path(&name.to_lowercase()),
 			format!(
 				include_str!("./help/generic.txt"),
 				name,
@@ -92,16 +99,76 @@ pub fn main() {
 fn copy_path(name: &str) {
 	let mut src = std::fs::canonicalize(env!("CARGO_MANIFEST_DIR")).expect("Missing Cargo Dir.");
 	src.push(format!("help/{name}.txt"));
-	write_help(out_path(name), &std::fs::read(src).expect("Failed to open file."));
+	write_help(help_path(name), &std::fs::read(src).expect("Failed to open file."));
 }
 
-/// # Out path.
-fn out_path(name: &str) -> PathBuf {
+/// # Output path (help).
+fn help_path(name: &str) -> PathBuf {
 	PathBuf::from(format!(
 		"{}/help-{}.txt",
 		std::env::var("OUT_DIR").expect("Missing OUT_DIR"),
 		name
 	))
+}
+
+/// # Output Path.
+///
+/// Append the sub-path to OUT_DIR and return it.
+fn out_path(stub: &str) -> PathBuf {
+	std::fs::canonicalize(std::env::var("OUT_DIR").expect("Missing OUT_DIR."))
+		.expect("Missing OUT_DIR.")
+		.join(stub)
+}
+
+/// # Generate CLI arguments.
+fn write_cli() {
+	// Main arguments first.
+	let mut builder = KeyWordsBuilder::default();
+	builder.push_commands([
+		"blank",
+		"confirm",
+		"crunched",
+		"debug",
+		"done",
+		"error",
+		"info",
+		"notice",
+		"print",
+		"review",
+		"success",
+		"task",
+		"warning",
+	]);
+	builder.push_keys([
+		"-h", "--help",
+		"-V", "--version",
+	]);
+	builder.save(out_path("argyle-kind.rs"));
+
+	// Blank arguments.
+	builder = KeyWordsBuilder::default();
+	builder.push_keys([
+		"-h", "--help",
+		"--stderr",
+	]);
+	builder.push_keys_with_values(["-c", "--count"]);
+	builder.save(out_path("argyle-blank.rs"));
+
+	// Message arguments.
+	builder = KeyWordsBuilder::default();
+	builder.push_keys([
+		"-h", "--help",
+		"-i", "--indent",
+		"--stderr",
+		"-t", "--timestamp",
+		"-y", "--yes",
+	]);
+	builder.push_keys_with_values([
+		"-c", "--prefix-color",
+		"-e", "--exit",
+		"-p", "--prefix",
+	]);
+	builder.save(out_path("argyle-msg.rs"));
 }
 
 /// # Write file.
