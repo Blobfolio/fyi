@@ -2,7 +2,7 @@
 # FYI: CLI
 */
 
-use argyle::stream::{
+use argyle::{
 	Argue,
 	Argument,
 };
@@ -95,26 +95,9 @@ impl Settings {
 
 /// # Parse Message Kind.
 pub(super) fn parse_kind() -> Result<MsgKind, FyiError> {
-	let mut args = argyle::stream::args()
-		.with_commands([
-			"blank",
-			"confirm",
-			"crunched",
-			"debug",
-			"done",
-			"error",
-			"info",
-			"notice",
-			"print",
-			"review",
-			"success",
-			"task",
-			"warning",
-		])?
-		.with_switches([
-			"-h", "--help",
-			"-V", "--version",
-		])?;
+	let mut args = argyle::args().with_keywords(
+		include!(concat!(env!("OUT_DIR"), "/argyle-kind.rs"))
+	);
 
 	// The first result must be a subcommand or help/version flag.
 	let kind = match args.next() {
@@ -133,11 +116,7 @@ pub(super) fn parse_kind() -> Result<MsgKind, FyiError> {
 pub(super) fn parse_blank() -> Result<(), FyiError> {
 	// The first arg is always skipped, the second we read earlier.
 	let args = Argue::from(std::env::args_os().skip(2))
-		.with_switches([
-			"-h", "--help",
-			"--stderr",
-		])?
-		.with_options(["-c", "--count"])?;
+		.with_keywords(include!(concat!(env!("OUT_DIR"), "/argyle-blank.rs")));
 
 	let mut stderr = false;
 	let mut count = NonZeroUsize::MIN;
@@ -167,18 +146,7 @@ pub(super) fn parse_blank() -> Result<(), FyiError> {
 pub(super) fn parse_msg(kind: MsgKind) -> Result<(Msg, Settings), FyiError> {
 	// The first arg is always skipped, the second we read earlier.
 	let args = Argue::from(std::env::args_os().skip(2))
-		.with_switches([
-			"-h", "--help",
-			"-i", "--indent",
-			"--stderr",
-			"-t", "--timestamp",
-			"-y", "--yes", // Technically only for confirmation.
-		])?
-		.with_options([
-			"-c", "--prefix-color",
-			"-e", "--exit",
-			"-p", "--prefix",
-		])?;
+		.with_keywords(include!(concat!(env!("OUT_DIR"), "/argyle-msg.rs")));
 
 	let mut msg = None;
 	let mut prefix = String::new();

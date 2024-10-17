@@ -164,11 +164,14 @@ label = "<MSG>"
 description = "The message!"
 subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "review", "success", "task", "warning" ]
 
+[build-dependencies]
+argyle = "0.10.*"
+
 [build-dependencies.fyi_msg]
 path = "../fyi_msg"
 
 [dependencies]
-argyle = "0.9.*"
+argyle = "0.10.*"
 dactyl = "0.7.*"
 
 [dependencies.fyi_msg]

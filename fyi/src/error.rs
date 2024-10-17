@@ -2,7 +2,6 @@
 # FYI: Errors
 */
 
-use argyle::stream::ArgyleError;
 use fyi_msg::MsgKind;
 use std::fmt;
 
@@ -11,9 +10,6 @@ use std::fmt;
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 /// # Errors!
 pub(super) enum FyiError {
-	/// # Argue Passthrough.
-	Argue(ArgyleError),
-
 	/// # Unrecognized CLI.
 	InvalidCli(MsgKind),
 
@@ -46,16 +42,10 @@ impl fmt::Display for FyiError {
 	}
 }
 
-impl From<ArgyleError> for FyiError {
-	#[inline]
-	fn from(src: ArgyleError) -> Self { Self::Argue(src) }
-}
-
 impl FyiError {
 	/// # As String Slice.
 	pub(super) const fn as_str(self) -> &'static str {
 		match self {
-			Self::Argue(e) => e.as_str(),
 			Self::InvalidCli(_) => "Invalid CLI argument(s).",
 			Self::NoMessage => "Missing message.",
 			Self::Passthrough(_) | Self::PrintHelp(_) => "",
