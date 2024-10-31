@@ -112,27 +112,3 @@ print a certain number of blank lines for you. Run
 | `-h` | `--help` | | Print help information and exit. | |
 | | `--stderr` | | Print to STDERR instead of STDOUT. | |
 | `-c` | `--count` | `<num>` | Number of empty lines to print. | 1 |
-
-
-
-## License
-
-See also: [CREDITS.md](CREDITS.md)
-
-Copyright © 2024 [Blobfolio, LLC](https://blobfolio.com) &lt;hello@blobfolio.com&gt;
-
-This work is free. You can redistribute it and/or modify it under the terms of the Do What The Fuck You Want To Public License, Version 2.
-
-    DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
-    Version 2, December 2004
-    
-    Copyright (C) 2004 Sam Hocevar <sam@hocevar.net>
-    
-    Everyone is permitted to copy and distribute verbatim or modified
-    copies of this license document, and changing it is allowed as long
-    as the name is changed.
-    
-    DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
-    TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
-    
-    0. You just DO WHAT THE FUCK YOU WANT TO.

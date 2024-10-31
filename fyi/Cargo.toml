@@ -2,14 +2,14 @@
 name = "fyi"
 version = "1.1.1"
 license = "WTFPL"
-authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
+authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
 description = "A dead-simple CLI status message printer for use in BASH scripts, etc."
 repository = "https://github.com/Blobfolio/fyi"
 publish = false
 
 [package.metadata.deb]
-maintainer = "Blobfolio, LLC. <hello@blobfolio.com>"
+maintainer = "Josh Stoik <josh@blobfolio.com>"
 copyright = "2024, Blobfolio, LLC <hello@blobfolio.com>"
 license-file = ["../LICENSE", "0"]
 revision = "1"
