@@ -52,6 +52,8 @@ pub enum MsgKind {
 	Review,
 	/// Success.
 	Success,
+	/// Skipped.
+	Skipped,
 	/// Task.
 	Task,
 	/// Warning.
@@ -83,6 +85,7 @@ impl From<&[u8]> for MsgKind {
 			b"info" => Self::Info,
 			b"notice" => Self::Notice,
 			b"review" => Self::Review,
+			b"skipped" => Self::Skipped,
 			b"success" => Self::Success,
 			b"task" => Self::Task,
 			b"warning" => Self::Warning,
@@ -113,6 +116,7 @@ impl MsgKind {
 			Self::None => "",
 			Self::Notice => "notice",
 			Self::Review => "review",
+			Self::Skipped => "skipped",
 			Self::Success => "success",
 			Self::Task => "task",
 			Self::Warning => "warning",
@@ -133,7 +137,7 @@ impl MsgKind {
 			Self::Done | Self::Info => 17,
 			Self::Debug | Self::Error => 18,
 			Self::Notice | Self::Review => 19,
-			Self::Success | Self::Warning => 20,
+			Self::Skipped | Self::Success | Self::Warning => 20,
 			Self::Task => 23,
 		}
 	}
@@ -157,6 +161,7 @@ impl MsgKind {
 			Self::Info => b"\x1b[95;1mInfo:\x1b[0m ",
 			Self::Notice => b"\x1b[95;1mNotice:\x1b[0m ",
 			Self::Review => b"\x1b[96;1mReview:\x1b[0m ",
+			Self::Skipped => b"\x1b[93;1mSkipped:\x1b[0m ",
 			Self::Success => b"\x1b[92;1mSuccess:\x1b[0m ",
 			Self::Task => b"\x1b[1;38;5;199mTask:\x1b[0m ",
 			Self::Warning => b"\x1b[93;1mWarning:\x1b[0m ",
@@ -191,6 +196,7 @@ mod tests {
 			MsgKind::None,
 			MsgKind::Notice,
 			MsgKind::Review,
+			MsgKind::Skipped,
 			MsgKind::Success,
 			MsgKind::Task,
 			MsgKind::Warning,
