@@ -1,15 +1,15 @@
 [package]
 name = "fyi"
-version = "1.1.1"
+version = "1.2.0"
 license = "WTFPL"
-authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
+authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
 description = "A dead-simple CLI status message printer for use in BASH scripts, etc."
 repository = "https://github.com/Blobfolio/fyi"
 publish = false
 
 [package.metadata.deb]
-maintainer = "Blobfolio, LLC. <hello@blobfolio.com>"
+maintainer = "Josh Stoik <josh@blobfolio.com>"
 copyright = "2024, Blobfolio, LLC <hello@blobfolio.com>"
 license-file = ["../LICENSE", "0"]
 revision = "1"
@@ -30,6 +30,7 @@ assets = [
     ["../release/man/fyi-notice.1.gz", "usr/share/man/man1/", "644"],
     ["../release/man/fyi-print.1.gz", "usr/share/man/man1/", "644"],
     ["../release/man/fyi-review.1.gz", "usr/share/man/man1/", "644"],
+    ["../release/man/fyi-skipped.1.gz", "usr/share/man/man1/", "644"],
     ["../release/man/fyi-success.1.gz", "usr/share/man/man1/", "644"],
     ["../release/man/fyi-task.1.gz", "usr/share/man/man1/", "644"],
     ["../release/man/fyi-warning.1.gz", "usr/share/man/man1/", "644"],
@@ -82,6 +83,10 @@ cmd = "review"
 description="Review: Hello World"
 
 [[package.metadata.bashman.subcommands]]
+cmd = "skipped"
+description="Skipped: Hello World"
+
+[[package.metadata.bashman.subcommands]]
 cmd = "success"
 description="Success: Hello World"
 
@@ -97,24 +102,24 @@ description="Warning: Hello World"
 short = "-h"
 long = "--help"
 description = "Print help information."
-subcommands = [ "", "blank", "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "review", "success", "task", "warning" ]
+subcommands = [ "", "blank", "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "review", "skipped", "success", "task", "warning" ]
 
 [[package.metadata.bashman.switches]]
 short = "-i"
 long = "--indent"
 description = "Indent the line."
-subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "review", "success", "task", "warning" ]
+subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "review", "skipped", "success", "task", "warning" ]
 
 [[package.metadata.bashman.switches]]
 long = "--stderr"
 description = "Print to STDERR instead of STDOUT."
-subcommands = [ "blank", "print", "crunched", "debug", "done", "error", "info", "notice", "review", "success", "task", "warning" ]
+subcommands = [ "blank", "print", "crunched", "debug", "done", "error", "info", "notice", "review", "skipped", "success", "task", "warning" ]
 
 [[package.metadata.bashman.switches]]
 short = "-t"
 long = "--timestamp"
 description = "Include a timestamp."
-subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "review", "success", "task", "warning" ]
+subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "review", "skipped", "success", "task", "warning" ]
 
 [[package.metadata.bashman.switches]]
 short = "-V"
@@ -141,7 +146,7 @@ long = "--exit"
 description = "Exit with this status code after printing. [default: 0]"
 label = "<NUM>"
 path = false
-subcommands = [ "print", "crunched", "debug", "done", "error", "info", "notice", "review", "success", "task", "warning" ]
+subcommands = [ "print", "crunched", "debug", "done", "error", "info", "notice", "review", "skipped", "success", "task", "warning" ]
 
 [[package.metadata.bashman.options]]
 short = "-c"
@@ -162,7 +167,7 @@ subcommands = [ "print" ]
 [[package.metadata.bashman.arguments]]
 label = "<MSG>"
 description = "The message!"
-subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "review", "success", "task", "warning" ]
+subcommands = [ "confirm", "print", "crunched", "debug", "done", "error", "info", "notice", "review", "skipped", "success", "task", "warning" ]
 
 [build-dependencies]
 argyle = "0.10.*"

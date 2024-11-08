@@ -51,45 +51,6 @@ _basher__fyi_confirm() {
 	COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 	return 0
 }
-_basher__fyi_print() {
-	local cur prev opts
-	COMPREPLY=()
-	cur="${COMP_WORDS[COMP_CWORD]}"
-	prev="${COMP_WORDS[COMP_CWORD-1]}"
-	opts=()
-	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
-		opts+=("-h")
-		opts+=("--help")
-	fi
-	if [[ ! " ${COMP_LINE} " =~ " -i " ]] && [[ ! " ${COMP_LINE} " =~ " --indent " ]]; then
-		opts+=("-i")
-		opts+=("--indent")
-	fi
-	[[ " ${COMP_LINE} " =~ " --stderr " ]] || opts+=("--stderr")
-	if [[ ! " ${COMP_LINE} " =~ " -t " ]] && [[ ! " ${COMP_LINE} " =~ " --timestamp " ]]; then
-		opts+=("-t")
-		opts+=("--timestamp")
-	fi
-	if [[ ! " ${COMP_LINE} " =~ " -e " ]] && [[ ! " ${COMP_LINE} " =~ " --exit " ]]; then
-		opts+=("-e")
-		opts+=("--exit")
-	fi
-	if [[ ! " ${COMP_LINE} " =~ " -c " ]] && [[ ! " ${COMP_LINE} " =~ " --prefix-color " ]]; then
-		opts+=("-c")
-		opts+=("--prefix-color")
-	fi
-	if [[ ! " ${COMP_LINE} " =~ " -p " ]] && [[ ! " ${COMP_LINE} " =~ " --prefix " ]]; then
-		opts+=("-p")
-		opts+=("--prefix")
-	fi
-	opts=" ${opts[@]} "
-	if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
-		COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-		return 0
-	fi
-	COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-	return 0
-}
 _basher__fyi_crunched() {
 	local cur prev opts
 	COMPREPLY=()
@@ -276,7 +237,77 @@ _basher__fyi_notice() {
 	COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 	return 0
 }
+_basher__fyi_print() {
+	local cur prev opts
+	COMPREPLY=()
+	cur="${COMP_WORDS[COMP_CWORD]}"
+	prev="${COMP_WORDS[COMP_CWORD-1]}"
+	opts=()
+	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
+		opts+=("-h")
+		opts+=("--help")
+	fi
+	if [[ ! " ${COMP_LINE} " =~ " -i " ]] && [[ ! " ${COMP_LINE} " =~ " --indent " ]]; then
+		opts+=("-i")
+		opts+=("--indent")
+	fi
+	[[ " ${COMP_LINE} " =~ " --stderr " ]] || opts+=("--stderr")
+	if [[ ! " ${COMP_LINE} " =~ " -t " ]] && [[ ! " ${COMP_LINE} " =~ " --timestamp " ]]; then
+		opts+=("-t")
+		opts+=("--timestamp")
+	fi
+	if [[ ! " ${COMP_LINE} " =~ " -e " ]] && [[ ! " ${COMP_LINE} " =~ " --exit " ]]; then
+		opts+=("-e")
+		opts+=("--exit")
+	fi
+	if [[ ! " ${COMP_LINE} " =~ " -p " ]] && [[ ! " ${COMP_LINE} " =~ " --prefix " ]]; then
+		opts+=("-p")
+		opts+=("--prefix")
+	fi
+	if [[ ! " ${COMP_LINE} " =~ " -c " ]] && [[ ! " ${COMP_LINE} " =~ " --prefix-color " ]]; then
+		opts+=("-c")
+		opts+=("--prefix-color")
+	fi
+	opts=" ${opts[@]} "
+	if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
+		COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+		return 0
+	fi
+	COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+	return 0
+}
 _basher__fyi_review() {
+	local cur prev opts
+	COMPREPLY=()
+	cur="${COMP_WORDS[COMP_CWORD]}"
+	prev="${COMP_WORDS[COMP_CWORD-1]}"
+	opts=()
+	if [[ ! " ${COMP_LINE} " =~ " -h " ]] && [[ ! " ${COMP_LINE} " =~ " --help " ]]; then
+		opts+=("-h")
+		opts+=("--help")
+	fi
+	if [[ ! " ${COMP_LINE} " =~ " -i " ]] && [[ ! " ${COMP_LINE} " =~ " --indent " ]]; then
+		opts+=("-i")
+		opts+=("--indent")
+	fi
+	[[ " ${COMP_LINE} " =~ " --stderr " ]] || opts+=("--stderr")
+	if [[ ! " ${COMP_LINE} " =~ " -t " ]] && [[ ! " ${COMP_LINE} " =~ " --timestamp " ]]; then
+		opts+=("-t")
+		opts+=("--timestamp")
+	fi
+	if [[ ! " ${COMP_LINE} " =~ " -e " ]] && [[ ! " ${COMP_LINE} " =~ " --exit " ]]; then
+		opts+=("-e")
+		opts+=("--exit")
+	fi
+	opts=" ${opts[@]} "
+	if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
+		COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+		return 0
+	fi
+	COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+	return 0
+}
+_basher__fyi_skipped() {
 	local cur prev opts
 	COMPREPLY=()
 	cur="${COMP_WORDS[COMP_CWORD]}"
@@ -416,14 +447,15 @@ _basher___fyi() {
 	fi
 	opts+=("blank")
 	opts+=("confirm")
-	opts+=("print")
 	opts+=("crunched")
 	opts+=("debug")
 	opts+=("done")
 	opts+=("error")
 	opts+=("info")
 	opts+=("notice")
+	opts+=("print")
 	opts+=("review")
+	opts+=("skipped")
 	opts+=("success")
 	opts+=("task")
 	opts+=("warning")
@@ -450,9 +482,6 @@ subcmd__basher___fyi() {
 			confirm)
 				cmd="confirm"
 				;;
-			print)
-				cmd="print"
-				;;
 			crunched)
 				cmd="crunched"
 				;;
@@ -471,8 +500,14 @@ subcmd__basher___fyi() {
 			notice)
 				cmd="notice"
 				;;
+			print)
+				cmd="print"
+				;;
 			review)
 				cmd="review"
+				;;
+			skipped)
+				cmd="skipped"
 				;;
 			success)
 				cmd="success"
@@ -503,9 +538,6 @@ chooser__basher___fyi() {
 		confirm)
 			_basher__fyi_confirm
 			;;
-		print)
-			_basher__fyi_print
-			;;
 		crunched)
 			_basher__fyi_crunched
 			;;
@@ -524,8 +556,14 @@ chooser__basher___fyi() {
 		notice)
 			_basher__fyi_notice
 			;;
+		print)
+			_basher__fyi_print
+			;;
 		review)
 			_basher__fyi_review
+			;;
+		skipped)
+			_basher__fyi_skipped
 			;;
 		success)
 			_basher__fyi_success

@@ -36,6 +36,7 @@ fn main() {
 	Msg::review("The total was such-and-such.").print();
 	Msg::debug("The devil is in the details.").print();
 	Msg::info("Details without the word 'bug'.").print();
+	Msg::skipped("Wasn't worth doing.").print();
 	Msg::task("Let's get to work!").print();
 
 	println!();

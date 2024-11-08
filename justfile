@@ -73,6 +73,7 @@ bench BENCH="":
 	"{{ cargo_bin }}" review "The total was such-and-such."
 	"{{ cargo_bin }}" debug "The devil is in the details."
 	"{{ cargo_bin }}" info "Details without the word 'bug'."
+	"{{ cargo_bin }}" skipped "Wasn't worth doing."
 	"{{ cargo_bin }}" task "Let's get to work!"
 
 	"{{ cargo_bin }}" blank
@@ -151,7 +152,7 @@ bench BENCH="":
 
 # Generate CREDITS.
 @credits:
-	cargo bashman -m "{{ pkg_dir1 }}/Cargo.toml"
+	cargo bashman -m "{{ pkg_dir1 }}/Cargo.toml" -t x86_64-unknown-linux-gnu
 	just _fix-chown "{{ justfile_directory() }}/CREDITS.md"
 
 

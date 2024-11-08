@@ -146,6 +146,7 @@ fn helper(cmd: MsgKind) {
 		MsgKind::Info => write_help!("info", true),
 		MsgKind::Notice => write_help!("notice", true),
 		MsgKind::Review => write_help!("review", true),
+		MsgKind::Skipped => write_help!("skipped", true),
 		MsgKind::Success => write_help!("success", true),
 		MsgKind::Task => write_help!("task", true),
 		MsgKind::Warning => write_help!("warning", true),

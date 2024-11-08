@@ -17,6 +17,7 @@ SUBCOMMANDS:
     info        Info: Hello World
     notice      Notice: Hello World
     review      Review: Hello World
+    skipped     Skipped: Hello World
     success     Success: Hello World
     task        Task: Hello World
     warning     Warning: Hello World
