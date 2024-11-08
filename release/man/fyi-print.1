@@ -1,6 +1,6 @@
-.TH "FYI PRINT" "1" "October 2024" "fyi print v1.1.1" "User Commands"
+.TH "FYI PRINT" "1" "November 2024" "fyi print v1.2.0" "User Commands"
 .SH NAME
-PRINT \- Manual page for fyi print v1.1.1.
+PRINT \- Manual page for fyi print v1.2.0.
 .SH DESCRIPTION
 Print a message without a prefix (or with a custom one).
 .SS USAGE:
@@ -24,11 +24,12 @@ Include a timestamp.
 \fB\-e\fR, \fB\-\-exit\fR <NUM>
 Exit with this status code after printing. [default: 0]
 .TP
-\fB\-c\fR, \fB\-\-prefix\-color\fR <NUM>
-Use this color for the prefix. [default: 199]
-.TP
 \fB\-p\fR, \fB\-\-prefix\fR <PREFIX>
 Set a custom prefix. [default: ]
-.SS <MSG>:
 .TP
+\fB\-c\fR, \fB\-\-prefix\-color\fR <NUM>
+Use this color for the prefix. [default: 199]
+.SS TRAILING:
+.TP
+\fB<MSG>\fR
 The message!
