@@ -9,6 +9,7 @@ mod task;
 
 
 
+use ahash::RandomState;
 use crate::{
 	BUFFER8,
 	Msg,
@@ -28,7 +29,6 @@ use dactyl::{
 use std::{
 	cmp::Ordering,
 	collections::BTreeSet,
-	hash::Hasher,
 	num::{
 		NonZeroU8,
 		NonZeroU16,
@@ -56,6 +56,14 @@ use steady::ProglessSteady;
 use task::ProglessTask;
 
 
+
+/// # Static Hasher.
+const AHASHER: RandomState = RandomState::with_seeds(
+	0x8596_cc44_bef0_1aa0,
+	0x98d4_0948_da60_19ae,
+	0x49f1_3013_c503_a6aa,
+	0xc4d7_82ff_3c9f_7bef,
+);
 
 /// # Double-Digit Times.
 ///
@@ -218,6 +226,9 @@ struct ProglessInner {
 	/// # Active Task List.
 	doing: Mutex<BTreeSet<ProglessTask>>,
 
+	/// # Scratch Buffer for Formatted Task List.
+	doing_buf: Mutex<Vec<u8>>,
+
 	/// # Total Tasks.
 	total: AtomicU32,
 }
@@ -298,6 +309,7 @@ impl Default for ProglessInner {
 			title: Mutex::new(None),
 			done: AtomicU32::new(0),
 			doing: Mutex::new(BTreeSet::default()),
+			doing_buf: Mutex::new(Vec::new()),
 			total: AtomicU32::new(1),
 		}
 	}
@@ -525,11 +537,24 @@ impl ProglessInner {
 	/// in cases where you're triggering done changes manually.
 	fn remove(&self, txt: &str) {
 		if self.running() {
-			if let Some(txt) = ProglessTask::fmt(txt) {
-				if mutex!(self.doing).remove(txt.as_bytes()) {
-					self.flags.fetch_or(TICK_DOING, SeqCst);
-					self.increment();
-				}
+			// Try to remove the task.
+			let removed: bool = {
+				let txt = txt.trim_end();
+				let mut ptr = mutex!(self.doing);
+
+				// Check for a direct hit first as it is relatively unlikely
+				// the label would have been reformatted for storage.
+				ptr.remove(txt.as_bytes()) ||
+				// Then again, maybe it was…
+				ProglessTask::new(txt).map_or(false, |task|
+					task != *txt && ptr.remove(&task)
+				)
+			};
+
+			// If we removed an entry, set the tick flag and increment.
+			if removed {
+				self.flags.fetch_or(TICK_DOING, SeqCst);
+				self.increment();
 			}
 		}
 	}
@@ -628,7 +653,7 @@ impl ProglessInner {
 
 		// Make sure the content is unique, otherwise we can leave the old bits
 		// up.
-		let hash = hash64(&buf);
+		let hash = AHASHER.hash_one(buf.as_bytes());
 		if hash == self.last_hash.swap(hash, SeqCst) { return; }
 
 		// Erase old lines if needed.
@@ -826,6 +851,7 @@ impl ProglessInner {
 		}
 	}
 
+	#[expect(clippy::significant_drop_tightening, reason = "False positive.")]
 	/// # Tick Doing.
 	///
 	/// Update the task list portion of the buffer. This is triggered both by
@@ -834,18 +860,29 @@ impl ProglessInner {
 	fn tick_set_doing(&self, width: u8) {
 		if self.flag_unset(TICK_DOING) {
 			let doing = mutex!(self.doing);
-			if doing.is_empty() {
+			let width: u8 = width.saturating_sub(6);
+
+			// Nothing doing. Literally!
+			if width < 16 || doing.is_empty() {
 				mutex!(self.buf).truncate(PART_DOING, 0);
 			}
+			// Build up the display block.
 			else {
-				let width: u8 = width.saturating_sub(6);
-
-				let mut tasks = Vec::<u8>::with_capacity(256);
+				let mut tasks = mutex!(self.doing_buf);
+				tasks.truncate(0);
 				tasks.extend_from_slice(b"\x1b[35m");
-				doing.iter().for_each(|x| x.push_to(&mut tasks, width));
+
+				let width = usize::from(width - 6); // Subtract prefix width.
+				for line in doing.iter() {
+					if let Some(line) = line.fitted(width) {
+						tasks.extend_from_slice(TASK_PREFIX);
+						tasks.extend_from_slice(line);
+						tasks.push(b'\n');
+					}
+				}
+
 				drop(doing); // Release the lock a few ns early.
 				tasks.extend_from_slice(b"\x1b[0m");
-
 				mutex!(self.buf).replace(PART_DOING, &tasks);
 			}
 		}
@@ -1403,19 +1440,6 @@ impl Progless {
 }
 
 
-
-#[must_use]
-#[inline]
-/// # `AHash` Byte Hash.
-///
-/// This is a convenience method for quickly hashing bytes using the
-/// [`AHash`](https://crates.io/crates/ahash) crate. Check out that project's
-/// home page for more details. Otherwise, TL;DR it is very fast.
-fn hash64(src: &[u8]) -> u64 {
-	let mut hasher = ahash::AHasher::default();
-	hasher.write(src);
-	hasher.finish()
-}
 
 #[cfg(unix)]
 #[must_use]
