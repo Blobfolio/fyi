@@ -27,7 +27,6 @@ use dactyl::{
 	},
 };
 use std::{
-	cmp::Ordering,
 	collections::BTreeSet,
 	num::{
 		NonZeroU8,
@@ -69,7 +68,7 @@ const AHASHER: RandomState = RandomState::with_seeds(
 ///
 /// This holds pre-asciified double-digit numbers up to sixty for use by the
 /// `write_time` method. It doesn't need to hold anything larger than that.
-static DD: [[u8; 2]; 60] = [
+const DD: &[[u8; 2]; 60] = &[
 	[48, 48], [48, 49], [48, 50], [48, 51], [48, 52], [48, 53], [48, 54], [48, 55], [48, 56], [48, 57],
 	[49, 48], [49, 49], [49, 50], [49, 51], [49, 52], [49, 53], [49, 54], [49, 55], [49, 56], [49, 57],
 	[50, 48], [50, 49], [50, 50], [50, 51], [50, 52], [50, 53], [50, 54], [50, 55], [50, 56], [50, 57],
@@ -688,31 +687,42 @@ impl ProglessInner {
 	/// This method "erases" any prior output so that new output can be written
 	/// in the same place. That's CLI animation, folks!
 	fn print_cls(&self) {
-		/// # Buffer 10 Line Clears.
-		///
-		/// 0..10 moves the cursor left. This is done only once per reset.
-		/// 14 is the length of each subsequent command, which moves the cursor up.
-		/// To clear "n" lines, then, slice [0..(10 + 14 * n)].
-		static CLS10: [u8; 150] = [27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75, 27, 91, 49, 65, 27, 91, 49, 48, 48, 48, 68, 27, 91, 75];
+		/// # Ten Line Clears.
+		const CLS10: &[u8; 140] = b"\
+			\x1b[1A\x1b[1000D\x1b[K\
+			\x1b[1A\x1b[1000D\x1b[K\
+			\x1b[1A\x1b[1000D\x1b[K\
+			\x1b[1A\x1b[1000D\x1b[K\
+			\x1b[1A\x1b[1000D\x1b[K\
+			\x1b[1A\x1b[1000D\x1b[K\
+			\x1b[1A\x1b[1000D\x1b[K\
+			\x1b[1A\x1b[1000D\x1b[K\
+			\x1b[1A\x1b[1000D\x1b[K\
+			\x1b[1A\x1b[1000D\x1b[K\
+		";
 
-		let last_lines = self.last_lines.swap(0, SeqCst);
-		if last_lines > 0 {
-			// Figure out how to slice our `CLS10` buffer.
-			match last_lines.cmp(&10) {
-				Ordering::Equal => { Self::print(&CLS10[..]); },
-				Ordering::Less => {
-					Self::print(&CLS10[0..10 + 14 * usize::from(last_lines)]);
-				},
-				// To clear more lines, print our pre-calculated buffer (which
-				// covers the first 10), and duplicate the line-up chunk (n-10)
-				// times to cover the rest.
-				Ordering::Greater => {
-					Self::print(&[
-						&CLS10[..],
-						&CLS10[14..28].repeat(usize::from(last_lines - 10)),
-					].concat());
-				},
+		let mut last_lines = usize::from(self.last_lines.swap(0, SeqCst));
+		if 0 != last_lines {
+			use std::io::Write;
+
+			let writer = std::io::stderr();
+			let mut handle = writer.lock();
+
+			// Clear the current line.
+			let _res = handle.write_all(b"\x1b[1000D\x1b[K");
+
+			// Now move the cursor up the appropriate number of lines, clearing
+			// each as we go.
+			loop {
+				// We can handle up to ten lines at a time.
+				let chunk = usize::min(last_lines, 10);
+				let _res = handle.write_all(&CLS10[..14 * chunk]);
+				last_lines -= chunk;
+				if last_lines == 0 { break; }
 			}
+
+			// Don't forget to flush!
+			let _res = handle.flush();
 		}
 	}
 }
@@ -827,10 +837,10 @@ impl ProglessInner {
 	/// conservatively, cannot exceed 244, and will always be at least 10.
 	fn tick_set_bar(&self, width: u8) {
 		/// # Bar Filler.
-		static BAR: [u8; 244] = [b'#'; 244];
+		const BAR: &[u8; 244] = &[b'#'; 244];
 
 		/// # Dash Filler.
-		static DASH: [u8; 244] = [b'-'; 244];
+		const DASH: &[u8; 244] = &[b'-'; 244];
 
 		if self.flag_unset(TICK_BAR) {
 			let (w_done, w_undone) = self.tick_bar_widths(width);
@@ -860,10 +870,10 @@ impl ProglessInner {
 	fn tick_set_doing(&self, width: u8) {
 		if self.flag_unset(TICK_DOING) {
 			let doing = mutex!(self.doing);
-			let width: u8 = width.saturating_sub(6);
+			let width = usize::from(width.saturating_sub(12)); // Six for padding, six for prefix.
 
 			// Nothing doing. Literally!
-			if width < 16 || doing.is_empty() {
+			if width < 2 || doing.is_empty() {
 				mutex!(self.buf).truncate(PART_DOING, 0);
 			}
 			// Build up the display block.
@@ -872,7 +882,6 @@ impl ProglessInner {
 				tasks.truncate(0);
 				tasks.extend_from_slice(b"\x1b[35m");
 
-				let width = usize::from(width - 6); // Subtract prefix width.
 				for line in doing.iter() {
 					if let Some(line) = line.fitted(width) {
 						tasks.extend_from_slice(TASK_PREFIX);

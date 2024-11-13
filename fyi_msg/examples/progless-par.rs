@@ -24,6 +24,8 @@ fn main() {
 	use rayon::prelude::*;
 	use std::time::Duration;
 
+	eprintln!("Text output to STDERR the normal way.");
+
 	// Initiate a progress bar.
 	let pbar = Progless::try_from(FILE_TYPES.len()).unwrap()
 		.with_title(Some(Msg::custom("Scanning", 199, "Pretending to look for \"message\" file types…")));
@@ -78,4 +80,6 @@ fn main() {
 	// Print a generic summary. The nicer `Progless::summary` summary would
 	// only reflect the last incarnation, which isn't helpful here.
 	Msg::from(pbar).eprint();
+
+	eprintln!("More random text that has nothing to do with Progless.");
 }
