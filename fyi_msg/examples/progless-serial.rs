@@ -25,6 +25,8 @@ fn main() {
 	};
 	use std::time::Duration;
 
+	eprintln!("Text output to STDERR the normal way.");
+
 	// Initiate a progress bar.
 	let pbar = Progless::try_from(FILE_TYPES.len()).unwrap()
 		.with_title(Some(Msg::custom("Scanning", 199, "Pretending to look at files one by one…")));
@@ -42,4 +44,6 @@ fn main() {
 	// Print a simple summary.
 	pbar.finish();
 	pbar.summary(MsgKind::Crunched, "file", "files").print();
+
+	eprintln!("More random text that has nothing to do with Progless.");
 }
