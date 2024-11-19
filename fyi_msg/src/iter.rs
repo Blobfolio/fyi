@@ -201,7 +201,7 @@ impl<I: Iterator<Item=u8>> Iterator for NoAnsi<u8, I> {
 			match self.state {
 				// We aren't in any particular state.
 				NoAnsiState::None =>
-					// We might be  entering a sequence.
+					// We might be entering a sequence.
 					if next == NoAnsiState::<u8>::ESCAPE {
 						match self.iter.next() {
 							Some(b'[') => {
