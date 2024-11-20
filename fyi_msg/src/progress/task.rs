@@ -2,10 +2,7 @@
 # FYI Msg - Progless Tasks
 */
 
-use crate::{
-	fitted,
-	iter::NoAnsi,
-};
+use crate::iter::NoAnsi;
 use std::{
 	borrow::Borrow,
 	cmp::Ordering,
@@ -152,14 +149,26 @@ impl ProglessTask {
 			Self::Ascii(s) =>
 				if s.len() <= width { Some(s) }
 				else { Some(&s[..width]) },
+
 			// Width-based truncation will be more complicated if we need it.
-			Self::Unicode(s, w) =>
-				if usize::from(w.get()) <= width { Some(s) }
-				else {
-					let end = fitted::length_width(s, width);
-					if end == 0 { None }
-					else { Some(&s[..end]) }
-				},
+			Self::Unicode(s, w) => {
+				if width < usize::from(w.get()) {
+					let mut w = 0;
+					for (pos, c) in std::str::from_utf8(s).ok()?.char_indices() {
+						let ch_w = UnicodeWidthChar::width(c).unwrap_or(0);
+						w += ch_w;
+
+						// If this char pushed us over, we're done!
+						if width < w {
+							if pos == 0 { return None; } // Unreachable at runtime.
+							return Some(&s[..pos]);
+						}
+					}
+				}
+
+				// The string was fine as-is!
+				Some(s)
+			},
 		}
 	}
 }
