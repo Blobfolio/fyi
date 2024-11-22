@@ -352,7 +352,7 @@ impl Msg {
 		let msg = msg.as_ref().as_bytes();
 		let v = [
 			b"\x1b[1;38;5;",
-			&*NiceU8::from(color),
+			NiceU8::from(color).as_bytes(),
 			b"m",
 			prefix,
 			b":\x1b[0m ",
@@ -747,7 +747,7 @@ impl Msg {
 				PART_PREFIX,
 				&[
 					b"\x1b[1;38;5;",
-					&*NiceU8::from(color),
+					NiceU8::from(color).as_bytes(),
 					b"m",
 					prefix,
 					b":\x1b[0m ",
@@ -824,12 +824,12 @@ impl Msg {
 				PART_SUFFIX,
 				&state.less_percent().map_or_else(
 					|| [
-						&b" \x1b[2m(Saved "[..],
+						b" \x1b[2m(Saved ",
 						NiceU64::from(saved).as_bytes(),
 						b" bytes.)\x1b[0m",
 					].concat(),
 					|percent| [
-						&b" \x1b[2m(Saved "[..],
+						b" \x1b[2m(Saved ",
 						NiceU64::from(saved).as_bytes(),
 						b" bytes, ",
 						NicePercent::from(percent).as_bytes(),
@@ -1079,7 +1079,7 @@ impl Msg {
 	/// return value — `true` for Yes, `false` for No — that is returned when
 	/// the user just hits `<ENTER>`.
 	pub fn prompt_with_default(&self, default: bool) -> bool {
-		self._prompt(default, false)
+		self.prompt__(default, false)
 	}
 
 	#[must_use]
@@ -1096,13 +1096,13 @@ impl Msg {
 	/// Same as [`Msg::prompt_with_default`], but printed to STDERR instead of
 	/// STDOUT.
 	pub fn eprompt_with_default(&self, default: bool) -> bool {
-		self._prompt(default, true)
+		self.prompt__(default, true)
 	}
 
 	/// # Internal Prompt Handling.
 	///
 	/// This prints the prompt, handling the desired default and output.
-	fn _prompt(&self, default: bool, stderr: bool) -> bool {
+	fn prompt__(&self, default: bool, stderr: bool) -> bool {
 		// Clone the message and append a little [y/N] instructional bit to the
 		// end. This might not be necessary, but preserves the original message
 		// in case it is needed again.

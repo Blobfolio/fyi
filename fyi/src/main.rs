@@ -69,7 +69,7 @@ use fyi_msg::{
 /// # Main.
 fn main() {
 	// Handle errors.
-	if let Err(e) = _main() {
+	if let Err(e) = main__() {
 		match e {
 			FyiError::Passthrough(_) => {},
 			FyiError::PrintHelp(x) => return helper(x),
@@ -87,7 +87,7 @@ fn main() {
 ///
 /// This lets us more easily bubble errors, which are printed and handled
 /// specially.
-fn _main() -> Result<(), FyiError> {
+fn main__() -> Result<(), FyiError> {
 	let kind = cli::parse_kind()?;
 	if matches!(kind, MsgKind::Blank) { return cli::parse_blank(); }
 	let (msg, flags) = cli::parse_msg(kind)?;

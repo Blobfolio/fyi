@@ -545,7 +545,7 @@ impl ProglessInner {
 				// the label would have been reformatted for storage.
 				ptr.remove(txt.as_bytes()) ||
 				// Then again, maybe it was…
-				ProglessTask::new(txt).map_or(false, |task|
+				ProglessTask::new(txt).is_some_and(|task|
 					task != *txt && ptr.remove(&task)
 				)
 			};
