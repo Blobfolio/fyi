@@ -1081,13 +1081,13 @@ impl From<Progless> for Msg {
 	///
 	/// For a more advanced summary, use the [`Progless::summary`] method.
 	fn from(src: Progless) -> Self {
-		// The content is all valid UTF-8; this is safe.
-		Self::done([
-			"Finished in ",
-			NiceElapsed::from(src.inner.started).as_str(),
-			".",
-		].concat())
-			.with_newline(true)
+		let elapsed = NiceElapsed::from(src.inner.started);
+		let mut msg = String::with_capacity(13 + elapsed.len());
+		msg.push_str("Finished in ");
+		msg.push_str(elapsed.as_str());
+		msg.push('.');
+
+		Self::done(msg).with_newline(true)
 	}
 }
 
@@ -1278,6 +1278,7 @@ impl Progless {
 	/// ```
 	pub fn summary<S>(&self, kind: MsgKind, singular: S, plural: S) -> Msg
 	where S: AsRef<str> {
+		// TODO: replace concat with manual vec after updating dactyl.
 		Msg::new(kind, [
 			&self.inner.done().nice_inflect(singular.as_ref(), plural.as_ref()),
 			" in ",

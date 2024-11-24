@@ -319,10 +319,11 @@ impl Msg {
 		let p_end = kind.len_32();
 		let m_end = p_end + msg.len() as u32;
 
-		Self(MsgBuffer::from_raw_parts(
-			[kind.as_bytes(), msg].concat(),
-			new_toc!(p_end, m_end)
-		))
+		let mut buf = Vec::with_capacity(m_end as usize);
+		buf.extend_from_slice(kind.as_bytes());
+		buf.extend_from_slice(msg);
+
+		Self(MsgBuffer::from_raw_parts(buf, new_toc!(p_end, m_end)))
 	}
 
 	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
@@ -350,19 +351,19 @@ impl Msg {
 
 		// Start a vector with the prefix bits.
 		let msg = msg.as_ref().as_bytes();
-		let v = [
-			b"\x1b[1;38;5;",
-			NiceU8::from(color).as_bytes(),
-			b"m",
-			prefix,
-			b":\x1b[0m ",
-			msg,
-		].concat();
+		let color = NiceU8::from(color);
+		let m_end = 16 + color.len() as u32 + prefix.len() as u32 + msg.len() as u32;
 
-		let m_end = v.len() as u32;
+		let mut buf = Vec::with_capacity(m_end as usize);
+		buf.extend_from_slice(b"\x1b[1;38;5;");
+		buf.extend_from_slice(color.as_bytes());
+		buf.push(b'm');
+		buf.extend_from_slice(prefix);
+		buf.extend_from_slice(b":\x1b[0m ");
+		buf.extend_from_slice(msg);
+
 		let p_end = m_end - msg.len() as u32;
-
-		Self(MsgBuffer::from_raw_parts(v, new_toc!(p_end, m_end)))
+		Self(MsgBuffer::from_raw_parts(buf, new_toc!(p_end, m_end)))
 	}
 
 	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
@@ -394,10 +395,11 @@ impl Msg {
 		let p_end = prefix.len() as u32;
 		let m_end = p_end + msg.len() as u32;
 
-		Self(MsgBuffer::from_raw_parts(
-			[prefix, msg].concat(),
-			new_toc!(p_end, m_end)
-		))
+		let mut buf = Vec::with_capacity(m_end as usize);
+		buf.extend_from_slice(prefix);
+		buf.extend_from_slice(msg);
+
+		Self(MsgBuffer::from_raw_parts(buf, new_toc!(p_end, m_end)))
 	}
 
 	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
@@ -417,10 +419,7 @@ impl Msg {
 		let msg = msg.as_ref().as_bytes();
 		let len = msg.len() as u32;
 
-		Self(MsgBuffer::from_raw_parts(
-			msg.to_vec(),
-			new_toc!(0, len)
-		))
+		Self(MsgBuffer::from_raw_parts(msg.to_vec(), new_toc!(0, len)))
 	}
 }
 
@@ -692,14 +691,12 @@ impl Msg {
 
 		if timestamp {
 			let now = FmtUtc2k::now_local();
-			self.0.replace(
-				PART_TIMESTAMP,
-				&[
-					b"\x1b[2m[\x1b[0;34m",
-					now.as_bytes(),
-					b"\x1b[39;2m]\x1b[0m ",
-				].concat()
-			);
+			let mut buf = Vec::with_capacity(25 + now.len());
+			buf.extend_from_slice(b"\x1b[2m[\x1b[0;34m");
+			buf.extend_from_slice(now.as_bytes());
+			buf.extend_from_slice(b"\x1b[39;2m]\x1b[0m ");
+
+			self.0.replace(PART_TIMESTAMP, buf.as_slice());
 			return;
 		}
 
@@ -743,16 +740,15 @@ impl Msg {
 
 		if prefix.is_empty() { self.0.truncate(PART_PREFIX, 0); }
 		else {
-			self.0.replace(
-				PART_PREFIX,
-				&[
-					b"\x1b[1;38;5;",
-					NiceU8::from(color).as_bytes(),
-					b"m",
-					prefix,
-					b":\x1b[0m ",
-				].concat(),
-			);
+			let color = NiceU8::from(color);
+			let mut buf = Vec::with_capacity(16 + color.len() + prefix.len());
+			buf.extend_from_slice(b"\x1b[1;38;5;");
+			buf.extend_from_slice(color.as_bytes());
+			buf.push(b'm');
+			buf.extend_from_slice(prefix);
+			buf.extend_from_slice(b":\x1b[0m ");
+
+			self.0.replace(PART_PREFIX, buf.as_slice());
 		}
 	}
 
@@ -820,23 +816,30 @@ impl Msg {
 		use dactyl::{NicePercent, NiceU64};
 
 		if let Some(saved) = state.less() {
-			self.0.replace(
-				PART_SUFFIX,
-				&state.less_percent().map_or_else(
-					|| [
-						b" \x1b[2m(Saved ",
-						NiceU64::from(saved).as_bytes(),
-						b" bytes.)\x1b[0m",
-					].concat(),
-					|percent| [
-						b" \x1b[2m(Saved ",
-						NiceU64::from(saved).as_bytes(),
-						b" bytes, ",
-						NicePercent::from(percent).as_bytes(),
-						b".)\x1b[0m",
-					].concat()
-				)
+			let saved = NiceU64::from(saved);
+			let buf = state.less_percent().map_or_else(
+				// Just the bytes.
+				|| {
+					let mut buf = Vec::with_capacity(24 + saved.len());
+					buf.extend_from_slice(b" \x1b[2m(Saved ");
+					buf.extend_from_slice(saved.as_bytes());
+					buf.extend_from_slice(b" bytes.)\x1b[0m");
+					buf
+				},
+				// With percent.
+				|per| {
+					let per = NicePercent::from(per);
+					let mut buf = Vec::with_capacity(26 + saved.len() + per.len());
+					buf.extend_from_slice(b" \x1b[2m(Saved ");
+					buf.extend_from_slice(saved.as_bytes());
+					buf.extend_from_slice(b" bytes, ");
+					buf.extend_from_slice(per.as_bytes());
+					buf.extend_from_slice(b".)\x1b[0m");
+					buf
+				}
 			);
+
+			self.0.replace(PART_SUFFIX, buf.as_slice());
 		}
 		else {
 			self.0.replace(PART_SUFFIX, b" \x1b[2m(No savings.)\x1b[0m");
