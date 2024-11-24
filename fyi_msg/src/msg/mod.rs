@@ -347,7 +347,7 @@ impl Msg {
 	pub fn custom<S>(prefix: S, color: u8, msg: S) -> Self
 	where S: AsRef<str> {
 		let prefix = prefix.as_ref().as_bytes();
-		if prefix.is_empty() { return Self::plain(msg); }
+		if prefix.is_empty() { return Self::plain(msg.as_ref()); }
 
 		// Start a vector with the prefix bits.
 		let msg = msg.as_ref().as_bytes();
@@ -415,11 +415,11 @@ impl Msg {
 	/// let msg = Msg::plain("This message has no prefix.");
 	/// ```
 	pub fn plain<S>(msg: S) -> Self
-	where S: AsRef<str> {
-		let msg = msg.as_ref().as_bytes();
+	where S: Into<String> {
+		let msg = msg.into().into_bytes();
 		let len = msg.len() as u32;
 
-		Self(MsgBuffer::from_raw_parts(msg.to_vec(), new_toc!(0, len)))
+		Self(MsgBuffer::from_raw_parts(msg, new_toc!(0, len)))
 	}
 }
 
