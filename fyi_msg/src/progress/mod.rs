@@ -1278,13 +1278,11 @@ impl Progless {
 	/// ```
 	pub fn summary<S>(&self, kind: MsgKind, singular: S, plural: S) -> Msg
 	where S: AsRef<str> {
-		// TODO: replace concat with manual vec after updating dactyl.
-		Msg::new(kind, [
-			&self.inner.done().nice_inflect(singular.as_ref(), plural.as_ref()),
-			" in ",
-			NiceElapsed::from(self.inner.started).as_str(),
-			".",
-		].concat())
+		Msg::new(kind, format!(
+			"{} in {}.",
+			self.inner.done().nice_inflect(singular.as_ref(), plural.as_ref()),
+			NiceElapsed::from(self.inner.started),
+		))
 			.with_newline(true)
 	}
 }
