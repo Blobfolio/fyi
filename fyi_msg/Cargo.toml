@@ -43,7 +43,7 @@ features = [ "local" ]
 optional = true
 
 [dev-dependencies]
-brunch = "0.6.*"
+brunch = "0.7.*"
 rayon = "1.10.*"
 
 [[bench]]
