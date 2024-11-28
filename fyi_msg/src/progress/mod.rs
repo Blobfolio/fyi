@@ -545,7 +545,7 @@ impl ProglessInner {
 				// the label would have been reformatted for storage.
 				ptr.remove(txt.as_bytes()) ||
 				// Then again, maybe it was…
-				ProglessTask::new(txt).map_or(false, |task|
+				ProglessTask::new(txt).is_some_and(|task|
 					task != *txt && ptr.remove(&task)
 				)
 			};
@@ -1081,13 +1081,13 @@ impl From<Progless> for Msg {
 	///
 	/// For a more advanced summary, use the [`Progless::summary`] method.
 	fn from(src: Progless) -> Self {
-		// The content is all valid UTF-8; this is safe.
-		Self::done([
-			"Finished in ",
-			NiceElapsed::from(src.inner.started).as_str(),
-			".",
-		].concat())
-			.with_newline(true)
+		let elapsed = NiceElapsed::from(src.inner.started);
+		let mut msg = String::with_capacity(13 + elapsed.len());
+		msg.push_str("Finished in ");
+		msg.push_str(elapsed.as_str());
+		msg.push('.');
+
+		Self::done(msg).with_newline(true)
 	}
 }
 
@@ -1278,12 +1278,11 @@ impl Progless {
 	/// ```
 	pub fn summary<S>(&self, kind: MsgKind, singular: S, plural: S) -> Msg
 	where S: AsRef<str> {
-		Msg::new(kind, [
-			&self.inner.done().nice_inflect(singular.as_ref(), plural.as_ref()),
-			" in ",
-			NiceElapsed::from(self.inner.started).as_str(),
-			".",
-		].concat())
+		Msg::new(kind, format!(
+			"{} in {}.",
+			self.inner.done().nice_inflect(singular.as_ref(), plural.as_ref()),
+			NiceElapsed::from(self.inner.started),
+		))
 			.with_newline(true)
 	}
 }

@@ -1,6 +1,6 @@
 [package]
 name = "fyi"
-version = "1.2.1"
+version = "1.3.0"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
@@ -177,7 +177,7 @@ path = "../fyi_msg"
 
 [dependencies]
 argyle = "0.10.*"
-dactyl = "0.7.*"
+dactyl = "0.8.*"
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"
