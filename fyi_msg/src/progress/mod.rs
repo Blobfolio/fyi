@@ -11,9 +11,7 @@ mod task;
 
 use ahash::RandomState;
 use crate::{
-	BUFFER8,
 	Msg,
-	MsgBuffer,
 	MsgKind,
 	ProglessError,
 };
@@ -28,6 +26,7 @@ use dactyl::{
 };
 use std::{
 	collections::BTreeSet,
+	hash,
 	num::{
 		NonZeroU8,
 		NonZeroU16,
@@ -64,11 +63,17 @@ const AHASHER: RandomState = RandomState::with_seeds(
 	0xc4d7_82ff_3c9f_7bef,
 );
 
+/// # Bar Filler: Done.
+static BAR_DONE:   [u8; 256] = [b'#'; 256];
+
+/// # Dash Filler: TBD.
+static BAR_UNDONE: [u8; 256] = [b'-'; 256];
+
 /// # Double-Digit Times.
 ///
 /// This holds pre-asciified double-digit numbers up to sixty for use by the
 /// `write_time` method. It doesn't need to hold anything larger than that.
-const DD: &[[u8; 2]; 60] = &[
+static DD: [[u8; 2]; 60] = [
 	[48, 48], [48, 49], [48, 50], [48, 51], [48, 52], [48, 53], [48, 54], [48, 55], [48, 56], [48, 57],
 	[49, 48], [49, 49], [49, 50], [49, 51], [49, 52], [49, 53], [49, 54], [49, 55], [49, 56], [49, 57],
 	[50, 48], [50, 49], [50, 50], [50, 51], [50, 52], [50, 53], [50, 54], [50, 55], [50, 56], [50, 57],
@@ -126,48 +131,11 @@ const TICKING: u8 =      0b0100_0000;
 /// # Flag: SIGINT Received?
 const SIGINT: u8 =       0b1000_0000;
 
-
-
-// Buffer Indexes.
-// The start and end points of the malleable progress components are stored in
-// an array for easy access. These are their indexes.
-
-/// # Buffer Index: Title.
-const PART_TITLE: usize = 0;
-
-/// # Buffer Index: Title.
-const PART_ELAPSED: usize = 1;
-
-/// # Buffer Index: Bar Done.
-const PART_BAR_DONE: usize = 2;
-
-/// # Buffer Index: Bar Remaining.
-const PART_BAR_UNDONE: usize = 3;
-
-/// # Buffer Index: Done Value.
-const PART_DONE: usize = 4;
-
-/// # Buffer Index: Total Value.
-const PART_TOTAL: usize = 5;
-
-/// # Buffer Index: Percent.
-const PART_PERCENT: usize = 6;
-
-/// # Buffer Index: Task List.
-const PART_DOING: usize = 7;
-
-
-
 /// # Minimum Bar Width.
 const MIN_BARS_WIDTH: u8 = 10;
 
 /// # Minimum Draw Width.
 const MIN_DRAW_WIDTH: u8 = 40;
-
-/// # Task Prefix.
-///
-/// This translates to:         •   •   •   •   ↳             •
-const TASK_PREFIX: &[u8; 8] = &[32, 32, 32, 32, 226, 134, 179, 32];
 
 
 
@@ -179,7 +147,7 @@ const TASK_PREFIX: &[u8; 8] = &[32, 32, 32, 32, 226, 134, 179, 32];
 /// thread-sharing.
 struct ProglessInner {
 	/// # Buffer.
-	buf: Mutex<MsgBuffer<BUFFER8>>,
+	buf: Mutex<ProglessBuffer>,
 
 	/// # Flags.
 	flags: AtomicU8,
@@ -225,9 +193,6 @@ struct ProglessInner {
 	/// # Active Task List.
 	doing: Mutex<BTreeSet<ProglessTask>>,
 
-	/// # Scratch Buffer for Formatted Task List.
-	doing_buf: Mutex<Vec<u8>>,
-
 	/// # Total Tasks.
 	total: AtomicU32,
 }
@@ -235,67 +200,7 @@ struct ProglessInner {
 impl Default for ProglessInner {
 	fn default() -> Self {
 		Self {
-			buf: Mutex::new(MsgBuffer::<BUFFER8>::from_raw_parts(
-				vec![
-					//  Title would go here.
-
-					//  \e   [   2    m   [   \e  [   0   ;   1    m
-						27, 91, 50, 109, 91, 27, 91, 48, 59, 49, 109,
-					//   0   0   :   0   0   :   0   0
-						48, 48, 58, 48, 48, 58, 48, 48,
-					//  \e   [   0   ;   2    m   ]  \e   [   0    m   •   •
-						27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32,
-
-					//  \e   [   2    m   [  \e   [   0   ;   1   ;   9   6    m
-						27, 91, 50, 109, 91, 27, 91, 48, 59, 49, 59, 57, 54, 109,
-
-					//  Bar Done would go here.
-
-					//  \e   [   0   ;   1   ;   3   4    m
-						27, 91, 48, 59, 49, 59, 51, 52, 109,
-
-					//  Bar Undone would go here.
-
-					//  \e   [   0   ;   2    m   ]  \e   [   0    m   •   •
-						27, 91, 48, 59, 50, 109, 93, 27, 91, 48, 109, 32, 32,
-
-					//  Done.
-					//  \e   [   1   ;   9   6    m
-						27, 91, 49, 59, 57, 54, 109,
-					//   0
-						48,
-
-					//  The slash between Done and Total.
-					//  \e   [   0   ;   2    m   /  \e   [   0   ;   1   ;   3   4    m
-						27, 91, 48, 59, 50, 109, 47, 27, 91, 48, 59, 49, 59, 51, 52, 109,
-
-					//  Total.
-					//   0
-						48,
-
-					//  The bit between Total and Percent.
-					//  \e   [   0   ;   1    m   •   •
-						27, 91, 48, 59, 49, 109, 32, 32,
-
-					//  Percent.
-					//   0   .   0   0   %
-						48, 46, 48, 48, 37,
-					//  \e   [   0    m  \n
-						27, 91, 48, 109, 10,
-
-				//  Doing would go here.
-				],
-				[
-					0, 0,     // Title.
-					11, 19,   // Elapsed.
-					46, 46,   // Bar Done.
-					55, 55,   // Bar Undone.
-					75, 76,   // Done.
-					92, 93,   // Total.
-					101, 106, // Percent.
-					111, 111, // Current Tasks.
-				]
-			)),
+			buf: Mutex::new(ProglessBuffer::default()),
 			flags: AtomicU8::new(0),
 
 			last_hash: AtomicU64::new(0),
@@ -308,7 +213,6 @@ impl Default for ProglessInner {
 			title: Mutex::new(None),
 			done: AtomicU32::new(0),
 			doing: Mutex::new(BTreeSet::default()),
-			doing_buf: Mutex::new(Vec::new()),
 			total: AtomicU32::new(1),
 		}
 	}
@@ -637,7 +541,6 @@ impl ProglessInner {
 
 /// # Render.
 impl ProglessInner {
-	#[expect(clippy::significant_drop_tightening, reason = "False positive.")]
 	/// # Preprint.
 	///
 	/// This method accepts a completed buffer ready for printing, hashing it
@@ -648,15 +551,15 @@ impl ProglessInner {
 
 		// Make sure the content is unique, otherwise we can leave the old bits
 		// up.
-		let hash = AHASHER.hash_one(buf.as_bytes());
+		let hash = AHASHER.hash_one(&*buf);
 		if hash == self.last_hash.swap(hash, SeqCst) { return; }
 
 		// Erase old lines if needed.
 		self.print_cls();
 
 		// Update the line count and print!
-		self.last_lines.store(u8::saturating_from(bytecount::count(&buf, b'\n')), SeqCst);
-		Self::print(&buf);
+		self.last_lines.store(u8::saturating_from(buf.lines), SeqCst);
+		let _res = buf.print();
 	}
 
 	/// # Print Blank.
@@ -665,17 +568,6 @@ impl ProglessInner {
 	fn print_blank(&self) {
 		self.last_hash.store(0, SeqCst);
 		self.print_cls();
-	}
-
-	/// # Print!
-	///
-	/// Print some arbitrary data to the write place. Haha.
-	fn print(buf: &[u8]) {
-		use std::io::Write;
-
-		let writer = std::io::stderr();
-		let mut handle = writer.lock();
-		let _res = handle.write_all(buf).and_then(|()| handle.flush());
 	}
 
 	/// # Erase Output.
@@ -783,80 +675,65 @@ impl ProglessInner {
 		true
 	}
 
-	/// # Tick Bar Dimensions.
-	///
-	/// This calculates the available widths for each of the three progress
-	/// bars (done, doing, remaining).
-	///
-	/// If the total available space winds up being less than 10, all three
-	/// values are set to zero, indicating this component should be removed.
-	fn tick_bar_widths(&self, width: u8) -> (u8, u8) {
-		// The magic "11" is made up of the following hard-coded pieces:
-		// 2: braces around elapsed time;
-		// 2: spaces after elapsed time;
-		// 1: the "/" between done and total;
-		// 2: the spaces after total;
-		// 2: the braces around the bar itself (should there be one);
-		// 2: the spaces after the bar itself (should there be one);
-		let space: u8 = width.saturating_sub(u8::saturating_from({
-			let buf = mutex!(self.buf);
-			11 +
-			buf.len(PART_ELAPSED) +
-			buf.len(PART_DONE) +
-			buf.len(PART_TOTAL) +
-			buf.len(PART_PERCENT)
-		}));
-		if space < MIN_BARS_WIDTH { return (0, 0); }
-
-		let total = self.total();
-		if 0 == total { return (0, 0); }
-
-		// Done!
-		let done = self.done();
-		if done == total { (space, 0) }
-		// Working on it!
-		else {
-			let o_done: u8 = u8::saturating_from((done * u32::from(space)).wrapping_div(total));
-			(o_done, space.saturating_sub(o_done))
-		}
-	}
-
-	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
 	/// # Tick Bar.
 	///
-	/// This redraws the actual progress *bar* portion of the buffer, which is
-	/// actually three different bars squished together: Done, Doing, and
-	/// Pending.
+	/// This reslices the done/remaining portions of the literal *bar* part of
+	/// the progress bar.
 	///
-	/// The entire line will never exceed 255 characters. The bars,
-	/// conservatively, cannot exceed 244, and will always be at least 10.
+	/// The entire line will never exceed 255 characters. The bar portion,
+	/// conservatively speaking, cannot exceed 244.
 	fn tick_set_bar(&self, width: u8) {
-		/// # Bar Filler.
-		const BAR: &[u8; 244] = &[b'#'; 244];
-
-		/// # Dash Filler.
-		const DASH: &[u8; 244] = &[b'-'; 244];
-
 		if self.flag_unset(TICK_BAR) {
-			let (w_done, w_undone) = self.tick_bar_widths(width);
+			// Assume zero.
+			let mut w_done = 0_u8;
+			let mut w_undone = 0_u8;
+
+			// How much room do we have for the bar(s)?
+			// The magic "19" is made up of the following hard-coded pieces:
+			// 10: elapsed time and braces;
+			// 2: spaces after elapsed time;
+			// 1: the "/" between done and total;
+			// 2: the spaces after total;
+			// 2: the braces around the bar itself;
+			// 2: the spaces after the bar itself;
+			let mut buf = mutex!(self.buf);
+			let space: u8 = width.saturating_sub(u8::saturating_from(
+				19 +
+				buf.done.len() +
+				buf.total.len() +
+				buf.percent.len()
+			));
+
+			// If we have any space, divide it up proportionately.
+			if MIN_BARS_WIDTH <= space {
+				let total = self.total();
+				if 0 != total {
+					let done = self.done();
+
+					// Nothing is done.
+					if done == 0 { w_undone = space; }
+					// Everything is done!
+					else if done == total { w_done = space; }
+					// Working on it!
+					else {
+						w_done = u8::saturating_from((done * u32::from(space)).wrapping_div(total));
+						w_undone = space.saturating_sub(w_done);
+					}
+				}
+
+				debug_assert_eq!(
+					w_done + w_undone,
+					space,
+					"BUG: bar space was miscalculated."
+				);
+			}
 
 			// Update the parts!.
-			let mut buf = mutex!(self.buf);
-
-			// We're handling undone first — the reverse display order — as it
-			// will only ever shrink, leaving that much less to copy-right when
-			// extending the done portion.
-			if buf.len(PART_BAR_UNDONE) as u8 != w_undone {
-				buf.replace(PART_BAR_UNDONE, &DASH[0..usize::from(w_undone)]);
-			}
-
-			if buf.len(PART_BAR_DONE) as u8 != w_done {
-				buf.replace(PART_BAR_DONE, &BAR[0..usize::from(w_done)]);
-			}
+			buf.bar_done =     &BAR_DONE[..usize::from(w_done)];
+			buf.bar_undone = &BAR_UNDONE[..usize::from(w_undone)];
 		}
 	}
 
-	#[expect(clippy::significant_drop_tightening, reason = "False positive.")]
 	/// # Tick Doing.
 	///
 	/// Update the task list portion of the buffer. This is triggered both by
@@ -864,31 +741,7 @@ impl ProglessInner {
 	/// may require lazy cropping).
 	fn tick_set_doing(&self, width: u8) {
 		if self.flag_unset(TICK_DOING) {
-			let doing = mutex!(self.doing);
-			let width = usize::from(width.saturating_sub(12)); // Six for padding, six for prefix.
-
-			// Nothing doing. Literally!
-			if width < 2 || doing.is_empty() {
-				mutex!(self.buf).truncate(PART_DOING, 0);
-			}
-			// Build up the display block.
-			else {
-				let mut tasks = mutex!(self.doing_buf);
-				tasks.truncate(0);
-				tasks.extend_from_slice(b"\x1b[35m");
-
-				for line in doing.iter() {
-					if let Some(line) = line.fitted(width) {
-						tasks.extend_from_slice(TASK_PREFIX);
-						tasks.extend_from_slice(line);
-						tasks.push(b'\n');
-					}
-				}
-
-				drop(doing); // Release the lock a few ns early.
-				tasks.extend_from_slice(b"\x1b[0m");
-				mutex!(self.buf).replace(PART_DOING, &tasks);
-			}
+			mutex!(self.buf).set_doing(&mutex!(self.doing), width);
 		}
 	}
 
@@ -897,7 +750,7 @@ impl ProglessInner {
 	/// This updates the "done" portion of the buffer as needed.
 	fn tick_set_done(&self) {
 		if self.flag_unset(TICK_DONE) {
-			mutex!(self.buf).replace(PART_DONE, &NiceU32::from(self.done()));
+			mutex!(self.buf).set_done(NiceU32::from(self.done()));
 		}
 	}
 
@@ -906,7 +759,7 @@ impl ProglessInner {
 	/// This updates the "percent" portion of the buffer as needed.
 	fn tick_set_percent(&self) {
 		if self.flag_unset(TICK_PERCENT) {
-			mutex!(self.buf).replace(PART_PERCENT, &NicePercent::from(self.percent()));
+			mutex!(self.buf).set_percent(NicePercent::from(self.percent()));
 		}
 	}
 
@@ -935,7 +788,7 @@ impl ProglessInner {
 		if secs == before.wrapping_div(1000) { Some(false) }
 		else {
 			let [h, m, s] = NiceElapsed::hms(secs);
-			write_time(mutex!(self.buf).get_mut(PART_ELAPSED), h, m, s);
+			write_time(&mut mutex!(self.buf).elapsed, h, m, s);
 			Some(true)
 		}
 	}
@@ -946,15 +799,7 @@ impl ProglessInner {
 	/// change. Long titles are lazy-cropped as needed.
 	fn tick_set_title(&self, width: u8) {
 		if self.flag_unset(TICK_TITLE) {
-			if let Some(title) = &*mutex!(self.title) {
-				mutex!(self.buf).replace(
-					PART_TITLE,
-					&title.fitted(usize::from(width.saturating_sub(1))),
-				);
-			}
-			else {
-				mutex!(self.buf).truncate(PART_TITLE, 0);
-			}
+			mutex!(self.buf).set_title(mutex!(self.title).as_ref(), width);
 		}
 	}
 
@@ -963,7 +808,7 @@ impl ProglessInner {
 	/// This updates the "total" portion of the buffer as needed.
 	fn tick_set_total(&self) {
 		if self.flag_unset(TICK_TOTAL) {
-			mutex!(self.buf).replace(PART_TOTAL, &NiceU32::from(self.total()));
+			mutex!(self.buf).set_total(NiceU32::from(self.total()));
 		}
 	}
 
@@ -978,6 +823,176 @@ impl ProglessInner {
 		}
 		width
 	}
+}
+
+
+
+#[derive(Debug)]
+/// # Progless Output Buffers.
+///
+/// This holds formatted copies of the various progress parts (from a
+/// `ProglessInner` instance), serving as a sort of custom `MsgBuffer`.
+///
+/// These values are only updated as-needed during ticks, then passed to
+/// STDERR.
+struct ProglessBuffer {
+	/// # Title (Width-Constrained).
+	title: Vec<u8>,
+
+	/// # Elapsed Time (HH:MM:SS).
+	elapsed: [u8; 8],
+
+	/// # The "Done" Part of the Bar.
+	bar_done: &'static [u8],
+
+	/// # The "TBD" Part of the Bar.
+	bar_undone: &'static [u8],
+
+	/// # Number Done (Formatted).
+	done: NiceU32,
+
+	/// # Number Total (Formatted).
+	total: NiceU32,
+
+	/// # Percentage Done (Formatted).
+	percent: NicePercent,
+
+	/// # Tasks (Width-Constrained).
+	doing: Vec<u8>,
+
+	/// # Line Count.
+	lines: usize,
+}
+
+impl Default for ProglessBuffer {
+	fn default() -> Self {
+		Self {
+			title: Vec::new(),
+			elapsed: *b"00:00:00",
+			bar_done: &[],
+			bar_undone: &[],
+			done: NiceU32::default(),
+			total: NiceU32::default(),
+			percent: NicePercent::min(),
+			doing: Vec::new(),
+			lines: 1,
+		}
+	}
+}
+
+impl hash::Hash for ProglessBuffer {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+    	state.write(&self.title);
+    	state.write(self.elapsed.as_slice());
+    	state.write_usize(self.bar_done.len());
+    	state.write_usize(self.bar_undone.len());
+    	state.write(self.done.as_bytes());
+    	state.write(self.total.as_bytes());
+    	state.write(self.percent.as_bytes());
+    	state.write(&self.doing);
+    }
+}
+
+impl ProglessBuffer {
+	/// # Write It!
+	fn print(&self) -> std::io::Result<()> {
+		use std::io::Write;
+
+		let mut w = std::io::stderr().lock();
+
+		// Title.
+		w.write_all(&self.title)?;
+
+		// Elapsed.
+		w.write_all(b"\x1b[2m[\x1b[0;1m")?;
+		w.write_all(self.elapsed.as_slice())?;
+		w.write_all(b"\x1b[0;2m]\x1b[0m  ")?;
+
+		// Bars.
+		w.write_all(b"\x1b[2m[\x1b[0;1;96m")?;
+		w.write_all(self.bar_done)?;
+		w.write_all(b"\x1b[0;1;34m")?;
+		w.write_all(self.bar_undone)?;
+		w.write_all(b"\x1b[0;2m]\x1b[0;1;96m  ")?;
+
+		// Done/total.
+		w.write_all(self.done.as_bytes())?;
+		w.write_all(b"\x1b[0;2m/\x1b[0;1;34m")?;
+		w.write_all(self.total.as_bytes())?;
+
+		// Percent.
+		w.write_all(b"\x1b[0;1m  ")?;
+		w.write_all(self.percent.as_bytes())?;
+
+		// Tasks.
+		if ! self.doing.is_empty() {
+			w.write_all(b"\x1b[0;35m")?;
+			w.write_all(&self.doing)?;
+		}
+
+		// The end!
+		w.write_all(b"\x1b[0m\n")?;
+		w.flush()
+	}
+}
+
+impl ProglessBuffer {
+	#[inline]
+	/// # Update Tasks.
+	fn set_doing(&mut self, doing: &BTreeSet<ProglessTask>, width: u8) {
+		/// # Task Prefix.
+		///
+		/// This translates to:           •   •   •   •   ↳             •
+		const PREFIX: &[u8; 9] = &[b'\n', 32, 32, 32, 32, 226, 134, 179, 32];
+
+		// Reset.
+		self.doing.truncate(0);
+		self.lines = bytecount::count(&self.title, b'\n') + 1;
+
+		// The actual width we can work with is minus six for padding, six for
+		// the prefix.
+		let width = usize::from(width.saturating_sub(12));
+
+		// Add each task as its own line, assuming we have the room.
+		if 2 <= width {
+			for line in doing {
+				if let Some(line) = line.fitted(width) {
+					self.doing.extend_from_slice(PREFIX);
+					self.doing.extend_from_slice(line);
+					self.lines += 1;
+				}
+			}
+		}
+	}
+
+	#[inline]
+	/// # Set Done.
+	///
+	/// TODO: remove and use `NiceU32::replace` after upgrading dactyl.
+	fn set_done(&mut self, done: NiceU32) { self.done = done; }
+
+	#[inline]
+	/// # Update Title.
+	fn set_title(&mut self, title: Option<&Msg>, width: u8) {
+		// Reset.
+		self.lines = 1 + bytecount::count(&self.doing, b'\n');
+
+		if let Some(title) = title {
+			title.fitted(usize::from(width)).as_ref().clone_into(&mut self.title);
+			self.lines += bytecount::count(title, b'\n');
+		}
+		else { self.title.truncate(0); }
+	}
+
+	#[inline]
+	/// # Set Total.
+	///
+	/// TODO: remove and use `NiceU32::replace` after upgrading dactyl.
+	fn set_total(&mut self, total: NiceU32) { self.total = total; }
+
+	#[inline]
+	/// # Set Percent.
+	fn set_percent(&mut self, percent: NicePercent) { self.percent = percent; }
 }
 
 
@@ -1486,19 +1501,14 @@ fn term_width() -> u8 {
 /// ## Safety
 ///
 /// The pointer must have 8 bytes free or undefined things will happen.
-fn write_time(buf: &mut [u8], h: u8, m: u8, s: u8) {
+fn write_time(buf: &mut [u8; 8], h: u8, m: u8, s: u8) {
 	assert!(
-		h < 60 &&
-		m < 60 &&
-		s < 60 &&
-		8 <= buf.len(),
+		h < 60 && m < 60 && s < 60,
 		"BUG: Invalid progress time pieces."
 	);
 
 	// Write 'em.
 	buf[..2].copy_from_slice(DD[usize::from(h)].as_slice());
-	buf[2] = b':';
 	buf[3..5].copy_from_slice(DD[usize::from(m)].as_slice());
-	buf[5] = b':';
 	buf[6..8].copy_from_slice(DD[usize::from(s)].as_slice());
 }
