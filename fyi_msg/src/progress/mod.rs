@@ -645,10 +645,6 @@ impl ProglessInner {
 	/// erased and replaced with the new output.
 	fn preprint(&self) {
 		let buf = mutex!(self.buf);
-		if 0 == buf.total_len() {
-			self.print_blank();
-			return;
-		}
 
 		// Make sure the content is unique, otherwise we can leave the old bits
 		// up.
