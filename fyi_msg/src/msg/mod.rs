@@ -924,7 +924,7 @@ impl Msg {
 			crate::width(self.0.get(PART_SUFFIX));
 
 		if fixed_width > width {
-			return Cow::Owned(Vec::new());
+			return Cow::Borrowed(&[]);
 		}
 
 		// Check the length again; the fixed bits might just have a lot of
