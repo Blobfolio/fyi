@@ -760,7 +760,6 @@ impl ProglessInner {
 		// follows.
 		let width = self.tick_set_width();
 		if width < MIN_DRAW_WIDTH {
-			self.flags.store(TICKING, SeqCst);
 			self.print_blank();
 			return true;
 		}
