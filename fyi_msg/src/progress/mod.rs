@@ -9,7 +9,6 @@ mod task;
 
 
 
-use ahash::RandomState;
 use crate::{
 	Msg,
 	MsgKind,
@@ -41,7 +40,6 @@ use std::{
 		atomic::{
 			AtomicU8,
 			AtomicU32,
-			AtomicU64,
 			Ordering::SeqCst,
 		},
 	},
@@ -54,14 +52,6 @@ use steady::ProglessSteady;
 use task::ProglessTask;
 
 
-
-/// # Static Hasher.
-const AHASHER: RandomState = RandomState::with_seeds(
-	0x8596_cc44_bef0_1aa0,
-	0x98d4_0948_da60_19ae,
-	0x49f1_3013_c503_a6aa,
-	0xc4d7_82ff_3c9f_7bef,
-);
 
 /// # Bar Filler: Done.
 static BAR_DONE:   [u8; 256] = [b'#'; 256];
@@ -99,13 +89,20 @@ use mutex;
 // a value changes. (Instead they're only recalculated at most once per tick.)
 
 /// # Flag: Initial State.
-const TICK_NEW: u8 =     0b0110_0001;
+const TICK_NEW: u8 =
+	TICK_BAR | TICK_TOTAL | TICKING;
 
 /// # Flag: Reset.
-const TICK_RESET: u8 =   0b0110_1111;
+const TICK_RESET: u8 =
+	TICK_BAR | TICK_DOING | TICK_DONE | TICK_PERCENT | TICK_TOTAL | TICKING;
 
 /// # Flag: Terminal Resized.
-const TICK_RESIZED: u8 = 0b0001_0011;
+const TICK_RESIZED: u8 =
+	TICK_BAR | TICK_DOING | TICK_TITLE;
+
+/// # Flag: Drawables.
+const TICK_DRAWABLE: u8 =
+	TICK_BAR | TICK_DOING | TICK_DONE | TICK_PERCENT | TICK_TITLE | TICK_TOTAL;
 
 /// # Flag: Repaint Bar.
 const TICK_BAR: u8 =     0b0000_0001;
@@ -152,12 +149,6 @@ struct ProglessInner {
 	/// # Flags.
 	flags: AtomicU8,
 
-	/// # Last Hash.
-	///
-	/// A hash of what was last printed. Saves redundant work in cases where
-	/// nothing has changed since the last print.
-	last_hash: AtomicU64,
-
 	/// # Last Printed Line Count.
 	///
 	/// The number of lines last printed. Before printing new output, this many
@@ -203,7 +194,6 @@ impl Default for ProglessInner {
 			buf: Mutex::new(ProglessBuffer::default()),
 			flags: AtomicU8::new(0),
 
-			last_hash: AtomicU64::new(0),
 			last_lines: AtomicU8::new(0),
 			last_width: AtomicU8::new(0),
 
@@ -322,7 +312,7 @@ impl ProglessInner {
 				SeqCst
 			);
 			mutex!(self.doing).clear();
-			self.print_blank();
+			self.print_cls();
 		}
 	}
 }
@@ -532,7 +522,7 @@ impl ProglessInner {
 	/// when the early shutdown actually arrives.
 	fn sigint(&self) {
 		let flags = self.flags.load(SeqCst);
-		if (TICKING == flags & TICKING) && (0 == flags & SIGINT) {
+		if TICKING == flags & (SIGINT | TICKING) {
 			self.flags.fetch_or(SIGINT, SeqCst);
 			self.set_title(Some(Msg::warning("Early shutdown in progress.")));
 		}
@@ -547,27 +537,14 @@ impl ProglessInner {
 	/// for comparison with the last job. If unique, the previous output is
 	/// erased and replaced with the new output.
 	fn preprint(&self) {
-		let buf = mutex!(self.buf);
-
-		// Make sure the content is unique, otherwise we can leave the old bits
-		// up.
-		let hash = AHASHER.hash_one(&*buf);
-		if hash == self.last_hash.swap(hash, SeqCst) { return; }
-
 		// Erase old lines if needed.
 		self.print_cls();
 
-		// Update the line count and print!
-		self.last_lines.store(u8::saturating_from(buf.lines), SeqCst);
-		let _res = buf.print();
-	}
-
-	/// # Print Blank.
-	///
-	/// This simply resets the last-print hash and clears any prior output.
-	fn print_blank(&self) {
-		self.last_hash.store(0, SeqCst);
-		self.print_cls();
+		// Print and update the line count.
+		let lines = mutex!(self.buf).print();
+		if let Ok(lines) = lines {
+			self.last_lines.store(lines, SeqCst);
+		}
 	}
 
 	/// # Erase Output.
@@ -648,13 +625,13 @@ impl ProglessInner {
 		// follows.
 		let width = self.tick_set_width();
 		if width < MIN_DRAW_WIDTH {
-			self.print_blank();
+			self.print_cls();
 			return true;
 		}
 
 		// If the time hasn't changed, and nothing else has changed, we can
 		// abort without all the tedious checking.
-		if ! time_changed && self.flags.load(SeqCst) == TICKING {
+		if ! time_changed && (self.flags.load(SeqCst) & TICK_DRAWABLE == 0) {
 			return true;
 		}
 
@@ -840,6 +817,7 @@ struct ProglessBuffer {
 	title: Vec<u8>,
 
 	/// # Elapsed Time (HH:MM:SS).
+	/// TODO: replace with `NiceClock` after updating dactyl.
 	elapsed: [u8; 8],
 
 	/// # The "Done" Part of the Bar.
@@ -860,8 +838,11 @@ struct ProglessBuffer {
 	/// # Tasks (Width-Constrained).
 	doing: Vec<u8>,
 
-	/// # Line Count.
-	lines: usize,
+	/// # Task Lines.
+	lines_doing: u8,
+
+	/// # Title Lines.
+	lines_title: u8,
 }
 
 impl Default for ProglessBuffer {
@@ -875,7 +856,8 @@ impl Default for ProglessBuffer {
 			total: NiceU32::default(),
 			percent: NicePercent::min(),
 			doing: Vec::new(),
-			lines: 1,
+			lines_doing: 0,
+			lines_title: 0,
 		}
 	}
 }
@@ -894,8 +876,25 @@ impl hash::Hash for ProglessBuffer {
 }
 
 impl ProglessBuffer {
+	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
+	/// # Line Count.
+	///
+	/// One line is always assumed for the time/bar/totals, but the title and
+	/// task lists can add more.
+	const fn lines(&self) -> u8 {
+		// Scale up the addition to prevent overflow, however unlikely.
+		let lines: u16 = self.lines_doing as u16 + self.lines_title as u16 + 1;
+
+		// Scale back down, saturating as necessary.
+		if lines <= u8::MAX as u16 { lines as u8 }
+		else { u8::MAX }
+	}
+
 	/// # Write It!
-	fn print(&self) -> std::io::Result<()> {
+	///
+	/// This writes the fully-formatted progress data to STDERR, returning the
+	/// (precalculated) line count.
+	fn print(&self) -> std::io::Result<u8> {
 		use std::io::Write;
 
 		let mut w = std::io::stderr().lock();
@@ -932,7 +931,10 @@ impl ProglessBuffer {
 
 		// The end!
 		w.write_all(b"\x1b[0m\n")?;
-		w.flush()
+		w.flush()?;
+
+		// Return the line count.
+		Ok(self.lines())
 	}
 }
 
@@ -947,20 +949,18 @@ impl ProglessBuffer {
 
 		// Reset.
 		self.doing.truncate(0);
-		self.lines = bytecount::count(&self.title, b'\n') + 1;
 
 		// The actual width we can work with is minus six for padding, six for
 		// the prefix.
 		let width = usize::from(width.saturating_sub(12));
 
 		// Add each task as its own line, assuming we have the room.
+		self.lines_doing = 0;
 		if 2 <= width {
-			for line in doing {
-				if let Some(line) = line.fitted(width) {
-					self.doing.extend_from_slice(PREFIX);
-					self.doing.extend_from_slice(line);
-					self.lines += 1;
-				}
+			for line in doing.iter().filter_map(|line| line.fitted(width)).take(255) {
+				self.doing.extend_from_slice(PREFIX);
+				self.doing.extend_from_slice(line);
+				self.lines_doing += 1;
 			}
 		}
 	}
@@ -974,14 +974,15 @@ impl ProglessBuffer {
 	#[inline]
 	/// # Update Title.
 	fn set_title(&mut self, title: Option<&Msg>, width: u8) {
-		// Reset.
-		self.lines = 1 + bytecount::count(&self.doing, b'\n');
-
 		if let Some(title) = title {
 			title.fitted(usize::from(width)).as_ref().clone_into(&mut self.title);
-			self.lines += bytecount::count(title, b'\n');
+			self.lines_title = u8::try_from(bytecount::count(title, b'\n'))
+				.unwrap_or(u8::MAX);
 		}
-		else { self.title.truncate(0); }
+		else {
+			self.title.truncate(0);
+			self.lines_title = 0;
+		}
 	}
 
 	#[inline]
