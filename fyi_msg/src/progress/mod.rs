@@ -895,9 +895,12 @@ impl ProglessBuffer {
 	/// This writes the fully-formatted progress data to STDERR, returning the
 	/// (precalculated) line count.
 	fn print(&self) -> std::io::Result<u8> {
-		use std::io::Write;
+		use std::io::{
+			BufWriter,
+			Write,
+		};
 
-		let mut w = std::io::stderr().lock();
+		let mut w = BufWriter::new(std::io::stderr().lock());
 
 		// Title.
 		w.write_all(&self.title)?;
