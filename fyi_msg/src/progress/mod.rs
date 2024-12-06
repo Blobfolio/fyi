@@ -364,13 +364,17 @@ impl ProglessInner {
 	/// The progress bar can optionally keep track of tasks that are actively
 	/// "in progress", which can be particularly useful when operating in
 	/// parallel.
-	fn add(&self, txt: &str) {
+	///
+	/// Returns `true` if the task was accepted.
+	fn add(&self, txt: &str) -> bool {
 		if
 			self.running() &&
 			ProglessTask::new(txt).is_some_and(|m| mutex!(self.doing).insert(m))
 		{
 			self.flags.fetch_or(TICK_DOING, SeqCst);
+			true
 		}
+		else { false }
 	}
 
 	#[inline]
@@ -1313,6 +1317,10 @@ impl Progless {
 	/// Any `AsRef<str>` value will do. See the module documentation for
 	/// example usage.
 	///
+	/// Returns `true` if the task was accepted. (If `false`, you should use
+	/// [`Progless::increment`] to mark the task as done instead of
+	/// [`Progless::remove`].)
+	///
 	/// ## Examples
 	///
 	/// ```no_run
@@ -1333,8 +1341,8 @@ impl Progless {
 	///
 	/// pbar.finish();
 	/// ```
-	pub fn add<S>(&self, txt: S)
-	where S: AsRef<str> { self.inner.add(txt.as_ref()); }
+	pub fn add<S>(&self, txt: S) -> bool
+	where S: AsRef<str> { self.inner.add(txt.as_ref()) }
 
 	#[inline]
 	/// # Increment Done.
