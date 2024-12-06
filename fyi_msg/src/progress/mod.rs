@@ -546,7 +546,7 @@ impl ProglessInner {
 
 		// Print and update the line count.
 		let lines = mutex!(self.buf).print();
-		if let Ok(lines) = lines {
+		if let Some(lines) = lines {
 			self.last_lines.store(lines, SeqCst);
 		}
 	}
@@ -574,8 +574,7 @@ impl ProglessInner {
 		if 0 != last_lines {
 			use std::io::Write;
 
-			let writer = std::io::stderr();
-			let mut handle = writer.lock();
+			let mut handle = std::io::stderr().lock();
 
 			// Clear the current line.
 			let _res = handle.write_all(b"\x1b[1000D\x1b[K");
@@ -898,50 +897,72 @@ impl ProglessBuffer {
 	///
 	/// This writes the fully-formatted progress data to STDERR, returning the
 	/// (precalculated) line count.
-	fn print(&self) -> std::io::Result<u8> {
-		use std::io::{
-			BufWriter,
-			Write,
-		};
+	fn print(&self) -> Option<u8> {
+		use std::io::ErrorKind;
+		use std::io::IoSlice;
+		use std::io::Write;
 
-		let mut w = BufWriter::new(std::io::stderr().lock());
-
-		// Title.
-		w.write_all(&self.title)?;
-
-		// Elapsed.
-		w.write_all(b"\x1b[2m[\x1b[0;1m")?;
-		w.write_all(self.elapsed.as_slice())?;
-		w.write_all(b"\x1b[0;2m]\x1b[0m  ")?;
-
-		// Bars.
-		w.write_all(b"\x1b[2m[\x1b[0;1;96m")?;
-		w.write_all(self.bar_done)?;
-		w.write_all(b"\x1b[0;1;34m")?;
-		w.write_all(self.bar_undone)?;
-		w.write_all(b"\x1b[0;2m]\x1b[0;1;96m  ")?;
-
-		// Done/total.
-		w.write_all(self.done.as_bytes())?;
-		w.write_all(b"\x1b[0;2m/\x1b[0;1;34m")?;
-		w.write_all(self.total.as_bytes())?;
-
-		// Percent.
-		w.write_all(b"\x1b[0;1m  ")?;
-		w.write_all(self.percent.as_bytes())?;
-
-		// Tasks.
-		if ! self.doing.is_empty() {
-			w.write_all(b"\x1b[0;35m")?;
-			w.write_all(&self.doing)?;
+		/// # Write All Vectored.
+		///
+		/// TODO: remove once `Write::write_all_vectored` is stable.
+		fn write_all_vectored(mut bufs: &mut [IoSlice<'_>]) -> bool {
+			// Make sure we have something to print.
+			IoSlice::advance_slices(&mut bufs, 0);
+			if bufs.is_empty() { true }
+			else {
+				// Write it all!
+				let mut handle = std::io::stderr().lock();
+				loop {
+					match handle.write_vectored(bufs) {
+						Ok(0) => return false,
+						Ok(n) => IoSlice::advance_slices(&mut bufs, n),
+						Err(e) =>
+							if e.kind() == ErrorKind::Interrupted {} // Keep trying.
+							else { return false; },
+					}
+					if bufs.is_empty() { break; }
+				}
+				handle.flush().is_ok()
+			}
 		}
 
-		// The end!
-		w.write_all(b"\x1b[0m\n")?;
-		w.flush()?;
+		// We're discontiguous enough, I think.
+		let parts = &mut [
+			// Title.
+			IoSlice::new(&self.title),
 
-		// Return the line count.
-		Ok(self.lines())
+			// Elapsed.
+			IoSlice::new(b"\x1b[2m[\x1b[0;1m"),
+			IoSlice::new(self.elapsed.as_slice()),
+			IoSlice::new(b"\x1b[0;2m]\x1b[0m  "),
+
+			// Bars.
+			IoSlice::new(b"\x1b[2m[\x1b[0;1;96m"),
+			IoSlice::new(self.bar_done),
+			IoSlice::new(b"\x1b[0;1;34m"),
+			IoSlice::new(self.bar_undone),
+			IoSlice::new(b"\x1b[0;2m]\x1b[0;1;96m  "),
+
+			// Done/total.
+			IoSlice::new(self.done.as_bytes()),
+			IoSlice::new(b"\x1b[0;2m/\x1b[0;1;34m"),
+			IoSlice::new(self.total.as_bytes()),
+
+			// Percent.
+			IoSlice::new(b"\x1b[0;1m  "),
+			IoSlice::new(self.percent.as_bytes()),
+
+			// Tasks.
+			IoSlice::new(b"\x1b[0;35m"),
+			IoSlice::new(&self.doing),
+
+			// The end!
+			IoSlice::new(b"\x1b[0m\n"),
+		];
+
+		// Write and return the line count!
+		if write_all_vectored(parts.as_mut_slice()) { Some(self.lines()) }
+		else { None }
 	}
 }
 
