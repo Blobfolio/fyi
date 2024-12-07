@@ -53,15 +53,34 @@ jobs:
 
     - name: Clippy
       run: |
-        cargo clippy --release --all-features --target ${{ matrix.target }}
-        cargo clippy --release --no-default-features --target ${{ matrix.target }}
+        cargo clippy --workspace --release --target ${{ matrix.target }}
 
-    - name: Tests (Debug)
+    - name: Clippy (Lib)
       run: |
-        cargo test --all-features --target ${{ matrix.target }}
-        cargo test --no-default-features --target ${{ matrix.target }}
+        cargo clippy --manifest-path fyi_msg/Cargo.toml --target ${{ matrix.target }}
+        cargo clippy --manifest-path fyi_msg/Cargo.toml --features=fitted --target ${{ matrix.target }}
+        cargo clippy --manifest-path fyi_msg/Cargo.toml --features=timestamps --target ${{ matrix.target }}
+        cargo clippy --manifest-path fyi_msg/Cargo.toml --features=fitted,timestamps --target ${{ matrix.target }}
+        cargo clippy --manifest-path fyi_msg/Cargo.toml --features=progress --target ${{ matrix.target }}
+        cargo clippy --manifest-path fyi_msg/Cargo.toml --features=progress-prepend --target ${{ matrix.target }}
+        cargo clippy --manifest-path fyi_msg/Cargo.toml --all-features --target ${{ matrix.target }}
 
-    - name: Tests (Release)
+    - name: Tests (Lib/Debug)
       run: |
-        cargo test --release --all-features --target ${{ matrix.target }}
-        cargo test --release --no-default-features --target ${{ matrix.target }}
+        cargo test --manifest-path fyi_msg/Cargo.toml --target ${{ matrix.target }}
+        cargo test --manifest-path fyi_msg/Cargo.toml --features=fitted --target ${{ matrix.target }}
+        cargo test --manifest-path fyi_msg/Cargo.toml --features=timestamps --target ${{ matrix.target }}
+        cargo test --manifest-path fyi_msg/Cargo.toml --features=fitted,timestamps --target ${{ matrix.target }}
+        cargo test --manifest-path fyi_msg/Cargo.toml --features=progress --target ${{ matrix.target }}
+        cargo test --manifest-path fyi_msg/Cargo.toml --features=progress-prepend --target ${{ matrix.target }}
+        cargo test --manifest-path fyi_msg/Cargo.toml --all-features --target ${{ matrix.target }}
+
+    - name: Tests (Lib/Release)
+      run: |
+        cargo test --manifest-path fyi_msg/Cargo.toml --release --target ${{ matrix.target }}
+        cargo test --manifest-path fyi_msg/Cargo.toml --release --features=fitted --target ${{ matrix.target }}
+        cargo test --manifest-path fyi_msg/Cargo.toml --release --features=timestamps --target ${{ matrix.target }}
+        cargo test --manifest-path fyi_msg/Cargo.toml --release --features=fitted,timestamps --target ${{ matrix.target }}
+        cargo test --manifest-path fyi_msg/Cargo.toml --release --features=progress --target ${{ matrix.target }}
+        cargo test --manifest-path fyi_msg/Cargo.toml --release --features=progress-prepend --target ${{ matrix.target }}
+        cargo test --manifest-path fyi_msg/Cargo.toml --release --all-features --target ${{ matrix.target }}

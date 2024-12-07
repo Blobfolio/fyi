@@ -144,9 +144,40 @@ bench BENCH="":
 # Clippy.
 @clippy:
 	clear
+
+	fyi task "Clippy (Workspace)"
 	cargo clippy \
 		--workspace \
 		--all-features \
+		--target-dir "{{ cargo_dir }}"
+
+	fyi task "Clippy (Lib)."
+	cargo clippy \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo clippy \
+		--features=fitted \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo clippy \
+		--features=timestamps \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo clippy \
+		--features=fitted,timestamps \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo clippy \
+		--features=progress \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo clippy \
+		--features=progress-prepend \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo clippy \
+		--all-features \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 
 
@@ -196,24 +227,80 @@ bench BENCH="":
 # Unit tests!
 @test:
 	clear
+	fyi task "Testing Bin (Debug)."
 	cargo test \
-		--all-features \
-		--workspace \
-		--release \
-		--target-dir "{{ cargo_dir }}"
-	cargo test \
-		--all-features \
-		--workspace \
+		--manifest-path "{{ pkg_dir1 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 
+	fyi task "Testing Bin (Release)."
 	cargo test \
-		--no-default-features \
-		--workspace \
+		--release \
+		--manifest-path "{{ pkg_dir1 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+
+	fyi task "Testing Lib (Debug)."
+	cargo test \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo test \
-		--no-default-features \
-		--workspace \
+		--features=fitted \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--features=timestamps \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--features=fitted,timestamps \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--features=progress \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--features=progress-prepend \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--all-features \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+
+	fyi task "Testing Lib (Release)."
+	cargo test \
 		--release \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--release \
+		--features=fitted \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--release \
+		--features=timestamps \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--release \
+		--features=fitted,timestamps \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--release \
+		--features=progress \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--release \
+		--features=progress-prepend \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--release \
+		--all-features \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 
 
