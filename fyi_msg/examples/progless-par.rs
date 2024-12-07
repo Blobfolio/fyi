@@ -37,11 +37,9 @@ fn main() {
 			pbar.add(txt);
 
 			// Example `push_msg` usage.
+			#[cfg(feature = "progress-prepend")]
 			if txt.starts_with("message/") {
-				pbar.push_msg(
-					Msg::custom("Found", 199, txt),
-					true,
-				);
+				pbar.push_msg(Msg::custom("Found", 199, txt));
 			}
 
 			// Simulate work.

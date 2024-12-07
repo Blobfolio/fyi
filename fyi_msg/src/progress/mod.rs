@@ -170,6 +170,10 @@ struct ProglessInner {
 	/// # Buffer.
 	buf: Mutex<ProglessBuffer>,
 
+	#[cfg(feature = "progress-prepend")]
+	/// # Prepend Messages.
+	prepend: Mutex<Option<Vec<u8>>>,
+
 	/// # Flags.
 	flags: AtomicU8,
 
@@ -216,6 +220,7 @@ impl Default for ProglessInner {
 	fn default() -> Self {
 		Self {
 			buf: Mutex::new(ProglessBuffer::default()),
+			#[cfg(feature = "progress-prepend")] prepend: Mutex::new(None),
 			flags: AtomicU8::new(0),
 
 			last_lines: AtomicU8::new(0),
@@ -432,23 +437,29 @@ impl ProglessInner {
 		}
 	}
 
+	#[cfg(feature = "progress-prepend")]
 	/// # Push Message.
 	///
-	/// "Insert" (print) a line before the running progress bar, useful for
-	/// debug logs, warnings, etc., that would otherwise have to wait for the
-	/// [`Progless`] instance to finish hogging the display.
+	/// "Insert" (print) a line (to STDERR) above the running progress bar,
+	/// useful for realtime debug logs, warnings, etc., that would otherwise
+	/// have to wait for the [`Progless`] instance to finish hogging the
+	/// display.
 	///
 	/// Note: This will add a `\n` to the end of the string.
-	///
-	/// The message will be printed to STDERR if `stderr`, otherwise STDOUT.
-	fn push_msg(&self, msg: Msg, stderr: bool) {
-		self.print_cls();
-
+	fn push_msg(&self, msg: Msg) {
 		let msg = msg.with_newline(true);
-		if stderr { msg.eprint(); }
-		else { msg.print(); }
 
-		if self.running() { self.tick(true); }
+		// If the progress instance is active, push the message into the
+		// queue so we don't wind up with a race condition.
+		if self.running() {
+			let mut buf = mutex!(self.prepend);
+			if let Some(already) = &mut *buf {
+				already.extend_from_slice(msg.as_bytes());
+			}
+			else { buf.replace(msg.into_vec()); }
+		}
+		// Otherwise just print it directly.
+		else { msg.eprint(); }
 	}
 
 	/// # Remove a task.
@@ -575,15 +586,21 @@ impl ProglessInner {
 		}
 	}
 
+	#[cfg(not(feature = "progress-prepend"))]
 	/// # Erase Output.
 	///
 	/// This method "erases" any prior output so that new output can be written
-	/// in the same place. That's CLI animation, folks!
+	/// in the same place.
+	///
+	/// (This would be a lot easier if we had only a single line, but that's
+	/// CLI animation for you. Haha.)
 	fn print_cls(&self) {
+		// We might not need to do anything.
 		let mut last_lines = usize::from(self.last_lines.swap(0, SeqCst));
 		if 0 != last_lines {
 			use std::io::Write;
 
+			// Get a lock on STDERR.
 			let mut handle = std::io::stderr().lock();
 
 			// Clear the current line.
@@ -602,6 +619,52 @@ impl ProglessInner {
 			// Don't forget to flush!
 			let _res = handle.flush();
 		}
+	}
+
+	#[cfg(feature = "progress-prepend")]
+	/// # Erase Output.
+	///
+	/// This method "erases" any prior output so that new output can be written
+	/// in the same place.
+	///
+	/// (This would be a lot easier if we had only a single line, but that's
+	/// CLI animation for you. Haha.)
+	///
+	/// This will also print and clear the "prepend" message queue, if any.
+	fn print_cls(&self) {
+		use std::io::Write;
+
+		// We might not need to do anything.
+		let mut last_lines = usize::from(self.last_lines.swap(0, SeqCst));
+		let prepend = mutex!(self.prepend).take();
+		if last_lines == 0 && prepend.is_none() { return; }
+
+		// Get a lock on STDERR.
+		let mut handle = std::io::stderr().lock();
+
+		// Clear any previously-written lines.
+		if 0 != last_lines {
+			// Clear the current line.
+			let _res = handle.write_all(b"\x1b[1000D\x1b[K");
+
+			// Now move the cursor up the appropriate number of lines, clearing
+			// each as we go.
+			loop {
+				// We can handle up to twenty lines at a time.
+				let chunk = usize::min(last_lines, 20);
+				let _res = handle.write_all(&CLS20[..14 * chunk]);
+				last_lines -= chunk;
+				if last_lines == 0 { break; }
+			}
+		}
+
+		// Now's the time to "prepend" messages, if any.
+		if let Some(msg) = prepend {
+			let _res = handle.write_all(&msg);
+		}
+
+		// Don't forget to flush!
+		let _res = handle.flush();
 	}
 }
 
@@ -1392,18 +1455,18 @@ impl Progless {
 	/// and more efficient than calling `increment()` a million times in a row.
 	pub fn increment_n(&self, n: u32) { self.inner.increment_n(n); }
 
+	#[cfg(feature = "progress-prepend")]
+	#[cfg_attr(docsrs, doc(cfg(feature = "progress-prepend")))]
 	#[inline]
 	/// # Push Message.
 	///
-	/// "Insert" (print) a line before the running progress bar, useful for
-	/// debug logs, warnings, etc., that would otherwise have to wait for the
-	/// [`Progless`] instance to finish hogging the display.
+	/// "Insert" (print) a line (to STDERR) above the running progress bar,
+	/// useful for realtime debug logs, warnings, etc., that would otherwise
+	/// have to wait for the [`Progless`] instance to finish hogging the
+	/// display.
 	///
 	/// Note: This will add a `\n` to the end of the string.
-	///
-	/// The message will be printed to STDERR if `stderr`, otherwise STDOUT.
-	pub fn push_msg<S>(&self, msg: S, stderr: bool)
-	where S: Into<Msg> { self.inner.push_msg(msg.into(), stderr); }
+	pub fn push_msg(&self, msg: Msg) { self.inner.push_msg(msg); }
 
 	#[inline]
 	/// # Remove a task.
