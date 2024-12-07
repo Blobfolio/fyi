@@ -53,11 +53,35 @@ use task::ProglessTask;
 
 
 
-/// # Bar Filler: Done.
+/// # Bar Filler (Done).
 static BAR_DONE:   [u8; 256] = [b'#'; 256];
 
-/// # Dash Filler: TBD.
+/// # Dash Filler (TBD).
 static BAR_UNDONE: [u8; 256] = [b'-'; 256];
+
+/// # Twenty Line Clears.
+static CLS20: [u8; 280] = *b"\
+	\x1b[1A\x1b[1000D\x1b[K\
+	\x1b[1A\x1b[1000D\x1b[K\
+	\x1b[1A\x1b[1000D\x1b[K\
+	\x1b[1A\x1b[1000D\x1b[K\
+	\x1b[1A\x1b[1000D\x1b[K\
+	\x1b[1A\x1b[1000D\x1b[K\
+	\x1b[1A\x1b[1000D\x1b[K\
+	\x1b[1A\x1b[1000D\x1b[K\
+	\x1b[1A\x1b[1000D\x1b[K\
+	\x1b[1A\x1b[1000D\x1b[K\
+	\x1b[1A\x1b[1000D\x1b[K\
+	\x1b[1A\x1b[1000D\x1b[K\
+	\x1b[1A\x1b[1000D\x1b[K\
+	\x1b[1A\x1b[1000D\x1b[K\
+	\x1b[1A\x1b[1000D\x1b[K\
+	\x1b[1A\x1b[1000D\x1b[K\
+	\x1b[1A\x1b[1000D\x1b[K\
+	\x1b[1A\x1b[1000D\x1b[K\
+	\x1b[1A\x1b[1000D\x1b[K\
+	\x1b[1A\x1b[1000D\x1b[K\
+";
 
 /// # Double-Digit Times.
 ///
@@ -556,20 +580,6 @@ impl ProglessInner {
 	/// This method "erases" any prior output so that new output can be written
 	/// in the same place. That's CLI animation, folks!
 	fn print_cls(&self) {
-		/// # Ten Line Clears.
-		const CLS10: &[u8; 140] = b"\
-			\x1b[1A\x1b[1000D\x1b[K\
-			\x1b[1A\x1b[1000D\x1b[K\
-			\x1b[1A\x1b[1000D\x1b[K\
-			\x1b[1A\x1b[1000D\x1b[K\
-			\x1b[1A\x1b[1000D\x1b[K\
-			\x1b[1A\x1b[1000D\x1b[K\
-			\x1b[1A\x1b[1000D\x1b[K\
-			\x1b[1A\x1b[1000D\x1b[K\
-			\x1b[1A\x1b[1000D\x1b[K\
-			\x1b[1A\x1b[1000D\x1b[K\
-		";
-
 		let mut last_lines = usize::from(self.last_lines.swap(0, SeqCst));
 		if 0 != last_lines {
 			use std::io::Write;
@@ -582,9 +592,9 @@ impl ProglessInner {
 			// Now move the cursor up the appropriate number of lines, clearing
 			// each as we go.
 			loop {
-				// We can handle up to ten lines at a time.
-				let chunk = usize::min(last_lines, 10);
-				let _res = handle.write_all(&CLS10[..14 * chunk]);
+				// We can handle up to twenty lines at a time.
+				let chunk = usize::min(last_lines, 20);
+				let _res = handle.write_all(&CLS20[..14 * chunk]);
 				last_lines -= chunk;
 				if last_lines == 0 { break; }
 			}
