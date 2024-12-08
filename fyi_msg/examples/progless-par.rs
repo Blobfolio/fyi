@@ -37,9 +37,10 @@ fn main() {
 			pbar.add(txt);
 
 			// Example `push_msg` usage.
-			#[cfg(feature = "progress-prepend")]
 			if txt.starts_with("message/") {
-				pbar.push_msg(Msg::custom("Found", 199, txt));
+				// Note this shouldn't fail in practice, but if STDERR is tied
+				// up for whatever reason the original message is passed back.
+				let _res = pbar.push_msg(Msg::custom("Found", 199, txt));
 			}
 
 			// Simulate work.
@@ -67,7 +68,7 @@ fn main() {
 			pbar.add(nice.as_str());
 
 			// Simulate work.
-			std::thread::sleep(Duration::from_millis(100));
+			std::thread::sleep(Duration::from_millis(99));
 
 			pbar.remove(nice.as_str());
 		});

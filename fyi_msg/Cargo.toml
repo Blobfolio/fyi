@@ -13,7 +13,7 @@ exclude = [ "examples" ]
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "docsrs"]
 rustdoc-args = ["--cfg", "docsrs"]
-features = [ "fitted", "progress", "progless-prepend", "timestamps" ]
+features = [ "fitted", "progress", "timestamps" ]
 default-target = "x86_64-unknown-linux-gnu"
 targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
@@ -80,9 +80,6 @@ fitted = [ "unicode-width" ]
 
 # Make use of the "progless" bar.
 progress = [ "bytecount", "fitted", "terminal_size" ]
-
-# Expose Progless::push_msg. Implies "progress".
-progress-prepend = [ "progress" ]
 
 # Add timestamp support to messages.
 timestamps = [ "utc2k" ]

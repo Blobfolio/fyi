@@ -172,10 +172,6 @@ bench BENCH="":
 		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo clippy \
-		--features=progress-prepend \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-	cargo clippy \
 		--all-features \
 		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
@@ -259,10 +255,6 @@ bench BENCH="":
 		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo test \
-		--features=progress-prepend \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-	cargo test \
 		--all-features \
 		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
@@ -290,11 +282,6 @@ bench BENCH="":
 	cargo test \
 		--release \
 		--features=progress \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-	cargo test \
-		--release \
-		--features=progress-prepend \
 		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo test \

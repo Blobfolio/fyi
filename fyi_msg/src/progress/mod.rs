@@ -26,7 +26,11 @@ use dactyl::{
 };
 use std::{
 	collections::BTreeSet,
-	hash,
+	io::{
+		IoSlice,
+		StderrLock,
+		Write,
+	},
 	num::{
 		NonZeroU8,
 		NonZeroU16,
@@ -106,15 +110,15 @@ const TICK_NEW: u8 =
 
 /// # Flag: Reset.
 const TICK_RESET: u8 =
-	TICK_BAR | TICK_DOING | TICK_DONE | TICK_PERCENT | TICK_TOTAL | TICKING;
+	TICK_BAR | TICK_DOING | TICK_DONE | TICK_TOTAL | TICKING;
 
-/// # Flag: Terminal Resized.
+/// # Flag: Resized.
 const TICK_RESIZED: u8 =
 	TICK_BAR | TICK_DOING | TICK_TITLE;
 
 /// # Flag: Drawables.
 const TICK_DRAWABLE: u8 =
-	TICK_BAR | TICK_DOING | TICK_DONE | TICK_PERCENT | TICK_TITLE | TICK_TOTAL;
+	TICK_BAR | TICK_DOING | TICK_DONE | TICK_TITLE | TICK_TOTAL;
 
 /// # Flag: Repaint Bar.
 const TICK_BAR: u8 =     0b0000_0001;
@@ -125,20 +129,17 @@ const TICK_DOING: u8 =   0b0000_0010;
 /// # Flag: Repaint Done Value.
 const TICK_DONE: u8 =    0b0000_0100;
 
-/// # Flag: Repaint Percent.
-const TICK_PERCENT: u8 = 0b0000_1000;
-
 /// # Flag: Repaint Title.
-const TICK_TITLE: u8 =   0b0001_0000;
+const TICK_TITLE: u8 =   0b0000_1000;
 
 /// # Flag: Repaint Total Value.
-const TICK_TOTAL: u8 =   0b0010_0000;
+const TICK_TOTAL: u8 =   0b0001_0000;
 
 /// # Flag: Is Ticking?
-const TICKING: u8 =      0b0100_0000;
+const TICKING: u8 =      0b0010_0000;
 
 /// # Flag: SIGINT Received?
-const SIGINT: u8 =       0b1000_0000;
+const SIGINT: u8 =       0b0100_0000;
 
 /// # Minimum Bar Width.
 const MIN_BARS_WIDTH: u8 = 10;
@@ -157,10 +158,6 @@ const MIN_DRAW_WIDTH: u8 = 40;
 struct ProglessInner {
 	/// # Buffer.
 	buf: Mutex<ProglessBuffer>,
-
-	#[cfg(feature = "progress-prepend")]
-	/// # Prepend Messages.
-	prepend: Mutex<Option<Vec<u8>>>,
 
 	/// # Flags.
 	flags: AtomicU8,
@@ -197,19 +194,18 @@ struct ProglessInner {
 	/// # Finished Tasks.
 	done: AtomicU32,
 
-	/// # Active Task List.
-	doing: Mutex<BTreeSet<ProglessTask>>,
-
 	/// # Total Tasks.
 	total: AtomicU32,
+
+	/// # Active Task List.
+	doing: Mutex<BTreeSet<ProglessTask>>,
 }
 
 impl Default for ProglessInner {
 	#[inline]
 	fn default() -> Self {
 		Self {
-			buf: Mutex::new(ProglessBuffer::default()),
-			#[cfg(feature = "progress-prepend")] prepend: Mutex::new(None),
+			buf: Mutex::new(ProglessBuffer::DEFAULT),
 			flags: AtomicU8::new(0),
 
 			last_lines: AtomicU8::new(0),
@@ -220,8 +216,8 @@ impl Default for ProglessInner {
 
 			title: Mutex::new(None),
 			done: AtomicU32::new(0),
-			doing: Mutex::new(BTreeSet::default()),
 			total: AtomicU32::new(1),
+			doing: Mutex::new(BTreeSet::default()),
 		}
 	}
 }
@@ -322,15 +318,21 @@ impl ProglessInner {
 	/// needed), set "done" equal to "total", and clear any active tasks. It
 	/// will also erase the CLI progress bar from the screen.
 	fn stop(&self) {
-		if self.running() {
-			self.flags.store(0, SeqCst);
+		// Shut 'er down!
+		if TICKING == self.flags.swap(0, SeqCst) & TICKING {
+			// Acquire the lock a little early just in case there is a
+			// final in-progress tick.
+			let mut handle = std::io::stderr().lock();
+
 			self.done.store(self.total(), SeqCst);
 			self.elapsed.store(
 				u32::saturating_from(self.started.elapsed().as_millis()),
 				SeqCst
 			);
 			mutex!(self.doing).clear();
-			self.print_cls();
+
+			// Clear the screen one last time.
+			self.print_cls(&mut handle);
 		}
 	}
 }
@@ -342,22 +344,6 @@ impl ProglessInner {
 	///
 	/// The number of completed tasks.
 	fn done(&self) -> u32 { self.done.load(SeqCst) }
-
-	#[expect(clippy::cast_possible_truncation, reason = "It is what it is.")]
-	/// # Percent.
-	///
-	/// Return the value of `done / total`. The value will always be between
-	/// `0.0..=1.0`.
-	fn percent(&self) -> f32 {
-		let done = self.done();
-		let total = self.total();
-
-		if done == 0 { 0.0 }
-		else if done >= total { 1.0 }
-		else {
-			(f64::from(done) / f64::from(total)) as f32
-		}
-	}
 
 	#[inline]
 	/// # Is Ticking.
@@ -407,7 +393,7 @@ impl ProglessInner {
 			let done = self.done.fetch_add(1, SeqCst) + 1;
 			if done >= self.total() { self.stop() }
 			else {
-				self.flags.fetch_or(TICK_DONE | TICK_PERCENT | TICK_BAR, SeqCst);
+				self.flags.fetch_or(TICK_DONE | TICK_BAR, SeqCst);
 			}
 		}
 	}
@@ -422,12 +408,11 @@ impl ProglessInner {
 			let done = self.done.fetch_add(n, SeqCst) + n;
 			if done >= self.total() { self.stop() }
 			else {
-				self.flags.fetch_or(TICK_DONE | TICK_PERCENT | TICK_BAR, SeqCst);
+				self.flags.fetch_or(TICK_DONE | TICK_BAR, SeqCst);
 			}
 		}
 	}
 
-	#[cfg(feature = "progress-prepend")]
 	/// # Push Message.
 	///
 	/// "Insert" (print) a line (to STDERR) above the running progress bar,
@@ -435,21 +420,34 @@ impl ProglessInner {
 	/// have to wait for the [`Progless`] instance to finish hogging the
 	/// display.
 	///
-	/// Note: This will add a `\n` to the end of the string.
-	fn push_msg(&self, msg: Msg) {
+	/// ## Errors
+	///
+	/// In practice this should never fail, but if for some reason STDERR is
+	/// tied up the original message is passed back as an error in case you
+	/// want to try to deal with it yourself.
+	fn push_msg(&self, msg: Msg) -> Result<(), Msg> {
 		let msg = msg.with_newline(true);
 
-		// If the progress instance is active, push the message into the
-		// queue so we don't wind up with a race condition.
+		// If the progress is active, we have to do some things.
 		if self.running() {
-			let mut buf = mutex!(self.prepend);
-			if let Some(already) = &mut *buf {
-				already.extend_from_slice(msg.as_bytes());
-			}
-			else { buf.replace(msg.into_vec()); }
+			// Clear the screen, then print the message.
+			let mut handle = std::io::stderr().lock();
+			self.print_cls(&mut handle);
+			let res = handle.write_all(msg.as_bytes())
+				.and_then(|()| handle.flush())
+				.is_err();
+			drop(handle);
+
+			// To complete the illusion, restore the progress bits.
+			self.tick();
+
+			// This shouldn't happen.
+			if res { return Err(msg); }
 		}
-		// Otherwise just print it directly.
+		// Otherwise we can just print it directly.
 		else { msg.eprint(); }
+
+		Ok(())
 	}
 
 	/// # Remove a task.
@@ -515,7 +513,7 @@ impl ProglessInner {
 		if self.running() && done != self.done.swap(done, SeqCst) {
 			if done >= self.total() { self.stop(); }
 			else {
-				self.flags.fetch_or(TICK_DONE | TICK_PERCENT | TICK_BAR, SeqCst);
+				self.flags.fetch_or(TICK_DONE | TICK_BAR, SeqCst);
 			}
 		}
 	}
@@ -527,13 +525,7 @@ impl ProglessInner {
 	/// everything else.
 	fn set_title(&self, title: Option<Msg>) {
 		if self.running() {
-			if let Some(title) = title {
-				mutex!(self.title).replace(title.with_newline(true));
-			}
-			else {
-				mutex!(self.title).take();
-			}
-
+			*mutex!(self.title) = title.map(|m| m.with_newline(true));
 			self.flags.fetch_or(TICK_TITLE, SeqCst);
 		}
 	}
@@ -552,31 +544,14 @@ impl ProglessInner {
 	fn sigint(&self) {
 		let flags = self.flags.load(SeqCst);
 		if TICKING == flags & (SIGINT | TICKING) {
-			self.flags.fetch_or(SIGINT, SeqCst);
-			self.set_title(Some(Msg::warning("Early shutdown in progress.")));
+			mutex!(self.title).replace(Msg::warning("Early shutdown in progress."));
+			self.flags.fetch_or(SIGINT | TICK_TITLE, SeqCst);
 		}
 	}
 }
 
 /// # Render.
 impl ProglessInner {
-	/// # Preprint.
-	///
-	/// This method accepts a completed buffer ready for printing, hashing it
-	/// for comparison with the last job. If unique, the previous output is
-	/// erased and replaced with the new output.
-	fn preprint(&self) {
-		// Erase old lines if needed.
-		self.print_cls();
-
-		// Print and update the line count.
-		let lines = mutex!(self.buf).print();
-		if let Some(lines) = lines {
-			self.last_lines.store(lines, SeqCst);
-		}
-	}
-
-	#[cfg(not(feature = "progress-prepend"))]
 	/// # Erase Output.
 	///
 	/// This method "erases" any prior output so that new output can be written
@@ -584,15 +559,10 @@ impl ProglessInner {
 	///
 	/// (This would be a lot easier if we had only a single line, but that's
 	/// CLI animation for you. Haha.)
-	fn print_cls(&self) {
+	fn print_cls(&self, handle: &mut StderrLock<'static>) {
 		// We might not need to do anything.
 		let mut last_lines = usize::from(self.last_lines.swap(0, SeqCst));
 		if 0 != last_lines {
-			use std::io::Write;
-
-			// Get a lock on STDERR.
-			let mut handle = std::io::stderr().lock();
-
 			// Clear the current line.
 			let _res = handle.write_all(b"\x1b[1000D\x1b[K");
 
@@ -610,64 +580,19 @@ impl ProglessInner {
 			let _res = handle.flush();
 		}
 	}
-
-	#[cfg(feature = "progress-prepend")]
-	/// # Erase Output.
-	///
-	/// This method "erases" any prior output so that new output can be written
-	/// in the same place.
-	///
-	/// (This would be a lot easier if we had only a single line, but that's
-	/// CLI animation for you. Haha.)
-	///
-	/// This will also print and clear the "prepend" message queue, if any.
-	fn print_cls(&self) {
-		use std::io::Write;
-
-		// We might not need to do anything.
-		let mut last_lines = usize::from(self.last_lines.swap(0, SeqCst));
-		let prepend = mutex!(self.prepend).take();
-		if last_lines == 0 && prepend.is_none() { return; }
-
-		// Get a lock on STDERR.
-		let mut handle = std::io::stderr().lock();
-
-		// Clear any previously-written lines.
-		if 0 != last_lines {
-			// Clear the current line.
-			let _res = handle.write_all(b"\x1b[1000D\x1b[K");
-
-			// Now move the cursor up the appropriate number of lines, clearing
-			// each as we go.
-			loop {
-				// We can handle up to twenty lines at a time.
-				let chunk = usize::min(last_lines, 20);
-				let _res = handle.write_all(&CLS20[..14 * chunk]);
-				last_lines -= chunk;
-				if last_lines == 0 { break; }
-			}
-		}
-
-		// Now's the time to "prepend" messages, if any.
-		if let Some(msg) = prepend {
-			let _res = handle.write_all(&msg);
-		}
-
-		// Don't forget to flush!
-		let _res = handle.flush();
-	}
 }
 
 /// # Ticks.
 impl ProglessInner {
+	#[inline]
 	/// # Tick Flag Toggle.
 	///
 	/// If a flag is set, unset it and return true. Otherwise false.
 	fn flag_unset(&self, flag: u8) -> bool {
-		let old = self.flags.fetch_and(! flag, SeqCst);
-		0 != old & flag
+		0 != self.flags.fetch_and(! flag, SeqCst) & flag
 	}
 
+	#[expect(clippy::cast_possible_truncation, reason = "It is what it is.")]
 	/// # Tick.
 	///
 	/// Ticking takes all of the changed values (since the last tick), updates
@@ -675,135 +600,68 @@ impl ProglessInner {
 	///
 	/// To help keep repeated calls to this from overloading the system, work
 	/// only takes place if it has been at least 60ms from the last tick.
-	fn tick(&self, force: bool) -> bool {
+	fn tick(&self) -> bool {
 		// We aren't running!
-		if ! self.running() {
-			return false;
-		}
+		if ! self.running() { return false; }
 
-		// We don't want to tick too often... that will just look bad.
-		let time_changed: bool = match self.tick_set_secs() {
-			None => if force { true } else { return true; },
-			Some(x) => x,
-		};
+		// Lock STDERR as early as possible to keep the state as consistent as
+		// possible, even though we may well not end up using it.
+		let mut handle = std::io::stderr().lock();
 
-		// Check the terminal width first because it affects most of what
-		// follows.
+		// If there's not enough room for a progress bar, just clear the
+		// previous output, if any.
 		let width = self.tick_set_width();
 		if width < MIN_DRAW_WIDTH {
-			self.print_cls();
-			return true;
+			self.print_cls(&mut handle);
 		}
-
-		// If the time hasn't changed, and nothing else has changed, we can
-		// abort without all the tedious checking.
-		if ! time_changed && (self.flags.load(SeqCst) & TICK_DRAWABLE == 0) {
-			return true;
-		}
-
-		// Handle the rest!
-		self.tick_set_doing(width);
-		self.tick_set_done();
-		self.tick_set_percent();
-		self.tick_set_title(width);
-		self.tick_set_total();
-
-		// The bar's width depends on how much space remains after the other
-		// elements sharing its line so it needs to go last.
-		self.tick_set_bar(width);
-
-		// Maybe we're printing, maybe we're not!
-		self.preprint();
-
-		true
-	}
-
-	/// # Tick Bar.
-	///
-	/// This reslices the done/remaining portions of the literal *bar* part of
-	/// the progress bar.
-	///
-	/// The entire line will never exceed 255 characters. The bar portion,
-	/// conservatively speaking, cannot exceed 244.
-	fn tick_set_bar(&self, width: u8) {
-		if self.flag_unset(TICK_BAR) {
-			// Assume zero.
-			let mut w_done = 0_u8;
-			let mut w_undone = 0_u8;
-
-			// How much room do we have for the bar(s)?
-			// The magic "19" is made up of the following hard-coded pieces:
-			// 10: elapsed time and braces;
-			// 2: spaces after elapsed time;
-			// 1: the "/" between done and total;
-			// 2: the spaces after total;
-			// 2: the braces around the bar itself;
-			// 2: the spaces after the bar itself;
+		// If something drawable changed, we need a complete refresh.
+		else if self.tick_set_secs() || 0 != self.flags.load(SeqCst) & TICK_DRAWABLE {
+			// Update the buffer bits.
 			let mut buf = mutex!(self.buf);
-			let space: u8 = width.saturating_sub(u8::saturating_from(
-				19 +
-				buf.done.len() +
-				buf.total.len() +
-				buf.percent.len()
-			));
 
-			// If we have any space, divide it up proportionately.
-			if MIN_BARS_WIDTH <= space {
+			// Let's start with the numbers since they affect multiple pieces.
+			let ticked = self.flags.fetch_and(! (TICK_DONE | TICK_TOTAL | TICK_BAR), SeqCst);
+			if ticked != 0 {
+				let done = self.done();
 				let total = self.total();
-				if 0 != total {
-					let done = self.done();
+				if TICK_DONE == ticked & TICK_DONE { buf.done.replace(done); }
+				if TICK_TOTAL == ticked & TICK_TOTAL { buf.total.replace(total); }
 
-					// Nothing is done.
-					if done == 0 { w_undone = space; }
-					// Everything is done!
-					else if done == total { w_done = space; }
-					// Working on it!
-					else {
-						w_done = u8::saturating_from((done * u32::from(space)).wrapping_div(total));
-						w_undone = space.saturating_sub(w_done);
-					}
+				// If either number changed, we need to update the percentage.
+				if 0 != ticked & (TICK_DONE | TICK_TOTAL) {
+					let percent =
+						if done == 0 || total == 0 { 0.0 }
+						else if done >= total { 1.0 }
+						else { (f64::from(done) / f64::from(total)) as f32 };
+					buf.percent.replace(percent);
 				}
 
-				debug_assert_eq!(
-					w_done + w_undone,
-					space,
-					"BUG: bar space was miscalculated."
-				);
+				// All three conditions independently require a bar update.
+				buf.set_bars(width, done, total);
 			}
 
-			// Update the parts!.
-			buf.bar_done =     &BAR_DONE[..usize::from(w_done)];
-			buf.bar_undone = &BAR_UNDONE[..usize::from(w_undone)];
-		}
-	}
+			// Update the tasks?
+			if self.flag_unset(TICK_DOING) {
+				buf.set_doing(&mutex!(self.doing), width);
+			}
 
-	/// # Tick Doing.
-	///
-	/// Update the task list portion of the buffer. This is triggered both by
-	/// changes to the task list as well as resoluation changes (as long values
-	/// may require lazy cropping).
-	fn tick_set_doing(&self, width: u8) {
-		if self.flag_unset(TICK_DOING) {
-			mutex!(self.buf).set_doing(&mutex!(self.doing), width);
-		}
-	}
+			// Update the title?
+			if self.flag_unset(TICK_TITLE) {
+				buf.set_title(mutex!(self.title).as_ref(), width);
+			}
 
-	/// # Tick Done.
-	///
-	/// This updates the "done" portion of the buffer as needed.
-	fn tick_set_done(&self) {
-		if self.flag_unset(TICK_DONE) {
-			mutex!(self.buf).done.replace(self.done());
-		}
-	}
+			// Clear the previous output.
+			self.print_cls(&mut handle);
 
-	/// # Tick Percent.
-	///
-	/// This updates the "percent" portion of the buffer as needed.
-	fn tick_set_percent(&self) {
-		if self.flag_unset(TICK_PERCENT) {
-			mutex!(self.buf).percent.replace(self.percent());
+			// Print the updated progress details and update the line count.
+			let lines = buf.print(&mut handle);
+			drop(buf);
+			if let Some(lines) = lines {
+				self.last_lines.store(lines, SeqCst);
+			}
 		}
+
+		true
 	}
 
 	/// # Tick Elapsed Seconds.
@@ -815,42 +673,20 @@ impl ProglessInner {
 	/// Because this is relative to the tick rather than the overall state of
 	/// progress, it has no corresponding tick flag.
 	///
-	/// A value of `true` is returned if one or more seconds has elapsed since
-	/// the last tick, otherwise `false` is returned.
-	fn tick_set_secs(&self) -> Option<bool> {
+	/// Returns `true` if the seconds have changed since the last check,
+	/// otherwise false.
+	fn tick_set_secs(&self) -> bool {
 		let now: u32 = u32::saturating_from(self.started.elapsed().as_millis());
 		let before: u32 = self.elapsed.load(SeqCst);
-
-		// Try not to exceed the steady tick rate.
-		if now.saturating_sub(before) < steady::TICK_RATE { return None; }
 
 		let secs: u32 = now.wrapping_div(1000);
 		self.elapsed.store(now, SeqCst);
 
 		// No change to the seconds bit.
-		if secs == before.wrapping_div(1000) { Some(false) }
+		if secs == before.wrapping_div(1000) { false }
 		else {
 			mutex!(self.buf).elapsed.replace(secs);
-			Some(true)
-		}
-	}
-
-	/// # Tick Title.
-	///
-	/// The title needs to be rewritten both on direct change and resolution
-	/// change. Long titles are lazy-cropped as needed.
-	fn tick_set_title(&self, width: u8) {
-		if self.flag_unset(TICK_TITLE) {
-			mutex!(self.buf).set_title(mutex!(self.title).as_ref(), width);
-		}
-	}
-
-	/// # Tick Total.
-	///
-	/// This updates the "total" portion of the buffer as needed.
-	fn tick_set_total(&self) {
-		if self.flag_unset(TICK_TOTAL) {
-			mutex!(self.buf).total.replace(self.total());
+			true
 		}
 	}
 
@@ -909,35 +745,20 @@ struct ProglessBuffer {
 	lines_title: u8,
 }
 
-impl Default for ProglessBuffer {
-	#[inline]
-	fn default() -> Self {
-		Self {
-			title: Vec::new(),
-			elapsed: NiceClock::MIN,
-			bar_done: &[],
-			bar_undone: &[],
-			done: NiceU32::MIN,
-			total: NiceU32::MIN,
-			percent: NicePercent::MIN,
-			doing: Vec::new(),
-			lines_doing: 0,
-			lines_title: 0,
-		}
-	}
-}
-
-impl hash::Hash for ProglessBuffer {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-    	state.write(&self.title);
-    	state.write(self.elapsed.as_bytes());
-    	state.write_usize(self.bar_done.len());
-    	state.write_usize(self.bar_undone.len());
-    	state.write(self.done.as_bytes());
-    	state.write(self.total.as_bytes());
-    	state.write(self.percent.as_bytes());
-    	state.write(&self.doing);
-    }
+impl ProglessBuffer {
+	/// # Default.
+	const DEFAULT: Self = Self {
+		title: Vec::new(),
+		elapsed: NiceClock::MIN,
+		bar_done: &[],
+		bar_undone: &[],
+		done: NiceU32::MIN,
+		total: NiceU32::MIN,
+		percent: NicePercent::MIN,
+		doing: Vec::new(),
+		lines_doing: 0,
+		lines_title: 0,
+	};
 }
 
 impl ProglessBuffer {
@@ -959,21 +780,22 @@ impl ProglessBuffer {
 	///
 	/// This writes the fully-formatted progress data to STDERR, returning the
 	/// (precalculated) line count.
-	fn print(&self) -> Option<u8> {
+	fn print(&self, handle: &mut StderrLock<'static>) -> Option<u8> {
 		use std::io::ErrorKind;
-		use std::io::IoSlice;
 		use std::io::Write;
 
 		/// # Write All Vectored.
 		///
 		/// TODO: remove once `Write::write_all_vectored` is stable.
-		fn write_all_vectored(mut bufs: &mut [IoSlice<'_>]) -> bool {
+		fn write_all_vectored(
+			mut bufs: &mut [IoSlice<'_>],
+			handle: &mut StderrLock<'static>,
+		) -> bool {
 			// Make sure we have something to print.
 			IoSlice::advance_slices(&mut bufs, 0);
 			if bufs.is_empty() { true }
 			else {
 				// Write it all!
-				let mut handle = std::io::stderr().lock();
 				loop {
 					match handle.write_vectored(bufs) {
 						Ok(0) => return false,
@@ -1023,13 +845,57 @@ impl ProglessBuffer {
 		];
 
 		// Write and return the line count!
-		if write_all_vectored(parts.as_mut_slice()) { Some(self.lines()) }
+		if write_all_vectored(parts.as_mut_slice(), handle) { Some(self.lines()) }
 		else { None }
 	}
 }
 
 impl ProglessBuffer {
-	#[inline]
+	/// # Set Bars.
+	fn set_bars(&mut self, width: u8, done: u32, total: u32) {
+		// Default sizes.
+		let mut w_done = 0_u8;
+		let mut w_undone = 0_u8;
+
+		// How much room do we have for the bar(s)?
+		// The magic "19" is made up of the following hard-coded pieces:
+		// 10: elapsed time and braces;
+		// 2: spaces after elapsed time;
+		// 1: the "/" between done and total;
+		// 2: the spaces after total;
+		// 2: the braces around the bar itself;
+		// 2: the spaces after the bar itself;
+		let space: u8 = width.saturating_sub(u8::saturating_from(
+			19 +
+			self.done.len() +
+			self.total.len() +
+			self.percent.len()
+		));
+
+		// If we have any space, divide it up proportionately.
+		if total != 0 && MIN_BARS_WIDTH <= space {
+			// Nothing is done.
+			if done == 0 { w_undone = space; }
+			// Everything is done!
+			else if done == total { w_done = space; }
+			// Working on it!
+			else {
+				w_done = u8::saturating_from((done * u32::from(space)).wrapping_div(total));
+				w_undone = space.saturating_sub(w_done);
+			}
+
+			debug_assert_eq!(
+				w_done + w_undone,
+				space,
+				"BUG: bar space was miscalculated."
+			);
+		}
+
+		// Update the parts!.
+		self.bar_done =     &BAR_DONE[..usize::from(w_done)];
+		self.bar_undone = &BAR_UNDONE[..usize::from(w_undone)];
+	}
+
 	/// # Update Tasks.
 	fn set_doing(&mut self, doing: &BTreeSet<ProglessTask>, width: u8) {
 		/// # Task Prefix.
@@ -1055,7 +921,6 @@ impl ProglessBuffer {
 		}
 	}
 
-	#[inline]
 	/// # Update Title.
 	fn set_title(&mut self, title: Option<&Msg>, width: u8) {
 		if let Some(title) = title {
@@ -1428,8 +1293,6 @@ impl Progless {
 	/// and more efficient than calling `increment()` a million times in a row.
 	pub fn increment_n(&self, n: u32) { self.inner.increment_n(n); }
 
-	#[cfg(feature = "progress-prepend")]
-	#[cfg_attr(docsrs, doc(cfg(feature = "progress-prepend")))]
 	#[inline]
 	/// # Push Message.
 	///
@@ -1438,8 +1301,12 @@ impl Progless {
 	/// have to wait for the [`Progless`] instance to finish hogging the
 	/// display.
 	///
-	/// Note: This will add a `\n` to the end of the string.
-	pub fn push_msg(&self, msg: Msg) { self.inner.push_msg(msg); }
+	/// ## Errors
+	///
+	/// In practice this should never fail, but if for some reason STDERR is
+	/// tied up the original message is passed back as an error in case you
+	/// want to try to deal with it yourself.
+	pub fn push_msg(&self, msg: Msg) -> Result<(), Msg> { self.inner.push_msg(msg) }
 
 	#[inline]
 	/// # Remove a task.

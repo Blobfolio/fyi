@@ -62,7 +62,6 @@ jobs:
         cargo clippy --manifest-path fyi_msg/Cargo.toml --features=timestamps --target ${{ matrix.target }}
         cargo clippy --manifest-path fyi_msg/Cargo.toml --features=fitted,timestamps --target ${{ matrix.target }}
         cargo clippy --manifest-path fyi_msg/Cargo.toml --features=progress --target ${{ matrix.target }}
-        cargo clippy --manifest-path fyi_msg/Cargo.toml --features=progress-prepend --target ${{ matrix.target }}
         cargo clippy --manifest-path fyi_msg/Cargo.toml --all-features --target ${{ matrix.target }}
 
     - name: Tests (Lib/Debug)
@@ -72,7 +71,6 @@ jobs:
         cargo test --manifest-path fyi_msg/Cargo.toml --features=timestamps --target ${{ matrix.target }}
         cargo test --manifest-path fyi_msg/Cargo.toml --features=fitted,timestamps --target ${{ matrix.target }}
         cargo test --manifest-path fyi_msg/Cargo.toml --features=progress --target ${{ matrix.target }}
-        cargo test --manifest-path fyi_msg/Cargo.toml --features=progress-prepend --target ${{ matrix.target }}
         cargo test --manifest-path fyi_msg/Cargo.toml --all-features --target ${{ matrix.target }}
 
     - name: Tests (Lib/Release)
@@ -82,5 +80,4 @@ jobs:
         cargo test --manifest-path fyi_msg/Cargo.toml --release --features=timestamps --target ${{ matrix.target }}
         cargo test --manifest-path fyi_msg/Cargo.toml --release --features=fitted,timestamps --target ${{ matrix.target }}
         cargo test --manifest-path fyi_msg/Cargo.toml --release --features=progress --target ${{ matrix.target }}
-        cargo test --manifest-path fyi_msg/Cargo.toml --release --features=progress-prepend --target ${{ matrix.target }}
         cargo test --manifest-path fyi_msg/Cargo.toml --release --all-features --target ${{ matrix.target }}

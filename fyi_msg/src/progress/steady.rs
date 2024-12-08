@@ -77,10 +77,9 @@ impl From<Arc<ProglessInner>> for ProglessSteady {
 			dead,
 			ticker:  Mutex::new(Some(std::thread::spawn(move || loop {
 				// This will abort if we've manually turned "dead" on, or if
-				// "inner" has reached 100%. Until then, this will initiate a
-				// steady "tick", which may or may not paint an update to the
-				// CLI.
-				if t_dead.load(Relaxed) || ! t_inner.tick(false) { break; }
+				// "inner" has reached 100%. Until then, this will initiate
+				// steady "ticks" to (selectively) repaint the CLI.
+				if t_dead.load(Relaxed) || ! t_inner.tick() { break; }
 
 				// Sleep for a short while before checking again.
 				std::thread::sleep(SLEEP);
@@ -104,9 +103,9 @@ impl ProglessSteady {
 		let t_dead = Arc::clone(&self.dead);
 		mutex!(self.ticker).replace(std::thread::spawn(move || loop {
 			// This will abort if we've manually turned "dead" on, or if
-			// "inner" has reached 100%. Until then, this will initiate a
-			// steady "tick", which may or may not paint an update to the CLI.
-			if t_dead.load(Relaxed) || ! t_inner.tick(false) { break; }
+			// "inner" has reached 100%. Until then, this will initiate
+			// steady "ticks" to (selectively) repaint the CLI.
+			if t_dead.load(Relaxed) || ! t_inner.tick() { break; }
 
 			// Sleep for a short while before checking again.
 			std::thread::sleep(SLEEP);
