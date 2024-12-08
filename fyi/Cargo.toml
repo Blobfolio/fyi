@@ -177,7 +177,7 @@ path = "../fyi_msg"
 
 [dependencies]
 argyle = "0.10.*"
-dactyl = "0.8.*"
+dactyl = "0.9.*"
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"

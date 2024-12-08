@@ -15,6 +15,7 @@ use crate::{
 	ProglessError,
 };
 use dactyl::{
+	NiceClock,
 	NiceElapsed,
 	NicePercent,
 	NiceU32,
@@ -82,19 +83,6 @@ static CLS20: [u8; 280] = *b"\
 	\x1b[1A\x1b[1000D\x1b[K\
 	\x1b[1A\x1b[1000D\x1b[K\
 ";
-
-/// # Double-Digit Times.
-///
-/// This holds pre-asciified double-digit numbers up to sixty for use by the
-/// `write_time` method. It doesn't need to hold anything larger than that.
-static DD: [[u8; 2]; 60] = [
-	[48, 48], [48, 49], [48, 50], [48, 51], [48, 52], [48, 53], [48, 54], [48, 55], [48, 56], [48, 57],
-	[49, 48], [49, 49], [49, 50], [49, 51], [49, 52], [49, 53], [49, 54], [49, 55], [49, 56], [49, 57],
-	[50, 48], [50, 49], [50, 50], [50, 51], [50, 52], [50, 53], [50, 54], [50, 55], [50, 56], [50, 57],
-	[51, 48], [51, 49], [51, 50], [51, 51], [51, 52], [51, 53], [51, 54], [51, 55], [51, 56], [51, 57],
-	[52, 48], [52, 49], [52, 50], [52, 51], [52, 52], [52, 53], [52, 54], [52, 55], [52, 56], [52, 57],
-	[53, 48], [53, 49], [53, 50], [53, 51], [53, 52], [53, 53], [53, 54], [53, 55], [53, 56], [53, 57],
-];
 
 /// # Helper: Mutex Unlock.
 ///
@@ -217,6 +205,7 @@ struct ProglessInner {
 }
 
 impl Default for ProglessInner {
+	#[inline]
 	fn default() -> Self {
 		Self {
 			buf: Mutex::new(ProglessBuffer::default()),
@@ -354,18 +343,19 @@ impl ProglessInner {
 	/// The number of completed tasks.
 	fn done(&self) -> u32 { self.done.load(SeqCst) }
 
+	#[expect(clippy::cast_possible_truncation, reason = "It is what it is.")]
 	/// # Percent.
 	///
 	/// Return the value of `done / total`. The value will always be between
 	/// `0.0..=1.0`.
-	fn percent(&self) -> f64 {
+	fn percent(&self) -> f32 {
 		let done = self.done();
 		let total = self.total();
 
 		if done == 0 { 0.0 }
-		else if done == total { 1.0 }
+		else if done >= total { 1.0 }
 		else {
-			f64::from(done) / f64::from(total)
+			(f64::from(done) / f64::from(total)) as f32
 		}
 	}
 
@@ -803,7 +793,7 @@ impl ProglessInner {
 	/// This updates the "done" portion of the buffer as needed.
 	fn tick_set_done(&self) {
 		if self.flag_unset(TICK_DONE) {
-			mutex!(self.buf).set_done(NiceU32::from(self.done()));
+			mutex!(self.buf).done.replace(self.done());
 		}
 	}
 
@@ -812,7 +802,7 @@ impl ProglessInner {
 	/// This updates the "percent" portion of the buffer as needed.
 	fn tick_set_percent(&self) {
 		if self.flag_unset(TICK_PERCENT) {
-			mutex!(self.buf).set_percent(NicePercent::from(self.percent()));
+			mutex!(self.buf).percent.replace(self.percent());
 		}
 	}
 
@@ -840,8 +830,7 @@ impl ProglessInner {
 		// No change to the seconds bit.
 		if secs == before.wrapping_div(1000) { Some(false) }
 		else {
-			let [h, m, s] = NiceElapsed::hms(secs);
-			write_time(&mut mutex!(self.buf).elapsed, h, m, s);
+			mutex!(self.buf).elapsed.replace(secs);
 			Some(true)
 		}
 	}
@@ -861,7 +850,7 @@ impl ProglessInner {
 	/// This updates the "total" portion of the buffer as needed.
 	fn tick_set_total(&self) {
 		if self.flag_unset(TICK_TOTAL) {
-			mutex!(self.buf).set_total(NiceU32::from(self.total()));
+			mutex!(self.buf).total.replace(self.total());
 		}
 	}
 
@@ -893,8 +882,7 @@ struct ProglessBuffer {
 	title: Vec<u8>,
 
 	/// # Elapsed Time (HH:MM:SS).
-	/// TODO: replace with `NiceClock` after updating dactyl.
-	elapsed: [u8; 8],
+	elapsed: NiceClock,
 
 	/// # The "Done" Part of the Bar.
 	bar_done: &'static [u8],
@@ -922,15 +910,16 @@ struct ProglessBuffer {
 }
 
 impl Default for ProglessBuffer {
+	#[inline]
 	fn default() -> Self {
 		Self {
 			title: Vec::new(),
-			elapsed: *b"00:00:00",
+			elapsed: NiceClock::MIN,
 			bar_done: &[],
 			bar_undone: &[],
-			done: NiceU32::default(),
-			total: NiceU32::default(),
-			percent: NicePercent::min(),
+			done: NiceU32::MIN,
+			total: NiceU32::MIN,
+			percent: NicePercent::MIN,
 			doing: Vec::new(),
 			lines_doing: 0,
 			lines_title: 0,
@@ -941,7 +930,7 @@ impl Default for ProglessBuffer {
 impl hash::Hash for ProglessBuffer {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
     	state.write(&self.title);
-    	state.write(self.elapsed.as_slice());
+    	state.write(self.elapsed.as_bytes());
     	state.write_usize(self.bar_done.len());
     	state.write_usize(self.bar_undone.len());
     	state.write(self.done.as_bytes());
@@ -1006,7 +995,7 @@ impl ProglessBuffer {
 
 			// Elapsed.
 			IoSlice::new(b"\x1b[2m[\x1b[0;1m"),
-			IoSlice::new(self.elapsed.as_slice()),
+			IoSlice::new(self.elapsed.as_bytes()),
 			IoSlice::new(b"\x1b[0;2m]\x1b[0m  "),
 
 			// Bars.
@@ -1067,12 +1056,6 @@ impl ProglessBuffer {
 	}
 
 	#[inline]
-	/// # Set Done.
-	///
-	/// TODO: remove and use `NiceU32::replace` after upgrading dactyl.
-	fn set_done(&mut self, done: NiceU32) { self.done = done; }
-
-	#[inline]
 	/// # Update Title.
 	fn set_title(&mut self, title: Option<&Msg>, width: u8) {
 		if let Some(title) = title {
@@ -1085,16 +1068,6 @@ impl ProglessBuffer {
 			self.lines_title = 0;
 		}
 	}
-
-	#[inline]
-	/// # Set Total.
-	///
-	/// TODO: remove and use `NiceU32::replace` after upgrading dactyl.
-	fn set_total(&mut self, total: NiceU32) { self.total = total; }
-
-	#[inline]
-	/// # Set Percent.
-	fn set_percent(&mut self, percent: NicePercent) { self.percent = percent; }
 }
 
 
@@ -1593,28 +1566,4 @@ fn term_width() -> u8 {
 		0,
 		|(Width(w), _)| u8::saturating_from(w.saturating_sub(1))
 	)
-}
-
-/// # Write Time.
-///
-/// This writes HH:MM:SS to the provided pointer.
-///
-/// ## Panics
-///
-/// This method is only intended to cover values that fit in a day and will
-/// panic if `h`, `m`, or `s` is outside the range of `0..60`.
-///
-/// ## Safety
-///
-/// The pointer must have 8 bytes free or undefined things will happen.
-fn write_time(buf: &mut [u8; 8], h: u8, m: u8, s: u8) {
-	assert!(
-		h < 60 && m < 60 && s < 60,
-		"BUG: Invalid progress time pieces."
-	);
-
-	// Write 'em.
-	buf[..2].copy_from_slice(DD[usize::from(h)].as_slice());
-	buf[3..5].copy_from_slice(DD[usize::from(m)].as_slice());
-	buf[6..8].copy_from_slice(DD[usize::from(s)].as_slice());
 }
