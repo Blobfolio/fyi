@@ -5,35 +5,17 @@
 use std::{
 	sync::{
 		Arc,
-		atomic::{
-			AtomicBool,
-			Ordering::{
-				Relaxed,
-				SeqCst,
-			},
-		},
+		Mutex,
+		Condvar,
+		LockResult,
 	},
 	thread::JoinHandle,
 	time::Duration,
 };
 use super::{
-	Mutex,
 	mutex,
 	ProglessInner,
 };
-
-
-
-/// # Tick Rate.
-///
-/// Delay between ticks in milliseconds.
-pub(super) const TICK_RATE: u32 = 100;
-
-/// # Sleep Duration.
-///
-/// `ProglessSteady` nap duration. This is half the value of the desired
-/// `TICK_RATE` because there are two such naps per cycle.
-const SLEEP: Duration = Duration::from_millis(TICK_RATE.wrapping_div(2) as u64);
 
 
 
@@ -41,21 +23,20 @@ const SLEEP: Duration = Duration::from_millis(TICK_RATE.wrapping_div(2) as u64);
 /// # Steady Ticker.
 ///
 /// Steady ticking is achieved by spawning a loop in a new thread that tries
-/// to tick the progress bar once every 60ms.
+/// to tick the progress bar once every 100ms.
 ///
 /// The struct itself exists to hold the handle from that thread so that it can
 /// run while it needs running, and stop once it needs to stop.
-///
-/// Stopping is triggered automatically in cases where the tick fails (because
-/// i.e. the progress has reached 100%), or manually when the `enabled` field
-/// is set to `false`. The latter is a failsafe for cases where the iterations
-/// fail to add up to the declared total.
 pub(super) struct ProglessSteady {
-	/// # Ticker Handle.
+	/// # Ticker Thread Handle.
 	ticker: Mutex<Option<JoinHandle<()>>>,
 
-	/// # Is It Dead?
-	dead: Arc<AtomicBool>,
+	/// # Ticker State.
+	///
+	/// Because `ProglessInner` cannot implement `Drop`, we need an independent
+	/// state control to prevent zombie ticking in cases where the user
+	/// accidentally leaves things unfinished.
+	state: Arc<(Mutex<bool>, Condvar)>,
 }
 
 impl Default for ProglessSteady {
@@ -63,66 +44,55 @@ impl Default for ProglessSteady {
 	fn default() -> Self {
 		Self {
 			ticker: Mutex::new(None),
-			dead: Arc::new(AtomicBool::new(true)),
+			state: Arc::new((Mutex::new(true), Condvar::new())),
 		}
 	}
 }
 
 impl From<Arc<ProglessInner>> for ProglessSteady {
+	#[inline]
 	fn from(t_inner: Arc<ProglessInner>) -> Self {
-		let dead = Arc::new(AtomicBool::new(false));
-		let t_dead = Arc::clone(&dead);
+		let state = Arc::new((Mutex::new(false), Condvar::new()));
+		let t_state = Arc::clone(&state);
 
 		Self {
-			dead,
-			ticker:  Mutex::new(Some(std::thread::spawn(move || loop {
-				// This will abort if we've manually turned "dead" on, or if
-				// "inner" has reached 100%. Until then, this will initiate
-				// steady "ticks" to (selectively) repaint the CLI.
-				if t_dead.load(Relaxed) || ! t_inner.tick() { break; }
-
-				// Sleep for a short while before checking again.
-				std::thread::sleep(SLEEP);
-				if t_dead.load(Relaxed) { break; }
-				std::thread::sleep(SLEEP);
-			}))),
+			state,
+			ticker:  Mutex::new(Some(spawn_ticker(t_state, t_inner))),
 		}
 	}
 }
 
 impl ProglessSteady {
+	/// # Tick Rate.
+	///
+	/// Progress "animation" is more _Speed Racer_ than _Lion King_; painting
+	/// every hundred milliseconds or so is plenty.
+	const TICK_RATE: Duration = Duration::from_millis(100);
+
 	/// # Start.
 	///
-	/// Make sure the steady ticker is running.
+	/// Make sure the steady ticker is up and running!
 	pub(super) fn start(&self, t_inner: Arc<ProglessInner>) {
 		// Make sure the old steady ticker is dead.
 		self.stop();
 
 		// Reset!
-		self.dead.store(false, SeqCst);
-		let t_dead = Arc::clone(&self.dead);
-		mutex!(self.ticker).replace(std::thread::spawn(move || loop {
-			// This will abort if we've manually turned "dead" on, or if
-			// "inner" has reached 100%. Until then, this will initiate
-			// steady "ticks" to (selectively) repaint the CLI.
-			if t_dead.load(Relaxed) || ! t_inner.tick() { break; }
-
-			// Sleep for a short while before checking again.
-			std::thread::sleep(SLEEP);
-			if t_dead.load(Relaxed) { break; }
-			std::thread::sleep(SLEEP);
-		}));
+		*mutex!(self.state.0) = false;
+		let t_state = Arc::clone(&self.state);
+		mutex!(self.ticker).replace(spawn_ticker(t_state, t_inner));
 	}
 
 	#[inline]
 	/// # Stop.
 	///
 	/// Make sure the steady ticker has actually aborted. This is called
-	/// automatically when [`Progless::finish`] is called.
+	/// automatically when [`Progless::finish`] is called or the instance is
+	/// dropped.
 	pub(super) fn stop(&self) {
 		let handle = mutex!(self.ticker).take();
 		if let Some(handle) = handle {
-			self.dead.store(true, SeqCst);
+			*mutex!(self.state.0) = true;
+			self.state.1.notify_all();
 			handle.join().unwrap();
 		}
 	}
@@ -130,10 +100,24 @@ impl ProglessSteady {
 
 impl Drop for ProglessSteady {
 	#[inline]
-	/// # Drop.
-	///
-	/// Make sure the spawned steady tick thread has actually stopped. If the
-	/// caller forgot to run [`Progless::finish`] it might keep doing its
-	/// thing.
 	fn drop(&mut self) { self.stop(); }
+}
+
+
+
+#[inline]
+/// # Spawn Ticker.
+///
+/// Spawn a new thread to issue steady-ish ticks until the associated progress
+/// completes or a hard stop gets issued.
+fn spawn_ticker(t_state: Arc<(Mutex<bool>, Condvar)>, t_inner: Arc<ProglessInner>)
+-> JoinHandle<()> {
+	std::thread::spawn(move || {
+		let (t_dead, t_cond) = &*t_state;
+		let mut state = mutex!(t_dead);
+		while let LockResult::Ok(res) = t_cond.wait_timeout(state, ProglessSteady::TICK_RATE) {
+			state = res.0;
+			if *state || ! t_inner.tick() { break; }
+		}
+	})
 }
