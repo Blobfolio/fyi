@@ -1,9 +1,9 @@
 [package]
 name = "fyi_msg"
-version = "1.3.0"
+version = "1.4.0"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
-rust-version = "1.81"
+rust-version = "1.83"
 description = "Simple ANSI-formatted, prefixed messages for console printing."
 license = "WTFPL"
 repository = "https://github.com/Blobfolio/fyi"
@@ -18,19 +18,14 @@ default-target = "x86_64-unknown-linux-gnu"
 targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
 [dependencies]
-dactyl = "0.8.*"
-
-[dependencies.ahash]
-version = "0.8.*"
-default-features = false
-optional = true
+dactyl = "0.9.*"
 
 [dependencies.bytecount]
 version = "=0.6.8"
 optional = true
 
 [dependencies.terminal_size]
-version = "=0.4.0"
+version = "=0.4.1"
 optional = true
 
 [dependencies.unicode-width]
@@ -43,7 +38,7 @@ features = [ "local" ]
 optional = true
 
 [dev-dependencies]
-brunch = "0.7.*"
+brunch = "0.8.*"
 rayon = "1.10.*"
 
 [[bench]]
@@ -84,7 +79,7 @@ bin_kinds = []
 fitted = [ "unicode-width" ]
 
 # Make use of the "progless" bar.
-progress = [ "ahash", "bytecount", "fitted", "terminal_size" ]
+progress = [ "bytecount", "fitted", "terminal_size" ]
 
 # Add timestamp support to messages.
 timestamps = [ "utc2k" ]
