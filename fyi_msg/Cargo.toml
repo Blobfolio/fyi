@@ -20,10 +20,6 @@ targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 [dependencies]
 dactyl = "0.9.*"
 
-[dependencies.bytecount]
-version = "=0.6.8"
-optional = true
-
 [dependencies.terminal_size]
 version = "=0.4.1"
 optional = true
@@ -79,7 +75,7 @@ bin_kinds = []
 fitted = [ "unicode-width" ]
 
 # Make use of the "progless" bar.
-progress = [ "bytecount", "fitted", "terminal_size" ]
+progress = [ "fitted", "terminal_size" ]
 
 # Add timestamp support to messages.
 timestamps = [ "utc2k" ]

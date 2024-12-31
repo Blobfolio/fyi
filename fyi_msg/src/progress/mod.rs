@@ -526,7 +526,7 @@ impl ProglessInner {
 	/// everything else.
 	fn set_title(&self, title: Option<Msg>) {
 		if self.running() {
-			*mutex!(self.title) = title.map(|m| m.with_newline(true));
+			*mutex!(self.title) = title.map(Msg::progless_title);
 			self.flags.fetch_or(TICK_TITLE, SeqCst);
 		}
 	}
@@ -703,9 +703,6 @@ struct ProglessBuffer {
 
 	/// # Task Lines.
 	lines_doing: u8,
-
-	/// # Title Lines.
-	lines_title: u8,
 }
 
 impl ProglessBuffer {
@@ -720,21 +717,10 @@ impl ProglessBuffer {
 		percent: NicePercent::MIN,
 		doing: Vec::new(),
 		lines_doing: 0,
-		lines_title: 0,
 	};
 }
 
 impl ProglessBuffer {
-	/// # Line Count.
-	///
-	/// One line is always assumed for the time/bar/totals, but the title and
-	/// task lists can add more.
-	const fn lines(&self) -> NonZeroU8 {
-		NonZeroU8::MIN
-			.saturating_add(self.lines_doing)
-			.saturating_add(self.lines_title)
-	}
-
 	/// # Write It!
 	///
 	/// This writes the fully-formatted progress data to STDERR, returning the
@@ -770,7 +756,12 @@ impl ProglessBuffer {
 			}
 		}
 
-		// We're discontiguous enough, I think.
+		// The number of lines we're about to print.
+		let lines = NonZeroU8::MIN
+			.saturating_add(self.lines_doing)
+			.saturating_add(u8::from(! self.title.is_empty()));
+
+		// We're discontiguous enough, I think…
 		let parts = &mut [
 			// Clear.
 			IoSlice::new(CLS),
@@ -781,10 +772,9 @@ impl ProglessBuffer {
 			// Elapsed.
 			IoSlice::new(b"\x1b[2m[\x1b[0;1m"),
 			IoSlice::new(self.elapsed.as_bytes()),
-			IoSlice::new(b"\x1b[0;2m]\x1b[0m  "),
+			IoSlice::new(b"\x1b[0;2m]  [\x1b[0;1;96m"),
 
 			// Bars.
-			IoSlice::new(b"\x1b[2m[\x1b[0;1;96m"),
 			IoSlice::new(self.bar_done),
 			IoSlice::new(b"\x1b[0;1;34m"),
 			IoSlice::new(self.bar_undone),
@@ -804,8 +794,8 @@ impl ProglessBuffer {
 			IoSlice::new(&self.doing),
 
 			// The end!
-			IoSlice::new(b"\x1b[0m\n\x1b[999D"),
-			IoSlice::new(LINE_UP[self.lines().get() as usize - 1]),
+			IoSlice::new(b"\x1b[0m\n"),
+			IoSlice::new(LINE_UP[lines.get() as usize - 1]),
 		];
 
 		write_all_vectored(parts.as_mut_slice(), handle)
@@ -876,9 +866,9 @@ impl ProglessBuffer {
 		// Add each task as its own line, assuming we have the room.
 		if
 			2 <= width &&
-			usize::from(self.lines_title) + 1 + doing.len() <= usize::from(height)
+			usize::from(! self.title.is_empty()) + 1 + doing.len() < usize::from(height)
 		{
-			for line in doing.iter().filter_map(|line| line.fitted(width)).take(255) {
+			for line in doing.iter().filter_map(|line| line.fitted(width)) {
 				self.doing.extend_from_slice(PREFIX);
 				self.doing.extend_from_slice(line);
 				self.lines_doing += 1;
@@ -889,12 +879,8 @@ impl ProglessBuffer {
 	/// # Update Title.
 	fn set_title(&mut self, title: Option<&Msg>, width: u8, height: u8) {
 		if let Some(title) = title {
-			// Count the line breaks.
-			self.lines_title = u8::try_from(bytecount::count(title, b'\n'))
-				.unwrap_or(u8::MAX);
-
 			// Add it if we have the height for it.
-			if self.lines_title + 2 < height {
+			if 2 < height {
 				title.fitted(usize::from(width)).as_ref().clone_into(&mut self.title);
 				return;
 			}
@@ -902,7 +888,6 @@ impl ProglessBuffer {
 
 		// Reset the title.
 		self.title.truncate(0);
-		self.lines_title = 0;
 	}
 }
 
@@ -1075,10 +1060,13 @@ impl Progless {
 	/// own line immediately before the progress line.
 	///
 	/// Titles are formatted as [`Msg`] objects. You can pass a [`Msg`]
-	/// directly, or something that implements `AsRef<str>` or `Borrow<str>`.
+	/// directly, or something that can be converted to one, like a string
+	/// slice.
 	///
-	/// As this takes an `Option`, you can pass `None` to unset the title
-	/// entirely.
+	/// Pass `None` to remove the title entirely.
+	///
+	/// Note: titles cannot have line breaks; this will automatically replace
+	/// any non-space whitespace with regular horizontal spaces.
 	///
 	/// ## Examples
 	///
