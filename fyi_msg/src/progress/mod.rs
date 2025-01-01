@@ -526,7 +526,7 @@ impl ProglessInner {
 	/// everything else.
 	fn set_title(&self, title: Option<Msg>) {
 		if self.running() {
-			*mutex!(self.title) = title.map(Msg::progless_title);
+			*mutex!(self.title) = title.map(Msg::into_progress_title);
 			self.flags.fetch_or(TICK_TITLE, SeqCst);
 		}
 	}

@@ -674,34 +674,38 @@ impl Msg {
 	/// To that end, this will replace any non-space whitespace in the
 	/// customizable sections to regular spaces and set the newline bit,
 	/// returning the result.
-	pub(crate) fn progless_title(mut self) -> Self {
-		// Check the custom parts
+	pub(crate) fn into_progress_title(mut self) -> Self {
+		// Check the custom parts.
 		for idx in [PART_PREFIX, PART_MSG, PART_SUFFIX] {
-			let part: &mut [u8] = self.0.get_mut(idx);
-			if ! part.is_empty() {
-				// Working with bytes is easiest.
-				if part.is_ascii() {
-					for b in part {
-						if b.is_ascii_whitespace() && *b != b' ' {
-							*b = b' ';
-						}
+			// These parts should be pretty small; let's skip the messy ASCII
+			// specialization and just work with strings from the outset.
+			if let Ok(tmp) = std::str::from_utf8(self.0.get(idx)) {
+				// Split on funky whitespace, if any.
+				if let Some((a, b)) = tmp.split_once(|c: char| c.is_whitespace() && c != ' ') {
+					// We have to allocate a new string.
+					let mut tmp = String::with_capacity(tmp.len());
+					tmp.push_str(a); // Leading non-funky bits.
+					tmp.push(' ');   // Replacement space.
+
+					// Run through and add the rest char-by-char, swapping
+					// spaces as needed.
+					for c in b.chars() {
+						if c.is_whitespace() { tmp.push(' '); }
+						else { tmp.push(c); }
 					}
+
+					// Replace the section!
+					self.0.replace(idx, tmp.as_bytes());
 				}
-				// Otherwise we'll need to poke around a string intermediary,
-				// and maybe reallocate/replace.
-				else if let Ok(tmp) = std::str::from_utf8(part) {
-					if tmp.chars().any(|c| c.is_whitespace() && c != ' ') {
-						let tmp: String = tmp.chars()
-							.map(|c| if c.is_whitespace() { ' ' } else { c })
-							.collect();
-						self.0.replace(idx, tmp.as_bytes());
-					}
-				}
-				// This shouldn't be reachable.
-				else { self.0.truncate(idx, 0); }
 			}
+			// This shouldn't be reachable.
+			else { self.0.truncate(idx, 0); }
 		}
+
+		// Set the newline bit.
 		self.set_newline(true);
+
+		// Done!
 		self
 	}
 }
