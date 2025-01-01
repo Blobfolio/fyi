@@ -577,19 +577,26 @@ impl ProglessInner {
 		// possible, even though we may well not end up using it.
 		let mut handle = std::io::stderr().lock();
 
-		// If there's not enough room for a progress bar, just clear the
-		// previous output, if any.
-		let (width, height) = self.tick_set_size();
-		if width < 8 || height < 2 {
-			// We don't even have enough room for a percentage!
+		// Pull the terminal dimensions.
+		let Some((width, height)) = self.tick_set_size() else {
+			// The size either changed between ticks or cannot be determined.
+			// Either way, let's skip a turn and wait for the state to
+			// stabilize.
+			return true;
+		};
+
+		// If we don't even have enough space for a percentage, clear the
+		// screen and call it a day.
+		if width.get() < 7 || height.get() < 2 {
 			let _res = handle.write_all(CLS).and_then(|()| handle.flush());
 		}
-		// If something drawable changed, we need a complete refresh.
+		// Otherwise if something drawable changed, (re)draw!
 		else if self.tick_set_secs() || 0 != self.flags.load(SeqCst) & TICK_DRAWABLE {
 			// Update the buffer bits.
 			let mut buf = mutex!(self.buf);
 
-			// Let's start with the numbers since they affect multiple pieces.
+			// Let's start with the numbers since their values are
+			// interconnected.
 			let ticked = self.flags.fetch_and(! (TICK_DONE | TICK_TOTAL | TICK_BAR), SeqCst);
 			if ticked != 0 {
 				let done = self.done();
@@ -610,19 +617,18 @@ impl ProglessInner {
 				buf.set_bars(width, done, total);
 			}
 
-			// Update the title?
+			// Title takes priority over tasks; update it next.
 			if self.flag_unset(TICK_TITLE) {
 				buf.set_title(mutex!(self.title).as_ref(), width, height);
 			}
 
-			// Update the tasks?
+			// Lastly, update the task list.
 			if self.flag_unset(TICK_DOING) {
 				buf.set_doing(&mutex!(self.doing), width, height);
 			}
 
-			// If space is too limited for everything, just print the
-			// percentage.
-			if width < MIN_DRAW_WIDTH { buf.print_small(&mut handle); }
+			// Print the percentage by itself if space is limited.
+			if width.get() < MIN_DRAW_WIDTH { buf.print_small(&mut handle); }
 			// Otherwise print it all!
 			else { buf.print(&mut handle); }
 		}
@@ -660,13 +666,14 @@ impl ProglessInner {
 	///
 	/// Check to see if the terminal width has changed since the last run and
 	/// update values — i.e. the relevant tick flags — as necessary.
-	fn tick_set_size(&self) -> (u8, u8) {
-		let (width, height) = term_size();
-		let wh = u16::from_le_bytes([width, height]);
-		if wh != self.last_size.swap(wh, SeqCst) {
+	fn tick_set_size(&self) -> Option<(NonZeroU8, NonZeroU8)> {
+		let (width, height) = term_size()?;
+		let wh = u16::from_le_bytes([width.get(), height.get()]);
+		if wh == self.last_size.swap(wh, SeqCst) { Some((width, height)) }
+		else {
 			self.flags.fetch_or(TICK_RESIZED, SeqCst);
+			None
 		}
-		(width, height)
 	}
 }
 
@@ -731,10 +738,10 @@ impl ProglessBuffer {
 	fn print_small(&self, handle: &mut StderrLock<'static>) -> bool {
 		// We're discontiguous enough, I think…
 		let parts = &mut [
-			IoSlice::new(CLS),
-			IoSlice::new(b"\x1b[1m"),
-			IoSlice::new(self.percent.as_bytes()),
-			IoSlice::new(b"\x1b[0m\n\x1b[1A"),
+			IoSlice::new(CLS),                     // CLS.
+			IoSlice::new(b"\x1b[1m"),              // Bold.
+			IoSlice::new(self.percent.as_bytes()), // Percent.
+			IoSlice::new(b"\x1b[0m\n\x1b[1A"),     // Reset and rewind.
 		];
 		write_all_vectored(parts.as_mut_slice(), handle)
 	}
@@ -792,7 +799,7 @@ impl ProglessBuffer {
 
 impl ProglessBuffer {
 	/// # Set Bars.
-	fn set_bars(&mut self, width: u8, done: u32, total: u32) {
+	fn set_bars(&mut self, width: NonZeroU8, done: u32, total: u32) {
 		// Default sizes.
 		let mut w_done = 0_u8;
 		let mut w_undone = 0_u8;
@@ -805,7 +812,7 @@ impl ProglessBuffer {
 		// 2: the spaces after total;
 		// 2: the braces around the bar itself;
 		// 2: the spaces after the bar itself;
-		let space: u8 = width.saturating_sub(u8::saturating_from(
+		let space: u8 = width.get().saturating_sub(u8::saturating_from(
 			19 +
 			self.done.len() +
 			self.total.len() +
@@ -837,7 +844,12 @@ impl ProglessBuffer {
 	}
 
 	/// # Update Tasks.
-	fn set_doing(&mut self, doing: &BTreeSet<ProglessTask>, width: u8, height: u8) {
+	fn set_doing(
+		&mut self,
+		doing: &BTreeSet<ProglessTask>,
+		width: NonZeroU8,
+		height: NonZeroU8,
+	) {
 		/// # Task Prefix.
 		///
 		/// This translates to:           •   •   •   •   ↳             •
@@ -849,12 +861,12 @@ impl ProglessBuffer {
 
 		// The actual width we can work with is minus six for padding, six for
 		// the prefix.
-		let width = usize::from(width.saturating_sub(12));
+		let width = usize::from(width.get().saturating_sub(12));
 
 		// Add each task as its own line, assuming we have the room.
 		if
 			2 <= width &&
-			usize::from(! self.title.is_empty()) + 1 + doing.len() < usize::from(height)
+			usize::from(! self.title.is_empty()) + 1 + doing.len() < usize::from(height.get())
 		{
 			for line in doing.iter().filter_map(|line| line.fitted(width)) {
 				self.doing.extend_from_slice(PREFIX);
@@ -865,11 +877,10 @@ impl ProglessBuffer {
 	}
 
 	/// # Update Title.
-	fn set_title(&mut self, title: Option<&Msg>, width: u8, height: u8) {
-		if let Some(title) = title {
-			// Add it if we have the height for it.
-			if 2 < height {
-				title.fitted(usize::from(width)).as_ref().clone_into(&mut self.title);
+	fn set_title(&mut self, title: Option<&Msg>, width: NonZeroU8, height: NonZeroU8) {
+		if 2 < height.get() {
+			if let Some(title) = title {
+				title.fitted(usize::from(width.get())).as_ref().clone_into(&mut self.title);
 				return;
 			}
 		}
@@ -1359,15 +1370,12 @@ impl Progless {
 ///
 /// Return the width and height of the terminal attached to STDERR, if any,
 /// less one to help smooth scroll weirdness.
-fn term_size() -> (u8, u8) {
+fn term_size() -> Option<(NonZeroU8, NonZeroU8)> {
 	use terminal_size::{Height, Width};
-	terminal_size::terminal_size_of(std::io::stderr()).map_or(
-		(0, 0),
-		|(Width(w), Height(h))| (
-			u8::saturating_from(w.saturating_sub(1)),
-			u8::saturating_from(h).saturating_sub(1)
-		)
-	)
+	let (Width(w), Height(h)) = terminal_size::terminal_size_of(std::io::stderr())?;
+	let w = NonZeroU8::new(u8::saturating_from(w.saturating_sub(1)))?;
+	let h = NonZeroU8::new(u8::saturating_from(h).saturating_sub(1))?;
+	Some((w, h))
 }
 
 #[cfg(not(unix))]
@@ -1377,15 +1385,12 @@ fn term_size() -> (u8, u8) {
 ///
 /// Return the width and height of the terminal attached to STDERR, if any,
 /// less one to help smooth scroll weirdness.
-fn term_size() -> (u8, u8) {
+fn term_size() -> Option<(NonZeroU8, NonZeroU8)> {
 	use terminal_size::{Height, Width};
-	terminal_size::terminal_size().map_or(
-		(0, 0),
-		|(Width(w), Height(h))| (
-			u8::saturating_from(w.saturating_sub(1)),
-			u8::saturating_from(h).saturating_sub(1)
-		)
-	)
+	let (Width(w), Height(h)) = terminal_size::terminal_size()?;
+	let w = NonZeroU8::new(u8::saturating_from(w.saturating_sub(1)))?;
+	let h = NonZeroU8::new(u8::saturating_from(h).saturating_sub(1))?;
+	Some((w, h))
 }
 
 #[inline]
