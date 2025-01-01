@@ -580,7 +580,8 @@ impl ProglessInner {
 		// If there's not enough room for a progress bar, just clear the
 		// previous output, if any.
 		let (width, height) = self.tick_set_size();
-		if width < MIN_DRAW_WIDTH {
+		if width < 8 || height < 2 {
+			// We don't even have enough room for a percentage!
 			let _res = handle.write_all(CLS).and_then(|()| handle.flush());
 		}
 		// If something drawable changed, we need a complete refresh.
@@ -619,8 +620,11 @@ impl ProglessInner {
 				buf.set_doing(&mutex!(self.doing), width, height);
 			}
 
-			// Print it!
-			let _res = buf.print(&mut handle);
+			// If space is too limited for everything, just print the
+			// percentage.
+			if width < MIN_DRAW_WIDTH { buf.print_small(&mut handle); }
+			// Otherwise print it all!
+			else { buf.print(&mut handle); }
 		}
 
 		true
@@ -721,41 +725,25 @@ impl ProglessBuffer {
 }
 
 impl ProglessBuffer {
+	/// # Print Short.
+	///
+	/// Print the percentage by itself.
+	fn print_small(&self, handle: &mut StderrLock<'static>) -> bool {
+		// We're discontiguous enough, I think…
+		let parts = &mut [
+			IoSlice::new(CLS),
+			IoSlice::new(b"\x1b[1m"),
+			IoSlice::new(self.percent.as_bytes()),
+			IoSlice::new(b"\x1b[0m\n\x1b[1A"),
+		];
+		write_all_vectored(parts.as_mut_slice(), handle)
+	}
+
 	/// # Write It!
 	///
 	/// This writes the fully-formatted progress data to STDERR, returning the
 	/// status as a bool.
 	fn print(&self, handle: &mut StderrLock<'static>) -> bool {
-		use std::io::ErrorKind;
-		use std::io::Write;
-
-		#[inline]
-		/// # Write All Vectored.
-		///
-		/// TODO: remove once `Write::write_all_vectored` is stable.
-		fn write_all_vectored(
-			mut bufs: &mut [IoSlice<'_>],
-			handle: &mut StderrLock<'static>,
-		) -> bool {
-			// Make sure we have something to print.
-			IoSlice::advance_slices(&mut bufs, 0);
-			if bufs.is_empty() { true } // This can't happen.
-			else {
-				// Write it all!
-				loop {
-					match handle.write_vectored(bufs) {
-						Ok(0) => return false,
-						Ok(n) => IoSlice::advance_slices(&mut bufs, n),
-						Err(e) =>
-							if e.kind() == ErrorKind::Interrupted {} // Keep trying.
-							else { return false; },
-					}
-					if bufs.is_empty() { break; }
-				}
-				handle.flush().is_ok()
-			}
-		}
-
 		// The number of lines we're about to print.
 		let lines = NonZeroU8::MIN
 			.saturating_add(self.lines_doing)
@@ -1398,4 +1386,34 @@ fn term_size() -> (u8, u8) {
 			u8::saturating_from(h).saturating_sub(1)
 		)
 	)
+}
+
+#[inline]
+/// # Write All Vectored.
+///
+/// TODO: remove once `Write::write_all_vectored` is stable.
+fn write_all_vectored(
+	mut bufs: &mut [IoSlice<'_>],
+	handle: &mut StderrLock<'static>,
+) -> bool {
+	use std::io::ErrorKind;
+	use std::io::Write;
+
+	// Make sure we have something to print.
+	IoSlice::advance_slices(&mut bufs, 0);
+	if bufs.is_empty() { true } // This can't happen.
+	else {
+		// Write it all!
+		loop {
+			match handle.write_vectored(bufs) {
+				Ok(0) => return false,
+				Ok(n) => IoSlice::advance_slices(&mut bufs, n),
+				Err(e) =>
+					if e.kind() == ErrorKind::Interrupted {} // Keep trying.
+					else { return false; },
+			}
+			if bufs.is_empty() { break; }
+		}
+		handle.flush().is_ok()
+	}
 }
