@@ -113,6 +113,7 @@ impl Drop for ProglessSteady {
 fn spawn_ticker(t_state: Arc<(Mutex<bool>, Condvar)>, t_inner: Arc<ProglessInner>)
 -> JoinHandle<()> {
 	std::thread::spawn(move || {
+		// Tick while the ticking's good.
 		let (t_dead, t_cond) = &*t_state;
 		let mut state = mutex!(t_dead);
 		while let LockResult::Ok(res) = t_cond.wait_timeout(state, ProglessSteady::TICK_RATE) {

@@ -930,7 +930,7 @@ impl Msg {
 		// Check the length again; the fixed bits might just have a lot of
 		// ANSI.
 		let keep = crate::length_width(self.0.get(PART_MSG), width - fixed_width) as u32;
-		if keep == 0 { Cow::Owned(Vec::new()) }
+		if keep == 0 { Cow::Borrowed(&[]) }
 		else if keep == self.0.len(PART_MSG) { Cow::Borrowed(self) }
 		else {
 			// We have to trim the message to fit. Let's do it on a copy.

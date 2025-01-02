@@ -44,6 +44,7 @@ use std::{
 		Mutex,
 		atomic::{
 			AtomicU8,
+			AtomicU16,
 			AtomicU32,
 			Ordering::SeqCst,
 		},
@@ -64,29 +65,34 @@ static BAR_DONE:   [u8; 256] = [b'#'; 256];
 /// # Dash Filler (TBD).
 static BAR_UNDONE: [u8; 256] = [b'-'; 256];
 
-/// # Twenty Line Clears.
-static CLS20: [u8; 280] = *b"\
-	\x1b[1A\x1b[1000D\x1b[K\
-	\x1b[1A\x1b[1000D\x1b[K\
-	\x1b[1A\x1b[1000D\x1b[K\
-	\x1b[1A\x1b[1000D\x1b[K\
-	\x1b[1A\x1b[1000D\x1b[K\
-	\x1b[1A\x1b[1000D\x1b[K\
-	\x1b[1A\x1b[1000D\x1b[K\
-	\x1b[1A\x1b[1000D\x1b[K\
-	\x1b[1A\x1b[1000D\x1b[K\
-	\x1b[1A\x1b[1000D\x1b[K\
-	\x1b[1A\x1b[1000D\x1b[K\
-	\x1b[1A\x1b[1000D\x1b[K\
-	\x1b[1A\x1b[1000D\x1b[K\
-	\x1b[1A\x1b[1000D\x1b[K\
-	\x1b[1A\x1b[1000D\x1b[K\
-	\x1b[1A\x1b[1000D\x1b[K\
-	\x1b[1A\x1b[1000D\x1b[K\
-	\x1b[1A\x1b[1000D\x1b[K\
-	\x1b[1A\x1b[1000D\x1b[K\
-	\x1b[1A\x1b[1000D\x1b[K\
-";
+/// # Clear Screen.
+///
+/// This ANSI sequence is used to clear the screen from the current cursor
+/// position (i.e. everything _after_).
+const CLS: &[u8] = b"\x1b[J";
+
+/// # Move Cursor Up.
+///
+/// Precalculated ANSI sequences to move the cursor up N lines, where N is
+/// within the range of `NonZeroU8`. (Indexes are `N-1`.)
+///
+/// This is used to realign the cursor to the start of the progress output
+/// following each repaint.
+static LINE_UP: [&[u8]; 255] = [
+	b"\x1b[1A", b"\x1b[2A", b"\x1b[3A", b"\x1b[4A", b"\x1b[5A", b"\x1b[6A", b"\x1b[7A", b"\x1b[8A", b"\x1b[9A", b"\x1b[10A", b"\x1b[11A", b"\x1b[12A", b"\x1b[13A", b"\x1b[14A", b"\x1b[15A", b"\x1b[16A", b"\x1b[17A", b"\x1b[18A", b"\x1b[19A", b"\x1b[20A",
+	b"\x1b[21A", b"\x1b[22A", b"\x1b[23A", b"\x1b[24A", b"\x1b[25A", b"\x1b[26A", b"\x1b[27A", b"\x1b[28A", b"\x1b[29A", b"\x1b[30A", b"\x1b[31A", b"\x1b[32A", b"\x1b[33A", b"\x1b[34A", b"\x1b[35A", b"\x1b[36A", b"\x1b[37A", b"\x1b[38A", b"\x1b[39A", b"\x1b[40A",
+	b"\x1b[41A", b"\x1b[42A", b"\x1b[43A", b"\x1b[44A", b"\x1b[45A", b"\x1b[46A", b"\x1b[47A", b"\x1b[48A", b"\x1b[49A", b"\x1b[50A", b"\x1b[51A", b"\x1b[52A", b"\x1b[53A", b"\x1b[54A", b"\x1b[55A", b"\x1b[56A", b"\x1b[57A", b"\x1b[58A", b"\x1b[59A", b"\x1b[60A",
+	b"\x1b[61A", b"\x1b[62A", b"\x1b[63A", b"\x1b[64A", b"\x1b[65A", b"\x1b[66A", b"\x1b[67A", b"\x1b[68A", b"\x1b[69A", b"\x1b[70A", b"\x1b[71A", b"\x1b[72A", b"\x1b[73A", b"\x1b[74A", b"\x1b[75A", b"\x1b[76A", b"\x1b[77A", b"\x1b[78A", b"\x1b[79A", b"\x1b[80A",
+	b"\x1b[81A", b"\x1b[82A", b"\x1b[83A", b"\x1b[84A", b"\x1b[85A", b"\x1b[86A", b"\x1b[87A", b"\x1b[88A", b"\x1b[89A", b"\x1b[90A", b"\x1b[91A", b"\x1b[92A", b"\x1b[93A", b"\x1b[94A", b"\x1b[95A", b"\x1b[96A", b"\x1b[97A", b"\x1b[98A", b"\x1b[99A", b"\x1b[100A",
+	b"\x1b[101A", b"\x1b[102A", b"\x1b[103A", b"\x1b[104A", b"\x1b[105A", b"\x1b[106A", b"\x1b[107A", b"\x1b[108A", b"\x1b[109A", b"\x1b[110A", b"\x1b[111A", b"\x1b[112A", b"\x1b[113A", b"\x1b[114A", b"\x1b[115A", b"\x1b[116A", b"\x1b[117A", b"\x1b[118A", b"\x1b[119A", b"\x1b[120A",
+	b"\x1b[121A", b"\x1b[122A", b"\x1b[123A", b"\x1b[124A", b"\x1b[125A", b"\x1b[126A", b"\x1b[127A", b"\x1b[128A", b"\x1b[129A", b"\x1b[130A", b"\x1b[131A", b"\x1b[132A", b"\x1b[133A", b"\x1b[134A", b"\x1b[135A", b"\x1b[136A", b"\x1b[137A", b"\x1b[138A", b"\x1b[139A", b"\x1b[140A",
+	b"\x1b[141A", b"\x1b[142A", b"\x1b[143A", b"\x1b[144A", b"\x1b[145A", b"\x1b[146A", b"\x1b[147A", b"\x1b[148A", b"\x1b[149A", b"\x1b[150A", b"\x1b[151A", b"\x1b[152A", b"\x1b[153A", b"\x1b[154A", b"\x1b[155A", b"\x1b[156A", b"\x1b[157A", b"\x1b[158A", b"\x1b[159A", b"\x1b[160A",
+	b"\x1b[161A", b"\x1b[162A", b"\x1b[163A", b"\x1b[164A", b"\x1b[165A", b"\x1b[166A", b"\x1b[167A", b"\x1b[168A", b"\x1b[169A", b"\x1b[170A", b"\x1b[171A", b"\x1b[172A", b"\x1b[173A", b"\x1b[174A", b"\x1b[175A", b"\x1b[176A", b"\x1b[177A", b"\x1b[178A", b"\x1b[179A", b"\x1b[180A",
+	b"\x1b[181A", b"\x1b[182A", b"\x1b[183A", b"\x1b[184A", b"\x1b[185A", b"\x1b[186A", b"\x1b[187A", b"\x1b[188A", b"\x1b[189A", b"\x1b[190A", b"\x1b[191A", b"\x1b[192A", b"\x1b[193A", b"\x1b[194A", b"\x1b[195A", b"\x1b[196A", b"\x1b[197A", b"\x1b[198A", b"\x1b[199A", b"\x1b[200A",
+	b"\x1b[201A", b"\x1b[202A", b"\x1b[203A", b"\x1b[204A", b"\x1b[205A", b"\x1b[206A", b"\x1b[207A", b"\x1b[208A", b"\x1b[209A", b"\x1b[210A", b"\x1b[211A", b"\x1b[212A", b"\x1b[213A", b"\x1b[214A", b"\x1b[215A", b"\x1b[216A", b"\x1b[217A", b"\x1b[218A", b"\x1b[219A", b"\x1b[220A",
+	b"\x1b[221A", b"\x1b[222A", b"\x1b[223A", b"\x1b[224A", b"\x1b[225A", b"\x1b[226A", b"\x1b[227A", b"\x1b[228A", b"\x1b[229A", b"\x1b[230A", b"\x1b[231A", b"\x1b[232A", b"\x1b[233A", b"\x1b[234A", b"\x1b[235A", b"\x1b[236A", b"\x1b[237A", b"\x1b[238A", b"\x1b[239A", b"\x1b[240A",
+	b"\x1b[241A", b"\x1b[242A", b"\x1b[243A", b"\x1b[244A", b"\x1b[245A", b"\x1b[246A", b"\x1b[247A", b"\x1b[248A", b"\x1b[249A", b"\x1b[250A", b"\x1b[251A", b"\x1b[252A", b"\x1b[253A", b"\x1b[254A", b"\x1b[255A",
+];
 
 /// # Helper: Mutex Unlock.
 ///
@@ -162,18 +168,12 @@ struct ProglessInner {
 	/// # Flags.
 	flags: AtomicU8,
 
-	/// # Last Printed Line Count.
-	///
-	/// The number of lines last printed. Before printing new output, this many
-	/// lines must be "erased".
-	last_lines: AtomicU8,
-
 	/// # Last Width.
 	///
 	/// The screen width from the last print. If this changes, all buffer parts
 	/// are recalculated (even if their values haven't changed) to ensure they
 	/// fit the new width.
-	last_width: AtomicU8,
+	last_size: AtomicU16,
 
 	/// # Start Time.
 	///
@@ -208,8 +208,7 @@ impl Default for ProglessInner {
 			buf: Mutex::new(ProglessBuffer::DEFAULT),
 			flags: AtomicU8::new(0),
 
-			last_lines: AtomicU8::new(0),
-			last_width: AtomicU8::new(0),
+			last_size: AtomicU16::new(0),
 
 			started: Instant::now(),
 			elapsed: AtomicU32::new(0),
@@ -319,7 +318,8 @@ impl ProglessInner {
 	/// will also erase the CLI progress bar from the screen.
 	fn stop(&self) {
 		// Shut 'er down!
-		if TICKING == self.flags.swap(0, SeqCst) & TICKING {
+		let flags = self.flags.swap(0, SeqCst);
+		if TICKING == flags & TICKING {
 			// Acquire the lock a little early just in case there is a
 			// final in-progress tick.
 			let mut handle = std::io::stderr().lock();
@@ -331,8 +331,9 @@ impl ProglessInner {
 			);
 			mutex!(self.doing).clear();
 
-			// Clear the screen one last time.
-			self.print_cls(&mut handle);
+			// Clear the screen for good measure and make sure cursor
+			// visibility is re-enabled.
+			let _res = handle.write_all(CLS).and_then(|()| handle.flush());
 		}
 	}
 }
@@ -432,8 +433,8 @@ impl ProglessInner {
 		if self.running() {
 			// Clear the screen, then print the message.
 			let mut handle = std::io::stderr().lock();
-			self.print_cls(&mut handle);
-			let res = handle.write_all(msg.as_bytes())
+			let res = handle.write_all(CLS)
+				.and_then(|()| handle.write_all(msg.as_bytes()))
 				.and_then(|()| handle.flush())
 				.is_err();
 			drop(handle);
@@ -525,7 +526,7 @@ impl ProglessInner {
 	/// everything else.
 	fn set_title(&self, title: Option<Msg>) {
 		if self.running() {
-			*mutex!(self.title) = title.map(|m| m.with_newline(true));
+			*mutex!(self.title) = title.map(|m| m.with_newline(false));
 			self.flags.fetch_or(TICK_TITLE, SeqCst);
 		}
 	}
@@ -546,38 +547,6 @@ impl ProglessInner {
 		if TICKING == flags & (SIGINT | TICKING) {
 			mutex!(self.title).replace(Msg::warning("Early shutdown in progress."));
 			self.flags.fetch_or(SIGINT | TICK_TITLE, SeqCst);
-		}
-	}
-}
-
-/// # Render.
-impl ProglessInner {
-	/// # Erase Output.
-	///
-	/// This method "erases" any prior output so that new output can be written
-	/// in the same place.
-	///
-	/// (This would be a lot easier if we had only a single line, but that's
-	/// CLI animation for you. Haha.)
-	fn print_cls(&self, handle: &mut StderrLock<'static>) {
-		// We might not need to do anything.
-		let mut last_lines = usize::from(self.last_lines.swap(0, SeqCst));
-		if 0 != last_lines {
-			// Clear the current line.
-			let _res = handle.write_all(b"\x1b[1000D\x1b[K");
-
-			// Now move the cursor up the appropriate number of lines, clearing
-			// each as we go.
-			loop {
-				// We can handle up to twenty lines at a time.
-				let chunk = usize::min(last_lines, 20);
-				let _res = handle.write_all(&CLS20[..14 * chunk]);
-				last_lines -= chunk;
-				if last_lines == 0 { break; }
-			}
-
-			// Don't forget to flush!
-			let _res = handle.flush();
 		}
 	}
 }
@@ -608,18 +577,26 @@ impl ProglessInner {
 		// possible, even though we may well not end up using it.
 		let mut handle = std::io::stderr().lock();
 
-		// If there's not enough room for a progress bar, just clear the
-		// previous output, if any.
-		let width = self.tick_set_width();
-		if width < MIN_DRAW_WIDTH {
-			self.print_cls(&mut handle);
+		// Pull the terminal dimensions.
+		let Some((width, height)) = self.tick_set_size() else {
+			// The size either changed between ticks or cannot be determined.
+			// Either way, let's skip a turn and wait for the state to
+			// stabilize.
+			return true;
+		};
+
+		// If we don't even have enough space for a percentage, clear the
+		// screen and call it a day.
+		if width.get() < 7 || height.get() < 2 {
+			let _res = handle.write_all(CLS).and_then(|()| handle.flush());
 		}
-		// If something drawable changed, we need a complete refresh.
+		// Otherwise if something drawable changed, (re)draw!
 		else if self.tick_set_secs() || 0 != self.flags.load(SeqCst) & TICK_DRAWABLE {
 			// Update the buffer bits.
 			let mut buf = mutex!(self.buf);
 
-			// Let's start with the numbers since they affect multiple pieces.
+			// Let's start with the numbers since their values are
+			// interconnected.
 			let ticked = self.flags.fetch_and(! (TICK_DONE | TICK_TOTAL | TICK_BAR), SeqCst);
 			if ticked != 0 {
 				let done = self.done();
@@ -640,25 +617,20 @@ impl ProglessInner {
 				buf.set_bars(width, done, total);
 			}
 
-			// Update the tasks?
-			if self.flag_unset(TICK_DOING) {
-				buf.set_doing(&mutex!(self.doing), width);
-			}
-
-			// Update the title?
+			// Title takes priority over tasks; update it next.
 			if self.flag_unset(TICK_TITLE) {
-				buf.set_title(mutex!(self.title).as_ref(), width);
+				buf.set_title(mutex!(self.title).as_ref(), width, height);
 			}
 
-			// Clear the previous output.
-			self.print_cls(&mut handle);
-
-			// Print the updated progress details and update the line count.
-			let lines = buf.print(&mut handle);
-			drop(buf);
-			if let Some(lines) = lines {
-				self.last_lines.store(lines, SeqCst);
+			// Lastly, update the task list.
+			if self.flag_unset(TICK_DOING) {
+				buf.set_doing(&mutex!(self.doing), width, height);
 			}
+
+			// Print the percentage by itself if space is limited.
+			if width.get() < MIN_DRAW_WIDTH { buf.print_small(&mut handle); }
+			// Otherwise print it all!
+			else { buf.print(&mut handle); }
 		}
 
 		true
@@ -694,12 +666,14 @@ impl ProglessInner {
 	///
 	/// Check to see if the terminal width has changed since the last run and
 	/// update values — i.e. the relevant tick flags — as necessary.
-	fn tick_set_width(&self) -> u8 {
-		let width = term_width();
-		if width != self.last_width.swap(width, SeqCst) {
+	fn tick_set_size(&self) -> Option<(NonZeroU8, NonZeroU8)> {
+		let (width, height) = term_size()?;
+		let wh = u16::from_le_bytes([width.get(), height.get()]);
+		if wh == self.last_size.swap(wh, SeqCst) { Some((width, height)) }
+		else {
 			self.flags.fetch_or(TICK_RESIZED, SeqCst);
+			None
 		}
-		width
 	}
 }
 
@@ -740,9 +714,6 @@ struct ProglessBuffer {
 
 	/// # Task Lines.
 	lines_doing: u8,
-
-	/// # Title Lines.
-	lines_title: u8,
 }
 
 impl ProglessBuffer {
@@ -757,71 +728,48 @@ impl ProglessBuffer {
 		percent: NicePercent::MIN,
 		doing: Vec::new(),
 		lines_doing: 0,
-		lines_title: 0,
 	};
 }
 
 impl ProglessBuffer {
-	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
-	/// # Line Count.
+	/// # Print Short.
 	///
-	/// One line is always assumed for the time/bar/totals, but the title and
-	/// task lists can add more.
-	const fn lines(&self) -> u8 {
-		// Scale up the addition to prevent overflow, however unlikely.
-		let lines: u16 = self.lines_doing as u16 + self.lines_title as u16 + 1;
-
-		// Scale back down, saturating as necessary.
-		if lines <= u8::MAX as u16 { lines as u8 }
-		else { u8::MAX }
+	/// Print the percentage by itself.
+	fn print_small(&self, handle: &mut StderrLock<'static>) -> bool {
+		// We're discontiguous enough, I think…
+		let parts = &mut [
+			IoSlice::new(CLS),                     // CLS.
+			IoSlice::new(b"\x1b[1m"),              // Bold.
+			IoSlice::new(self.percent.as_bytes()), // Percent.
+			IoSlice::new(b"\x1b[0m\n\x1b[1A"),     // Reset and rewind.
+		];
+		write_all_vectored(parts.as_mut_slice(), handle)
 	}
 
 	/// # Write It!
 	///
 	/// This writes the fully-formatted progress data to STDERR, returning the
-	/// (precalculated) line count.
-	fn print(&self, handle: &mut StderrLock<'static>) -> Option<u8> {
-		use std::io::ErrorKind;
-		use std::io::Write;
+	/// status as a bool.
+	fn print(&self, handle: &mut StderrLock<'static>) -> bool {
+		// The number of lines we're about to print.
+		let lines = NonZeroU8::MIN
+			.saturating_add(self.lines_doing)
+			.saturating_add(u8::from(! self.title.is_empty()));
 
-		/// # Write All Vectored.
-		///
-		/// TODO: remove once `Write::write_all_vectored` is stable.
-		fn write_all_vectored(
-			mut bufs: &mut [IoSlice<'_>],
-			handle: &mut StderrLock<'static>,
-		) -> bool {
-			// Make sure we have something to print.
-			IoSlice::advance_slices(&mut bufs, 0);
-			if bufs.is_empty() { true }
-			else {
-				// Write it all!
-				loop {
-					match handle.write_vectored(bufs) {
-						Ok(0) => return false,
-						Ok(n) => IoSlice::advance_slices(&mut bufs, n),
-						Err(e) =>
-							if e.kind() == ErrorKind::Interrupted {} // Keep trying.
-							else { return false; },
-					}
-					if bufs.is_empty() { break; }
-				}
-				handle.flush().is_ok()
-			}
-		}
-
-		// We're discontiguous enough, I think.
+		// We're discontiguous enough, I think…
 		let parts = &mut [
+			// Clear.
+			IoSlice::new(CLS),
+
 			// Title.
 			IoSlice::new(&self.title),
 
 			// Elapsed.
-			IoSlice::new(b"\x1b[2m[\x1b[0;1m"),
+			IoSlice::new(b"\x1b[0;2m[\x1b[0;1m"),
 			IoSlice::new(self.elapsed.as_bytes()),
-			IoSlice::new(b"\x1b[0;2m]\x1b[0m  "),
+			IoSlice::new(b"\x1b[0;2m]  [\x1b[0;1;96m"),
 
 			// Bars.
-			IoSlice::new(b"\x1b[2m[\x1b[0;1;96m"),
 			IoSlice::new(self.bar_done),
 			IoSlice::new(b"\x1b[0;1;34m"),
 			IoSlice::new(self.bar_undone),
@@ -842,17 +790,16 @@ impl ProglessBuffer {
 
 			// The end!
 			IoSlice::new(b"\x1b[0m\n"),
+			IoSlice::new(LINE_UP[lines.get() as usize - 1]),
 		];
 
-		// Write and return the line count!
-		if write_all_vectored(parts.as_mut_slice(), handle) { Some(self.lines()) }
-		else { None }
+		write_all_vectored(parts.as_mut_slice(), handle)
 	}
 }
 
 impl ProglessBuffer {
 	/// # Set Bars.
-	fn set_bars(&mut self, width: u8, done: u32, total: u32) {
+	fn set_bars(&mut self, width: NonZeroU8, done: u32, total: u32) {
 		// Default sizes.
 		let mut w_done = 0_u8;
 		let mut w_undone = 0_u8;
@@ -865,7 +812,7 @@ impl ProglessBuffer {
 		// 2: the spaces after total;
 		// 2: the braces around the bar itself;
 		// 2: the spaces after the bar itself;
-		let space: u8 = width.saturating_sub(u8::saturating_from(
+		let space: u8 = width.get().saturating_sub(u8::saturating_from(
 			19 +
 			self.done.len() +
 			self.total.len() +
@@ -897,7 +844,12 @@ impl ProglessBuffer {
 	}
 
 	/// # Update Tasks.
-	fn set_doing(&mut self, doing: &BTreeSet<ProglessTask>, width: u8) {
+	fn set_doing(
+		&mut self,
+		doing: &BTreeSet<ProglessTask>,
+		width: NonZeroU8,
+		height: NonZeroU8,
+	) {
 		/// # Task Prefix.
 		///
 		/// This translates to:           •   •   •   •   ↳             •
@@ -905,15 +857,18 @@ impl ProglessBuffer {
 
 		// Reset.
 		self.doing.truncate(0);
+		self.lines_doing = 0;
 
 		// The actual width we can work with is minus six for padding, six for
 		// the prefix.
-		let width = usize::from(width.saturating_sub(12));
+		let width = usize::from(width.get().saturating_sub(12));
 
 		// Add each task as its own line, assuming we have the room.
-		self.lines_doing = 0;
-		if 2 <= width {
-			for line in doing.iter().filter_map(|line| line.fitted(width)).take(255) {
+		if
+			2 <= width &&
+			usize::from(! self.title.is_empty()) + 1 + doing.len() < usize::from(height.get())
+		{
+			for line in doing.iter().filter_map(|line| line.fitted(width)) {
 				self.doing.extend_from_slice(PREFIX);
 				self.doing.extend_from_slice(line);
 				self.lines_doing += 1;
@@ -922,15 +877,22 @@ impl ProglessBuffer {
 	}
 
 	/// # Update Title.
-	fn set_title(&mut self, title: Option<&Msg>, width: u8) {
-		if let Some(title) = title {
-			title.fitted(usize::from(width)).as_ref().clone_into(&mut self.title);
-			self.lines_title = u8::try_from(bytecount::count(title, b'\n'))
-				.unwrap_or(u8::MAX);
-		}
-		else {
-			self.title.truncate(0);
-			self.lines_title = 0;
+	fn set_title(&mut self, title: Option<&Msg>, width: NonZeroU8, height: NonZeroU8) {
+		// Reset the title.
+		self.title.truncate(0);
+
+		if 2 < height.get() {
+			if let Some(title) = title {
+				let title = title.fitted(usize::from(width.get()));
+				let slice: &[u8] = title.as_ref();
+
+				// Truncate to first line.
+				let end = slice.iter().copied().position(|b| b == b'\n').unwrap_or(slice.len());
+				if end != 0 {
+					self.title.extend_from_slice(&slice[..end]);
+					self.title.push(b'\n');
+				}
+			}
 		}
 	}
 }
@@ -1104,10 +1066,13 @@ impl Progless {
 	/// own line immediately before the progress line.
 	///
 	/// Titles are formatted as [`Msg`] objects. You can pass a [`Msg`]
-	/// directly, or something that implements `AsRef<str>` or `Borrow<str>`.
+	/// directly, or something that can be converted to one, like a string
+	/// slice.
 	///
-	/// As this takes an `Option`, you can pass `None` to unset the title
-	/// entirely.
+	/// Pass `None` to remove the title entirely.
+	///
+	/// Note: titles cannot have line breaks; this will automatically replace
+	/// any non-space whitespace with regular horizontal spaces.
 	///
 	/// ## Examples
 	///
@@ -1408,29 +1373,59 @@ impl Progless {
 #[cfg(unix)]
 #[must_use]
 #[inline]
-/// # Term Width.
+/// # Term Width and Height.
 ///
-/// Return the column width of STDERR, if any, minus one to mitigate any
-/// whitespace weirdness at the edge.
-fn term_width() -> u8 {
-	use terminal_size::Width;
-	terminal_size::terminal_size_of(std::io::stderr()).map_or(
-		0,
-		|(Width(w), _)| u8::saturating_from(w.saturating_sub(1))
-	)
+/// Return the width and height of the terminal attached to STDERR, if any,
+/// less one to help smooth scroll weirdness.
+fn term_size() -> Option<(NonZeroU8, NonZeroU8)> {
+	use terminal_size::{Height, Width};
+	let (Width(w), Height(h)) = terminal_size::terminal_size_of(std::io::stderr())?;
+	let w = NonZeroU8::new(u8::saturating_from(w.saturating_sub(1)))?;
+	let h = NonZeroU8::new(u8::saturating_from(h).saturating_sub(1))?;
+	Some((w, h))
 }
 
 #[cfg(not(unix))]
 #[must_use]
 #[inline]
-/// # Term Width.
+/// # Term Width and Height.
 ///
-/// Return the terminal column width, if any, minus one to mitigate any
-/// whitespace weirdness at the edge.
-fn term_width() -> u8 {
-	use terminal_size::Width;
-	terminal_size::terminal_size().map_or(
-		0,
-		|(Width(w), _)| u8::saturating_from(w.saturating_sub(1))
-	)
+/// Return the width and height of the terminal attached to STDERR, if any,
+/// less one to help smooth scroll weirdness.
+fn term_size() -> Option<(NonZeroU8, NonZeroU8)> {
+	use terminal_size::{Height, Width};
+	let (Width(w), Height(h)) = terminal_size::terminal_size()?;
+	let w = NonZeroU8::new(u8::saturating_from(w.saturating_sub(1)))?;
+	let h = NonZeroU8::new(u8::saturating_from(h).saturating_sub(1))?;
+	Some((w, h))
+}
+
+#[inline]
+/// # Write All Vectored.
+///
+/// TODO: remove once `Write::write_all_vectored` is stable.
+fn write_all_vectored(
+	mut bufs: &mut [IoSlice<'_>],
+	handle: &mut StderrLock<'static>,
+) -> bool {
+	use std::io::ErrorKind;
+	use std::io::Write;
+
+	// Make sure we have something to print.
+	IoSlice::advance_slices(&mut bufs, 0);
+	if bufs.is_empty() { true } // This can't happen.
+	else {
+		// Write it all!
+		loop {
+			match handle.write_vectored(bufs) {
+				Ok(0) => return false,
+				Ok(n) => IoSlice::advance_slices(&mut bufs, n),
+				Err(e) =>
+					if e.kind() == ErrorKind::Interrupted {} // Keep trying.
+					else { return false; },
+			}
+			if bufs.is_empty() { break; }
+		}
+		handle.flush().is_ok()
+	}
 }
