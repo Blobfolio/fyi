@@ -663,51 +663,6 @@ impl Msg {
 		self.strip_ansi();
 		self
 	}
-
-	#[cfg(feature = "progress")]
-	/// # For Progress Title.
-	///
-	/// This method is used internally to ensure messages used for
-	/// [`Progless`](crate::Progless) titles have exactly one line break (at
-	/// the very end).
-	///
-	/// To that end, this will replace any non-space whitespace in the
-	/// customizable sections to regular spaces and set the newline bit,
-	/// returning the result.
-	pub(crate) fn into_progress_title(mut self) -> Self {
-		// Check the custom parts.
-		for idx in [PART_PREFIX, PART_MSG, PART_SUFFIX] {
-			// These parts should be pretty small; let's skip the messy ASCII
-			// specialization and just work with strings from the outset.
-			if let Ok(tmp) = std::str::from_utf8(self.0.get(idx)) {
-				// Split on funky whitespace, if any.
-				if let Some((a, b)) = tmp.split_once(|c: char| c.is_whitespace() && c != ' ') {
-					// We have to allocate a new string.
-					let mut tmp = String::with_capacity(tmp.len());
-					tmp.push_str(a); // Leading non-funky bits.
-					tmp.push(' ');   // Replacement space.
-
-					// Run through and add the rest char-by-char, swapping
-					// spaces as needed.
-					for c in b.chars() {
-						if c.is_whitespace() { tmp.push(' '); }
-						else { tmp.push(c); }
-					}
-
-					// Replace the section!
-					self.0.replace(idx, tmp.as_bytes());
-				}
-			}
-			// This shouldn't be reachable.
-			else { self.0.truncate(idx, 0); }
-		}
-
-		// Set the newline bit.
-		self.set_newline(true);
-
-		// Done!
-		self
-	}
 }
 
 /// ## Setters.

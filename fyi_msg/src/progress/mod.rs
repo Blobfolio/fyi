@@ -526,7 +526,7 @@ impl ProglessInner {
 	/// everything else.
 	fn set_title(&self, title: Option<Msg>) {
 		if self.running() {
-			*mutex!(self.title) = title.map(Msg::into_progress_title);
+			*mutex!(self.title) = title.map(|m| m.with_newline(false));
 			self.flags.fetch_or(TICK_TITLE, SeqCst);
 		}
 	}
@@ -765,7 +765,7 @@ impl ProglessBuffer {
 			IoSlice::new(&self.title),
 
 			// Elapsed.
-			IoSlice::new(b"\x1b[2m[\x1b[0;1m"),
+			IoSlice::new(b"\x1b[0;2m[\x1b[0;1m"),
 			IoSlice::new(self.elapsed.as_bytes()),
 			IoSlice::new(b"\x1b[0;2m]  [\x1b[0;1;96m"),
 
@@ -878,15 +878,22 @@ impl ProglessBuffer {
 
 	/// # Update Title.
 	fn set_title(&mut self, title: Option<&Msg>, width: NonZeroU8, height: NonZeroU8) {
-		if 2 < height.get() {
-			if let Some(title) = title {
-				title.fitted(usize::from(width.get())).as_ref().clone_into(&mut self.title);
-				return;
-			}
-		}
-
 		// Reset the title.
 		self.title.truncate(0);
+
+		if 2 < height.get() {
+			if let Some(title) = title {
+				let title = title.fitted(usize::from(width.get()));
+				let slice: &[u8] = title.as_ref();
+
+				// Truncate to first line.
+				let end = slice.iter().copied().position(|b| b == b'\n').unwrap_or(slice.len());
+				if end != 0 {
+					self.title.extend_from_slice(&slice[..end]);
+					self.title.push(b'\n');
+				}
+			}
+		}
 	}
 }
 
