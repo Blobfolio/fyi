@@ -113,11 +113,6 @@ impl Drop for ProglessSteady {
 fn spawn_ticker(t_state: Arc<(Mutex<bool>, Condvar)>, t_inner: Arc<ProglessInner>)
 -> JoinHandle<()> {
 	std::thread::spawn(move || {
-		// Because we keep the cursor at the start of the progress output, we
-		// need to temporarily — while this thread remains active — "hide" the
-		// cursor to prevent any unsightly blinking.
-		eprint!("\x1b[?25l");
-
 		// Tick while the ticking's good.
 		let (t_dead, t_cond) = &*t_state;
 		let mut state = mutex!(t_dead);
@@ -125,8 +120,5 @@ fn spawn_ticker(t_state: Arc<(Mutex<bool>, Condvar)>, t_inner: Arc<ProglessInner
 			state = res.0;
 			if *state || ! t_inner.tick() { break; }
 		}
-
-		// We're done mucking with the display; "unhide" the cursor!
-		eprint!("\x1b[?25h");
 	})
 }
