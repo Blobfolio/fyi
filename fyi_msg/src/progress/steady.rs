@@ -118,7 +118,7 @@ fn spawn_ticker(t_state: Arc<(Mutex<bool>, Condvar)>, t_inner: Arc<ProglessInner
 		let mut state = mutex!(t_dead);
 		while let LockResult::Ok(res) = t_cond.wait_timeout(state, ProglessSteady::TICK_RATE) {
 			state = res.0;
-			if *state || ! t_inner.tick() { break; }
+			if *state || ! t_inner.tick(false) { break; }
 		}
 	})
 }

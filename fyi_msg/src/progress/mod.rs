@@ -127,10 +127,7 @@ const SIGINT: u8 =       0b0100_0000;
 /// # Minimum Bar Width.
 const MIN_BARS_WIDTH: u8 = 10;
 
-/// # Minimum Draw Width (Full Output).
-const MIN_DRAW_WIDTH_FULL: u8 = 40;
-
-/// # Minimum Draw Width (Percent Only).
+/// # Minimum Draw Width.
 const MIN_DRAW_WIDTH: u8 = 10;
 
 
@@ -420,7 +417,7 @@ impl ProglessInner {
 			drop(handle);
 
 			// To complete the illusion, restore the progress bits.
-			self.tick();
+			self.tick(true);
 
 			// This shouldn't happen.
 			if res { return Err(msg); }
@@ -547,9 +544,9 @@ impl ProglessInner {
 	/// Ticking takes all of the changed values (since the last tick), updates
 	/// their corresponding parts in the buffer, and prints the result, if any.
 	///
-	/// To help keep repeated calls to this from overloading the system, work
-	/// only takes place if it has been at least 60ms from the last tick.
-	fn tick(&self) -> bool {
+	/// To avoid pointless work, this has no effect unless something drawable
+	/// changed between ticks or `force` is `true`.
+	fn tick(&self, force: bool) -> bool {
 		// We aren't running!
 		if ! self.running() { return false; }
 
@@ -607,10 +604,11 @@ impl ProglessInner {
 				buf.set_doing(&mutex!(self.doing), width, height);
 			}
 
-			// Full display.
-			if MIN_DRAW_WIDTH_FULL <= width.get() { buf.print(&mut handle); }
-			// Percent only.
-			else { buf.print_small(&mut handle); }
+			buf.print(width, &mut handle);
+		}
+		// Force a repaint?
+		else if force {
+			mutex!(self.buf).print(width, &mut handle);
 		}
 
 		true
@@ -712,26 +710,14 @@ impl ProglessBuffer {
 }
 
 impl ProglessBuffer {
-	#[cold]
-	/// # Print Abbreviated: Percent Only.
-	///
-	/// For small screens, print the percentage by itself to give users _some_
-	/// sort of visual indication of progress.
-	fn print_small(&self, handle: &mut StderrLock<'static>) -> bool {
-		// We're discontiguous enough, I think…
-		let parts = &mut [
-			IoSlice::new("\x1b[J \x1b[0;1;96m» \x1b[0;1m".as_bytes()), // Clear + Prefix.
-			IoSlice::new(self.percent.as_bytes()), // Percent.
-			IoSlice::new(b"\x1b[0m\r"), // Reset and rewind.
-		];
-		write_all_vectored(parts.as_mut_slice(), handle)
-	}
-
+	#[inline(never)]
 	/// # Write It!
 	///
 	/// This writes the fully-formatted progress data to STDERR, returning the
 	/// status as a bool.
-	fn print(&self, handle: &mut StderrLock<'static>) -> bool {
+	fn print(&self, width: NonZeroU8, handle: &mut StderrLock<'static>) -> bool {
+		use std::io::ErrorKind;
+
 		/// # Progress Output Closer.
 		///
 		/// Reset the styles, add a line break, and rewind to the start.
@@ -754,49 +740,74 @@ impl ProglessBuffer {
 			b"\x1b[0m\r\x1b[240A", b"\x1b[0m\r\x1b[241A", b"\x1b[0m\r\x1b[242A", b"\x1b[0m\r\x1b[243A", b"\x1b[0m\r\x1b[244A", b"\x1b[0m\r\x1b[245A", b"\x1b[0m\r\x1b[246A", b"\x1b[0m\r\x1b[247A", b"\x1b[0m\r\x1b[248A", b"\x1b[0m\r\x1b[249A", b"\x1b[0m\r\x1b[250A", b"\x1b[0m\r\x1b[251A", b"\x1b[0m\r\x1b[252A", b"\x1b[0m\r\x1b[253A", b"\x1b[0m\r\x1b[254A", b"\x1b[0m\r\x1b[255A",
 		];
 
-		// The number of lines we'll need to move up after printing to get
-		// back to the start.
-		let lines =
-			if self.title.is_empty() { self.lines_doing }
-			else { self.lines_doing.saturating_add(1) };
+		// We're discontiguous enough to warrant vectored writes, I think…
+		let mut parts: &mut [IoSlice] =
+			// If the screen is too small for everything, print the percentage
+			// by itself to give them some indication of progress.
+			if width.get() < 40 {
+				&mut [
+					IoSlice::new("\x1b[J \x1b[0;1;96m» \x1b[0;1m".as_bytes()), // Clear + Prefix.
+					IoSlice::new(self.percent.as_bytes()), // Percent.
+					IoSlice::new(b"\x1b[0m\r"), // Reset and rewind.
+				]
+			}
+			// Otherwise give it all we've got!
+			else {
+				// The number of lines we'll need to move up after printing to
+				// get back to the start.
+				let lines =
+					if self.title.is_empty() { self.lines_doing }
+					else { self.lines_doing.saturating_add(1) };
 
-		// We're discontiguous enough, I think…
-		let parts = &mut [
-			// Clear.
-			IoSlice::new(CLS),
+				&mut [
+					// Clear.
+					IoSlice::new(CLS),
 
-			// Title.
-			IoSlice::new(&self.title),
+					// Title.
+					IoSlice::new(&self.title),
 
-			// Elapsed.
-			IoSlice::new(b"\x1b[0;2m[\x1b[0;1m"),
-			IoSlice::new(self.elapsed.as_bytes()),
-			IoSlice::new(b"\x1b[0;2m]  [\x1b[0;1;96m"),
+					// Elapsed.
+					IoSlice::new(b"\x1b[0;2m[\x1b[0;1m"),
+					IoSlice::new(self.elapsed.as_bytes()),
+					IoSlice::new(b"\x1b[0;2m]  [\x1b[0;1;96m"),
 
-			// Bars.
-			IoSlice::new(self.bar_done),
-			IoSlice::new(b"\x1b[0;1;34m"),
-			IoSlice::new(self.bar_undone),
-			IoSlice::new(b"\x1b[0;2m]\x1b[0;1;96m  "),
+					// Bars.
+					IoSlice::new(self.bar_done),
+					IoSlice::new(b"\x1b[0;1;34m"),
+					IoSlice::new(self.bar_undone),
+					IoSlice::new(b"\x1b[0;2m]\x1b[0;1;96m  "),
 
-			// Done/total.
-			IoSlice::new(self.done.as_bytes()),
-			IoSlice::new(b"\x1b[0;2m/\x1b[0;1;34m"),
-			IoSlice::new(self.total.as_bytes()),
+					// Done/total.
+					IoSlice::new(self.done.as_bytes()),
+					IoSlice::new(b"\x1b[0;2m/\x1b[0;1;34m"),
+					IoSlice::new(self.total.as_bytes()),
 
-			// Percent.
-			IoSlice::new(b"\x1b[0;1m  "),
-			IoSlice::new(self.percent.as_bytes()),
+					// Percent.
+					IoSlice::new(b"\x1b[0;1m  "),
+					IoSlice::new(self.percent.as_bytes()),
 
-			// Tasks.
-			IoSlice::new(b"\x1b[0;35m"),
-			IoSlice::new(&self.doing),
+					// Tasks.
+					IoSlice::new(b"\x1b[0;35m"),
+					IoSlice::new(&self.doing),
 
-			// The end!
-			IoSlice::new(CLOSE[usize::from(lines)]),
-		];
+					// The end!
+					IoSlice::new(CLOSE[usize::from(lines)]),
+				]
+			};
 
-		write_all_vectored(parts.as_mut_slice(), handle)
+		// TODO: remove once `write_all_vectored` is stable.
+		IoSlice::advance_slices(&mut parts, 0);
+		loop {
+			match handle.write_vectored(parts) {
+				Ok(0) => return false,
+				Ok(n) => IoSlice::advance_slices(&mut parts, n),
+				Err(e) =>
+					if e.kind() == ErrorKind::Interrupted {} // Keep trying.
+					else { return false; },
+			}
+			if parts.is_empty() { break; }
+		}
+		handle.flush().is_ok()
 	}
 }
 
@@ -1402,34 +1413,4 @@ fn term_size() -> Option<(NonZeroU8, NonZeroU8)> {
 	let w = NonZeroU8::new(u8::saturating_from(w.saturating_sub(1)))?;
 	let h = NonZeroU8::new(u8::saturating_from(h).saturating_sub(1))?;
 	Some((w, h))
-}
-
-#[inline]
-/// # Write All Vectored.
-///
-/// TODO: remove once `Write::write_all_vectored` is stable.
-fn write_all_vectored(
-	mut bufs: &mut [IoSlice<'_>],
-	handle: &mut StderrLock<'static>,
-) -> bool {
-	use std::io::ErrorKind;
-	use std::io::Write;
-
-	// Make sure we have something to print.
-	IoSlice::advance_slices(&mut bufs, 0);
-	if bufs.is_empty() { true } // This can't happen.
-	else {
-		// Write it all!
-		loop {
-			match handle.write_vectored(bufs) {
-				Ok(0) => return false,
-				Ok(n) => IoSlice::advance_slices(&mut bufs, n),
-				Err(e) =>
-					if e.kind() == ErrorKind::Interrupted {} // Keep trying.
-					else { return false; },
-			}
-			if bufs.is_empty() { break; }
-		}
-		handle.flush().is_ok()
-	}
 }
