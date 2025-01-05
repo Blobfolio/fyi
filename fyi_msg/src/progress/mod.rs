@@ -567,7 +567,7 @@ impl ProglessInner {
 
 		// If we don't even have enough space for a percentage, clear the
 		// screen and call it a day.
-		if width.get() < MIN_DRAW_WIDTH || height.get() < 2 {
+		if width.get() < MIN_DRAW_WIDTH {
 			let _res = handle.write_all(CLS).and_then(|()| handle.flush());
 		}
 		// Otherwise if something drawable changed, (re)draw!
@@ -720,9 +720,9 @@ impl ProglessBuffer {
 	fn print_small(&self, handle: &mut StderrLock<'static>) -> bool {
 		// We're discontiguous enough, I think…
 		let parts = &mut [
-			IoSlice::new("\x1b[J \x1b[0;1;96m» \x1b[0;1m".as_bytes()), // Prefix.
+			IoSlice::new("\x1b[J \x1b[0;1;96m» \x1b[0;1m".as_bytes()), // Clear + Prefix.
 			IoSlice::new(self.percent.as_bytes()), // Percent.
-			IoSlice::new(b"\x1b[0m\n\x1b[1A"),     // Reset and rewind.
+			IoSlice::new(b"\x1b[0m\r"), // Reset and rewind.
 		];
 		write_all_vectored(parts.as_mut_slice(), handle)
 	}
@@ -735,28 +735,30 @@ impl ProglessBuffer {
 		/// # Progress Output Closer.
 		///
 		/// Reset the styles, add a line break, and rewind to the start.
-		///
-		/// Note that since line counts (N) are non-zero, indexing is N-1.
-		static CLOSE: [&[u8]; 255] = [
-			b"\x1b[0m\n\x1b[1A", b"\x1b[0m\n\x1b[2A", b"\x1b[0m\n\x1b[3A", b"\x1b[0m\n\x1b[4A", b"\x1b[0m\n\x1b[5A", b"\x1b[0m\n\x1b[6A", b"\x1b[0m\n\x1b[7A", b"\x1b[0m\n\x1b[8A", b"\x1b[0m\n\x1b[9A", b"\x1b[0m\n\x1b[10A", b"\x1b[0m\n\x1b[11A", b"\x1b[0m\n\x1b[12A", b"\x1b[0m\n\x1b[13A", b"\x1b[0m\n\x1b[14A", b"\x1b[0m\n\x1b[15A", b"\x1b[0m\n\x1b[16A", b"\x1b[0m\n\x1b[17A", b"\x1b[0m\n\x1b[18A", b"\x1b[0m\n\x1b[19A", b"\x1b[0m\n\x1b[20A",
-			b"\x1b[0m\n\x1b[21A", b"\x1b[0m\n\x1b[22A", b"\x1b[0m\n\x1b[23A", b"\x1b[0m\n\x1b[24A", b"\x1b[0m\n\x1b[25A", b"\x1b[0m\n\x1b[26A", b"\x1b[0m\n\x1b[27A", b"\x1b[0m\n\x1b[28A", b"\x1b[0m\n\x1b[29A", b"\x1b[0m\n\x1b[30A", b"\x1b[0m\n\x1b[31A", b"\x1b[0m\n\x1b[32A", b"\x1b[0m\n\x1b[33A", b"\x1b[0m\n\x1b[34A", b"\x1b[0m\n\x1b[35A", b"\x1b[0m\n\x1b[36A", b"\x1b[0m\n\x1b[37A", b"\x1b[0m\n\x1b[38A", b"\x1b[0m\n\x1b[39A", b"\x1b[0m\n\x1b[40A",
-			b"\x1b[0m\n\x1b[41A", b"\x1b[0m\n\x1b[42A", b"\x1b[0m\n\x1b[43A", b"\x1b[0m\n\x1b[44A", b"\x1b[0m\n\x1b[45A", b"\x1b[0m\n\x1b[46A", b"\x1b[0m\n\x1b[47A", b"\x1b[0m\n\x1b[48A", b"\x1b[0m\n\x1b[49A", b"\x1b[0m\n\x1b[50A", b"\x1b[0m\n\x1b[51A", b"\x1b[0m\n\x1b[52A", b"\x1b[0m\n\x1b[53A", b"\x1b[0m\n\x1b[54A", b"\x1b[0m\n\x1b[55A", b"\x1b[0m\n\x1b[56A", b"\x1b[0m\n\x1b[57A", b"\x1b[0m\n\x1b[58A", b"\x1b[0m\n\x1b[59A", b"\x1b[0m\n\x1b[60A",
-			b"\x1b[0m\n\x1b[61A", b"\x1b[0m\n\x1b[62A", b"\x1b[0m\n\x1b[63A", b"\x1b[0m\n\x1b[64A", b"\x1b[0m\n\x1b[65A", b"\x1b[0m\n\x1b[66A", b"\x1b[0m\n\x1b[67A", b"\x1b[0m\n\x1b[68A", b"\x1b[0m\n\x1b[69A", b"\x1b[0m\n\x1b[70A", b"\x1b[0m\n\x1b[71A", b"\x1b[0m\n\x1b[72A", b"\x1b[0m\n\x1b[73A", b"\x1b[0m\n\x1b[74A", b"\x1b[0m\n\x1b[75A", b"\x1b[0m\n\x1b[76A", b"\x1b[0m\n\x1b[77A", b"\x1b[0m\n\x1b[78A", b"\x1b[0m\n\x1b[79A", b"\x1b[0m\n\x1b[80A",
-			b"\x1b[0m\n\x1b[81A", b"\x1b[0m\n\x1b[82A", b"\x1b[0m\n\x1b[83A", b"\x1b[0m\n\x1b[84A", b"\x1b[0m\n\x1b[85A", b"\x1b[0m\n\x1b[86A", b"\x1b[0m\n\x1b[87A", b"\x1b[0m\n\x1b[88A", b"\x1b[0m\n\x1b[89A", b"\x1b[0m\n\x1b[90A", b"\x1b[0m\n\x1b[91A", b"\x1b[0m\n\x1b[92A", b"\x1b[0m\n\x1b[93A", b"\x1b[0m\n\x1b[94A", b"\x1b[0m\n\x1b[95A", b"\x1b[0m\n\x1b[96A", b"\x1b[0m\n\x1b[97A", b"\x1b[0m\n\x1b[98A", b"\x1b[0m\n\x1b[99A", b"\x1b[0m\n\x1b[100A",
-			b"\x1b[0m\n\x1b[101A", b"\x1b[0m\n\x1b[102A", b"\x1b[0m\n\x1b[103A", b"\x1b[0m\n\x1b[104A", b"\x1b[0m\n\x1b[105A", b"\x1b[0m\n\x1b[106A", b"\x1b[0m\n\x1b[107A", b"\x1b[0m\n\x1b[108A", b"\x1b[0m\n\x1b[109A", b"\x1b[0m\n\x1b[110A", b"\x1b[0m\n\x1b[111A", b"\x1b[0m\n\x1b[112A", b"\x1b[0m\n\x1b[113A", b"\x1b[0m\n\x1b[114A", b"\x1b[0m\n\x1b[115A", b"\x1b[0m\n\x1b[116A", b"\x1b[0m\n\x1b[117A", b"\x1b[0m\n\x1b[118A", b"\x1b[0m\n\x1b[119A", b"\x1b[0m\n\x1b[120A",
-			b"\x1b[0m\n\x1b[121A", b"\x1b[0m\n\x1b[122A", b"\x1b[0m\n\x1b[123A", b"\x1b[0m\n\x1b[124A", b"\x1b[0m\n\x1b[125A", b"\x1b[0m\n\x1b[126A", b"\x1b[0m\n\x1b[127A", b"\x1b[0m\n\x1b[128A", b"\x1b[0m\n\x1b[129A", b"\x1b[0m\n\x1b[130A", b"\x1b[0m\n\x1b[131A", b"\x1b[0m\n\x1b[132A", b"\x1b[0m\n\x1b[133A", b"\x1b[0m\n\x1b[134A", b"\x1b[0m\n\x1b[135A", b"\x1b[0m\n\x1b[136A", b"\x1b[0m\n\x1b[137A", b"\x1b[0m\n\x1b[138A", b"\x1b[0m\n\x1b[139A", b"\x1b[0m\n\x1b[140A",
-			b"\x1b[0m\n\x1b[141A", b"\x1b[0m\n\x1b[142A", b"\x1b[0m\n\x1b[143A", b"\x1b[0m\n\x1b[144A", b"\x1b[0m\n\x1b[145A", b"\x1b[0m\n\x1b[146A", b"\x1b[0m\n\x1b[147A", b"\x1b[0m\n\x1b[148A", b"\x1b[0m\n\x1b[149A", b"\x1b[0m\n\x1b[150A", b"\x1b[0m\n\x1b[151A", b"\x1b[0m\n\x1b[152A", b"\x1b[0m\n\x1b[153A", b"\x1b[0m\n\x1b[154A", b"\x1b[0m\n\x1b[155A", b"\x1b[0m\n\x1b[156A", b"\x1b[0m\n\x1b[157A", b"\x1b[0m\n\x1b[158A", b"\x1b[0m\n\x1b[159A", b"\x1b[0m\n\x1b[160A",
-			b"\x1b[0m\n\x1b[161A", b"\x1b[0m\n\x1b[162A", b"\x1b[0m\n\x1b[163A", b"\x1b[0m\n\x1b[164A", b"\x1b[0m\n\x1b[165A", b"\x1b[0m\n\x1b[166A", b"\x1b[0m\n\x1b[167A", b"\x1b[0m\n\x1b[168A", b"\x1b[0m\n\x1b[169A", b"\x1b[0m\n\x1b[170A", b"\x1b[0m\n\x1b[171A", b"\x1b[0m\n\x1b[172A", b"\x1b[0m\n\x1b[173A", b"\x1b[0m\n\x1b[174A", b"\x1b[0m\n\x1b[175A", b"\x1b[0m\n\x1b[176A", b"\x1b[0m\n\x1b[177A", b"\x1b[0m\n\x1b[178A", b"\x1b[0m\n\x1b[179A", b"\x1b[0m\n\x1b[180A",
-			b"\x1b[0m\n\x1b[181A", b"\x1b[0m\n\x1b[182A", b"\x1b[0m\n\x1b[183A", b"\x1b[0m\n\x1b[184A", b"\x1b[0m\n\x1b[185A", b"\x1b[0m\n\x1b[186A", b"\x1b[0m\n\x1b[187A", b"\x1b[0m\n\x1b[188A", b"\x1b[0m\n\x1b[189A", b"\x1b[0m\n\x1b[190A", b"\x1b[0m\n\x1b[191A", b"\x1b[0m\n\x1b[192A", b"\x1b[0m\n\x1b[193A", b"\x1b[0m\n\x1b[194A", b"\x1b[0m\n\x1b[195A", b"\x1b[0m\n\x1b[196A", b"\x1b[0m\n\x1b[197A", b"\x1b[0m\n\x1b[198A", b"\x1b[0m\n\x1b[199A", b"\x1b[0m\n\x1b[200A",
-			b"\x1b[0m\n\x1b[201A", b"\x1b[0m\n\x1b[202A", b"\x1b[0m\n\x1b[203A", b"\x1b[0m\n\x1b[204A", b"\x1b[0m\n\x1b[205A", b"\x1b[0m\n\x1b[206A", b"\x1b[0m\n\x1b[207A", b"\x1b[0m\n\x1b[208A", b"\x1b[0m\n\x1b[209A", b"\x1b[0m\n\x1b[210A", b"\x1b[0m\n\x1b[211A", b"\x1b[0m\n\x1b[212A", b"\x1b[0m\n\x1b[213A", b"\x1b[0m\n\x1b[214A", b"\x1b[0m\n\x1b[215A", b"\x1b[0m\n\x1b[216A", b"\x1b[0m\n\x1b[217A", b"\x1b[0m\n\x1b[218A", b"\x1b[0m\n\x1b[219A", b"\x1b[0m\n\x1b[220A",
-			b"\x1b[0m\n\x1b[221A", b"\x1b[0m\n\x1b[222A", b"\x1b[0m\n\x1b[223A", b"\x1b[0m\n\x1b[224A", b"\x1b[0m\n\x1b[225A", b"\x1b[0m\n\x1b[226A", b"\x1b[0m\n\x1b[227A", b"\x1b[0m\n\x1b[228A", b"\x1b[0m\n\x1b[229A", b"\x1b[0m\n\x1b[230A", b"\x1b[0m\n\x1b[231A", b"\x1b[0m\n\x1b[232A", b"\x1b[0m\n\x1b[233A", b"\x1b[0m\n\x1b[234A", b"\x1b[0m\n\x1b[235A", b"\x1b[0m\n\x1b[236A", b"\x1b[0m\n\x1b[237A", b"\x1b[0m\n\x1b[238A", b"\x1b[0m\n\x1b[239A", b"\x1b[0m\n\x1b[240A",
-			b"\x1b[0m\n\x1b[241A", b"\x1b[0m\n\x1b[242A", b"\x1b[0m\n\x1b[243A", b"\x1b[0m\n\x1b[244A", b"\x1b[0m\n\x1b[245A", b"\x1b[0m\n\x1b[246A", b"\x1b[0m\n\x1b[247A", b"\x1b[0m\n\x1b[248A", b"\x1b[0m\n\x1b[249A", b"\x1b[0m\n\x1b[250A", b"\x1b[0m\n\x1b[251A", b"\x1b[0m\n\x1b[252A", b"\x1b[0m\n\x1b[253A", b"\x1b[0m\n\x1b[254A", b"\x1b[0m\n\x1b[255A",
+		static CLOSE: [&[u8]; 256] = [
+			b"\x1b[0m\r", b"\x1b[0m\r\x1b[1A", b"\x1b[0m\r\x1b[2A", b"\x1b[0m\r\x1b[3A", b"\x1b[0m\r\x1b[4A", b"\x1b[0m\r\x1b[5A", b"\x1b[0m\r\x1b[6A", b"\x1b[0m\r\x1b[7A", b"\x1b[0m\r\x1b[8A", b"\x1b[0m\r\x1b[9A", b"\x1b[0m\r\x1b[10A", b"\x1b[0m\r\x1b[11A", b"\x1b[0m\r\x1b[12A", b"\x1b[0m\r\x1b[13A", b"\x1b[0m\r\x1b[14A", b"\x1b[0m\r\x1b[15A",
+			b"\x1b[0m\r\x1b[16A", b"\x1b[0m\r\x1b[17A", b"\x1b[0m\r\x1b[18A", b"\x1b[0m\r\x1b[19A", b"\x1b[0m\r\x1b[20A", b"\x1b[0m\r\x1b[21A", b"\x1b[0m\r\x1b[22A", b"\x1b[0m\r\x1b[23A", b"\x1b[0m\r\x1b[24A", b"\x1b[0m\r\x1b[25A", b"\x1b[0m\r\x1b[26A", b"\x1b[0m\r\x1b[27A", b"\x1b[0m\r\x1b[28A", b"\x1b[0m\r\x1b[29A", b"\x1b[0m\r\x1b[30A", b"\x1b[0m\r\x1b[31A",
+			b"\x1b[0m\r\x1b[32A", b"\x1b[0m\r\x1b[33A", b"\x1b[0m\r\x1b[34A", b"\x1b[0m\r\x1b[35A", b"\x1b[0m\r\x1b[36A", b"\x1b[0m\r\x1b[37A", b"\x1b[0m\r\x1b[38A", b"\x1b[0m\r\x1b[39A", b"\x1b[0m\r\x1b[40A", b"\x1b[0m\r\x1b[41A", b"\x1b[0m\r\x1b[42A", b"\x1b[0m\r\x1b[43A", b"\x1b[0m\r\x1b[44A", b"\x1b[0m\r\x1b[45A", b"\x1b[0m\r\x1b[46A", b"\x1b[0m\r\x1b[47A",
+			b"\x1b[0m\r\x1b[48A", b"\x1b[0m\r\x1b[49A", b"\x1b[0m\r\x1b[50A", b"\x1b[0m\r\x1b[51A", b"\x1b[0m\r\x1b[52A", b"\x1b[0m\r\x1b[53A", b"\x1b[0m\r\x1b[54A", b"\x1b[0m\r\x1b[55A", b"\x1b[0m\r\x1b[56A", b"\x1b[0m\r\x1b[57A", b"\x1b[0m\r\x1b[58A", b"\x1b[0m\r\x1b[59A", b"\x1b[0m\r\x1b[60A", b"\x1b[0m\r\x1b[61A", b"\x1b[0m\r\x1b[62A", b"\x1b[0m\r\x1b[63A",
+			b"\x1b[0m\r\x1b[64A", b"\x1b[0m\r\x1b[65A", b"\x1b[0m\r\x1b[66A", b"\x1b[0m\r\x1b[67A", b"\x1b[0m\r\x1b[68A", b"\x1b[0m\r\x1b[69A", b"\x1b[0m\r\x1b[70A", b"\x1b[0m\r\x1b[71A", b"\x1b[0m\r\x1b[72A", b"\x1b[0m\r\x1b[73A", b"\x1b[0m\r\x1b[74A", b"\x1b[0m\r\x1b[75A", b"\x1b[0m\r\x1b[76A", b"\x1b[0m\r\x1b[77A", b"\x1b[0m\r\x1b[78A", b"\x1b[0m\r\x1b[79A",
+			b"\x1b[0m\r\x1b[80A", b"\x1b[0m\r\x1b[81A", b"\x1b[0m\r\x1b[82A", b"\x1b[0m\r\x1b[83A", b"\x1b[0m\r\x1b[84A", b"\x1b[0m\r\x1b[85A", b"\x1b[0m\r\x1b[86A", b"\x1b[0m\r\x1b[87A", b"\x1b[0m\r\x1b[88A", b"\x1b[0m\r\x1b[89A", b"\x1b[0m\r\x1b[90A", b"\x1b[0m\r\x1b[91A", b"\x1b[0m\r\x1b[92A", b"\x1b[0m\r\x1b[93A", b"\x1b[0m\r\x1b[94A", b"\x1b[0m\r\x1b[95A",
+			b"\x1b[0m\r\x1b[96A", b"\x1b[0m\r\x1b[97A", b"\x1b[0m\r\x1b[98A", b"\x1b[0m\r\x1b[99A", b"\x1b[0m\r\x1b[100A", b"\x1b[0m\r\x1b[101A", b"\x1b[0m\r\x1b[102A", b"\x1b[0m\r\x1b[103A", b"\x1b[0m\r\x1b[104A", b"\x1b[0m\r\x1b[105A", b"\x1b[0m\r\x1b[106A", b"\x1b[0m\r\x1b[107A", b"\x1b[0m\r\x1b[108A", b"\x1b[0m\r\x1b[109A", b"\x1b[0m\r\x1b[110A", b"\x1b[0m\r\x1b[111A",
+			b"\x1b[0m\r\x1b[112A", b"\x1b[0m\r\x1b[113A", b"\x1b[0m\r\x1b[114A", b"\x1b[0m\r\x1b[115A", b"\x1b[0m\r\x1b[116A", b"\x1b[0m\r\x1b[117A", b"\x1b[0m\r\x1b[118A", b"\x1b[0m\r\x1b[119A", b"\x1b[0m\r\x1b[120A", b"\x1b[0m\r\x1b[121A", b"\x1b[0m\r\x1b[122A", b"\x1b[0m\r\x1b[123A", b"\x1b[0m\r\x1b[124A", b"\x1b[0m\r\x1b[125A", b"\x1b[0m\r\x1b[126A", b"\x1b[0m\r\x1b[127A",
+			b"\x1b[0m\r\x1b[128A", b"\x1b[0m\r\x1b[129A", b"\x1b[0m\r\x1b[130A", b"\x1b[0m\r\x1b[131A", b"\x1b[0m\r\x1b[132A", b"\x1b[0m\r\x1b[133A", b"\x1b[0m\r\x1b[134A", b"\x1b[0m\r\x1b[135A", b"\x1b[0m\r\x1b[136A", b"\x1b[0m\r\x1b[137A", b"\x1b[0m\r\x1b[138A", b"\x1b[0m\r\x1b[139A", b"\x1b[0m\r\x1b[140A", b"\x1b[0m\r\x1b[141A", b"\x1b[0m\r\x1b[142A", b"\x1b[0m\r\x1b[143A",
+			b"\x1b[0m\r\x1b[144A", b"\x1b[0m\r\x1b[145A", b"\x1b[0m\r\x1b[146A", b"\x1b[0m\r\x1b[147A", b"\x1b[0m\r\x1b[148A", b"\x1b[0m\r\x1b[149A", b"\x1b[0m\r\x1b[150A", b"\x1b[0m\r\x1b[151A", b"\x1b[0m\r\x1b[152A", b"\x1b[0m\r\x1b[153A", b"\x1b[0m\r\x1b[154A", b"\x1b[0m\r\x1b[155A", b"\x1b[0m\r\x1b[156A", b"\x1b[0m\r\x1b[157A", b"\x1b[0m\r\x1b[158A", b"\x1b[0m\r\x1b[159A",
+			b"\x1b[0m\r\x1b[160A", b"\x1b[0m\r\x1b[161A", b"\x1b[0m\r\x1b[162A", b"\x1b[0m\r\x1b[163A", b"\x1b[0m\r\x1b[164A", b"\x1b[0m\r\x1b[165A", b"\x1b[0m\r\x1b[166A", b"\x1b[0m\r\x1b[167A", b"\x1b[0m\r\x1b[168A", b"\x1b[0m\r\x1b[169A", b"\x1b[0m\r\x1b[170A", b"\x1b[0m\r\x1b[171A", b"\x1b[0m\r\x1b[172A", b"\x1b[0m\r\x1b[173A", b"\x1b[0m\r\x1b[174A", b"\x1b[0m\r\x1b[175A",
+			b"\x1b[0m\r\x1b[176A", b"\x1b[0m\r\x1b[177A", b"\x1b[0m\r\x1b[178A", b"\x1b[0m\r\x1b[179A", b"\x1b[0m\r\x1b[180A", b"\x1b[0m\r\x1b[181A", b"\x1b[0m\r\x1b[182A", b"\x1b[0m\r\x1b[183A", b"\x1b[0m\r\x1b[184A", b"\x1b[0m\r\x1b[185A", b"\x1b[0m\r\x1b[186A", b"\x1b[0m\r\x1b[187A", b"\x1b[0m\r\x1b[188A", b"\x1b[0m\r\x1b[189A", b"\x1b[0m\r\x1b[190A", b"\x1b[0m\r\x1b[191A",
+			b"\x1b[0m\r\x1b[192A", b"\x1b[0m\r\x1b[193A", b"\x1b[0m\r\x1b[194A", b"\x1b[0m\r\x1b[195A", b"\x1b[0m\r\x1b[196A", b"\x1b[0m\r\x1b[197A", b"\x1b[0m\r\x1b[198A", b"\x1b[0m\r\x1b[199A", b"\x1b[0m\r\x1b[200A", b"\x1b[0m\r\x1b[201A", b"\x1b[0m\r\x1b[202A", b"\x1b[0m\r\x1b[203A", b"\x1b[0m\r\x1b[204A", b"\x1b[0m\r\x1b[205A", b"\x1b[0m\r\x1b[206A", b"\x1b[0m\r\x1b[207A",
+			b"\x1b[0m\r\x1b[208A", b"\x1b[0m\r\x1b[209A", b"\x1b[0m\r\x1b[210A", b"\x1b[0m\r\x1b[211A", b"\x1b[0m\r\x1b[212A", b"\x1b[0m\r\x1b[213A", b"\x1b[0m\r\x1b[214A", b"\x1b[0m\r\x1b[215A", b"\x1b[0m\r\x1b[216A", b"\x1b[0m\r\x1b[217A", b"\x1b[0m\r\x1b[218A", b"\x1b[0m\r\x1b[219A", b"\x1b[0m\r\x1b[220A", b"\x1b[0m\r\x1b[221A", b"\x1b[0m\r\x1b[222A", b"\x1b[0m\r\x1b[223A",
+			b"\x1b[0m\r\x1b[224A", b"\x1b[0m\r\x1b[225A", b"\x1b[0m\r\x1b[226A", b"\x1b[0m\r\x1b[227A", b"\x1b[0m\r\x1b[228A", b"\x1b[0m\r\x1b[229A", b"\x1b[0m\r\x1b[230A", b"\x1b[0m\r\x1b[231A", b"\x1b[0m\r\x1b[232A", b"\x1b[0m\r\x1b[233A", b"\x1b[0m\r\x1b[234A", b"\x1b[0m\r\x1b[235A", b"\x1b[0m\r\x1b[236A", b"\x1b[0m\r\x1b[237A", b"\x1b[0m\r\x1b[238A", b"\x1b[0m\r\x1b[239A",
+			b"\x1b[0m\r\x1b[240A", b"\x1b[0m\r\x1b[241A", b"\x1b[0m\r\x1b[242A", b"\x1b[0m\r\x1b[243A", b"\x1b[0m\r\x1b[244A", b"\x1b[0m\r\x1b[245A", b"\x1b[0m\r\x1b[246A", b"\x1b[0m\r\x1b[247A", b"\x1b[0m\r\x1b[248A", b"\x1b[0m\r\x1b[249A", b"\x1b[0m\r\x1b[250A", b"\x1b[0m\r\x1b[251A", b"\x1b[0m\r\x1b[252A", b"\x1b[0m\r\x1b[253A", b"\x1b[0m\r\x1b[254A", b"\x1b[0m\r\x1b[255A",
 		];
 
-		// The number of lines we're about to print.
-		let lines = NonZeroU8::MIN
-			.saturating_add(self.lines_doing)
-			.saturating_add(u8::from(! self.title.is_empty()));
+		// The number of lines we'll need to move up after printing to get
+		// back to the start.
+		let lines =
+			if self.title.is_empty() { self.lines_doing }
+			else { self.lines_doing.saturating_add(1) };
 
 		// We're discontiguous enough, I think…
 		let parts = &mut [
@@ -791,7 +793,7 @@ impl ProglessBuffer {
 			IoSlice::new(&self.doing),
 
 			// The end!
-			IoSlice::new(CLOSE[lines.get() as usize - 1]),
+			IoSlice::new(CLOSE[usize::from(lines)]),
 		];
 
 		write_all_vectored(parts.as_mut_slice(), handle)
@@ -867,7 +869,7 @@ impl ProglessBuffer {
 		// Add each task as its own line, assuming we have the room.
 		if
 			2 <= width &&
-			usize::from(! self.title.is_empty()) + 1 + doing.len() < usize::from(height.get())
+			usize::from(! self.title.is_empty()) + 1 + doing.len() <= usize::from(height.get())
 		{
 			for line in doing.iter().filter_map(|line| line.fitted(width)) {
 				self.doing.extend_from_slice(PREFIX);
@@ -882,7 +884,8 @@ impl ProglessBuffer {
 		// Reset the title.
 		self.title.truncate(0);
 
-		if 2 < height.get() {
+		// We need at least two lines of screen space to fit a title.
+		if 2 <= height.get() {
 			if let Some(title) = title {
 				let title = title.fitted(usize::from(width.get()));
 				let slice: &[u8] = title.as_ref();
