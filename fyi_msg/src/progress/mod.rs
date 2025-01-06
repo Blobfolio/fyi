@@ -520,8 +520,7 @@ impl ProglessInner {
 	/// The caller must still run [`Progless::finish`] to close everything up
 	/// when the early shutdown actually arrives.
 	fn sigint(&self) {
-		let flags = self.flags.load(SeqCst);
-		if TICKING == flags & (SIGINT | TICKING) {
+		if TICKING == self.flags.load(SeqCst) & (SIGINT | TICKING) {
 			mutex!(self.title).replace(Msg::warning("Early shutdown in progress."));
 			self.flags.fetch_or(SIGINT | TICK_TITLE, SeqCst);
 		}
@@ -994,7 +993,7 @@ where ProglessInner: From<T> {
 		let inner = Arc::new(ProglessInner::from(total));
 		Self {
 			steady: Arc::new(ProglessSteady::from(Arc::clone(&inner))),
-			inner
+			inner,
 		}
 	}
 }
@@ -1031,7 +1030,7 @@ macro_rules! outer_tryfrom {
 				let inner = Arc::new(ProglessInner::try_from(total)?);
 				Ok(Self {
 					steady: Arc::new(ProglessSteady::from(Arc::clone(&inner))),
-					inner
+					inner,
 				})
 			}
 		}
@@ -1046,6 +1045,39 @@ outer_tryfrom!(
 
 /// # Constants.
 impl Progless {
+	/// # ANSI Sequence: Hide Cursor.
+	///
+	/// Emit this sequence to STDERR to hide the terminal cursor.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::Progless;
+	///
+	/// // Hide the cursor.
+	/// eprint!("{}", Progless::CURSOR_HIDE);
+	/// ```
+	pub const CURSOR_HIDE: &str = "\x1b[?25l";
+
+	/// # ANSI Sequence: Unhide Cursor.
+	///
+	/// Emit this sequence to STDERR to restore the terminal cursor.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::Progless;
+	///
+	/// // Hide the cursor.
+	/// eprint!("{}", Progless::CURSOR_HIDE);
+	///
+	/// // Do some stuff.
+	///
+	/// // Bring the cursor back.
+	/// eprint!("{}", Progless::CURSOR_UNHIDE);
+	/// ```
+	pub const CURSOR_UNHIDE: &str = "\x1b[?25h";
+
 	#[cfg(target_pointer_width = "16")]
 	/// # Max Total.
 	///
@@ -1257,6 +1289,30 @@ impl Progless {
 	where S: AsRef<str> { self.inner.add(txt.as_ref()) }
 
 	#[inline]
+	#[expect(unsafe_code, reason = "We're using unsafe as a warning.")]
+	/// # Hide (STDERR) Cursor.
+	///
+	/// This method can be used to un/hide the terminal's cursor, slightly
+	/// improving the aesthetics of the progress output by removing all that
+	/// incessant blinking.
+	///
+	/// Passing a value of `true` will hide the cursor until either a value of
+	/// `false` is passed instead, or the `Progless` instance itself gets
+	/// dropped.
+	///
+	/// ## Safety
+	///
+	/// This method is normally safe, but if the runtime process gets
+	/// terminated prematurely — `SIGINT`, panic, etc. — the cursor can _remain
+	/// hidden_ until the terminal itself is restarted.
+	///
+	/// As such, it is recommended this feature only be used in conjunction
+	/// with graceful handling for such events, where a manual
+	/// `eprint!(Progless::CURSOR_UNHIDE);` can be sneaked in just before
+	/// dying.
+	pub unsafe fn hide_cursor(&self, hide: bool) { self.steady.hide_cursor(hide); }
+
+	#[inline]
 	/// # Increment Done.
 	///
 	/// Increase the completed count by exactly one. This is safer to use than
@@ -1380,7 +1436,14 @@ impl Progless {
 	///
 	/// The caller must still run [`Progless::finish`] to close everything up
 	/// when the early shutdown actually arrives.
-	pub fn sigint(&self) { self.inner.sigint(); }
+	pub fn sigint(&self) {
+		// This doesn't bode well for the drop handling; let's unhide the
+		// cursor now while we still have a chance.
+		self.steady.hide_cursor(false);
+
+		// And trigger the usual sigint stuff.
+		self.inner.sigint();
+	}
 }
 
 

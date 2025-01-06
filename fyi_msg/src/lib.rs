@@ -45,10 +45,9 @@ For more usage examples, check out the `examples/msg` demo, which covers just ab
 | `fitted` | Enables [`Msg::fitted`] for obtaining a slice trimmed to a specific display width. |
 | `progress` | Enables [`Progless`], a thread-safe CLI progress bar displayer.
 | `timestamps` | Enables timestamp-related methods and flags like [`Msg::with_timestamp`]. |
-
 */
 
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 #![deny(
 	clippy::allow_attributes_without_reason,
