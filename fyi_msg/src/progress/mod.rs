@@ -565,7 +565,7 @@ impl ProglessInner {
 		}
 
 		// Did anything paint-worthy happen between ticks?
-		let ticked = match self.tick_set_drawable() {
+		let mut ticked = match self.tick_set_drawable() {
 			// Yes!
 			Some(t) => t,
 			None =>
@@ -612,12 +612,23 @@ impl ProglessInner {
 		}
 
 		// Titles don't change very often, but they're given display priority
-		// over the tasks so should be checked first.
+		// over the tasks so need to be checked first.
 		if TICK_TITLE == ticked & TICK_TITLE {
+			// Did we have a title and tasks last time?
+			let before = buf.doing.is_empty() || ! buf.title.is_empty();
+
+			// Update it.
 			buf.set_title(mutex!(self.title).as_ref(), width, height);
+
+			// If we now have a title and didn't before, and there were tasks
+			// potentially competing for space, force a task redraw to make
+			// sure the extra (title) line isn't one line too many.
+			if ! before && ! buf.title.is_empty() {
+				ticked |= TICK_DOING;
+			}
 		}
 
-		// And finally, if the task list changed, update its buffer.
+		// If the task list changed, update its buffer.
 		if TICK_DOING == ticked & TICK_DOING {
 			buf.set_doing(&mutex!(self.doing), width, height);
 		}
@@ -652,6 +663,9 @@ impl ProglessInner {
 	///
 	/// Returns `true` if the seconds have changed since the last check,
 	/// otherwise false.
+	///
+	/// Note that unlike the other components, this manages both the raw and
+	/// formatted values.
 	fn tick_set_secs(&self) -> bool {
 		let now: u32 = u32::saturating_from(self.started.elapsed().as_millis());
 		let before: u32 = self.elapsed.swap(now, SeqCst);
