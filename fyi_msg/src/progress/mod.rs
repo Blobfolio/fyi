@@ -91,6 +91,10 @@ use mutex;
 const TICK_NEW: u8 =
 	TICK_BAR | TICK_TOTAL | TICKING;
 
+/// # Flag: Percent.
+const TICK_PERCENT: u8 =
+	TICK_DONE | TICK_TOTAL;
+
 /// # Flag: Reset.
 const TICK_RESET: u8 =
 	TICK_BAR | TICK_DOING | TICK_DONE | TICK_TOTAL | TICKING;
@@ -529,14 +533,6 @@ impl ProglessInner {
 
 /// # Ticks.
 impl ProglessInner {
-	#[inline]
-	/// # Tick Flag Toggle.
-	///
-	/// If a flag is set, unset it and return true. Otherwise false.
-	fn flag_unset(&self, flag: u8) -> bool {
-		0 != self.flags.fetch_and(! flag, SeqCst) & flag
-	}
-
 	#[expect(clippy::cast_possible_truncation, reason = "It is what it is.")]
 	/// # Tick.
 	///
@@ -565,52 +561,84 @@ impl ProglessInner {
 		// screen and call it a day.
 		if width.get() < MIN_DRAW_WIDTH {
 			let _res = handle.write_all(CLS).and_then(|()| handle.flush());
-		}
-		// Otherwise if something drawable changed, (re)draw!
-		else if self.tick_set_secs() || 0 != self.flags.load(SeqCst) & TICK_DRAWABLE {
-			// Update the buffer bits.
-			let mut buf = mutex!(self.buf);
-
-			// Let's start with the numbers since their values are
-			// interconnected.
-			let ticked = self.flags.fetch_and(! (TICK_DONE | TICK_TOTAL | TICK_BAR), SeqCst);
-			if ticked != 0 {
-				let done = self.done();
-				let total = self.total();
-				if TICK_DONE == ticked & TICK_DONE { buf.done.replace(done); }
-				if TICK_TOTAL == ticked & TICK_TOTAL { buf.total.replace(total); }
-
-				// If either number changed, we need to update the percentage.
-				if 0 != ticked & (TICK_DONE | TICK_TOTAL) {
-					let percent =
-						if done == 0 || total == 0 { 0.0 }
-						else if done >= total { 1.0 }
-						else { (f64::from(done) / f64::from(total)) as f32 };
-					buf.percent.replace(percent);
-				}
-
-				// All three conditions independently require a bar update.
-				buf.set_bars(width, done, total);
-			}
-
-			// Title takes priority over tasks; update it next.
-			if self.flag_unset(TICK_TITLE) {
-				buf.set_title(mutex!(self.title).as_ref(), width, height);
-			}
-
-			// Lastly, update the task list.
-			if self.flag_unset(TICK_DOING) {
-				buf.set_doing(&mutex!(self.doing), width, height);
-			}
-
-			buf.print(width, &mut handle);
-		}
-		// Force a repaint?
-		else if force {
-			mutex!(self.buf).print(width, &mut handle);
+			return true;
 		}
 
+		// Did anything paint-worthy happen between ticks?
+		let ticked = match self.tick_set_drawable() {
+			// Yes!
+			Some(t) => t,
+			None =>
+				// No, but it doesn't matter; "push_msg" cleared the screen so
+				// a repaint is required.
+				if force { 0 }
+				// No, and there's nothing for us to do.
+				else { return true; },
+		};
+
+		// Lock the internal buffer holding the print-formatted progress
+		// components. Everything we do from here on out will require it.
+		let mut buf = mutex!(self.buf);
+
+		// The actual progress-related parts of the progress output are all
+		// interrelated, so it's best to handle their buffer-patching together.
+		if 0 != ticked & (TICK_DONE | TICK_TOTAL | TICK_BAR) {
+			// The bar and percentage parts depend on the values of done and
+			// total just as done and total depend on themselves, so whether or
+			// not they updated, we'll need to know what they are.
+			let done = self.done();
+			let total = self.total();
+
+			// If the done value changed, update its buffer.
+			if TICK_DONE == ticked & TICK_DONE { buf.done.replace(done); }
+
+			// Likewise but less likely, the total.
+			if TICK_TOTAL == ticked & TICK_TOTAL { buf.total.replace(total); }
+
+			// The percentage is tied to both done and total, so if either
+			// value changed, we'll need to update its buffer.
+			if 0 != ticked & TICK_PERCENT {
+				let percent =
+					if done == 0 || total == 0 { 0.0 }
+					else if done >= total { 1.0 }
+					else { (f64::from(done) / f64::from(total)) as f32 };
+				buf.percent.replace(percent);
+			}
+
+			// The bar formatting depends on both the values and sizing of the
+			// other components, so their buffers will always need to be
+			// recalculated, and recalculated _last_.
+			buf.set_bars(width, done, total);
+		}
+
+		// Titles don't change very often, but they're given display priority
+		// over the tasks so should be checked first.
+		if TICK_TITLE == ticked & TICK_TITLE {
+			buf.set_title(mutex!(self.title).as_ref(), width, height);
+		}
+
+		// And finally, if the task list changed, update its buffer.
+		if TICK_DOING == ticked & TICK_DOING {
+			buf.set_doing(&mutex!(self.doing), width, height);
+		}
+
+		// We made it! Print and return.
+		buf.print(width, &mut handle);
 		true
+	}
+
+	/// # Tick Drawable Changes.
+	///
+	/// Compute and unset the drawable changes since the last tick and update
+	/// the timestamp.
+	///
+	/// Returns `None` if nothing paint-worthy changed, or the sections (as a
+	/// bitflag) requiring buffer updates before display.
+	fn tick_set_drawable(&self) -> Option<u8> {
+		let secs = self.tick_set_secs();
+		let flags = self.flags.fetch_and(! TICK_DRAWABLE, SeqCst) & TICK_DRAWABLE;
+		if secs || flags != 0 { Some(flags) }
+		else { None }
 	}
 
 	/// # Tick Elapsed Seconds.
