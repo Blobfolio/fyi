@@ -335,7 +335,7 @@ impl ProglessInner {
 	///
 	/// For the most part, this struct's setter methods only work while
 	/// progress is happening; after that they're frozen.
-	fn running(&self) -> bool { 0 != self.flags.load(SeqCst) & TICKING }
+	fn running(&self) -> bool { TICKING == self.flags.load(SeqCst) & TICKING }
 
 	#[inline]
 	/// # Total.
@@ -365,33 +365,17 @@ impl ProglessInner {
 	}
 
 	#[inline]
-	/// # Increment Done.
-	///
-	/// Increase the completed count by exactly one. This is safer to use than
-	/// `set_done()` in cases where multiple tasks are happening at once as it
-	/// will not accidentally decrease the value, etc.
-	fn increment(&self) {
-		if self.running() {
-			let done = self.done.fetch_add(1, SeqCst) + 1;
-			if done >= self.total() { self.stop() }
-			else {
-				self.flags.fetch_or(TICK_DONE | TICK_BAR, SeqCst);
-			}
-		}
-	}
-
-	#[inline]
 	/// # Increment Done by N.
 	///
 	/// Increase the completed count by `n`. This is safer to use than `set_done()`
 	/// and more efficient than calling `increment()` a million times in a row.
 	fn increment_n(&self, n: u32) {
 		if n != 0 && self.running() {
-			let done = self.done.fetch_add(n, SeqCst) + n;
-			if done >= self.total() { self.stop() }
-			else {
+			let done = self.done.fetch_add(n, SeqCst);
+			if n < u32::MAX - done && done + n < self.total() {
 				self.flags.fetch_or(TICK_DONE | TICK_BAR, SeqCst);
 			}
+			else { self.stop(); }
 		}
 	}
 
@@ -456,7 +440,7 @@ impl ProglessInner {
 			// If we removed an entry, set the tick flag and increment.
 			if removed {
 				self.flags.fetch_or(TICK_DOING, SeqCst);
-				self.increment();
+				self.increment_n(1);
 			}
 		}
 	}
@@ -493,10 +477,10 @@ impl ProglessInner {
 	/// better.
 	fn set_done(&self, done: u32) {
 		if self.running() && done != self.done.swap(done, SeqCst) {
-			if done >= self.total() { self.stop(); }
-			else {
+			if done < self.total() {
 				self.flags.fetch_or(TICK_DONE | TICK_BAR, SeqCst);
 			}
+			else { self.stop(); }
 		}
 	}
 
@@ -1360,7 +1344,7 @@ impl Progless {
 	/// will not accidentally decrease the value, etc.
 	///
 	/// See the various examples all over this page for more information.
-	pub fn increment(&self) { self.inner.increment(); }
+	pub fn increment(&self) { self.inner.increment_n(1); }
 
 	#[inline]
 	/// # Increment Done by N.
