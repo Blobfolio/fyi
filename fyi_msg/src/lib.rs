@@ -96,7 +96,6 @@ For more usage examples, check out the `examples/msg` demo, which covers just ab
 	unused_import_braces,
 )]
 
-#![expect(clippy::module_name_repetitions, reason = "Repetition is preferred.")]
 #![expect(clippy::redundant_pub_crate, reason = "Unresolvable.")]
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
