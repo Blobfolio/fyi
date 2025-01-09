@@ -3,8 +3,13 @@
 */
 
 use std::{
+	io::Write,
 	sync::{
 		Arc,
+		atomic::{
+			AtomicBool,
+			Ordering::SeqCst,
+		},
 		Mutex,
 		Condvar,
 		LockResult,
@@ -14,6 +19,7 @@ use std::{
 };
 use super::{
 	mutex,
+	Progless,
 	ProglessInner,
 };
 
@@ -28,6 +34,12 @@ use super::{
 /// The struct itself exists to hold the handle from that thread so that it can
 /// run while it needs running, and stop once it needs to stop.
 pub(super) struct ProglessSteady {
+	/// # Hide Cursor?
+	///
+	/// If `true`, the ANSI sequence for hiding the terminal cursor has been
+	/// printed to STDERR (requiring a corresponding unhide sequence at drop).
+	cursor: Arc<AtomicBool>,
+
 	/// # Ticker Thread Handle.
 	ticker: Mutex<Option<JoinHandle<()>>>,
 
@@ -45,6 +57,7 @@ impl Default for ProglessSteady {
 		Self {
 			ticker: Mutex::new(None),
 			state: Arc::new((Mutex::new(true), Condvar::new())),
+			cursor: Arc::new(AtomicBool::new(false)),
 		}
 	}
 }
@@ -58,6 +71,7 @@ impl From<Arc<ProglessInner>> for ProglessSteady {
 		Self {
 			state,
 			ticker:  Mutex::new(Some(spawn_ticker(t_state, t_inner))),
+			cursor: Arc::new(AtomicBool::new(false)),
 		}
 	}
 }
@@ -68,6 +82,18 @@ impl ProglessSteady {
 	/// Progress "animation" is more _Speed Racer_ than _Lion King_; painting
 	/// every hundred milliseconds or so is plenty.
 	const TICK_RATE: Duration = Duration::from_millis(100);
+
+	/// # Hide Cursor.
+	pub(super) fn hide_cursor(&self, hide: bool) {
+		if hide != self.cursor.swap(hide, SeqCst) {
+			// The state changed; print the appropriate ANSI sequence.
+			let out =
+				if hide { Progless::CURSOR_HIDE }
+				else { Progless::CURSOR_UNHIDE };
+			let mut handle = std::io::stderr().lock();
+			let _res = handle.write_all(out.as_bytes()).and_then(|()| handle.flush());
+		}
+	}
 
 	/// # Start.
 	///
@@ -100,7 +126,16 @@ impl ProglessSteady {
 
 impl Drop for ProglessSteady {
 	#[inline]
-	fn drop(&mut self) { self.stop(); }
+	fn drop(&mut self) {
+		self.stop();
+
+		// Restore cursor visibility, if applicable.
+		if self.cursor.load(SeqCst) {
+			let mut handle = std::io::stderr().lock();
+			let _res = handle.write_all(Progless::CURSOR_UNHIDE.as_bytes())
+				.and_then(|()| handle.flush());
+		}
+	}
 }
 
 
@@ -118,7 +153,7 @@ fn spawn_ticker(t_state: Arc<(Mutex<bool>, Condvar)>, t_inner: Arc<ProglessInner
 		let mut state = mutex!(t_dead);
 		while let LockResult::Ok(res) = t_cond.wait_timeout(state, ProglessSteady::TICK_RATE) {
 			state = res.0;
-			if *state || ! t_inner.tick() { break; }
+			if *state || ! t_inner.tick(false) { break; }
 		}
 	})
 }
