@@ -149,11 +149,11 @@ struct ProglessInner {
 	/// # Flags.
 	flags: AtomicU8,
 
-	/// # Last Width.
+	/// # Last Width/Height.
 	///
-	/// The screen width from the last print. If this changes, all buffer parts
-	/// are recalculated (even if their values haven't changed) to ensure they
-	/// fit the new width.
+	/// The screen dimensions (columns and rows) from the last print. If this
+	/// changes, all space-constrained buffer parts are recalculated (even if
+	/// their values are unchanged) to ensure they still fit.
 	last_size: AtomicU16,
 
 	/// # Start Time.
@@ -164,9 +164,8 @@ struct ProglessInner {
 
 	/// # Elapsed Seconds.
 	///
-	/// This is the number of elapsed milliseconds as of the last tick. This
-	/// gives us a reference to throttle back-to-back ticks as well as a cache
-	/// of the seconds written to the `[00:00:00]` portion of the buffer.
+	/// The number of elapsed seconds as of the last tick (so we know when to
+	/// update the corresponding buffer part).
 	elapsed: AtomicU32,
 
 	/// # Title.
@@ -307,7 +306,7 @@ impl ProglessInner {
 
 			self.done.store(self.total(), SeqCst);
 			self.elapsed.store(
-				u32::saturating_from(self.started.elapsed().as_millis()),
+				u32::saturating_from(self.started.elapsed().as_secs()),
 				SeqCst
 			);
 			mutex!(self.doing).clear();
@@ -651,12 +650,9 @@ impl ProglessInner {
 	/// Note that unlike the other components, this manages both the raw and
 	/// formatted values.
 	fn tick_set_secs(&self) -> bool {
-		let now: u32 = u32::saturating_from(self.started.elapsed().as_millis());
-		let before: u32 = self.elapsed.swap(now, SeqCst);
-		let secs: u32 = now.wrapping_div(1000);
-
 		// No change to the seconds bit.
-		if secs == before.wrapping_div(1000) { false }
+		let secs: u32 = u32::saturating_from(self.started.elapsed().as_secs());
+		if secs == self.elapsed.swap(secs, SeqCst) { false }
 		else {
 			mutex!(self.buf).elapsed.replace(secs);
 			true
