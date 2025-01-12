@@ -143,6 +143,10 @@ pub use progress::{
 	error::ProglessError,
 };
 
+// Re-export.
+#[cfg_attr(docsrs, doc(cfg(feature = "signal-hook")))]
+#[cfg(feature = "signal-hook")] pub use signal_hook;
+
 #[cfg(feature = "timestamps")]
 #[cfg_attr(docsrs, doc(cfg(feature = "timestamps")))]
 pub use msg::FLAG_TIMESTAMP;
