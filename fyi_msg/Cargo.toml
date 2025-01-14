@@ -1,6 +1,6 @@
 [package]
 name = "fyi_msg"
-version = "1.5.0"
+version = "1.6.0"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
 rust-version = "1.83"
@@ -19,6 +19,11 @@ targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
 [dependencies]
 dactyl = "0.9.*"
+
+[dependencies.signal-hook]
+version = "0.3.*"
+default-features = false
+optional = true
 
 [dependencies.terminal_size]
 version = "=0.4.1"
@@ -65,17 +70,40 @@ harness = false
 required-features = [ "timestamps" ]
 
 [features]
-default = []
 
-# This adds a few additional MsgKinds relevant only to the main FYI binary.
-# There is no point enabling this in other crates.
-bin_kinds = []
+# This library's features are opt-in.
+default = []
 
 # Add width-fitting support to the Msg struct, i.e. Msg.fitted().
 fitted = [ "unicode-width" ]
 
-# Make use of the "progless" bar.
+# Add timestamp support to the Msg struct.
+timestamps = [ "utc2k" ]
+
+# Enable the Progless struct, a Msg-like progress bar.
 progress = [ "fitted", "terminal_size" ]
 
-# Add timestamp support to messages.
-timestamps = [ "utc2k" ]
+# ADVANCED: Add SIGWINCH signal support to the Progless struct, reducing
+# resize-related latency.
+#
+# NOT recommended for general use.
+signals_sigwinch = [ "progress", "signal-hook" ]
+
+# ADVANCED: Add SIGINT signal support to the Progless struct, allowing some
+# quick cleanup/restoration to be sneaked in before premature termination.
+# (This makes possible subtle UI improvements like hiding the cursor during
+# progress render.)
+#
+# This necessarily replaces the default SIGINT-handling behaviors, so should
+# NOT be used in projects that implement their own handling.
+#
+# NOT recommended for general use.
+signals_sigint = [ "progress", "signal-hook" ]
+
+# ADVANCED: Enable all signal features.
+#
+# NOT recommended for general use.
+signals = [ "signals_sigint", "signals_sigwinch" ]
+
+# INTERNAL: used by the accompanying "fyi" binary.
+bin_kinds = []

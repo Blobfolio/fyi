@@ -7,6 +7,9 @@ pub(super) mod error;
 mod steady;
 mod task;
 
+#[cfg(any(feature = "signals_sigint", feature = "signals_sigwinch"))]
+pub(super) mod signals;
+
 
 
 use crate::{
@@ -148,6 +151,7 @@ const TICK_TOTAL: u8 =   0b0001_0000;
 /// # Flag: Is Ticking?
 const TICKING: u8 =      0b0010_0000;
 
+#[cfg(feature = "signals_sigint")]
 /// # Flag: SIGINT Received?
 const SIGINT: u8 =       0b0100_0000;
 
@@ -532,6 +536,7 @@ impl ProglessInner {
 		}
 	}
 
+	#[cfg(feature = "signals_sigint")]
 	/// # Set SIGINT.
 	///
 	/// This method is used to indicate that a SIGINT was received and that
@@ -543,11 +548,16 @@ impl ProglessInner {
 	///
 	/// The caller must still run [`Progless::finish`] to close everything up
 	/// when the early shutdown actually arrives.
-	fn sigint(&self) {
-		if TICKING == self.flags.load(SeqCst) & (SIGINT | TICKING) {
-			mutex!(self.title).replace(Msg::warning("Early shutdown in progress."));
+	///
+	/// This will return `false` if ticking has stopped, otherwise `true`.
+	fn sigint(&self) -> bool {
+		let flags = self.flags.load(SeqCst);
+		if TICKING == flags & (SIGINT | TICKING) {
+			mutex!(self.title).replace(Msg::new(MsgKind::Warning, "Early shutdown in progress."));
 			self.flags.fetch_or(SIGINT | TICK_TITLE, SeqCst);
+			true
 		}
+		else { TICKING == flags & TICKING }
 	}
 }
 
@@ -697,10 +707,46 @@ impl ProglessInner {
 		}
 	}
 
-	/// # Tick Width.
+	#[cfg(feature = "signals_sigwinch")]
+	/// # Set Tick Width/Height.
 	///
-	/// Check to see if the terminal width has changed since the last run and
-	/// update values — i.e. the relevant tick flags — as necessary.
+	/// When signal support is enabled, this method is used to query and set
+	/// the terminal dimensions and toggle the corresponding flags.
+	///
+	/// This will return `false` if progress has stopped, otherwise `true`.
+	fn tick_resize(&self) -> bool {
+		if self.running() {
+			if let Some((width, height)) = term_size() {
+				let wh = u16::from_le_bytes([width.get(), height.get()]);
+				if wh != self.last_size.swap(wh, SeqCst) {
+					self.flags.fetch_or(TICK_RESIZED, SeqCst);
+				}
+			}
+			true
+		}
+		else { false }
+	}
+
+	#[cfg(feature = "signals_sigwinch")]
+	/// # Tick Width/Height.
+	///
+	/// When signal support is enabled, this doesn't need to set anything; it
+	/// simply returns the cached terminal dimensions, unless zero.
+	fn tick_set_size(&self) -> Option<(NonZeroU8, NonZeroU8)> {
+		let [width, height] = self.last_size.load(SeqCst).to_le_bytes();
+		let width = NonZeroU8::new(width)?;
+		let height = NonZeroU8::new(height)?;
+		Some((width, height))
+	}
+
+	#[cfg(not(feature = "signals_sigwinch"))]
+	/// # Tick Width/Height.
+	///
+	/// Without signal support, we need to query the terminal dimensions with
+	/// each tick and work backwards to figure out if anything changed.
+	///
+	/// This version of this method does that, returning the result if
+	/// non-zero.
 	fn tick_set_size(&self) -> Option<(NonZeroU8, NonZeroU8)> {
 		let (width, height) = term_size()?;
 		let wh = u16::from_le_bytes([width.get(), height.get()]);
@@ -1348,30 +1394,6 @@ impl Progless {
 	where S: AsRef<str> { self.inner.add(txt.as_ref()) }
 
 	#[inline]
-	#[expect(unsafe_code, reason = "We're using unsafe as a warning.")]
-	/// # Hide (STDERR) Cursor.
-	///
-	/// This method can be used to un/hide the terminal's cursor, slightly
-	/// improving the aesthetics of the progress output by removing all that
-	/// incessant blinking.
-	///
-	/// Passing a value of `true` will hide the cursor until either a value of
-	/// `false` is passed instead, or the `Progless` instance itself gets
-	/// dropped.
-	///
-	/// ## Safety
-	///
-	/// This method is normally safe, but if the runtime process gets
-	/// terminated prematurely — `SIGINT`, panic, etc. — the cursor can _remain
-	/// hidden_ until the terminal itself is restarted.
-	///
-	/// As such, it is recommended this feature only be used in conjunction
-	/// with graceful handling for such events, where a manual
-	/// `eprint!(Progless::CURSOR_UNHIDE);` can be sneaked in just before
-	/// dying.
-	pub unsafe fn hide_cursor(&self, hide: bool) { self.steady.hide_cursor(hide); }
-
-	#[inline]
 	/// # Increment Done.
 	///
 	/// Increase the completed count by exactly one. This is safer to use than
@@ -1481,27 +1503,6 @@ impl Progless {
 			199,
 			"Reticulating splines\u{2026}"
 		)));
-	}
-
-	#[inline]
-	/// # Set SIGINT.
-	///
-	/// This method is used to indicate that a SIGINT was received and that
-	/// the tasks are being wound down (early).
-	///
-	/// For the running [`Progless`], all this really means is that the title
-	/// will be changed to "Early shutdown in progress." (This is purely a
-	/// visual thing.)
-	///
-	/// The caller must still run [`Progless::finish`] to close everything up
-	/// when the early shutdown actually arrives.
-	pub fn sigint(&self) {
-		// This doesn't bode well for the drop handling; let's unhide the
-		// cursor now while we still have a chance.
-		self.steady.hide_cursor(false);
-
-		// And trigger the usual sigint stuff.
-		self.inner.sigint();
 	}
 }
 

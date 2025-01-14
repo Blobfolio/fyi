@@ -30,9 +30,6 @@ fn main() {
 	let pbar = Progless::try_from(FILE_TYPES.len()).unwrap()
 		.with_title(Some(Msg::custom("Scanning", 199, "Pretending to look for \"message\" file types…")));
 
-	// Hide the terminal cursor for the duration.
-	unsafe { pbar.hide_cursor(true); }
-
 	FILE_TYPES.par_iter()
 		.map(|&t| (t, Duration::from_millis(t.len() as u64 * 3)))
 		.for_each(|(txt, delay)| {
