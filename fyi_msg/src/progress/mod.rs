@@ -553,7 +553,7 @@ impl ProglessInner {
 	fn sigint(&self) -> bool {
 		let flags = self.flags.load(SeqCst);
 		if TICKING == flags & (SIGINT | TICKING) {
-			mutex!(self.title).replace(Msg::warning("Early shutdown in progress.").with_newline(false));
+			mutex!(self.title).replace(Msg::new(MsgKind::Warning, "Early shutdown in progress."));
 			self.flags.fetch_or(SIGINT | TICK_TITLE, SeqCst);
 			true
 		}
