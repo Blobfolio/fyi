@@ -40,9 +40,17 @@ impl Progless {
 	/// The returned state variable can be used to check whether or not a
 	/// `SIGINT` has come in, and change course accordingly.
 	///
-	/// Note: only the _first_ registered `SIGINT`-handling strategy will be
-	/// recognized, so be sure to call this as early as possible, and before
-	/// any [`Progless`] instances are created.
+	/// ## Warnings
+	///
+	/// `SIGINT`-handling strategies are mutually exclusive and custom
+	/// bindings are **not supported**.
+	///
+	/// This library offers three different options — default, two-strike, and
+	/// keepalive — and implements whichever happens to be registered _first_.
+	///
+	/// As such, this method should be called as early as possible, and _before_
+	/// any [`Progless`] instances are created, otherwise you'll be stuck with
+	/// the default "immediate death" handling.
 	///
 	/// ## Examples
 	///
@@ -77,15 +85,23 @@ impl Progless {
 	/// # Keepalive `SIGINT` Handler.
 	///
 	/// Implement a keepalive `SIGINT`-handling policy, performing some
-	/// cleanup if and when the first signal is received and, well, that's it.
-	/// No early exit will be triggered.
+	/// cleanup if and when the first signal is received, _without_ triggering
+	/// any early exit. (The program will keep on keeping on.)
 	///
 	/// The returned state variable can be used to check whether or not a
 	/// `SIGINT` has come in, and change course accordingly.
 	///
-	/// Note: only the _first_ registered `SIGINT`-handling strategy will be
-	/// recognized, so be sure to call this as early as possible, and before
-	/// any [`Progless`] instances are created.
+	/// ## Warnings
+	///
+	/// `SIGINT`-handling strategies are mutually exclusive and custom
+	/// bindings are **not supported**.
+	///
+	/// This library offers three different options — default, two-strike, and
+	/// keepalive — and implements whichever happens to be registered _first_.
+	///
+	/// As such, this method should be called as early as possible, and _before_
+	/// any [`Progless`] instances are created, otherwise you'll be stuck with
+	/// the default "immediate death" handling.
 	///
 	/// ## Examples
 	///
@@ -93,7 +109,7 @@ impl Progless {
 	/// use fyi_msg::Progless;
 	/// use std::sync::atomic::Ordering::SeqCst;
 	///
-	/// // Register a shutdown handler.
+	/// // Register a non-shutdown shutdown handler.
 	/// let killed = Progless::sigint_keepalive();
 	/// let mut warned = false;
 	///
@@ -101,7 +117,7 @@ impl Progless {
 	///     // The first CTRL+C has arrived.
 	///     if ! warned && killed.load(SeqCst) {
 	///         warned = true;
-	///         eprintln!("I hear you, but do not care.");
+	///         eprintln!("I hear you, but do not care!");
 	///     }
 	///
 	///     // Do stuff as usual…
