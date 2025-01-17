@@ -23,7 +23,7 @@ use super::ProglessInner;
 /// # `SIGINT` Handler.
 ///
 /// There can only be one…
-static SIGINT_HANLDER: OnceLock<SigintHandler> = OnceLock::new();
+static SIGINT_HANLDER: OnceLock<Arc<AtomicBool>> = OnceLock::new();
 
 
 
@@ -40,9 +40,17 @@ impl Progless {
 	/// The returned state variable can be used to check whether or not a
 	/// `SIGINT` has come in, and change course accordingly.
 	///
-	/// Note: only the _first_ registered `SIGINT`-handling strategy will be
-	/// recognized, so be sure to call this as early as possible, and before
-	/// any [`Progless`] instances are created.
+	/// ## Warnings
+	///
+	/// `SIGINT`-handling strategies are mutually exclusive and custom
+	/// bindings are **not supported**.
+	///
+	/// This library offers three different options — default, two-strike, and
+	/// keepalive — and implements whichever happens to be registered _first_.
+	///
+	/// As such, this method should be called as early as possible, and _before_
+	/// any [`Progless`] instances are created, otherwise you'll be stuck with
+	/// the default "immediate death" handling.
 	///
 	/// ## Examples
 	///
@@ -70,22 +78,30 @@ impl Progless {
 	/// reason. If another handler was already present, it will simply return
 	/// _its_ switch instead.
 	pub fn sigint_two_strike() -> &'static Arc<AtomicBool> {
-		&SIGINT_HANLDER.get_or_init(SigintHandler::two_strike).0
+		SIGINT_HANLDER.get_or_init(sigint_two_strike)
 	}
 
 	#[must_use]
 	/// # Keepalive `SIGINT` Handler.
 	///
 	/// Implement a keepalive `SIGINT`-handling policy, performing some
-	/// cleanup if and when the first signal is received and, well, that's it.
-	/// No early exit will be triggered.
+	/// cleanup if and when the first signal is received, _without_ triggering
+	/// any early exit. (The program will keep on keeping on.)
 	///
 	/// The returned state variable can be used to check whether or not a
 	/// `SIGINT` has come in, and change course accordingly.
 	///
-	/// Note: only the _first_ registered `SIGINT`-handling strategy will be
-	/// recognized, so be sure to call this as early as possible, and before
-	/// any [`Progless`] instances are created.
+	/// ## Warnings
+	///
+	/// `SIGINT`-handling strategies are mutually exclusive and custom
+	/// bindings are **not supported**.
+	///
+	/// This library offers three different options — default, two-strike, and
+	/// keepalive — and implements whichever happens to be registered _first_.
+	///
+	/// As such, this method should be called as early as possible, and _before_
+	/// any [`Progless`] instances are created, otherwise you'll be stuck with
+	/// the default "immediate death" handling.
 	///
 	/// ## Examples
 	///
@@ -93,7 +109,7 @@ impl Progless {
 	/// use fyi_msg::Progless;
 	/// use std::sync::atomic::Ordering::SeqCst;
 	///
-	/// // Register a shutdown handler.
+	/// // Register a non-shutdown shutdown handler.
 	/// let killed = Progless::sigint_keepalive();
 	/// let mut warned = false;
 	///
@@ -101,7 +117,7 @@ impl Progless {
 	///     // The first CTRL+C has arrived.
 	///     if ! warned && killed.load(SeqCst) {
 	///         warned = true;
-	///         eprintln!("I hear you, but do not care.");
+	///         eprintln!("I hear you, but do not care!");
 	///     }
 	///
 	///     // Do stuff as usual…
@@ -114,7 +130,7 @@ impl Progless {
 	/// reason. If another handler was already present, it will simply return
 	/// _its_ switch instead.
 	pub fn sigint_keepalive() -> &'static Arc<AtomicBool> {
-		&SIGINT_HANLDER.get_or_init(SigintHandler::keepalive).0
+		SIGINT_HANLDER.get_or_init(sigint_keepalive)
 	}
 }
 
@@ -148,7 +164,7 @@ impl Default for ProglessSignals {
 	#[inline]
 	fn default() -> Self {
 		#[cfg(feature = "signals_sigint")]
-		let sigint = &SIGINT_HANLDER.get_or_init(SigintHandler::default).0;
+		let sigint = SIGINT_HANLDER.get_or_init(sigint_default);
 
 		#[cfg(feature = "signals_sigint")]
 		if ! sigint.load(SeqCst) { eprint!("{}", Progless::CURSOR_HIDE); }
@@ -203,10 +219,10 @@ impl ProglessSignals {
 
 
 #[cfg(feature = "signals_sigwinch")]
-/// # Signal Handler.
+/// # Resize Handler.
 ///
-/// This struct holds the information for a single custom signal listener,
-/// ensuring it gets unregistered on drop.
+/// This struct holds the information for a custom `SIGWINCH` signal listener
+/// to track screen resize events. On drop, it will unregister itself.
 struct ResizeHandler {
 	/// # Switch.
 	switch: Arc<AtomicBool>,
@@ -241,102 +257,97 @@ impl ResizeHandler {
 
 
 #[cfg(feature = "signals_sigint")]
-/// # `SIGINT` Handler.
+#[expect(unsafe_code, reason = "For signal listener.")]
+/// # "Default" `SIGINT` Handler.
 ///
-/// As it turns out, global signals are kinda annoying. Haha.
+/// Bind a new listener for `SIGINT` signals that sneaks in a little cleanup
+/// before terminating as usual.
 ///
-/// This struct is used to register and bind an `AtomicBool` to one of three
-/// different handling strategies.
-/// 1. [`SigintHandler::default`] immediately exits on the first `SIGINT`.
-/// 2. [`SigintHandler::two_strike`] immediately exits too, but only if a second `SIGINT` arrives.
-/// 3. [`SignalHandler::keepalive`] acknowledges the signals, but never exits.
+/// ## Panics
 ///
-/// The strategies are mutually exclusive, so whichever makes its way into
-/// the `SIGINT_HANDLER` static first is the one that gets used.
-struct SigintHandler(Arc<AtomicBool>);
+/// This will panic if the handler cannot be registered.
+fn sigint_default() -> Arc<AtomicBool> {
+	let switch = Arc::new(AtomicBool::new(false));
 
-#[cfg(feature = "signals_sigint")]
-impl Default for SigintHandler {
-	#[expect(unsafe_code, reason = "For signal listener.")]
-	/// # Default `SIGINT` Handling.
-	///
-	/// This version performs some light cleanup and exits immediately,
-	/// mimicking the default handling behaviors.
-	fn default() -> Self {
-		let switch = Arc::new(AtomicBool::new(false));
-
-		// Safety: signal-hook marks manual registration unsafe because such
-		// callbacks can be race-prone, but our inner operations are atomic.
-		unsafe {
-			let t_switch = Arc::clone(&switch);
-			if signal_hook::low_level::register(SIGINT, move || {
-				// Unhide our cursor if we changed state.
-				if ! t_switch.swap(true, SeqCst) {
-					eprint!("{}", Progless::CURSOR_UNHIDE);
-				}
-
-				// One strike and you're out!
-				signal_hook::low_level::exit(1);
-			}).is_err() {
-				Msg::error("Unable to register SIGINT handler!").die(1);
+	// Safety: signal-hook marks manual registration unsafe because such
+	// callbacks can be race-prone, but our inner operations are atomic.
+	unsafe {
+		let t_switch = Arc::clone(&switch);
+		if signal_hook::low_level::register(SIGINT, move || {
+			// Unhide our cursor if we changed state.
+			if ! t_switch.swap(true, SeqCst) {
+				eprint!("{}", Progless::CURSOR_UNHIDE);
 			}
-		}
 
-		Self(switch)
+			// One strike and you're out!
+			signal_hook::low_level::exit(1);
+		}).is_err() { sigint_error(); }
 	}
+
+	switch
 }
 
 #[cfg(feature = "signals_sigint")]
-impl SigintHandler {
-	#[expect(unsafe_code, reason = "For signal listener.")]
-	/// # Two-Strike `SIGINT` Handling.
-	///
-	/// Establish a two-strike `SIGINT` policy, performing cleanup on the first
-	/// signal, and exiting on the second.
-	fn two_strike() -> Self {
-		let switch = Arc::new(AtomicBool::new(false));
+#[expect(unsafe_code, reason = "For signal listener.")]
+/// # Two-Strike `SIGINT` Handler.
+///
+/// Bind a new listener for `SIGINT` signals that performs cleanup on the first
+/// signal, and shuts down on the second.
+///
+/// ## Panics
+///
+/// This will panic if the handler cannot be registered.
+fn sigint_two_strike() -> Arc<AtomicBool> {
+	let switch = Arc::new(AtomicBool::new(false));
 
-		// Safety: signal-hook marks manual registration unsafe because such
-		// callbacks can be race-prone, but our inner operations are atomic.
-		unsafe {
-			let t_switch = Arc::clone(&switch);
-			if signal_hook::low_level::register(SIGINT, move || {
-				// Terminate the process if the switch was already true.
-				if t_switch.swap(true, SeqCst) {
-					signal_hook::low_level::exit(1);
-				}
-				// Otherwise just unhide the cursor.
-				else { eprint!("{}", Progless::CURSOR_UNHIDE); }
-			}).is_err() {
-				Msg::error("Unable to register SIGINT handler!").die(1);
-			}
-		}
-
-		Self(switch)
+	// Safety: signal-hook marks manual registration unsafe because such
+	// callbacks can be race-prone, but our inner operations are atomic.
+	unsafe {
+		let t_switch = Arc::clone(&switch);
+		if signal_hook::low_level::register(SIGINT, move || {
+			// Terminate the process if the switch was already true.
+			if t_switch.swap(true, SeqCst) { signal_hook::low_level::exit(1); }
+			// Otherwise just unhide the cursor.
+			else { eprint!("{}", Progless::CURSOR_UNHIDE); }
+		}).is_err() { sigint_error(); }
 	}
 
-	#[expect(unsafe_code, reason = "For signal listener.")]
-	/// # Keepalive `SIGINT` Handling.
-	///
-	/// Perform cleanup on the first signal, and that's it. This version never
-	/// accepts premature death.
-	fn keepalive() -> Self {
-		let switch = Arc::new(AtomicBool::new(false));
+	switch
+}
 
-		// Safety: signal-hook marks manual registration unsafe because such
-		// callbacks can be race-prone, but our inner operations are atomic.
-		unsafe {
-			let t_switch = Arc::clone(&switch);
-			if signal_hook::low_level::register(SIGINT, move || {
-				// Unhide the cursor.
-				if ! t_switch.swap(true, SeqCst) {
-					eprint!("{}", Progless::CURSOR_UNHIDE);
-				}
-			}).is_err() {
-				Msg::error("Unable to register SIGINT handler!").die(1);
+#[cfg(feature = "signals_sigint")]
+#[expect(unsafe_code, reason = "For signal listener.")]
+/// # Keepalive `SIGINT` Handler.
+///
+/// Bind a new listener for `SIGINT` signals that performs cleanup on the first
+/// signal but otherwise allows everything to continue running.
+///
+/// ## Panics
+///
+/// This will panic if the handler cannot be registered.
+fn sigint_keepalive() -> Arc<AtomicBool> {
+	let switch = Arc::new(AtomicBool::new(false));
+
+	// Safety: signal-hook marks manual registration unsafe because such
+	// callbacks can be race-prone, but our inner operations are atomic.
+	unsafe {
+		let t_switch = Arc::clone(&switch);
+		if signal_hook::low_level::register(SIGINT, move || {
+			// Unhide the cursor.
+			if ! t_switch.swap(true, SeqCst) {
+				eprint!("{}", Progless::CURSOR_UNHIDE);
 			}
-		}
-
-		Self(switch)
+		}).is_err() { sigint_error(); }
 	}
+
+	switch
+}
+
+#[cfg(feature = "signals_sigint")]
+#[inline]
+/// # `SIGINT` Handler Registration Error.
+///
+/// Print an error and die.
+fn sigint_error() -> ! {
+	Msg::error("Unable to register a SIGINT handler!").die(1);
 }
