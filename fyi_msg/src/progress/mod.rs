@@ -536,6 +536,22 @@ impl ProglessInner {
 		}
 	}
 
+	/// # Set Title Message.
+	///
+	/// Change (only) the message part — what follows the prefix — of the title
+	/// to something else.
+	///
+	/// Note this has no effect unless there actually is a title. If not, use
+	/// [`Progless::set_title`] instead.
+	fn set_title_msg(&self, msg: &str) {
+		if self.running() {
+			if let Some(title) = mutex!(self.title).as_mut() {
+				title.set_msg(msg);
+				self.flags.fetch_or(TICK_TITLE, SeqCst);
+			}
+		}
+	}
+
 	#[cfg(feature = "signals_sigint")]
 	/// # Set SIGINT.
 	///
@@ -1488,6 +1504,16 @@ impl Progless {
 		});
 		self.inner.set_title(title);
 	}
+
+	#[inline]
+	/// # Set Title Message.
+	///
+	/// Change (only) the message part — what follows the prefix — of the title
+	/// to something else.
+	///
+	/// Note this has no effect unless there actually is a title. If not, use
+	/// [`Progless::set_title`] instead.
+	pub fn set_title_msg(&self, msg: &str) { self.inner.set_title_msg(msg); }
 
 	#[inline]
 	/// # Set Title As X: Reticulating Splines…
