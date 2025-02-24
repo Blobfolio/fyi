@@ -2,8 +2,8 @@
 name = "fyi_msg"
 version = "1.6.1"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
-edition = "2021"
-rust-version = "1.83"
+edition = "2024"
+rust-version = "1.85"
 description = "Simple ANSI-formatted, prefixed messages for console printing."
 license = "WTFPL"
 repository = "https://github.com/Blobfolio/fyi"
