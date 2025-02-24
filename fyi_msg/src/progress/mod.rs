@@ -123,7 +123,7 @@ const TICK_PERCENT: u8 =
 
 /// # Flag: Reset.
 const TICK_RESET: u8 =
-	TICK_BAR | TICK_DOING | TICK_DONE | TICK_TOTAL | TICKING;
+	TICK_BAR | TICK_DOING | TICK_DONE | TICK_TITLE | TICK_TOTAL | TICKING;
 
 /// # Flag: Resized.
 const TICK_RESIZED: u8 =
@@ -522,10 +522,8 @@ impl ProglessInner {
 	/// bits while progress is progressing, and removed afterward with
 	/// everything else.
 	fn set_title(&self, title: Option<Msg>) {
-		if self.running() {
-			*mutex!(self.title) = title.map(|m| m.with_newline(false));
-			self.flags.fetch_or(TICK_TITLE, SeqCst);
-		}
+		*mutex!(self.title) = title.map(|m| m.with_newline(false));
+		if self.running() { self.flags.fetch_or(TICK_TITLE, SeqCst); }
 	}
 
 	/// # Set Title Message.
@@ -533,14 +531,11 @@ impl ProglessInner {
 	/// Change (only) the message part — what follows the prefix — of the title
 	/// to something else.
 	///
-	/// Note this has no effect unless there actually is a title. If not, use
-	/// [`Progless::set_title`] instead.
+	/// Note: this has no effect for instances without a title component.
 	fn set_title_msg(&self, msg: &str) {
-		if self.running() {
-			if let Some(title) = mutex!(self.title).as_mut() {
-				title.set_msg(msg);
-				self.flags.fetch_or(TICK_TITLE, SeqCst);
-			}
+		if let Some(title) = mutex!(self.title).as_mut() {
+			title.set_msg(msg);
+			if self.running() { self.flags.fetch_or(TICK_TITLE, SeqCst); }
 		}
 	}
 
@@ -1511,8 +1506,7 @@ impl Progless {
 	/// Change (only) the message part — what follows the prefix — of the title
 	/// to something else.
 	///
-	/// Note this has no effect unless there actually is a title. If not, use
-	/// [`Progless::set_title`] instead.
+	/// Note: this has no effect for instances without a title component.
 	pub fn set_title_msg(&self, msg: &str) { self.inner.set_title_msg(msg); }
 
 	#[inline]
