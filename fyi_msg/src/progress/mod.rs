@@ -489,18 +489,10 @@ impl ProglessInner {
 	/// _continuous_. If you need the time counter to reset to `[00:00:00]`,
 	/// you need start a brand new instance instead of resetting an existing
 	/// one.
-	///
-	/// ## Errors
-	///
-	/// This will return an error if the new total is zero.
-	fn reset(&self, total: u32) -> Result<(), ProglessError> {
+	fn reset(&self, total: NonZeroU32) {
 		self.stop();
-		if 0 == total { Err(ProglessError::EmptyTotal) }
-		else {
-			self.done_total.store(u64::from(total), SeqCst);
-			self.flags.store(TICK_RESET, SeqCst);
-			Ok(())
-		}
+		self.done_total.store(u64::from(total.get()), SeqCst);
+		self.flags.store(TICK_RESET, SeqCst);
 	}
 
 	/// # Set Done.
@@ -1463,13 +1455,21 @@ impl Progless {
 	/// _continuous_. If you need the time counter to reset to `[00:00:00]`,
 	/// you need start a brand new instance instead of resetting an existing
 	/// one.
+	pub fn reset(&self, total: NonZeroU32) {
+		self.inner.reset(total);
+		self.steady.start(Arc::clone(&self.inner));
+	}
+
+	/// # Reset (Fallible).
+	///
+	/// Same as [`Progless::reset`], but will fail if `total` is zero.
 	///
 	/// ## Errors
 	///
 	/// This will return an error if the new total is zero.
-	pub fn reset(&self, total: u32) -> Result<(), ProglessError> {
-		self.inner.reset(total)?;
-		self.steady.start(Arc::clone(&self.inner));
+	pub fn try_reset(&self, total: u32) -> Result<(), ProglessError> {
+		let total = NonZeroU32::new(total).ok_or(ProglessError::EmptyTotal)?;
+		self.reset(total);
 		Ok(())
 	}
 

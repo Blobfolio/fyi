@@ -57,7 +57,7 @@ fn main() {
 
 	// This would only fail if the new total is zero, which we know is not the
 	// case here.
-	pbar.reset(nums.len() as u32).unwrap();
+	pbar.try_reset(nums.len() as u32).unwrap();
 
 	// Change the title.
 	pbar.set_title(Some(Msg::custom("Crunching", 199, "Playing with numbers now…")));

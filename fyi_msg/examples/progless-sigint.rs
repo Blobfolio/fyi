@@ -19,6 +19,7 @@ fn main() -> std::process::ExitCode {
 fn main() {
 	use fyi_msg::Progless;
 	use std::{
+		num::NonZeroU32,
 		sync::atomic::Ordering::SeqCst,
 		time::Duration,
 	};
@@ -50,7 +51,7 @@ fn main() {
 
 	// Go again?
 	if fyi_msg::confirm!(yes: "Count some more?") {
-		pbar.reset(250).unwrap();
+		pbar.reset(NonZeroU32::new(250).unwrap());
 		pbar.set_title(Some(Msg::task("More numbers…")));
 		for _ in 500..750 {
 			let duration =
