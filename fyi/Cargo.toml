@@ -143,7 +143,7 @@ subcommands = [ "blank" ]
 [[package.metadata.bashman.options]]
 short = "-e"
 long = "--exit"
-description = "Exit with this status code after printing. [default: 0]"
+description = "Exit with this code (0-255) after printing. [default: 0]"
 label = "<NUM>"
 path = false
 subcommands = [ "print", "crunched", "debug", "done", "error", "info", "notice", "review", "skipped", "success", "task", "warning" ]

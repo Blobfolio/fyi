@@ -9,8 +9,9 @@ use fyi_msg::Msg;
 
 
 #[cfg(not(all(feature = "progress", feature = "signals_sigint")))]
-fn main() {
-	Msg::error("This example requires the 'progress' and 'signals_sigint' features.").die(1);
+fn main() -> std::process::ExitCode {
+	Msg::error("This example requires the 'progress' and 'signals_sigint' features.").eprint();
+	std::process::ExitCode::FAILURE
 }
 
 #[cfg(all(feature = "progress", feature = "signals_sigint"))]

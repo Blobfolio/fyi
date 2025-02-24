@@ -5,7 +5,7 @@ FLAGS:
     -t, --timestamp    Include a timestamp.
 
 OPTIONS:
-    -e, --exit <num>   Exit with this status code after printing. [default: 0]
+    -e, --exit <num>   Exit with this code (0-255) after printing. [default: 0]
 
 ARGS:
     <MSG>    The message!

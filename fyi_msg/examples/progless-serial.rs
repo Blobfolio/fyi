@@ -12,8 +12,9 @@ use fyi_msg::Msg;
 include!("_progless-data.txt");
 
 #[cfg(not(feature = "progress"))]
-fn main() {
-	Msg::error("This example requires the 'progress' feature.").die(1);
+fn main() -> std::process::ExitCode {
+	Msg::error("This example requires the 'progress' feature.").eprint();
+	std::process::ExitCode::FAILURE
 }
 
 #[cfg(feature = "progress")]

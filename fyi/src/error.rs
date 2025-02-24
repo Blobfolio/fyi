@@ -3,11 +3,14 @@
 */
 
 use fyi_msg::MsgKind;
-use std::fmt;
+use std::{
+	fmt,
+	process::ExitCode,
+};
 
 
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 /// # Errors!
 pub(super) enum FyiError {
 	/// # Unrecognized CLI.
@@ -17,7 +20,7 @@ pub(super) enum FyiError {
 	NoMessage,
 
 	/// # Passthrough.
-	Passthrough(i32),
+	Passthrough(ExitCode),
 
 	/// # Print Help (Not an Error).
 	PrintHelp(MsgKind),
@@ -50,15 +53,6 @@ impl FyiError {
 			Self::NoMessage => "Missing message.",
 			Self::Passthrough(_) | Self::PrintHelp(_) => "",
 			Self::PrintVersion => concat!("FYI v", env!("CARGO_PKG_VERSION")),
-		}
-	}
-
-	/// # Exit Code.
-	pub(super) const fn exit_code(self) -> i32 {
-		match self {
-			Self::Passthrough(e) => e,
-			Self::PrintHelp(_) | Self::PrintVersion => 0,
-			_ => 1,
 		}
 	}
 }

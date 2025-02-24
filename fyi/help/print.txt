@@ -10,7 +10,8 @@ FLAGS:
     -t, --timestamp    Include a timestamp.
 
 OPTIONS:
-    -e, --exit <num>            Exit with this status code after printing. [default: 0]
+    -e, --exit <num>            Exit with this code (0-255) after printing.
+                                [default: 0]
     -p, --prefix <txt>          Set a custom prefix. [default: ]
     -c, --prefix-color <num>    Use this color for the prefix. [default: 199]
 

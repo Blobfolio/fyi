@@ -63,22 +63,27 @@ use fyi_msg::{
 	Msg,
 	MsgKind,
 };
+use std::process::ExitCode;
 
 
 
 /// # Main.
-fn main() {
-	// Handle errors.
-	if let Err(e) = main__() {
-		match e {
-			FyiError::Passthrough(_) => {},
-			FyiError::PrintHelp(x) => return helper(x),
-			FyiError::PrintVersion => { println!("{}", FyiError::PrintVersion); },
-			_ => { Msg::error(e.to_string()).eprint(); },
-		}
-
-		let code = e.exit_code();
-		if code != 0 { std::process::exit(code); }
+fn main() -> ExitCode {
+	match main__() {
+		Ok(()) => ExitCode::SUCCESS,
+		Err(FyiError::PrintHelp(x)) => {
+			helper(x);
+			ExitCode::SUCCESS
+		},
+		Err(FyiError::PrintVersion) => {
+			println!("{}", FyiError::PrintVersion);
+			ExitCode::SUCCESS
+		},
+		Err(FyiError::Passthrough(e)) => e,
+		Err(e) => {
+			Msg::error(e.to_string()).eprint();
+			ExitCode::FAILURE
+		},
 	}
 }
 
@@ -95,7 +100,7 @@ fn main__() -> Result<(), FyiError> {
 	if matches!(kind, MsgKind::Confirm) {
 		return
 			if msg.prompt_with_default(flags.yes()) { Ok(()) }
-			else { Err(FyiError::Passthrough(1)) };
+			else { Err(FyiError::Passthrough(ExitCode::FAILURE)) };
 	}
 
 	// Print to `STDERR`.
