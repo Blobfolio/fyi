@@ -123,7 +123,7 @@ const TICK_PERCENT: u8 =
 
 /// # Flag: Reset.
 const TICK_RESET: u8 =
-	TICK_BAR | TICK_DOING | TICK_DONE | TICK_TOTAL | TICKING;
+	TICK_BAR | TICK_DOING | TICK_DONE | TICK_TITLE | TICK_TOTAL | TICKING;
 
 /// # Flag: Resized.
 const TICK_RESIZED: u8 =
@@ -489,18 +489,10 @@ impl ProglessInner {
 	/// _continuous_. If you need the time counter to reset to `[00:00:00]`,
 	/// you need start a brand new instance instead of resetting an existing
 	/// one.
-	///
-	/// ## Errors
-	///
-	/// This will return an error if the new total is zero.
-	fn reset(&self, total: u32) -> Result<(), ProglessError> {
+	fn reset(&self, total: NonZeroU32) {
 		self.stop();
-		if 0 == total { Err(ProglessError::EmptyTotal) }
-		else {
-			self.done_total.store(u64::from(total), SeqCst);
-			self.flags.store(TICK_RESET, SeqCst);
-			Ok(())
-		}
+		self.done_total.store(u64::from(total.get()), SeqCst);
+		self.flags.store(TICK_RESET, SeqCst);
 	}
 
 	/// # Set Done.
@@ -530,9 +522,20 @@ impl ProglessInner {
 	/// bits while progress is progressing, and removed afterward with
 	/// everything else.
 	fn set_title(&self, title: Option<Msg>) {
-		if self.running() {
-			*mutex!(self.title) = title.map(|m| m.with_newline(false));
-			self.flags.fetch_or(TICK_TITLE, SeqCst);
+		*mutex!(self.title) = title.map(|m| m.with_newline(false));
+		if self.running() { self.flags.fetch_or(TICK_TITLE, SeqCst); }
+	}
+
+	/// # Set Title Message.
+	///
+	/// Change (only) the message part — what follows the prefix — of the title
+	/// to something else.
+	///
+	/// Note: this has no effect for instances without a title component.
+	fn set_title_msg(&self, msg: &str) {
+		if let Some(title) = mutex!(self.title).as_mut() {
+			title.set_msg(msg);
+			if self.running() { self.flags.fetch_or(TICK_TITLE, SeqCst); }
 		}
 	}
 
@@ -1447,13 +1450,21 @@ impl Progless {
 	/// _continuous_. If you need the time counter to reset to `[00:00:00]`,
 	/// you need start a brand new instance instead of resetting an existing
 	/// one.
+	pub fn reset(&self, total: NonZeroU32) {
+		self.inner.reset(total);
+		self.steady.start(Arc::clone(&self.inner));
+	}
+
+	/// # Reset (Fallible).
+	///
+	/// Same as [`Progless::reset`], but will fail if `total` is zero.
 	///
 	/// ## Errors
 	///
 	/// This will return an error if the new total is zero.
-	pub fn reset(&self, total: u32) -> Result<(), ProglessError> {
-		self.inner.reset(total)?;
-		self.steady.start(Arc::clone(&self.inner));
+	pub fn try_reset(&self, total: u32) -> Result<(), ProglessError> {
+		let total = NonZeroU32::new(total).ok_or(ProglessError::EmptyTotal)?;
+		self.reset(total);
 		Ok(())
 	}
 
@@ -1488,6 +1499,15 @@ impl Progless {
 		});
 		self.inner.set_title(title);
 	}
+
+	#[inline]
+	/// # Set Title Message.
+	///
+	/// Change (only) the message part — what follows the prefix — of the title
+	/// to something else.
+	///
+	/// Note: this has no effect for instances without a title component.
+	pub fn set_title_msg(&self, msg: &str) { self.inner.set_title_msg(msg); }
 
 	#[inline]
 	/// # Set Title As X: Reticulating Splines…

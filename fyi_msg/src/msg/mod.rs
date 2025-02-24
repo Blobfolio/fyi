@@ -1017,28 +1017,6 @@ impl Msg {
 		let _res = handle.write_all(&self.0).and_then(|()| handle.flush());
 	}
 
-	#[inline]
-	/// # Print and Die.
-	///
-	/// This is a convenience method for printing a message to `STDERR` and
-	/// terminating the thread with the provided exit code. Generally you'd
-	/// want to pass a non-zero value here.
-	///
-	/// Be careful calling this method in parallel contexts as it will only
-	/// stop the current thread, not the entire program execution.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	/// Msg::error("Oh no!").with_newline(true).die(1);
-	/// unreachable!();
-	/// ```
-	pub fn die(&self, code: i32) -> ! {
-		self.eprint();
-		std::process::exit(code);
-	}
-
 	#[must_use]
 	#[inline]
 	/// # Prompt.

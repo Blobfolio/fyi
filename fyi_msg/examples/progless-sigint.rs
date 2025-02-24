@@ -9,8 +9,9 @@ use fyi_msg::Msg;
 
 
 #[cfg(not(all(feature = "progress", feature = "signals_sigint")))]
-fn main() {
-	Msg::error("This example requires the 'progress' and 'signals_sigint' features.").die(1);
+fn main() -> std::process::ExitCode {
+	Msg::error("This example requires the 'progress' and 'signals_sigint' features.").eprint();
+	std::process::ExitCode::FAILURE
 }
 
 #[cfg(all(feature = "progress", feature = "signals_sigint"))]
@@ -18,6 +19,7 @@ fn main() {
 fn main() {
 	use fyi_msg::Progless;
 	use std::{
+		num::NonZeroU32,
 		sync::atomic::Ordering::SeqCst,
 		time::Duration,
 	};
@@ -49,7 +51,7 @@ fn main() {
 
 	// Go again?
 	if fyi_msg::confirm!(yes: "Count some more?") {
-		pbar.reset(250).unwrap();
+		pbar.reset(NonZeroU32::new(250).unwrap());
 		pbar.set_title(Some(Msg::task("More numbers…")));
 		for _ in 500..750 {
 			let duration =

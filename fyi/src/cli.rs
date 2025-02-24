@@ -7,15 +7,15 @@ use argyle::{
 	Argument,
 };
 use crate::FyiError;
-use dactyl::traits::{
-	BytesToSigned,
-	BytesToUnsigned,
-};
+use dactyl::traits::BytesToUnsigned;
 use fyi_msg::{
 	Msg,
 	MsgKind,
 };
-use std::num::NonZeroUsize;
+use std::{
+	num::NonZeroUsize,
+	process::ExitCode,
+};
 
 
 
@@ -29,7 +29,7 @@ pub(super) struct Settings {
 	flags: u8,
 
 	/// # Exit.
-	exit: i32,
+	exit: ExitCode,
 }
 
 impl Settings {
@@ -46,8 +46,8 @@ impl Settings {
 	const FLAG_YES: u8 =       0b1000;
 
 	/// # Exit Code.
-	pub(super) const fn exit(self) -> Result<(), FyiError> {
-		if self.exit == 0 { Ok(()) }
+	pub(super) fn exit(self) -> Result<(), FyiError> {
+		if self.exit == ExitCode::SUCCESS { Ok(()) }
 		else { Err(FyiError::Passthrough(self.exit)) }
 	}
 
@@ -75,7 +75,7 @@ impl Settings {
 
 	/// # New.
 	const fn new() -> Self {
-		Self { flags: 0, exit: 0 }
+		Self { flags: 0, exit: ExitCode::SUCCESS }
 	}
 
 	/// # Set Indent.
@@ -164,7 +164,7 @@ pub(super) fn parse_msg(kind: MsgKind) -> Result<(Msg, Settings), FyiError> {
 				if let Some(s) = u8::btou(s.trim().as_bytes()) { color = s; },
 			Argument::KeyWithValue("-p" | "--prefix", s) => { prefix = s; },
 			Argument::KeyWithValue("-e" | "--exit", s) =>
-				if let Some(s) = i32::btoi(s.trim().as_bytes()) { flags.exit = s; },
+				if let Some(s) = u8::btou(s.trim().as_bytes()) { flags.exit = s.into(); },
 
 			Argument::Other(s) =>
 				if msg.is_none() { msg.replace(s); }
