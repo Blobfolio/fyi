@@ -349,5 +349,6 @@ fn sigint_keepalive() -> Arc<AtomicBool> {
 ///
 /// Print an error and die.
 fn sigint_error() -> ! {
-	Msg::error("Unable to register a SIGINT handler!").die(1);
+	Msg::error("Unable to register a SIGINT handler!").eprint();
+	std::process::exit(1);
 }
