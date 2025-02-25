@@ -18,7 +18,7 @@ default-target = "x86_64-unknown-linux-gnu"
 targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
 [dependencies]
-dactyl = "0.9.*"
+dactyl = "0.10.*"
 
 [dependencies.signal-hook]
 version = "0.3.*"
