@@ -3,7 +3,7 @@
 */
 
 use super::Msg;
-use std::ops::Deref;
+use std::fmt;
 
 
 
@@ -32,41 +32,56 @@ use std::ops::Deref;
 /// what [`MsgKind::into_msg`] does anyway.
 pub enum MsgKind {
 	#[default]
-	/// None.
+	/// # None.
+	///
+	/// No prefix at all, equivalent to [`Msg::plain`].
 	None,
-	/// Confirm.
+
+	/// # Confirm.
 	Confirm,
-	/// Crunched.
+
+	/// # Crunched.
 	Crunched,
-	/// Debug.
+
+	/// # Debug.
 	Debug,
-	/// Done.
+
+	/// # Done.
 	Done,
-	/// Error.
+
+	/// # Error.
 	Error,
-	/// Info.
+
+	/// # Info.
 	Info,
-	/// Notice.
+
+	/// # Notice.
 	Notice,
-	/// Review
+
+	/// # Review
 	Review,
-	/// Success.
-	Success,
-	/// Skipped.
+
+	/// # Skipped.
 	Skipped,
-	/// Task.
+
+	/// # Success.
+	Success,
+
+	/// # Task.
 	Task,
-	/// Warning.
+
+	/// # Warning.
 	Warning,
 
 	#[cfg(feature = "bin_kinds")] #[doc(hidden)] Blank,
 	#[cfg(feature = "bin_kinds")] #[doc(hidden)] Custom,
 }
 
-impl Deref for MsgKind {
-	type Target = [u8];
+impl fmt::Display for MsgKind {
 	#[inline]
-	fn deref(&self) -> &Self::Target { self.as_bytes() }
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.pad(self.prefix())
+	}
 }
 
 impl From<&[u8]> for MsgKind {
@@ -98,6 +113,7 @@ impl From<&[u8]> for MsgKind {
 
 /// ## Details.
 impl MsgKind {
+	#[doc(hidden)]
 	#[cfg(feature = "bin_kinds")]
 	#[must_use]
 	/// # Command.
@@ -123,11 +139,39 @@ impl MsgKind {
 		}
 	}
 
+	#[cfg(feature = "bin_kinds")]
+	#[must_use]
+	/// # Is Empty.
+	///
+	/// This returns true for [`MsgKind::None`], false for everything else.
+	pub const fn is_empty(self) -> bool {
+		matches!(self, Self::None | Self::Blank | Self::Custom)
+	}
+
+	#[cfg(not(feature = "bin_kinds"))]
+	#[must_use]
+	/// # Is Empty.
+	///
+	/// This returns true for [`MsgKind::None`], false for everything else.
+	pub const fn is_empty(self) -> bool { matches!(self, Self::None) }
+
 	#[must_use]
 	/// # Length.
 	///
 	/// This returns the byte length of the prefix as a `u32`, worth mentioning
 	/// only because most length methods think in terms of `usize`.
+	///
+	/// Note: this value includes "invisible" ANSI-related bytes as well as the
+	/// trailing ": " bit, so will be bigger than you might expect for
+	/// everything but [`MsgKind::None`], which is empty/zero.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::MsgKind;
+	///
+	/// assert!(4 < MsgKind::Task.len_32());
+	/// ```
 	pub const fn len_32(self) -> u32 {
 		match self {
 			#[cfg(feature = "bin_kinds")] Self::None | Self::Blank | Self::Custom => 0,
@@ -146,9 +190,12 @@ impl MsgKind {
 /// ## Conversion.
 impl MsgKind {
 	#[must_use]
-	/// # As Bytes.
+	/// # As (Formatted) Byte Slice.
 	///
-	/// This is the same as dereferencing.
+	/// Return a byte slice suitable for use as a [`Msg`] prefix part, complete
+	/// with ANSI coloration/bolding and a trailing ": ".
+	///
+	/// In most contexts, [`MsgKind::prefix`] is more appropriate.
 	pub const fn as_bytes(self) -> &'static [u8] {
 		match self {
 			#[cfg(feature = "bin_kinds")] Self::None | Self::Blank | Self::Custom => &[],
@@ -176,6 +223,80 @@ impl MsgKind {
 	/// what it does under the hood.
 	pub fn into_msg<S>(self, msg: S) -> Msg
 	where S: AsRef<str> { Msg::new(self, msg) }
+
+	#[inline]
+	#[must_use]
+	/// # Prefix (Label).
+	///
+	/// Return just the word, without any ANSI formatting or trailing
+	/// punctuation.
+	///
+	/// In practice, this works out to be the same as the variant itself,
+	/// except for [`MsgKind::None`], which is literally nothing.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::MsgKind;
+	///
+	/// // It's what you'd expect.
+	/// assert_eq!(MsgKind::Error.prefix(), "Error");
+	/// assert_eq!(MsgKind::Success.prefix(), "Success");
+	///
+	/// // Except maybe this, which is actually nothing.
+	/// assert_eq!(MsgKind::None.prefix(), "");
+	/// ```
+	pub const fn prefix(self) -> &'static str {
+		match self {
+			#[cfg(feature = "bin_kinds")] Self::None | Self::Blank | Self::Custom => "",
+			#[cfg(not(feature = "bin_kinds"))] Self::None => "",
+			Self::Confirm => "Confirm",
+			Self::Crunched => "Crunched",
+			Self::Debug => "Debug",
+			Self::Done => "Done",
+			Self::Error => "Error",
+			Self::Info => "Info",
+			Self::Notice => "Notice",
+			Self::Review => "Review",
+			Self::Skipped => "Skipped",
+			Self::Success => "Success",
+			Self::Task => "Task",
+			Self::Warning => "Warning",
+		}
+	}
+
+	#[inline]
+	#[must_use]
+	/// # Prefix Color.
+	///
+	/// Return the ANSI color code ([256/vte](https://misc.flogisoft.com/bash/tip_colors_and_formatting#foreground_text1))
+	/// used by the prefix.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::MsgKind;
+	///
+	/// // Roll your own coloration.
+	/// let kind = MsgKind::Task;
+	/// println!(
+	///     "\x1b[1;38;5;{}m{kind}:\x1b[0m Who even needs this crate?!",
+	///     kind.prefix_color(),
+	/// );
+	/// ```
+	pub const fn prefix_color(self) -> u8 {
+		match self {
+			#[cfg(feature = "bin_kinds")] Self::None | Self::Blank | Self::Custom => 39,
+			#[cfg(not(feature = "bin_kinds"))] Self::None => 39,
+			Self::Confirm => 208,                              // Orange.
+			Self::Crunched | Self::Done | Self::Success => 10, // (Light) Green.
+			Self::Debug | Self::Review => 14,                  // (Light) Cyan.
+			Self::Error => 9,                                  // (Light) Red.
+			Self::Info | Self::Notice => 13,                   // (Light) Magenta.
+			Self::Skipped | Self::Warning => 11,               // (Light) Yellow.
+			Self::Task => 199,                                 // Hot Pink.
+		}
+	}
 }
 
 
@@ -184,25 +305,49 @@ impl MsgKind {
 mod tests {
 	use super::*;
 
+	/// # Kinds.
+	///
+	/// All the normal kinds except for [`MsgKind::None`].
+	const KINDS: [MsgKind; 13] = [
+		MsgKind::None,
+		MsgKind::Confirm,
+		MsgKind::Crunched,
+		MsgKind::Debug,
+		MsgKind::Done,
+		MsgKind::Error,
+		MsgKind::Info,
+		MsgKind::Notice,
+		MsgKind::Review,
+		MsgKind::Skipped,
+		MsgKind::Success,
+		MsgKind::Task,
+		MsgKind::Warning,
+	];
+
 	#[test]
 	fn t_len() {
-		for p in &[
-			MsgKind::Confirm,
-			MsgKind::Crunched,
-			MsgKind::Debug,
-			MsgKind::Done,
-			MsgKind::Error,
-			MsgKind::Info,
-			MsgKind::None,
-			MsgKind::Notice,
-			MsgKind::Review,
-			MsgKind::Skipped,
-			MsgKind::Success,
-			MsgKind::Task,
-			MsgKind::Warning,
-		] {
-			assert_eq!(p.len(), p.as_bytes().len());
+		for p in KINDS {
+			assert_eq!(p.len_32() as usize, p.as_bytes().len());
 			assert_eq!(p.is_empty(), p.as_bytes().is_empty());
+			assert_eq!(p.is_empty(), p.len_32() == 0);
+		}
+	}
+
+	#[test]
+	fn t_prefix() {
+		for p in KINDS {
+			// Prefix should match the display impl.
+			let prefix = p.prefix();
+			assert_eq!(prefix, p.to_string());
+
+			// None is empty so there's nothing to look for, per se.
+			if matches!(p, MsgKind::None) { assert_eq!(prefix, ""); }
+			// Otherwise we should find our prefix in the formatted byte slice
+			// between the closing ANSI "m" and colon.
+			else {
+				let s = std::str::from_utf8(p.as_bytes()).expect("Invalid UTF-8!");
+				assert!(s.contains(&format!("m{prefix}:\x1b")));
+			}
 		}
 	}
 }
