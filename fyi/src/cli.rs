@@ -10,6 +10,7 @@ use crate::FyiError;
 use dactyl::traits::BytesToUnsigned;
 use fyi_msg::{
 	Msg,
+	MsgFlags,
 	MsgKind,
 };
 use std::{
@@ -51,13 +52,13 @@ impl Settings {
 	pub(super) const fn yes(self) -> bool { self.flags.contains(Flags::Yes) }
 
 	/// # Convert to `Msg` Flags.
-	const fn msg_flags(self) -> u8 {
-		let mut flags: u8 = fyi_msg::FLAG_NEWLINE;
+	const fn msg_flags(self) -> MsgFlags {
+		let mut flags = MsgFlags::Newline;
 		if self.flags.contains(Flags::Indent) {
-			flags |= fyi_msg::FLAG_INDENT;
+			flags = flags.with(MsgFlags::Indent);
 		}
 		if self.flags.contains(Flags::Timestamp) {
-			flags |= fyi_msg::FLAG_TIMESTAMP;
+			flags = flags.with(MsgFlags::Timestamp);
 		}
 		flags
 	}
