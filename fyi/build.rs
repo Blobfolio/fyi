@@ -2,7 +2,10 @@
 # FYI: Build
 */
 
-use argyle::KeyWordsBuilder;
+use argyle::{
+	FlagsBuilder,
+	KeyWordsBuilder,
+};
 use fyi_msg::{
 	Msg,
 	MsgKind,
@@ -21,12 +24,15 @@ use std::path::{
 ///
 /// It also generates the keywords used for CLI parsing, again to save some
 /// runtime overhead.
-pub fn main() {
+fn main() {
 	println!("cargo:rerun-if-changed=help");
 	println!("cargo:rerun-if-env-changed=CARGO_PKG_VERSION");
 
 	// Build the CLI arguments.
 	write_cli();
+
+	// Build the flags.
+	write_flags();
 
 	// Handle the top.
 	write_help(
@@ -171,6 +177,16 @@ fn write_cli() {
 		"-p", "--prefix",
 	]);
 	builder.save(out_path("argyle-msg.rs"));
+}
+
+/// # Write flags (program settings bools).
+fn write_flags() {
+	FlagsBuilder::new("Flags")
+		.with_flag("Indent", Some("# Indent Message."))
+		.with_flag("Stderr", Some("# Print to STDERR."))
+		.with_flag("Timestamp", Some("# Timestamp Message."))
+		.with_flag("Yes", Some("# Assume Yes (No Prompt)."))
+		.save(out_path("flags.rs"));
 }
 
 /// # Write file.

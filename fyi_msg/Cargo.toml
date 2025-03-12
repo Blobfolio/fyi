@@ -1,6 +1,6 @@
 [package]
 name = "fyi_msg"
-version = "1.7.1"
+version = "1.8.0"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
 rust-version = "1.85"
@@ -16,6 +16,9 @@ rustdoc-args = ["--cfg", "docsrs"]
 features = [ "fitted", "progress", "signals", "timestamps" ]
 default-target = "x86_64-unknown-linux-gnu"
 targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
+
+[build-dependencies]
+argyle = "0.12.0"
 
 [dependencies]
 dactyl = "0.10.*"
