@@ -54,12 +54,8 @@ impl Settings {
 	/// # Convert to `Msg` Flags.
 	const fn msg_flags(self) -> MsgFlags {
 		let mut flags = MsgFlags::Newline;
-		if self.flags.contains(Flags::Indent) {
-			flags = flags.with(MsgFlags::Indent);
-		}
-		if self.flags.contains(Flags::Timestamp) {
-			flags = flags.with(MsgFlags::Timestamp);
-		}
+		if self.flags.contains(Flags::Indent) { flags.set(MsgFlags::Indent); }
+		if self.flags.contains(Flags::Timestamp) { flags.set(MsgFlags::Timestamp); }
 		flags
 	}
 
@@ -67,18 +63,6 @@ impl Settings {
 	const fn new() -> Self {
 		Self { flags: Flags::None, exit: ExitCode::SUCCESS }
 	}
-
-	/// # Set Indent.
-	fn set_indent(&mut self) { self.flags |= Flags::Indent; }
-
-	/// # Set Stderr.
-	fn set_stderr(&mut self) { self.flags |= Flags::Stderr; }
-
-	/// # Set Timestamp.
-	fn set_timestamp(&mut self) { self.flags |= Flags::Timestamp; }
-
-	/// # Set Yes.
-	fn set_yes(&mut self) { self.flags |= Flags::Yes; }
 }
 
 
@@ -145,10 +129,10 @@ pub(super) fn parse_msg(kind: MsgKind) -> Result<(Msg, Settings), FyiError> {
 	for arg in args {
 		match arg {
 			Argument::Key("-h" | "--help") => return Err(FyiError::PrintHelp(kind)),
-			Argument::Key("-i" | "--indent") => { flags.set_indent(); },
-			Argument::Key("--stderr") => { flags.set_stderr(); },
-			Argument::Key("-t" | "--timestamp") => { flags.set_timestamp(); },
-			Argument::Key("-y" | "--yes") => { flags.set_yes(); },
+			Argument::Key("-i" | "--indent") => { flags.flags.set(Flags::Indent); },
+			Argument::Key("--stderr") => { flags.flags.set(Flags::Stderr); },
+			Argument::Key("-t" | "--timestamp") => { flags.flags.set(Flags::Timestamp); },
+			Argument::Key("-y" | "--yes") => { flags.flags.set(Flags::Yes); },
 
 			Argument::KeyWithValue("-c" | "--prefix-color", s) =>
 				if let Some(s) = u8::btou(s.trim().as_bytes()) { color = s; },
