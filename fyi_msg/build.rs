@@ -13,8 +13,14 @@ use std::{
 
 
 
-/// # Build `MsgFlags`.
+/// # Build stuff!
 fn main() {
+	println!("cargo:rerun-if-env-changed=CARGO_PKG_VERSION");
+	build_msg_flags();
+}
+
+/// # Build/Save `MsgFlags`.
+fn build_msg_flags() {
 	let mut builder = FlagsBuilder::new("MsgFlags")
 		.public()
 		.with_docs("# Message Flags.
