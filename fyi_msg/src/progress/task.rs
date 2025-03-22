@@ -2,7 +2,7 @@
 # FYI Msg - Progless Tasks
 */
 
-use crate::iter::NoAnsi;
+use crate::ansi::NoAnsi;
 use std::{
 	borrow::Borrow,
 	cmp::Ordering,

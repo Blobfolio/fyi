@@ -1004,14 +1004,14 @@ impl ProglessBuffer {
 		// We need at least two lines of screen space to fit a title.
 		if 2 <= height.get() {
 			if let Some(title) = title {
-				let title = title.fitted(usize::from(width.get()));
-				let slice: &[u8] = title.as_ref();
-
-				// Truncate to first line.
-				let end = slice.iter().copied().position(|b| b == b'\n').unwrap_or(slice.len());
-				if end != 0 {
-					self.title.extend_from_slice(&slice[..end]);
-					self.title.push(b'\n');
+				if let Some(title) = title.fitted(usize::from(width.get())) {
+					// Truncate to first line.
+					let slice = title.as_bytes();
+					let end = slice.iter().copied().position(|b| b == b'\n').unwrap_or(slice.len());
+					if end != 0 {
+						self.title.extend_from_slice(&slice[..end]);
+						self.title.push(b'\n');
+					}
 				}
 			}
 		}

@@ -15,6 +15,7 @@ use std::{
 pub enum ProglessError {
 	/// # Length (total) must be non-zero.
 	EmptyTotal,
+
 	/// # Length (total) overflow.
 	TotalOverflow,
 }
@@ -27,7 +28,7 @@ impl AsRef<str> for ProglessError {
 impl fmt::Display for ProglessError {
 	#[inline]
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str(self.as_str())
+		<str as fmt::Display>::fmt(self.as_str(), f)
 	}
 }
 

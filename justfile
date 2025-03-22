@@ -63,23 +63,19 @@ bench BENCH="":
 
 	"{{ cargo_bin }}" blank
 
-	"{{ cargo_bin }}" notice "So official!"
-	"{{ cargo_bin }}" success "Hurray! You did it!"
-	"{{ cargo_bin }}" warning "Hold it there, Sparky!"
-	"{{ cargo_bin }}" error "Oopsie."
-
-	"{{ cargo_bin }}" blank
-
-	"{{ cargo_bin }}" review "The total was such-and-such."
-	"{{ cargo_bin }}" debug "The devil is in the details."
-	"{{ cargo_bin }}" info "Details without the word 'bug'."
-	"{{ cargo_bin }}" skipped "Wasn't worth doing."
-	"{{ cargo_bin }}" task "Let's get to work!"
-
-	"{{ cargo_bin }}" blank
-
-	"{{ cargo_bin }}" crunched "Some hard work just happened."
-	"{{ cargo_bin }}" done "As the French say, «FIN»."
+	"{{ cargo_bin }}" aborted "Built-in prefix."
+	"{{ cargo_bin }}" crunched "Built-in prefix."
+	"{{ cargo_bin }}" debug "Built-in prefix."
+	"{{ cargo_bin }}" done "Built-in prefix."
+	"{{ cargo_bin }}" error "Built-in prefix."
+	"{{ cargo_bin }}" found "Built-in prefix."
+	"{{ cargo_bin }}" info "Built-in prefix."
+	"{{ cargo_bin }}" notice "Built-in prefix."
+	"{{ cargo_bin }}" review "Built-in prefix."
+	"{{ cargo_bin }}" skipped "Built-in prefix."
+	"{{ cargo_bin }}" success "Built-in prefix."
+	"{{ cargo_bin }}" task "Built-in prefix."
+	"{{ cargo_bin }}" warning "Built-in prefix."
 
 	"{{ cargo_bin }}" blank
 

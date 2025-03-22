@@ -136,6 +136,7 @@ fn spawn_ticker(t_state: Arc<(Mutex<bool>, Condvar)>, t_inner: Arc<ProglessInner
 			if ! signals.pretick(&t_inner) || ! t_inner.tick(false) {
 				*state = true; // Update the state to match.
 				drop(state);
+				drop(signals);
 				return;
 			}
 

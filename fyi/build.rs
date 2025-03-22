@@ -17,6 +17,14 @@ use std::path::{
 
 
 
+/// # Generic Help.
+const HELP: &str = include_str!("help/help.txt");
+
+/// # Manifest.
+const MANIFEST: &str = include_str!(env!("CARGO_MANIFEST_PATH"));
+
+
+
 /// # Build Arguments and Help Screens
 ///
 /// This generates text for the various help screens to avoid having to do that
@@ -77,21 +85,35 @@ fn main() {
 	copy_path("generic-bottom");
 
 	// The rest get manually built.
-	for &(name, kind) in &[
-		("Crunched", MsgKind::Crunched),
-		("Debug", MsgKind::Debug),
-		("Done", MsgKind::Done),
-		("Error", MsgKind::Error),
-		("Info", MsgKind::Info),
-		("Notice", MsgKind::Notice),
-		("Review", MsgKind::Review),
-		("Skipped", MsgKind::Skipped),
-		("Success", MsgKind::Success),
-		("Task", MsgKind::Task),
-		("Warning", MsgKind::Warning),
-	] {
+	for kind in MsgKind::ALL {
+		// Before we get to work, let's make sure we remembered to add
+		// manual and subcommand entries for it in the Cargo.toml manifest.
+		let cmd = kind.command();
+		if ! cmd.is_empty() {
+			assert!(
+				MANIFEST.contains(&format!(r#"cmd = "{cmd}""#)),
+				"Manifest missing subcommand entry for {cmd}.",
+			);
+			assert!(
+				MANIFEST.contains(&format!(r#""../release/man/fyi-{cmd}.1.gz""#)),
+				"Manifest missing manual entry for {cmd}.",
+			);
+		}
+
+		// Some of the kinds are already accounted for and can be skipped.
+		if kind.is_empty() || matches!(kind, MsgKind::Confirm) { continue; }
+		let name = kind.as_str();
+
+		// Let's double-check there's a mention in the top-level help's
+		// SUBCOMMANDS section for this kind.
+		assert!(
+			HELP.contains(&format!("{name}: Hello World")),
+			"Top-level help is missing subcommand entry for {name}.",
+		);
+
+		// And generate the help!
 		write_help(
-			help_path(&name.to_lowercase()),
+			help_path(&name.to_ascii_lowercase()),
 			format!(
 				include_str!("./help/generic.txt"),
 				name,
@@ -104,9 +126,7 @@ fn main() {
 
 /// # Out path.
 fn copy_path(name: &str) {
-	let mut src = std::fs::canonicalize(env!("CARGO_MANIFEST_DIR")).expect("Missing Cargo Dir.");
-	src.push(format!("help/{name}.txt"));
-	write_help(help_path(name), &std::fs::read(src).expect("Failed to open file."));
+	write_help(help_path(name), &std::fs::read(format!("help/{name}.txt")).expect("Failed to open file."));
 }
 
 /// # Output path (help).
@@ -131,22 +151,13 @@ fn out_path(stub: &str) -> PathBuf {
 fn write_cli() {
 	// Main arguments first.
 	let mut builder = KeyWordsBuilder::default();
-	builder.push_commands([
-		"blank",
-		"confirm",
-		"crunched",
-		"debug",
-		"done",
-		"error",
-		"info",
-		"notice",
-		"print",
-		"review",
-		"skipped",
-		"success",
-		"task",
-		"warning",
-	]);
+	builder.push_commands(
+		MsgKind::ALL.into_iter().filter_map(|k| {
+			let cmd = k.command();
+			if cmd.is_empty() { None }
+			else { Some(cmd) }
+		})
+	);
 	builder.push_keys([
 		"-h", "--help",
 		"-V", "--version",

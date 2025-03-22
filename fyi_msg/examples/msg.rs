@@ -10,7 +10,7 @@ fn main() {
 		MsgKind,
 	};
 
-	Msg::plain("This message has no prefix.")
+	Msg::from("This message has no prefix.")
 		.with_newline(true)
 		.print();
 
@@ -26,32 +26,12 @@ fn main() {
 
 	println!();
 
-	Msg::notice("So official!").print();
-	Msg::success("Hurray! You did it!").print();
-	Msg::warning("Hold it there, Sparky!").print();
-	Msg::error("Oopsie.").print();
-
-	println!();
-
-	Msg::review("The total was such-and-such.").print();
-	Msg::debug("The devil is in the details.").print();
-	Msg::info("Details without the word 'bug'.").print();
-	Msg::skipped("Wasn't worth doing.").print();
-	Msg::task("Let's get to work!").print();
-
-	println!();
-
-	// This can be printed without actually confirming anything by building
-	// the message manually. There is no direct `Msg::confirm()` method to
-	// avoid confusion with the `fyi_msg::confirm!()` macro.
-	MsgKind::Confirm.into_msg("Choose your own adventure.")
-		.with_newline(true)
-		.print();
-
-	println!();
-
-	Msg::crunched("Some hard work just happened.").print();
-	Msg::done("As the French say, «FIN».").print();
+	// The built-ins.
+	for kind in MsgKind::ALL {
+		if kind.prefix_color().is_some() {
+			Msg::new(kind, "Built-in prefix.").with_newline(true).print();
+		}
+	}
 
 	println!();
 
@@ -100,50 +80,50 @@ fn main() {
 
 	// A prompt to STDERR.
 	if Msg::new(MsgKind::Confirm, "Did this print to STDERR?").eprompt_with_default(true) {
-		Msg::plain("Great!")
+		Msg::from("Great!")
 			.with_newline(true)
 			.print();
 	}
 	else {
-		Msg::plain("Are you sure?!")
+		Msg::from("Are you sure?!")
 			.with_newline(true)
 			.print();
 	}
 
 	// Here's that macro we mentioned earlier.
 	if confirm!(yes: "Was this example useful?") {
-		Msg::plain("Great!")
+		Msg::from("Great!")
 			.with_newline(true)
 			.print();
 	}
 	else {
-		Msg::plain("Oh well. Can't please 'em all!")
+		Msg::from("Oh well. Can't please 'em all!")
 			.with_newline(true)
 			.print();
 	}
 
 	// Test confirmation with indentation.
 	if confirm!(yes: "Is this confirmation indented?", 1) {
-		Msg::plain("Great!")
+		Msg::from("Great!")
 			.with_indent(1)
 			.with_newline(true)
 			.print();
 	}
 	else {
-		Msg::plain("Are you sure?!")
+		Msg::from("Are you sure?!")
 			.with_indent(1)
 			.with_newline(true)
 			.print();
 	}
 
 	if confirm!("Do you hate fun?", 2) {
-		Msg::plain("That's weird.")
+		Msg::from("That's weird.")
 			.with_indent(2)
 			.with_newline(true)
 			.print();
 	}
 	else {
-		Msg::plain("Just checking…")
+		Msg::from("Just checking…")
 			.with_indent(2)
 			.with_newline(true)
 			.print();

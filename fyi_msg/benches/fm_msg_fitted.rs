@@ -12,11 +12,11 @@ const TEXT: &str = "This is an example message.";
 
 benches!(
 	Bench::new("fyi_msg::Msg::error()::fitted(20)")
-		.run_seeded(Msg::error(TEXT), |v| v.fitted(20).len()),
+		.run_seeded(Msg::error(TEXT), |v| v.fitted(20).is_some()),
 
 	Bench::new("fyi_msg::Msg::error()::fitted(40)")
-		.run_seeded(Msg::error(TEXT), |v| v.fitted(40).len()),
+		.run_seeded(Msg::error(TEXT), |v| v.fitted(40).is_some()),
 
 	Bench::new("fyi_msg::Msg::error()::fitted(50)")
-		.run_seeded(Msg::error(TEXT), |v| v.fitted(50).len())
+		.run_seeded(Msg::error(TEXT), |v| v.fitted(50).is_some())
 );

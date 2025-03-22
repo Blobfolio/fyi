@@ -1,18 +1,123 @@
 /*!
-# FYI Msg: Iterators.
+# FYI Msg: Ansi Helpers
 */
 
-use std::fmt;
+use std::{
+	borrow::Borrow,
+	fmt,
+	hash,
+};
+
+
+
+include!(concat!(env!("OUT_DIR"), "/ansi-color.rs"));
+
+
+
+impl AsRef<str> for AnsiColor {
+	#[inline]
+	fn as_ref(&self) -> &str { self.as_str() }
+}
+
+impl Borrow<str> for AnsiColor {
+	#[inline]
+	fn borrow(&self) -> &str { self.as_str() }
+}
+
+impl fmt::Display for AnsiColor {
+	#[inline]
+	/// # Print Ansi Sequence.
+	///
+	/// Print the full Ansi sequence for the selected color, e.g.
+	/// `"\x1b[38;5;199m"`.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::ansi::AnsiColor;
+	///
+	/// assert_eq!(
+	///     AnsiColor::LightMagenta.to_string(),
+	///     "\x1b[95m",
+	/// );
+	///
+	/// // Note the same thing can be obtained without allocation:
+	/// assert_eq!(
+	///     AnsiColor::LightMagenta.as_str(),
+	///     "\x1b[95m",
+	/// );
+	/// ```
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		<str as fmt::Display>::fmt(self.as_str(), f)
+	}
+}
+
+impl From<u8> for AnsiColor {
+	#[inline]
+	/// # From `u8`.
+	///
+	/// Note this can also be achieved using the const [`AnsiColor::from_u8`]
+	/// method.
+	///
+	/// ```
+	/// use fyi_msg::ansi::AnsiColor;
+	///
+	/// // All the colors of the termbow!
+	/// for i in u8::MIN..=u8::MAX {
+	///     assert_eq!(
+	///         AnsiColor::from(i),
+	///         AnsiColor::from_u8(i),
+	///     );
+	/// }
+	/// ```
+	fn from(num: u8) -> Self { Self::from_u8(num) }
+}
+
+impl hash::Hash for AnsiColor {
+	#[inline]
+	fn hash<H: hash::Hasher>(&self, state: &mut H) { state.write_u8(*self as u8); }
+}
+
+impl PartialEq<u8> for AnsiColor {
+	#[inline]
+	fn eq(&self, other: &u8) -> bool { *self as u8 == *other }
+}
+
+impl PartialEq<AnsiColor> for u8 {
+	#[inline]
+	fn eq(&self, other: &AnsiColor) -> bool { *self == *other as Self }
+}
+
+impl AnsiColor {
+	/// # Ansi Reset Sequence.
+	///
+	/// This tiny sequence resets all style/color attributes back to the
+	/// terminal defaults.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::ansi::AnsiColor;
+	///
+	/// // Only "Blue" prints, well, blue.
+	/// println!(
+	///     "{}Blue{} is the warmest color.",
+	///     AnsiColor::Blue,
+	///     AnsiColor::RESET,
+	/// );
+	/// ```
+	pub const RESET: &'static str = "\x1b[0m";
+}
 
 
 
 #[derive(Debug, Clone)]
-/// # ANSI-Stripping Iterator.
+/// # Ansi-Stripping Iterator.
 ///
-/// This iterator strips ANSI [CSI](https://en.wikipedia.org/wiki/ANSI_escape_code#CSI_(Control_Sequence_Introducer)_sequences) and [OSC](https://en.wikipedia.org/wiki/ANSI_escape_code#OSC_(Operating_System_Command)_sequences) sequences
+/// This iterator strips Ansi [CSI](https://en.wikipedia.org/wiki/ANSI_escape_code#CSI_(Control_Sequence_Introducer)_sequences) and [OSC](https://en.wikipedia.org/wiki/ANSI_escape_code#OSC_(Operating_System_Command)_sequences) sequences
 /// from existing `char`/`u8` iterators.
 ///
-/// Note that other types of (less common) ANSI sequences and miscellaneous
+/// Note that other types of (less common) Ansi sequences and miscellaneous
 /// control characters may remain.
 pub struct NoAnsi<U: Copy + fmt::Debug, I: Iterator<Item=U>> {
 	/// # Iterator.
@@ -20,7 +125,7 @@ pub struct NoAnsi<U: Copy + fmt::Debug, I: Iterator<Item=U>> {
 
 	/// # Ansi Match State.
 	///
-	/// This keeps track of whether and where we are inside an ANSI sequence.
+	/// This keeps track of whether and where we are inside an Ansi sequence.
 	state: NoAnsiState<U>,
 
 	/// # Byte Position.
@@ -33,17 +138,17 @@ impl<U: Copy + fmt::Debug, I: Iterator<Item=U>> NoAnsi<U, I> {
 	/// # Bytes Traversed.
 	///
 	/// Return the number of bytes traversed by the iterator (so far),
-	/// including any ANSI sequences that have been ignored.
+	/// including any Ansi sequences that have been ignored.
 	///
 	/// ## Examples
 	///
 	/// ```
-	/// use fyi_msg::iter::NoAnsi;
+	/// use fyi_msg::ansi::NoAnsi;
 	///
 	/// let raw = "\x1b[1mHello\x1b[0m";
 	/// let mut iter = NoAnsi::<char, _>::new(raw.chars());
 	///
-	/// // The leading ANSI sequence is ignored; the first thing we get back
+	/// // The leading Ansi sequence is ignored; the first thing we get back
 	/// // from the iterator is the H.
 	/// assert_eq!(iter.next(), Some('H'));
 	///
@@ -66,7 +171,7 @@ impl<I: Iterator<Item=char>> NoAnsi<char, I> {
 	/// ## Examples
 	///
 	/// ```
-	/// use fyi_msg::iter::NoAnsi;
+	/// use fyi_msg::ansi::NoAnsi;
 	///
 	/// let fmt: &str = "\x1b[1mHello\x1b[0m \x1b[38;5;199mWorld!\x1b[m";
 	/// assert_eq!(
@@ -166,7 +271,7 @@ impl<I: Iterator<Item=u8>> NoAnsi<u8, I> {
 	/// ## Examples
 	///
 	/// ```
-	/// use fyi_msg::iter::NoAnsi;
+	/// use fyi_msg::ansi::NoAnsi;
 	///
 	/// let fmt: &[u8] = b"\x1b[1mHello\x1b[0m \x1b[38;5;199mWorld!\x1b[m";
 	/// assert_eq!(
@@ -309,6 +414,7 @@ impl NoAnsiState<u8> {
 	/// # OE Character (part two).
 	const OE_2: u8 = 147;
 }
+
 
 
 

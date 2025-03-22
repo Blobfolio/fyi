@@ -102,24 +102,10 @@ For more usage examples, check out the `examples/msg` demo, which covers just ab
 
 
 
-pub mod iter;
+pub mod ansi;
 mod msg;
 #[cfg(feature = "fitted")]   mod fitted;
 #[cfg(feature = "progress")] mod progress;
-
-#[doc(hidden)]
-pub use msg::{
-	buffer::BUFFER2,
-	buffer::BUFFER3,
-	buffer::BUFFER4,
-	buffer::BUFFER5,
-	buffer::BUFFER6,
-	buffer::BUFFER7,
-	buffer::BUFFER8,
-	buffer::BUFFER9,
-	buffer::BUFFER10,
-	buffer::MsgBuffer,
-};
 
 pub use msg::{
 	MsgFlags,
@@ -145,6 +131,9 @@ pub use progress::{
 // Re-export.
 #[cfg_attr(docsrs, doc(cfg(feature = "signal-hook")))]
 #[cfg(feature = "signal-hook")] pub use signal_hook;
+
+#[cfg(test)] use brunch as _;
+#[cfg(test)] use rayon as _;
 
 #[macro_use]
 /// # Macros.

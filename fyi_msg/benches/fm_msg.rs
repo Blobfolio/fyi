@@ -17,8 +17,8 @@ benches!(
 	Bench::new("fyi_msg::Msg::default()")
 		.run(Msg::default),
 
-	Bench::new("fyi_msg::Msg::plain()")
-		.run(|| Msg::plain(TEXT)),
+	Bench::new("fyi_msg::Msg::from()")
+		.run(|| Msg::from(TEXT)),
 
 	Bench::new("fyi_msg::Msg::custom(Prefix, 199)")
 		.run(|| Msg::custom("Prefix", 199, TEXT)),

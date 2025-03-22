@@ -1,30 +1,29 @@
 /*!
-# FYI Msg
+# FYI Msg: Messages!
 */
 
-#![allow(clippy::manual_non_exhaustive, reason = "False positive.")]
-
-pub(super) mod buffer;
 pub(super) mod kind;
 
 use crate::{
-	iter::NoAnsi,
+	ansi::{
+		AnsiColor,
+		NoAnsi,
+	},
 	MsgKind,
-	MsgBuffer,
 };
-
 #[cfg(feature = "progress")] use crate::BeforeAfter;
-
-use dactyl::NiceU8;
 use std::{
-	borrow::Borrow,
+	borrow::{
+		Borrow,
+		Cow,
+	},
+	cmp::Ordering,
 	fmt,
 	hash,
 	io,
-	ops::Deref,
+	num::NonZeroUsize,
+	ops::Range,
 };
-
-#[cfg(feature = "fitted")] use std::borrow::Cow;
 
 
 
@@ -34,132 +33,99 @@ include!(concat!(env!("OUT_DIR"), "/msg-flags.rs"));
 
 
 #[cfg(feature = "timestamps")]
-/// # Message Buffer Length.
-const MSGBUFFER: usize = crate::BUFFER6;
-
-#[cfg(not(feature = "timestamps"))]
-/// # Message Buffer Length.
-const MSGBUFFER: usize = crate::BUFFER5;
-
-
-
-#[cfg(feature = "timestamps")]
-/// # Helper: `ToC` Setup.
-macro_rules! new_toc {
+/// # Helper: `Toc` Setup.
+macro_rules! toc {
 	($p_end:expr, $m_end:expr) => (
-		[
-			0, 0,           // Indentation.
-			0, 0,           // Timestamp.
-			0, $p_end,      // Prefix.
-			$p_end, $m_end, // Message.
-			$m_end, $m_end, // Suffix.
-			$m_end, $m_end, // Newline.
-		]
+		Toc([
+			0,      // Indentation.
+			0,      // Timestamp.
+			0,      // Prefix.
+			$p_end, // Message.
+			$m_end, // Suffix.
+			$m_end, // Newline.
+			$m_end, // Total Length.
+		])
 	);
 	($p_end:expr, $m_end:expr, true) => (
-		[
-			0, 0,               // Indentation.
-			0, 0,               // Timestamp.
-			0, $p_end,          // Prefix.
-			$p_end, $m_end,     // Message.
-			$m_end, $m_end,     // Suffix.
-			$m_end, $m_end + 1, // Newline.
-		]
+		Toc([
+			0,          // Indentation.
+			0,          // Timestamp.
+			0,          // Prefix.
+			$p_end,     // Message.
+			$m_end,     // Suffix.
+			$m_end,     // Newline.
+			$m_end + 1, // Total Length.
+		])
 	);
 }
 
 #[cfg(not(feature = "timestamps"))]
-/// # Helper: `ToC` Setup.
-macro_rules! new_toc {
+/// # Helper: `Toc` Setup.
+macro_rules! toc {
 	($p_end:expr, $m_end:expr) => (
-		[
-			0, 0,           // Indentation.
-			0, $p_end,      // Prefix.
-			$p_end, $m_end, // Message.
-			$m_end, $m_end, // Suffix.
-			$m_end, $m_end, // Newline.
-		]
+		Toc([
+			0,      // Indentation.
+			0,      // Prefix.
+			$p_end, // Message.
+			$m_end, // Suffix.
+			$m_end, // Newline.
+			$m_end, // Total Length.
+		])
 	);
 	($p_end:expr, $m_end:expr, true) => (
-		[
-			0, 0,               // Indentation.
-			0, $p_end,          // Prefix.
-			$p_end, $m_end,     // Message.
-			$m_end, $m_end,     // Suffix.
-			$m_end, $m_end + 1, // Newline.
-		]
+		Toc([
+			0,          // Indentation.
+			0,          // Prefix.
+			$p_end,     // Message.
+			$m_end,     // Suffix.
+			$m_end,     // Newline.
+			$m_end + 1, // Total Length.
+		])
 	);
 }
 
-/// # Helper: Impl Built-in `MsgKind` Methods.
-macro_rules! impl_builtins {
-	($name:literal, $fn:ident, $kind:expr, $p_len:literal) => (
-		impl_builtins!(
-			concat!("# New ", $name),
-			concat!("Msg::", stringify!($fn), r#"("Hello World").print(); // "#, $name, ": Hello World"),
-			$fn,
-			$kind,
-			$p_len
-		);
-	);
-
-	($name:expr, $ex:expr, $fn:ident, $kind:expr, $p_len:literal) => (
-		#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
-		#[doc = $name]
+/// # Helper: `MsgKind` Built-Ins.
+macro_rules! msg_kind {
+	($fn:ident, $kind:ident, $color:ident) => (
+		#[must_use]
+		#[doc = concat!("# New ", stringify!($kind), ".")]
 		///
-		/// This is a convenience method to create a thusly prefixed message
-		/// with a trailing line break.
-		///
-		/// This is equivalent to combining [`Msg::new`] with [`Msg::with_newline`],
-		/// but optimized for this specific prefix.
+		#[doc = concat!("Create a new [`Msg`] with a [`MsgKind::", stringify!($kind), "`] prefix and trailing line break.")]
 		///
 		/// ## Examples
 		///
-		/// ```no_run
-		/// use fyi_msg::Msg;
-		#[doc = $ex]
 		/// ```
-		pub fn $fn<S>(msg: S) -> Self
-		where S: AsRef<str> {
-			let msg = msg.as_ref().as_bytes();
-			let len = msg.len();
-			let m_end = len as u32 + $p_len;
+		/// use fyi_msg::{Msg, MsgKind};
+		///
+		/// assert_eq!(
+		#[doc = concat!("    Msg::", stringify!($fn), "(\"Hello World\"),")]
+		#[doc = concat!("    Msg::new(MsgKind::", stringify!($kind), ", \"Hello World\").with_newline(true),")]
+		/// );
+		/// ```
+		pub fn $fn<S: AsRef<str>>(msg: S) -> Self {
+			let msg = msg.as_ref();
+			let prefix = MsgKind::$kind.as_str_prefix();
 
-			let mut v: Vec<u8> = Vec::with_capacity($p_len + 1 + len);
-			v.extend_from_slice($kind.as_bytes());
-			v.extend_from_slice(msg);
-			v.push(b'\n');
+			// Prefix first.
+			let mut inner = String::with_capacity(prefix.len() + msg.len() + 1);
+			inner.push_str(prefix);
+			let p_end = inner.len();
 
-			Self(MsgBuffer::from_raw_parts(v, new_toc!($p_len, m_end, true)))
+			// Add the content.
+			inner.push_str(msg);
+			let m_end = inner.len();
+
+			// Add a new line.
+			inner.push('\n');
+
+			// Done!
+			Self {
+				inner,
+				toc: toc!(p_end, m_end, true),
+			}
 		}
 	);
 }
-
-
-
-// Buffer Indexes.
-
-/// Buffer Index: Indentation.
-const PART_INDENT: usize = 0;
-
-/// Buffer Index: Timestamp.
-#[cfg(feature = "timestamps")] const PART_TIMESTAMP: usize = 1;
-
-/// Buffer Index: Prefix.
-#[cfg(feature = "timestamps")] const PART_PREFIX: usize = 2;
-#[cfg(not(feature = "timestamps"))] const PART_PREFIX: usize = 1;
-
-/// Buffer Index: Message body.
-#[cfg(feature = "timestamps")] const PART_MSG: usize = 3;
-#[cfg(not(feature = "timestamps"))] const PART_MSG: usize = 2;
-
-/// Buffer Index: Suffix.
-#[cfg(feature = "timestamps")] const PART_SUFFIX: usize = 4;
-#[cfg(not(feature = "timestamps"))] const PART_SUFFIX: usize = 3;
-
-/// Buffer Index: Newline.
-#[cfg(feature = "timestamps")] const PART_NEWLINE: usize = 5;
-#[cfg(not(feature = "timestamps"))] const PART_NEWLINE: usize = 4;
 
 
 
@@ -169,22 +135,21 @@ const PART_INDENT: usize = 0;
 /// The `Msg` struct provides a partitioned, contiguous byte source to hold
 /// arbitrary messages of the "Error: Oh no!" variety. They can be modified
 /// efficiently in place (per-part) and printed to `STDOUT` with [`Msg::print`]
-/// or `STDERR` with [`Msg::eprint`].
+/// or `STDERR` with [`Msg::eprint`] (or via [`Display`](fmt::Display)).
 ///
-/// Take a look at `examples/msg`, which covers just about all the standard use
-/// cases.
+/// Take a look at `examples/msg`, which demonstrates most of the options.
 ///
 /// There are two crate feature gates that augment this struct (at the expense
 /// of additional dependencies):
 ///
-/// * `fitted` adds the [`Msg::fitted`] method, which returns a byte slice that should fit within a given display width, shrinking the message part of the message as necessary to make room (leaving prefixes and suffixes in tact).
+/// * `fitted` adds the [`Msg::fitted`] method, which returns a string slice that _should_ fit within a given display width, shrinking the message part of the message as necessary to make room (leaving prefixes and suffixes in tact).
 /// * `timestamps` adds [`Msg::with_timestamp`] and [`Msg::set_timestamp`] methods for adding a local datetime value before the prefix.
 ///
 /// Everything else comes stock!
 ///
 /// ## Examples
 ///
-/// ```no_run
+/// ```
 /// use fyi_msg::{Msg, MsgKind};
 /// Msg::new(MsgKind::Success, "You did it!")
 ///     .with_newline(true)
@@ -197,6 +162,13 @@ const PART_INDENT: usize = 0;
 /// list. These are equivalent to chaining [`Msg::new`] and [`Msg::with_newline`]
 /// for the given type.
 ///
+/// ```
+/// use fyi_msg::{Msg, MsgKind};
+///
+/// // Same as before, but more concise.
+/// Msg::success("You did it!").print();
+/// ```
+///
 /// Confirmations have a convenience macro instead, [`confirm`](crate::confirm),
 /// that handles all the setup and prompting, returning a simple `bool`
 /// indicating the yes/noness of the user response.
@@ -205,12 +177,15 @@ const PART_INDENT: usize = 0;
 ///
 /// ## Conversion
 ///
-/// While [`Msg`] objects are perfectly usable as-are, they can be easily
-/// converted to other formats. They dereference to a byte slice and implement
-/// `AsRef<[u8]>`. They also implement `AsRef<str>` and `Borrow<str>` for
-/// stringy situations. And if you want to consume the struct into an owned
-/// type, there's also [`Msg::into_vec`] and [`Msg::into_string`].
-pub struct Msg(MsgBuffer<MSGBUFFER>);
+/// `Msg` objects are essentially just fancy strings that can be borrowed with
+/// [`Msg::as_str`] or stolen with [`Msg::into_string`].
+pub struct Msg {
+	/// # Actual Message.
+	inner: String,
+
+	/// # Table of Contents.
+	toc: Toc,
+}
 
 impl AsRef<[u8]> for Msg {
 	#[inline]
@@ -227,68 +202,114 @@ impl Borrow<str> for Msg {
 	fn borrow(&self) -> &str { self.as_str() }
 }
 
-impl Deref for Msg {
-	type Target = [u8];
-	#[inline]
-	fn deref(&self) -> &Self::Target { &self.0 }
-}
-
 impl fmt::Display for Msg {
 	#[inline]
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str(self.as_str())
+		<str as fmt::Display>::fmt(self.as_str(), f)
 	}
-}
-
-impl From<&str> for Msg {
-	#[inline]
-	fn from(src: &str) -> Self { Self::plain(src) }
-}
-
-impl From<String> for Msg {
-	#[inline]
-	fn from(src: String) -> Self { Self::plain(src) }
 }
 
 impl Eq for Msg {}
 
+/// # Helper: From Stringlike.
+macro_rules! from_stringlike {
+	($ty:ty, $op:ident) => (
+		impl From<$ty> for Msg {
+			#[inline]
+			fn from(src: $ty) -> Self { Self::from(src.$op()) }
+		}
+	);
+}
+from_stringlike!(&str, to_owned);
+from_stringlike!(&String, clone);
+from_stringlike!(Cow<'_, str>, into_owned);
+
+impl From<String> for Msg {
+	#[inline]
+	fn from(src: String) -> Self {
+		let m_end = src.len();
+		Self {
+			inner: src,
+			toc: toc!(0, m_end),
+		}
+	}
+}
+
+impl From<Msg> for String {
+	#[inline]
+	fn from(src: Msg) -> Self { src.into_string() }
+}
+
 impl hash::Hash for Msg {
 	#[inline]
-	fn hash<H: hash::Hasher>(&self, state: &mut H) { self.0.hash(state); }
+	fn hash<H: hash::Hasher>(&self, state: &mut H) { self.inner.hash(state); }
 }
 
 impl PartialEq for Msg {
 	#[inline]
-	fn eq(&self, other: &Self) -> bool { self.0 == other.0 }
+	fn eq(&self, other: &Self) -> bool { self.inner == other.inner }
 }
 
 impl PartialEq<str> for Msg {
 	#[inline]
 	fn eq(&self, other: &str) -> bool { self.as_str() == other }
 }
-
+impl PartialEq<Cow<'_, str>> for Msg {
+	#[inline]
+	fn eq(&self, other: &Cow<'_, str>) -> bool { self.as_str() == other.as_ref() }
+}
 impl PartialEq<String> for Msg {
 	#[inline]
-	fn eq(&self, other: &String) -> bool { self.as_str() == other }
+	fn eq(&self, other: &String) -> bool { self.as_str() == other.as_str() }
 }
-
 impl PartialEq<[u8]> for Msg {
 	#[inline]
 	fn eq(&self, other: &[u8]) -> bool { self.as_bytes() == other }
 }
-
 impl PartialEq<Vec<u8>> for Msg {
 	#[inline]
-	fn eq(&self, other: &Vec<u8>) -> bool { self.0 == *other }
+	fn eq(&self, other: &Vec<u8>) -> bool { self.as_bytes() == other.as_slice() }
 }
 
-/// ## Instantiation.
+/// # Helper: `PartialEq` Aliases.
+///
+/// Flip the existing `PartialEq<$ty>` around, and implement symmetric traits
+/// for `&$ty`.
+macro_rules! partial_eq {
+	($($ty:ty),+) => ($(
+		impl PartialEq<&$ty> for Msg {
+			#[inline]
+			fn eq(&self, other: &&$ty) -> bool { *self == **other }
+		}
+		impl PartialEq<Msg> for $ty {
+			#[inline]
+			fn eq(&self, other: &Msg) -> bool { *other == *self }
+		}
+		impl PartialEq<Msg> for &$ty {
+			#[inline]
+			fn eq(&self, other: &Msg) -> bool { *other == **self }
+		}
+	)+);
+}
+partial_eq!(str, Cow<'_, str>, String, [u8], Vec<u8>);
+
+impl Ord for Msg {
+	#[inline]
+	fn cmp(&self, other: &Self) -> Ordering { self.inner.cmp(&other.inner) }
+}
+
+impl PartialOrd for Msg {
+	#[inline]
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
+}
+
+/// # Construction.
 impl Msg {
-	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
+	#[must_use]
 	/// # New Message.
 	///
 	/// This creates a new message with a built-in prefix (which can be
-	/// [`MsgKind::None`](crate::MsgKind::None), though in that case, [`Msg::plain`]
+	/// [`MsgKind::None`](crate::MsgKind::None), though in that case, [`Msg::from`]
 	/// is better).
 	///
 	/// If your prefix choice is built-in and known at compile time and you
@@ -304,486 +325,303 @@ impl Msg {
 	/// ```
 	pub fn new<S>(kind: MsgKind, msg: S) -> Self
 	where S: AsRef<str> {
-		let msg = msg.as_ref().as_bytes();
-		let p_end = kind.len_32();
-		let m_end = p_end + msg.len() as u32;
+		let msg = msg.as_ref();
+		let prefix = kind.as_str_prefix();
 
-		let mut buf = Vec::with_capacity(m_end as usize);
-		buf.extend_from_slice(kind.as_bytes());
-		buf.extend_from_slice(msg);
-
-		Self(MsgBuffer::from_raw_parts(buf, new_toc!(p_end, m_end)))
-	}
-
-	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
-	/// # Custom Prefix.
-	///
-	/// This creates a new message with a user-defined prefix and color. See
-	/// [here](https://misc.flogisoft.com/bash/tip_colors_and_formatting) for a BASH color code primer.
-	///
-	/// The prefix you provide will automatically have a `": "` added to the
-	/// end, so you should pass "Prefix" rather than "Prefix:".
-	///
-	/// If you don't like the colonics, use [`Msg::custom_preformatted`]
-	/// instead.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::{Msg, MsgKind};
-	/// let msg = Msg::custom("Prefix", 199, "This message has a pink prefix.");
-	/// ```
-	pub fn custom<S>(prefix: S, color: u8, msg: S) -> Self
-	where S: AsRef<str> {
-		let prefix = prefix.as_ref().as_bytes();
-		if prefix.is_empty() { return Self::plain(msg.as_ref()); }
-
-		// Start a vector with the prefix bits.
-		let msg = msg.as_ref().as_bytes();
-		let color = NiceU8::from(color);
-		let m_end = 16 + color.len() as u32 + prefix.len() as u32 + msg.len() as u32;
-
-		let mut buf = Vec::with_capacity(m_end as usize);
-		buf.extend_from_slice(b"\x1b[1;38;5;");
-		buf.extend_from_slice(color.as_bytes());
-		buf.push(b'm');
-		buf.extend_from_slice(prefix);
-		buf.extend_from_slice(b":\x1b[0m ");
-		buf.extend_from_slice(msg);
-
-		let p_end = m_end - msg.len() as u32;
-		Self(MsgBuffer::from_raw_parts(buf, new_toc!(p_end, m_end)))
-	}
-
-	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
-	/// # Custom Prefix (Pre-formatted)
-	///
-	/// Same as [`Msg::custom`], except no validation or formatting is applied
-	/// to the provided prefix. This can be useful in cases where the prefix
-	/// requires special spacing, delimiters, or formatting that don't match
-	/// the default format.
-	///
-	/// It is worth noting that when using this method, you must provide the
-	/// punctuation and space that will separate the prefix and message parts,
-	/// otherwise you'll end up with "prefixmessage" glued together.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::{Msg, MsgKind};
-	/// let msg = Msg::custom_preformatted(
-	///     "e.g. ",
-	///     "This message has an unformatted prefix."
-	/// );
-	/// ```
-	pub fn custom_preformatted<S>(prefix: S, msg: S) -> Self
-	where S: AsRef<str> {
-		let prefix = prefix.as_ref().as_bytes();
-		let msg = msg.as_ref().as_bytes();
-
-		let p_end = prefix.len() as u32;
-		let m_end = p_end + msg.len() as u32;
-
-		let mut buf = Vec::with_capacity(m_end as usize);
-		buf.extend_from_slice(prefix);
-		buf.extend_from_slice(msg);
-
-		Self(MsgBuffer::from_raw_parts(buf, new_toc!(p_end, m_end)))
-	}
-
-	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
-	/// # New Message Without Any Prefix.
-	///
-	/// This is a streamlined equivalent of calling [`Msg::new`] with a
-	/// [`MsgKind::None`].
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	/// let msg = Msg::plain("This message has no prefix.");
-	/// ```
-	pub fn plain<S>(msg: S) -> Self
-	where S: Into<String> {
-		let msg = msg.into().into_bytes();
-		let len = msg.len() as u32;
-
-		Self(MsgBuffer::from_raw_parts(msg, new_toc!(0, len)))
-	}
-}
-
-/// # Built-ins.
-///
-/// This contains convenience methods for creating a new message with a
-/// built-in prefix and trailing line break. All of the stock kinds are covered
-/// except for [`MsgKind::Confirm`], which does not have trailing line breaks
-/// in its prompt form, and is kind of weird to use without a prompt.
-///
-/// Speaking of, there is a dedicated [`confirm`](crate::confirm) macro, that
-/// renders the message with the right prefix, pops the prompt, and returns the
-/// `bool`.
-impl Msg {
-	impl_builtins!("Crunched", crunched, MsgKind::Crunched, 21);
-	impl_builtins!("Debug", debug, MsgKind::Debug, 18);
-	impl_builtins!("Done", done, MsgKind::Done, 17);
-	impl_builtins!("Info", info, MsgKind::Info, 17);
-	impl_builtins!("Error", error, MsgKind::Error, 18);
-	impl_builtins!("Notice", notice, MsgKind::Notice, 19);
-	impl_builtins!("Review", review, MsgKind::Review, 19);
-	impl_builtins!("Skipped", skipped, MsgKind::Skipped, 20);
-	impl_builtins!("Success", success, MsgKind::Success, 20);
-	impl_builtins!("Task", task, MsgKind::Task, 23);
-	impl_builtins!("Warning", warning, MsgKind::Warning, 20);
-}
-
-/// ## Builders.
-impl Msg {
-	#[must_use]
-	/// # With Flags.
-	///
-	/// This can be used to quickly set indentation, timestamps, and/or a
-	/// trailing line break, but only affirmatively; it will not unset any
-	/// missing value.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::{Msg, MsgFlags};
-	///
-	/// // All at once.
-	/// let msg1 = Msg::plain("Indented message with trailing line.")
-	///     .with_flags(MsgFlags::Indent | MsgFlags::Newline);
-	///
-	/// // One by one.
-	/// let msg2 = Msg::plain("Indented message with trailing line.")
-	///     .with_indent(1)
-	///     .with_newline(true);
-	///
-	/// // Either way comes out the same.
-	/// assert_eq!(msg1, msg2);
-	/// ```
-	pub fn with_flags(mut self, flags: MsgFlags) -> Self {
-		if flags.contains(MsgFlags::Indent) { self.set_indent(1); }
-
-		#[cfg(feature = "timestamps")]
-		if flags.contains(MsgFlags::Timestamp) { self.set_timestamp(true); }
-
-		if flags.contains(MsgFlags::Newline) { self.set_newline(true); }
-
-		self
-	}
-
-	#[must_use]
-	#[inline]
-	/// # With Indent.
-	///
-	/// Indent the message using four spaces per `indent`. To remove
-	/// indentation, pass `0`. Large values are capped at a maximum of `4`
-	/// levels of indentation.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	/// let msg = Msg::plain("Indented message.")
-	///     .with_indent(1);
-	/// ```
-	pub fn with_indent(mut self, indent: u8) -> Self {
-		self.set_indent(indent);
-		self
-	}
-
-	#[cfg(feature = "timestamps")]
-	#[cfg_attr(docsrs, doc(cfg(feature = "timestamps")))]
-	#[must_use]
-	#[inline]
-	/// # With Timestamp.
-	///
-	/// Disable, enable, and/or recalculate the timestamp prefix for the
-	/// message.
-	///
-	/// **This requires the `timestamps` crate feature.**
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	/// let msg = Msg::plain("Timestamped message.")
-	///     .with_timestamp(true);
-	/// ```
-	pub fn with_timestamp(mut self, timestamp: bool) -> Self {
-		self.set_timestamp(timestamp);
-		self
-	}
-
-	#[must_use]
-	#[inline]
-	/// # With Linebreak.
-	///
-	/// Add a trailing linebreak to the end of the message. This is either one
-	/// or none; calling it multiple times won't add more lines.
-	///
-	/// Without a linebreak, [`Msg::print`] is analogous to `print!()`,
-	/// whereas with a linebreak, it is more like `println!()`. (The newline
-	/// isn't limited to print contexts, but that's mainly what it is for.)
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	/// let msg = Msg::plain("This has a trailing newline.")
-	///     .with_newline(true);
-	/// ```
-	pub fn with_newline(mut self, newline: bool) -> Self {
-		self.set_newline(newline);
-		self
-	}
-
-	#[must_use]
-	#[inline]
-	/// # With Prefix.
-	///
-	/// Set or reset the message prefix.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::{Msg, MsgKind};
-	/// assert_eq!(
-	///     Msg::plain("Hello world.").with_prefix(MsgKind::Success),
-	///     Msg::new(MsgKind::Success, "Hello world.")
-	/// );
-	/// ```
-	pub fn with_prefix(mut self, kind: MsgKind) -> Self {
-		self.set_prefix(kind);
-		self
-	}
-
-	#[must_use]
-	/// # With Custom Prefix.
-	///
-	/// Set or reset the message with a user-defined prefix and color.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	/// assert_eq!(
-	///     Msg::plain("Hello world.").with_custom_prefix("Prefix", 4),
-	///     Msg::custom("Prefix", 4, "Hello world.")
-	/// );
-	/// ```
-	pub fn with_custom_prefix<S>(mut self, prefix: S, color: u8) -> Self
-	where S: AsRef<str> {
-		self.set_custom_prefix(prefix, color);
-		self
-	}
-
-	#[must_use]
-	#[inline]
-	/// # With Message.
-	///
-	/// Set or reset the message portion of the message.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	///
-	/// // A contrived example…
-	/// let mut msg = Msg::plain("Should I say this?")
-	///     .with_msg("No, this!");
-	/// ```
-	pub fn with_msg<S>(mut self, msg: S) -> Self
-	where S: AsRef<str> {
-		self.set_msg(msg);
-		self
-	}
-
-	#[must_use]
-	#[inline]
-	/// # With Suffix.
-	///
-	/// Set or reset the message suffix.
-	///
-	/// Unlike prefixes, there are no built-in suffixes, and as such, no
-	/// assumptions or automatic formatting is applied. The value you set must
-	/// include any spacing, delimiters, and formatting needed to have it look
-	/// right. Generally you'll want to at least have a leading space,
-	/// otherwise you'll get "messagesuffix" all glued together.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	///
-	/// // A contrived example…
-	/// let mut msg = Msg::plain("5,000 matching files were found.")
-	///     .with_suffix(" (75%)");
-	/// ```
-	pub fn with_suffix<S>(mut self, suffix: S) -> Self
-	where S: AsRef<str> {
-		self.set_suffix(suffix);
-		self
-	}
-
-	#[must_use]
-	/// # Without ANSI Formatting.
-	///
-	/// Strip any ANSI formatting from the message.
-	///
-	/// Note that subsequent changes might re-introduce ANSI formatting, so
-	/// this should generally be the last operation before display.
-	///
-	/// For unchained usage, see [`Msg::strip_ansi`].
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::Msg;
-	///
-	/// Msg::info("5,000 matching files were found.")
-	///     .without_ansi()
-	///     .print();
-	/// ```
-	pub fn without_ansi(mut self) -> Self {
-		self.strip_ansi();
-		self
-	}
-}
-
-/// ## Setters.
-impl Msg {
-	/// # Set Indentation.
-	///
-	/// This is the setter companion to the [`Msg::with_indent`] builder
-	/// method. Refer to that documentation for more information.
-	pub fn set_indent(&mut self, indent: u8) {
-		/// # Sixteen Spaces.
-		static SPACES: [u8; 16] = [32_u8; 16];
-
-		self.0.replace(PART_INDENT, &SPACES[0..4.min(usize::from(indent)) * 4]);
-	}
-
-	#[cfg(feature = "timestamps")]
-	#[cfg_attr(docsrs, doc(cfg(feature = "timestamps")))]
-	/// # Set Timestamp.
-	///
-	/// This is the setter companion to the [`Msg::with_timestamp`] builder
-	/// method. Refer to that documentation for more information.
-	///
-	/// **This requires the `timestamps` crate feature.**
-	pub fn set_timestamp(&mut self, timestamp: bool) {
-		use utc2k::FmtUtc2k;
-
-		if timestamp {
-			let now = FmtUtc2k::now_local();
-			let mut buf = Vec::with_capacity(25 + now.len());
-			buf.extend_from_slice(b"\x1b[2m[\x1b[0;34m");
-			buf.extend_from_slice(now.as_bytes());
-			buf.extend_from_slice(b"\x1b[39;2m]\x1b[0m ");
-
-			self.0.replace(PART_TIMESTAMP, buf.as_slice());
-			return;
-		}
-
-		// Clear the timestamp if it exists.
-		if 0 != self.0.len(PART_TIMESTAMP) {
-			self.0.truncate(PART_TIMESTAMP, 0);
-		}
-	}
-
-	/// # Set Linebreak.
-	///
-	/// This is the setter companion to the [`Msg::with_newline`] builder
-	/// method. Refer to that documentation for more information.
-	pub fn set_newline(&mut self, newline: bool) {
-		if newline {
-			if 0 == self.0.len(PART_NEWLINE) {
-				self.0.extend(PART_NEWLINE, b"\n");
-			}
-		}
-		else if 0 != self.0.len(PART_NEWLINE) {
-			self.0.truncate(PART_NEWLINE, 0);
-		}
-	}
-
-	#[inline]
-	/// # Set Prefix.
-	///
-	/// This is the setter companion to the [`Msg::with_prefix`] builder
-	/// method. Refer to that documentation for more information.
-	pub fn set_prefix(&mut self, kind: MsgKind) {
-		self.0.replace(PART_PREFIX, kind.as_bytes());
-	}
-
-	/// # Set Custom Prefix.
-	///
-	/// This is the setter companion to the [`Msg::with_custom_prefix`] builder
-	/// method. Refer to that documentation for more information.
-	pub fn set_custom_prefix<S>(&mut self, prefix: S, color: u8)
-	where S: AsRef<str> {
-		let prefix = prefix.as_ref().as_bytes();
-
-		if prefix.is_empty() { self.0.truncate(PART_PREFIX, 0); }
+		if prefix.is_empty() { Self::from(msg) }
 		else {
-			let color = NiceU8::from(color);
-			let mut buf = Vec::with_capacity(16 + color.len() + prefix.len());
-			buf.extend_from_slice(b"\x1b[1;38;5;");
-			buf.extend_from_slice(color.as_bytes());
-			buf.push(b'm');
-			buf.extend_from_slice(prefix);
-			buf.extend_from_slice(b":\x1b[0m ");
+			let mut inner = String::with_capacity(prefix.len() + msg.len());
 
-			self.0.replace(PART_PREFIX, buf.as_slice());
+			// Add the prefix.
+			inner.push_str(prefix);
+			let p_end = inner.len();
+
+			// Add the content.
+			inner.push_str(msg);
+			let m_end = inner.len();
+
+			// Done!
+			Self {
+				inner,
+				toc: toc!(p_end, m_end),
+			}
 		}
 	}
 
-	#[inline]
-	/// # Set Message.
+	#[expect(clippy::similar_names, reason = "It's fine.")]
+	#[must_use]
+	/// # New w/ Custom Prefix.
 	///
-	/// This is the setter companion to the [`Msg::with_msg`] builder method.
-	/// Refer to that documentation for more information.
-	pub fn set_msg<S>(&mut self, msg: S)
-	where S: AsRef<str> {
-		self.0.replace(PART_MSG, msg.as_ref().as_bytes());
+	/// This creates a new message with a user-defined prefix and color.
+	///
+	/// Prefixes are automatically separated from the message content by a
+	/// same-colored `": "`. If `prefix` doesn't already end that way, it will
+	/// be adjusted accordingly (unless totally empty).
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::{Msg, MsgKind};
+	///
+	/// assert_eq!(
+	///     Msg::custom("Prefix", 199, "This message has a pink prefix."),
+	///     Msg::custom("Prefix: ", 199, "This message has a pink prefix."),
+	/// );
+	/// ```
+	pub fn custom<C, S1, S2>(prefix: S1, color: C, msg: S2) -> Self
+	where
+		C: Into<AnsiColor>,
+		S1: AsRef<str>,
+		S2: AsRef<str>,
+	{
+		let msg = msg.as_ref();
+
+		// If there's no prefix, skip the trouble and forward to Msg::from.
+		let prefix: &str = prefix.as_ref().trim_end();
+		let Some(last) = prefix.chars().last() else { return Self::from(msg); };
+		let colon = last.is_alphanumeric();
+		let color = <C as Into<AnsiColor>>::into(color).as_str_bold();
+
+		// Add the prefix first.
+		let mut inner = String::with_capacity(
+			color.len() + prefix.len() + usize::from(colon) +
+			AnsiColor::RESET.len() + 1 + msg.len()
+		);
+		inner.push_str(color);
+		inner.push_str(prefix);
+		if colon { inner.push(':'); }
+		inner.push_str(AnsiColor::RESET);
+		inner.push(' ');
+		let p_end = inner.len();
+
+		// Then the content.
+		inner.push_str(msg);
+		let m_end = inner.len();
+
+		// Done!
+		Self {
+			inner,
+			toc: toc!(p_end, m_end),
+		}
 	}
+}
+
+/// # Getters.
+impl Msg {
+	#[inline]
+	#[must_use]
+	/// # As Byte Slice.
+	///
+	/// Return the formatted message as a byte slice.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// assert_eq!(
+	///     Msg::from("Hello world").as_bytes(),
+	///     b"Hello world",
+	/// );
+	/// ```
+	pub fn as_bytes(&self) -> &[u8] { self.inner.as_bytes() }
 
 	#[inline]
-	/// # Set Suffix.
+	#[must_use]
+	/// # As String Slice.
 	///
-	/// This is the setter companion to the [`Msg::with_suffix`] builder
-	/// method. Refer to that documentation for more information.
-	pub fn set_suffix<S>(&mut self, suffix: S)
-	where S: AsRef<str> {
-		self.0.replace(PART_SUFFIX, suffix.as_ref().as_bytes());
-	}
+	/// Return the formatted message as a string slice.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// assert_eq!(
+	///     Msg::from("Hello world").as_str(),
+	///     "Hello world",
+	/// );
+	/// ```
+	pub fn as_str(&self) -> &str { self.inner.as_str() }
 
-	/// # Strip ANSI Formatting.
+	#[cfg(feature = "fitted")]
+	#[cfg_attr(docsrs, doc(cfg(feature = "fitted")))]
+	#[must_use]
+	/// # Capped to Width.
 	///
-	/// Remove colors, bold, etc. from the message.
+	/// Return a string representation of the message with its display width
+	/// capped to `width`, selectively trimming from the end of the
+	/// suffix/message parts of the [`Msg`] as necessary to make it work.
 	///
-	/// Note that subsequent changes might re-introduce ANSI formatting, so
-	/// this should generally be the last operation before display.
+	/// The _other_ parts — prefix, line break, etc. — are always passed
+	/// through in their entirety; if they themselves are too wide, `None` is
+	/// returned instead.
 	///
-	/// See also [`Msg::without_ansi`].
+	/// ## Limitations
 	///
-	/// Returns true if the content was modified.
-	pub fn strip_ansi(&mut self) -> bool {
-		// Iterate through all the parts (except indent and newline), replacing
-		// the content as needed.
-		let mut changed = false;
-		for i in 1..=PART_SUFFIX {
-			let old = self.0.get(i);
-			if old.contains(&b'\x1b') {
-				let new: Vec<u8> = NoAnsi::<u8, _>::new(old.iter().copied()).collect();
-				self.0.replace(i, &new);
-				changed = true;
+	/// Messages with _content_ spanning multiple lines — e.g. `"Hello\nWorld"` —
+	/// are not supported, unless the cumulative width of all lines fits, or
+	/// the chop is made to the first line.
+	///
+	/// (Trailing line breaks appended with [`Msg::with_newline`] are fine;
+	/// the above only applies when breaks live somewhere in the _middle_.)
+	///
+	/// See [`fitted::width`](crate::fitted::width) for more details.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// let msg = Msg::custom("Name", 4, "Björk")
+	///     .with_suffix(" (the Great)")
+	///     .with_newline(true); // Trailing line breaks are fine.
+	///
+	/// // As it is:
+	/// assert_eq!(
+	///     msg.as_str(),
+	///     "\x1b[1;34mName:\x1b[0m Björk (the Great)\n",
+	/// );
+	///
+	/// // Fit it to 20 columns; lose some suffix.
+	/// assert_eq!(
+	///     msg.fitted(20).as_deref(),
+	///     Some("\x1b[1;34mName:\x1b[0m Björk (the Gre\n"),
+	/// );
+	///
+	/// // Fit it to 10 columns; lose all suffix, some message.
+	/// assert_eq!(
+	///     msg.fitted(10).as_deref(),
+	///     Some("\x1b[1;34mName:\x1b[0m Björ\n"),
+	/// );
+	///
+	/// // Fit it to 7 columns; we've still got a "B"!
+	/// assert_eq!(
+	///     msg.fitted(7).as_deref(),
+	///     Some("\x1b[1;34mName:\x1b[0m B\n"),
+	/// );
+	///
+	/// // Fitting fails once the entirety of the message part is lost.
+	/// assert!(msg.fitted(6).is_none());
+	/// ```
+	pub fn fitted(&self, width: usize) -> Option<Cow<str>> {
+		// Width won't be bigger than length; we might not even need to check!
+		if self.inner.len() <= width { return Some(Cow::Borrowed(self.as_str())); }
+
+		// Calculate the whole width and see where we land.
+		let all = self.as_str();
+		let keep = crate::length_width(all.as_bytes(), width);
+
+		// Everything fits!
+		if keep == all.len() { return Some(Cow::Borrowed(self.as_str())); }
+
+		// It doesn't fit, but might if chopped…
+		if keep != 0 {
+			// We might have to rebuild slightly.
+			let newline = self.toc.part_len(TocId::Newline).is_some();
+			let chopped = &all[..keep];
+
+			let from = self.toc.part_start(TocId::Suffix);
+			let ansi: bool =
+				// Is the chop in the suffix part?
+				if from <= keep { chopped[from..keep].contains('\x1b') }
+				// Is the chop in the message part?
+				else {
+					let from = self.toc.part_start(TocId::Message);
+					if from < keep { chopped[from..keep].contains('\x1b') }
+					// We can't afford to lose the entire message!
+					else { return None; }
+				};
+
+			// Only accept chops spanning a single line.
+			if ! chopped.bytes().any(|b| b == b'\n') {
+				// We have to build a new string.
+				if newline || ansi {
+					let mut out = chopped.to_owned();
+					if ansi { out.push_str(AnsiColor::RESET); }
+					if newline { out.push('\n'); }
+					return Some(Cow::Owned(out));
+				}
+
+				// We can send the stub as-is.
+				return Some(Cow::Borrowed(chopped));
 			}
 		}
 
-		changed
+		// Nope!
+		None
 	}
+
+	#[inline]
+	#[must_use]
+	/// # Into Bytes.
+	///
+	/// Consume self, returning an owned byte vector.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// assert_eq!(
+	///     Msg::from("Hello world").into_bytes(),
+	///     b"Hello world",
+	/// );
+	/// ```
+	pub fn into_bytes(self) -> Vec<u8> { self.inner.into_bytes() }
+
+	#[inline]
+	#[must_use]
+	/// # Into String.
+	///
+	/// Consume self, returning the inner string.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// assert_eq!(
+	///     Msg::from("Hello world").into_string(),
+	///     "Hello world",
+	/// );
+	/// ```
+	pub fn into_string(self) -> String { self.inner }
+
+	#[inline]
+	#[must_use]
+	/// # Is Empty?
+	///
+	/// Returns `true` if the message is empty.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// // One way to get an empty message.
+	/// assert!(Msg::from("").is_empty());
+	/// ```
+	pub fn is_empty(&self) -> bool { self.inner.is_empty() }
+
+	#[inline]
+	#[must_use]
+	/// # Message Length.
+	///
+	/// Return the total number of bytes in the formatted message.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// assert_eq!(Msg::from("ABC").len(), 3);
+	/// assert_eq!(
+	///     Msg::done("Goodbye.").len(),
+	///     26,
+	/// ); // Don't forget about Ansi…
+	/// ```
+	pub fn len(&self) -> usize { self.inner.len() }
 }
 
 #[cfg(feature = "progress")]
@@ -807,201 +645,623 @@ impl Msg {
 			let buf = state.less_percent().map_or_else(
 				// Just the bytes.
 				|| {
-					let mut buf = Vec::with_capacity(24 + saved.len());
-					buf.extend_from_slice(b" \x1b[2m(Saved ");
-					buf.extend_from_slice(saved.as_bytes());
-					buf.extend_from_slice(b" bytes.)\x1b[0m");
+					let mut buf = String::with_capacity(24 + saved.len());
+					buf.push_str(" \x1b[2m(Saved ");
+					buf.push_str(saved.as_str());
+					buf.push_str(" bytes.)\x1b[0m");
 					buf
 				},
 				// With percent.
 				|per| {
 					let per = NicePercent::from(per);
-					let mut buf = Vec::with_capacity(26 + saved.len() + per.len());
-					buf.extend_from_slice(b" \x1b[2m(Saved ");
-					buf.extend_from_slice(saved.as_bytes());
-					buf.extend_from_slice(b" bytes, ");
-					buf.extend_from_slice(per.as_bytes());
-					buf.extend_from_slice(b".)\x1b[0m");
+					let mut buf = String::with_capacity(26 + saved.len() + per.len());
+					buf.push_str(" \x1b[2m(Saved ");
+					buf.push_str(saved.as_str());
+					buf.push_str(" bytes, ");
+					buf.push_str(per.as_str());
+					buf.push_str(".)\x1b[0m");
 					buf
 				}
 			);
 
-			self.0.replace(PART_SUFFIX, buf.as_slice());
+			self.replace_part(TocId::Suffix, &buf);
 		}
 		else {
-			self.0.replace(PART_SUFFIX, b" \x1b[2m(No savings.)\x1b[0m");
+			self.replace_part(TocId::Suffix, " \x1b[2m(No savings.)\x1b[0m");
 		}
 
 		self
 	}
 }
 
-/// ## Conversion.
+/// # Setters.
 impl Msg {
-	#[must_use]
-	#[inline]
-	/// # As Bytes.
+	/// # Set Indentation.
 	///
-	/// Return the entire message as a byte slice. Alternatively, you could
-	/// dereference the struct or use [`Msg::as_ref`].
-	pub fn as_bytes(&self) -> &[u8] { &self.0 }
+	/// (Re)set the message's indentation level to `tabs` "tabs" (four spaces
+	/// each), up to a maximum depth of eight (thirty-two spaces total).
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// let mut msg = Msg::from("Hello world.");
+	///
+	/// msg.set_indent(1);
+	/// assert_eq!(msg, "    Hello world.");
+	///
+	/// msg.set_indent(2);
+	/// assert_eq!(msg, "        Hello world.");
+	///
+	/// // …
+	///
+	/// msg.set_indent(7);
+	/// assert_eq!(msg, "                            Hello world.");
+	///
+	/// msg.set_indent(8);
+	/// assert_eq!(msg, "                                Hello world.");
+	///
+	/// // Pass as big a number as you want, but indentation maxes out at
+	/// // eight.
+	/// msg.set_indent(u8::MAX);
+	/// assert_eq!(msg, "                                Hello world.");
+	///
+	/// // Back to zero!
+	/// msg.set_indent(0);
+	/// assert_eq!(msg, "Hello world.");
+	/// ```
+	pub fn set_indent(&mut self, tabs: u8) {
+		/// # Thirty-Two Spaces.
+		///
+		/// For indentation, alignment, etc.
+		static SPACES: &str = "                                ";
 
-	#[must_use]
-	#[inline]
-	/// # As Str.
-	///
-	/// Return the entire message as a string slice. Alternatively, you could
-	/// use [`Msg::as_ref`] or [`Msg::borrow`].
-	pub fn as_str(&self) -> &str { self.0.as_str() }
-
-	#[must_use]
-	#[inline]
-	/// # Into Vec.
-	///
-	/// Consume the message, returning an owned `Vec<u8>`.
-	pub fn into_vec(self) -> Vec<u8> { self.0.into_vec() }
-
-	#[must_use]
-	#[inline]
-	/// # Into String.
-	///
-	/// Consume the message, returning an owned string.
-	pub fn into_string(self) -> String {
-		String::from_utf8(self.0.into_vec()).unwrap_or_else(|_| String::new())
+		self.replace_part(
+			TocId::Indent,
+			SPACES.get(..usize::from(tabs) * 4).unwrap_or(SPACES),
+		);
 	}
 
-	#[cfg(feature = "fitted")]
-	#[cfg_attr(docsrs, doc(cfg(feature = "fitted")))]
-	#[expect(clippy::cast_possible_truncation, reason = "False positive.")]
-	#[must_use]
-	/// # Capped Width Slice.
+	/// # Set Message Content.
 	///
-	/// This will return a byte string that should fit a given console width if
-	/// printed. This is subject to the usual disclaimers of "Unicode is
-	/// monstrously complicated…", but it does its best, and will be more
-	/// accurate than simply chopping to the [`Msg::len`].
+	/// (Re)set the actual message part of the message.
 	///
-	/// Only the user-defined message portion of the `Msg` will be trimmed for
-	/// space. Prefixes, suffixes, the trailing newline, etc., are left
-	/// unchanged.
+	/// ```
+	/// use fyi_msg::Msg;
 	///
-	/// If the message cannot be made to fit, an empty byte string is returned.
+	/// let mut msg = Msg::from("Hello");
+	/// assert_eq!(msg, "Hello");
 	///
-	/// **This requires the `fitted` crate feature.**
-	pub fn fitted(&self, width: usize) -> Cow<[u8]> {
-		// Quick length bypass; length will only ever be greater or equal to
-		// width, so if that fits, the message fits.
-		if self.len() <= width {
-			return Cow::Borrowed(self);
+	/// msg.set_msg("Goodbye");
+	/// assert_eq!(msg, "Goodbye");
+	/// ```
+	pub fn set_msg<S: AsRef<str>>(&mut self, msg: S) {
+		self.replace_part(TocId::Message, msg.as_ref());
+	}
+
+	/// # Set Trailing Linebreak.
+	///
+	/// Add/remove the message's trailing line break.
+	///
+	/// ## Examples
+	///
+	/// Messages created with [`Msg::from`], [`Msg::custom`], [`Msg::new`],
+	/// and [`MsgKind::into_msg`] have no trailing line break by default:
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// let mut msg = Msg::from("Hello World!");
+	/// assert_eq!(msg, "Hello World!");
+	///
+	/// msg.set_newline(true); // Add it.
+	/// assert_eq!(msg, "Hello World!\n");
+	/// ```
+	///
+	/// Messages created with the kind-specific helper methods, however, _do_
+	/// have a line break by default:
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// let mut msg = Msg::info("Hello World!");
+	/// assert_eq!(msg, "\x1b[1;95mInfo:\x1b[0m Hello World!\n");
+	///
+	/// msg.set_newline(false); // Remove it.
+	/// assert_eq!(msg, "\x1b[1;95mInfo:\x1b[0m Hello World!");
+	/// ```
+	pub fn set_newline(&mut self, enabled: bool) {
+		let out = if enabled { "\n" } else { "" };
+		self.replace_part(TocId::Newline, out);
+	}
+
+	/// # Set Prefix (Built-In).
+	///
+	/// (Re)set the message prefix.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::{Msg, MsgKind};
+	///
+	/// let mut msg = Msg::new(MsgKind::Error, "Uh oh!");
+	/// assert_eq!(
+	///     msg,
+	///     "\x1b[1;91mError:\x1b[0m Uh oh!"
+	/// );
+	///
+	/// // Downgrade to warning.
+	/// msg.set_prefix(MsgKind::Warning);
+	/// assert_eq!(
+	///     msg,
+	///     "\x1b[1;93mWarning:\x1b[0m Uh oh!"
+	/// );
+	///
+	/// // Remove the prefix altogether.
+	/// msg.set_prefix(MsgKind::None);
+	/// assert_eq!(msg, "Uh oh!");
+	/// ```
+	pub fn set_prefix(&mut self, kind: MsgKind) {
+		self.replace_part(TocId::Prefix, kind.as_str_prefix());
+	}
+
+	#[expect(clippy::similar_names, reason = "It's fine.")]
+	/// # Set Prefix (Custom).
+	///
+	/// (Re)set the message prefix.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// let mut msg = Msg::from("The best color.");
+	/// msg.set_custom_prefix("Pink", 199);
+	///
+	/// assert_eq!(
+	///     msg,
+	///     "\x1b[1;38;5;199mPink:\x1b[0m The best color.",
+	/// );
+	/// ```
+	pub fn set_custom_prefix<C, S>(&mut self, prefix: S, color: C)
+	where C: Into<AnsiColor>, S: AsRef<str> {
+		let prefix: &str = prefix.as_ref().trim_end();
+
+		// If not empty, format it.
+		if let Some(last) = prefix.chars().last() {
+			// Figure out the rest of the prefix parts.
+			let colon = last.is_alphanumeric();
+			let color = <C as Into<AnsiColor>>::into(color).as_str_bold();
+
+			let mut out = String::with_capacity(
+				color.len() + prefix.len() + usize::from(colon) + AnsiColor::RESET.len() + 1
+			);
+			out.push_str(color);
+			out.push_str(prefix);
+			if colon { out.push(':'); }
+			out.push_str(AnsiColor::RESET);
+			out.push(' ');
+
+			self.replace_part(TocId::Prefix, &out);
 		}
-
-		// If the fixed width bits are themselves too big, we can't fit print.
-		#[cfg(feature = "timestamps")]
-		let fixed_width: usize =
-			self.0.len(PART_INDENT) as usize +
-			crate::width(self.0.get(PART_PREFIX)) +
-			crate::width(self.0.get(PART_SUFFIX)) +
-			if 0 == self.0.len(PART_TIMESTAMP) { 0 }
-			else { 21 };
-
-		#[cfg(not(feature = "timestamps"))]
-		let fixed_width: usize =
-			self.0.len(PART_INDENT) as usize +
-			crate::width(self.0.get(PART_PREFIX)) +
-			crate::width(self.0.get(PART_SUFFIX));
-
-		if fixed_width > width {
-			return Cow::Borrowed(&[]);
-		}
-
-		// Check the length again; the fixed bits might just have a lot of
-		// ANSI.
-		let keep = crate::length_width(self.0.get(PART_MSG), width - fixed_width) as u32;
-		if keep == 0 { Cow::Borrowed(&[]) }
-		else if keep == self.0.len(PART_MSG) { Cow::Borrowed(self) }
 		else {
-			// We have to trim the message to fit. Let's do it on a copy.
-			let mut tmp = self.clone();
-			tmp.0.truncate(PART_MSG, keep);
-
-			// We might need to append an ANSI reset to be safe. This might be
-			// unnecessary, but nitpicking is more expensive than redundancy
-			// here.
-			if tmp.0.get(PART_MSG).contains(&b'\x1b') {
-				tmp.0.extend(PART_MSG, b"\x1b[0m");
-			}
-
-			Cow::Owned(tmp.into_vec())
+			self.replace_part(TocId::Prefix, "");
 		}
+	}
+
+	/// # Set Suffix.
+	///
+	/// (Re)set the message suffix.
+	///
+	/// Unlike prefixes, no automatic formatting is applied to suffixes. For
+	/// example, if you want a space separating the message content and suffix,
+	/// the suffix should start with a leading space.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// let mut msg = Msg::from("Checked!");
+	/// msg.set_suffix(" ✓");
+	///
+	/// assert_eq!(
+	///     msg,
+	///     "Checked! ✓",
+	/// );
+	pub fn set_suffix<S: AsRef<str>>(&mut self, suffix: S) {
+		self.replace_part(TocId::Suffix, suffix.as_ref());
+	}
+
+	#[cfg(feature = "timestamps")]
+	#[cfg_attr(docsrs, doc(cfg(feature = "timestamps")))]
+	/// # Set Timestamp.
+	///
+	/// Add/remove a timestamp to/from the beginning the of the message.
+	///
+	/// ## Examples.
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// let mut msg = Msg::from("Parsed log.");
+	/// msg.set_timestamp(true); // [YYYY-MM-DD hh:mm:ss] Parsed log.
+	/// ```
+	pub fn set_timestamp(&mut self, enabled: bool) {
+		if enabled {
+			let now = utc2k::FmtUtc2k::now_local();
+			let mut out = String::with_capacity(24 + now.len());
+			out.push_str("\x1b[2m[\x1b[0;34m");
+			out.push_str(now.as_str());
+			out.push_str("\x1b[0;2m]\x1b[0m ");
+			self.replace_part(TocId::Timestamp, &out);
+		}
+		else { self.replace_part(TocId::Timestamp, ""); };
+	}
+
+	/// # Strip Ansi Formatting.
+	///
+	/// Remove colors, bold, etc. from the message.
+	///
+	/// This is best called last, as changes made after this might reintroduce
+	/// fancy formatting.
+	///
+	/// See also [`Msg::without_ansi`].
+	///
+	/// Returns `true` if the content was modified.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::Msg;
+	///
+	/// let mut msg = Msg::info("5,000 matching files were found.");
+	/// assert!(msg.strip_ansi());
+	///
+	/// // Now it reads:
+	/// assert_eq!(
+	///     msg,
+	///     "Info: 5,000 matching files were found.\n",
+	/// );
+	/// ```
+	pub fn strip_ansi(&mut self) -> bool {
+		// Iterate through all the parts (except indent and newline), replacing
+		// the content as needed.
+		let mut changed = false;
+		for id in TocId::ANSI_PARTS {
+			let old = &self.inner[self.toc.part_rng(id)];
+			if old.contains('\x1b') {
+				let new: String = NoAnsi::<char, _>::new(old.chars()).collect();
+				self.replace_part(id, &new);
+				changed = true;
+			}
+		}
+
+		changed
 	}
 }
 
-/// ## Details.
+/// # Builder Setters.
 impl Msg {
 	#[must_use]
-	#[inline]
-	/// # Length.
+	/// # With Flags.
 	///
-	/// This returns the total length of the entire `Msg`, ANSI markup and all.
-	pub const fn len(&self) -> usize {
-		// Because the buffers used by `Msg` end on partitioned space, the end
-		// of the last part is equal to the total length. Let's use that method
-		// since it is constant!
-		self.0.end(PART_NEWLINE) as usize
+	/// This is a convenience method for adding indentation, timestamps,
+	/// and/or line breaks all in one go.
+	///
+	/// (This will only add those things, never remove them.)
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::{Msg, MsgFlags};
+	///
+	/// // All at once.
+	/// let msg1 = Msg::from("Indented message with trailing line.")
+	///     .with_flags(MsgFlags::Indent | MsgFlags::Newline);
+	///
+	/// // One by one.
+	/// let msg2 = Msg::from("Indented message with trailing line.")
+	///     .with_indent(1)
+	///     .with_newline(true);
+	///
+	/// // Either way comes out the same.
+	/// assert_eq!(msg1, msg2);
+	/// ```
+	pub fn with_flags(mut self, flags: MsgFlags) -> Self {
+		if flags.contains(MsgFlags::Indent) { self.set_indent(1); }
+
+		#[cfg(feature = "timestamps")]
+		if flags.contains(MsgFlags::Timestamp) { self.set_timestamp(true); }
+
+		if flags.contains(MsgFlags::Newline) { self.set_newline(true); }
+
+		self
+	}
+
+	#[inline]
+	#[must_use]
+	/// # With/Without Indentation.
+	///
+	/// (Re)set the message's indentation level to `tabs` "tabs" (four spaces
+	/// each), up to a maximum depth of eight (thirty-two spaces total).
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// let msg = Msg::from("Hello world.").with_indent(1);
+	/// assert_eq!(msg, "    Hello world.");
+	///
+	/// let msg = Msg::from("Hello world.").with_indent(2);
+	/// assert_eq!(msg, "        Hello world.");
+	///
+	/// // …
+	///
+	/// let msg = Msg::from("Hello world.").with_indent(7);
+	/// assert_eq!(msg, "                            Hello world.");
+	///
+	/// let msg = Msg::from("Hello world.").with_indent(8);
+	/// assert_eq!(msg, "                                Hello world.");
+	///
+	/// // The tabs dry up after eight.
+	/// assert_eq!(
+	///     Msg::from("Hello world.").with_indent(8),
+	///     Msg::from("Hello world.").with_indent(u8::MAX),
+	/// );
+	/// ```
+	pub fn with_indent(mut self, tabs: u8) -> Self {
+		self.set_indent(tabs);
+		self
+	}
+
+	#[inline]
+	#[must_use]
+	/// # With Message Content.
+	///
+	/// In most cases where the message content needs to change, [`Msg::set_msg`]
+	/// probably makes more sense, but everything else gets a builder method,
+	/// so why not?
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// let msg = Msg::from("Hello")
+	///     .with_msg("Goodbye");
+	/// assert_eq!(msg, "Goodbye");
+	/// ```
+	pub fn with_msg<S: AsRef<str>>(mut self, msg: S) -> Self {
+		self.set_msg(msg);
+		self
+	}
+
+	#[inline]
+	#[must_use]
+	/// # With/Without Trailing Linebreak.
+	///
+	/// Add/remove the message's trailing line break.
+	///
+	/// ## Examples
+	///
+	/// Messages created with [`Msg::from`], [`Msg::custom`], [`Msg::new`],
+	/// and [`MsgKind::into_msg`] have no trailing line break by default:
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// let mut msg = Msg::from("Hello World!");
+	/// assert_eq!(
+	///     msg,
+	///     "Hello World!",
+	/// );
+	///
+	/// assert_eq!(
+	///     msg.with_newline(true), // Add line break.
+	///     "Hello World!\n",
+	/// );
+	/// ```
+	///
+	/// Messages created with the built-in helper methods, however, do:
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// let mut msg = Msg::info("Hello World!");
+	/// assert_eq!(
+	///     msg,
+	///     "\x1b[1;95mInfo:\x1b[0m Hello World!\n",
+	/// );
+	///
+	/// assert_eq!(
+	///     msg.with_newline(false), // Remove line break.
+	///     "\x1b[1;95mInfo:\x1b[0m Hello World!",
+	/// );
+	/// ```
+	pub fn with_newline(mut self, enabled: bool) -> Self {
+		self.set_newline(enabled);
+		self
+	}
+
+	#[inline]
+	#[must_use]
+	/// # With Prefix (Built-In).
+	///
+	/// (Re)set the message prefix.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::{Msg, MsgKind};
+	///
+	/// let msg = Msg::from("Uh oh!")
+	///     .with_prefix(MsgKind::Error);
+	/// assert_eq!(
+	///     msg,
+	///     "\x1b[1;91mError:\x1b[0m Uh oh!"
+	/// );
+	/// ```
+	pub fn with_prefix(mut self, kind: MsgKind) -> Self {
+		self.set_prefix(kind);
+		self
+	}
+
+	#[inline]
+	#[must_use]
+	/// # With Prefix (Custom).
+	///
+	/// (Re)set the message prefix.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// let msg = Msg::from("The best color.")
+	///     .with_custom_prefix("Pink", 199);
+	///
+	/// assert_eq!(
+	///     msg,
+	///     "\x1b[1;38;5;199mPink:\x1b[0m The best color.",
+	/// );
+	/// ```
+	pub fn with_custom_prefix<C, S>(mut self, prefix: S, color: C) -> Self
+	where C: Into<AnsiColor>, S: AsRef<str> {
+		self.set_custom_prefix(prefix, color);
+		self
+	}
+
+	#[inline]
+	#[must_use]
+	/// # With Suffix.
+	///
+	/// (Re)set the message suffix.
+	///
+	/// Unlike prefixes, no automatic formatting is applied to suffixes. For
+	/// example, if you want a space separating the message content and suffix,
+	/// the suffix should start with a leading space.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// let msg = Msg::from("Checked!")
+	///     .with_suffix(" ✓");
+	///
+	/// assert_eq!(
+	///     msg,
+	///     "Checked! ✓",
+	/// );
+	pub fn with_suffix<S: AsRef<str>>(mut self, suffix: S) -> Self {
+		self.set_suffix(suffix);
+		self
+	}
+
+	#[cfg(feature = "timestamps")]
+	#[cfg_attr(docsrs, doc(cfg(feature = "timestamps")))]
+	#[inline]
+	#[must_use]
+	/// # With/Without Timestamp.
+	///
+	/// Add/remove a timestamp to/from the beginning the of the message.
+	///
+	/// ## Examples.
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// let msg = Msg::from("Parsed log.")
+	///     .with_timestamp(true); // [YYYY-MM-DD hh:mm:ss] Parsed log.
+	/// ```
+	pub fn with_timestamp(mut self, enabled: bool) -> Self {
+		self.set_timestamp(enabled);
+		self
 	}
 
 	#[must_use]
-	#[inline]
-	/// # Is Empty.
-	pub const fn is_empty(&self) -> bool { self.len() == 0 }
+	/// # Without Ansi Formatting.
+	///
+	/// Remove colors, bold, etc. from the message.
+	///
+	/// This is best called last, as changes made after this might reintroduce
+	/// fancy formatting.
+	///
+	/// For unchained usage, see [`Msg::strip_ansi`].
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::Msg;
+	///
+	/// assert_eq!(
+	///     Msg::info("5,000 matching files were found.").without_ansi(),
+	///     "Info: 5,000 matching files were found.\n",
+	/// );
+	/// ```
+	pub fn without_ansi(mut self) -> Self {
+		self.strip_ansi();
+		self
+	}
 }
 
 /// ## Printing.
 impl Msg {
 	#[inline]
-	/// # Locked Print to `STDOUT`.
+	/// # Print to `STDOUT`.
 	///
-	/// This is equivalent to calling either `print!()` or `println()`
-	/// depending on whether or not a trailing linebreak has been set.
-	///
-	/// In fact, [`Msg`] does implement `Display`, so you could do just that,
-	/// but this method avoids the allocation penalty.
+	/// This is a convenience method for printing a message to `STDOUT` without
+	/// having to go through the standard library's [`print`] macro.
 	///
 	/// ## Examples
 	///
 	/// ```no_run
 	/// use fyi_msg::Msg;
-	/// Msg::plain("Hello world!").with_newline(true).print();
+	///
+	/// let msg = Msg::info("Hello World!");
+	///
+	/// // You've got two choices to print.
+	/// print!("{msg}"); // \x1b[1;95mInfo:\x1b[0m Hello World!\n
+	/// msg.print();     // \x1b[1;95mInfo:\x1b[0m Hello World!\n
+	/// // This line break is embedded in the message itself.   ^
+	///
+	/// // As such, you probably don't want to do this:
+	/// println!("{msg}"); // \x1b[1;95mInfo:\x1b[0m Hello World!\n\n
 	/// ```
 	pub fn print(&self) {
 		use io::Write;
 
-		let writer = io::stdout();
-		let mut handle = writer.lock();
-		let _res = handle.write_all(&self.0).and_then(|()| handle.flush());
+		let mut handle = io::stdout().lock();
+		let _res = handle.write_all(self.as_bytes()).and_then(|()| handle.flush());
 	}
 
 	#[inline]
-	/// # Locked Print to `STDERR`.
+	/// # Print to `STDERR`.
 	///
-	/// This is equivalent to calling either `eprint!()` or `eprintln()`
-	/// depending on whether or not a trailing linebreak has been set.
-	///
-	/// In fact, [`Msg`] does implement `Display`, so you could do just that,
-	/// but this method avoids the allocation penalty.
+	/// This is a convenience method for printing a message to `STDERR` without
+	/// having to go through the standard library's [`eprint`] macro.
 	///
 	/// ## Examples
 	///
 	/// ```no_run
 	/// use fyi_msg::Msg;
-	/// Msg::error("Oh no!").with_newline(true).eprint();
+	///
+	/// let msg = Msg::info("Hello World!");
+	///
+	/// // You've got two choices to print.
+	/// eprint!("{msg}"); // \x1b[1;95mInfo:\x1b[0m Hello World!\n
+	/// msg.eprint();     // \x1b[1;95mInfo:\x1b[0m Hello World!\n
+	/// // This line break is embedded in the message itself.   ^
+	///
+	/// // As such, you probably don't want to do this:
+	/// eprintln!("{msg}"); // \x1b[1;95mInfo:\x1b[0m Hello World!\n\n
 	/// ```
 	pub fn eprint(&self) {
 		use io::Write;
 
-		let writer = io::stderr();
-		let mut handle = writer.lock();
-		let _res = handle.write_all(&self.0).and_then(|()| handle.flush());
+		let mut handle = io::stderr().lock();
+		let _res = handle.write_all(self.as_bytes()).and_then(|()| handle.flush());
 	}
 
 	#[must_use]
@@ -1010,7 +1270,7 @@ impl Msg {
 	///
 	/// This produces a simple y/N input prompt, requiring the user type "Y" or
 	/// "N" to proceed. Positive values return `true`, negative values return
-	/// `false`. The default (if the user just hits &lt;enter&gt;) is "N".
+	/// `false`. The default (if the user just hits `<ENTER>`) is "N".
 	///
 	/// Note: the prompt normalizes the suffix and newline parts for display.
 	/// If your message contains these parts, they will be ignored by the
@@ -1019,8 +1279,7 @@ impl Msg {
 	///
 	/// Every example in the docs shows this in combination with the built-in
 	/// [`MsgKind::Confirm`] prefix, but this can be called on any [`Msg`]
-	/// object. The main thing worth noting is the suffix portion is
-	/// overridden for display, so don't bother putting anything there.
+	/// object.
 	///
 	/// ## Example
 	///
@@ -1043,26 +1302,26 @@ impl Msg {
 	#[inline]
 	/// # Prompt (w/ Default).
 	///
-	/// This is identical to [`Msg::prompt`], except you specify the default
-	/// return value — `true` for Yes, `false` for No — that is returned when
-	/// the user just hits `<ENTER>`.
+	/// Same as [`Msg::prompt`], but with the option of specifying the default
+	/// return value — `true` for Yes, `false` for No — that will be returned
+	/// if the user just hits `<ENTER>`.
 	pub fn prompt_with_default(&self, default: bool) -> bool {
 		self.prompt__(default, false)
 	}
 
 	#[must_use]
 	#[inline]
-	/// # Prompt (STDERR).
+	/// # Prompt (`STDERR`).
 	///
-	/// Same as [`Msg::prompt`], but printed to STDERR instead of STDOUT.
+	/// Same as [`Msg::prompt`], but printed to `STDERR` instead of `STDOUT`.
 	pub fn eprompt(&self) -> bool { self.eprompt_with_default(false) }
 
 	#[must_use]
 	#[inline]
-	/// # Prompt (w/ Default, STDERR).
+	/// # Prompt (w/ Default, `STDERR`).
 	///
-	/// Same as [`Msg::prompt_with_default`], but printed to STDERR instead of
-	/// STDOUT.
+	/// Same as [`Msg::prompt_with_default`], but printed to `STDERR` instead of
+	/// `STDOUT`.
 	pub fn eprompt_with_default(&self, default: bool) -> bool {
 		self.prompt__(default, true)
 	}
@@ -1076,8 +1335,8 @@ impl Msg {
 		// in case it is needed again.
 		let q = self.clone()
 			.with_suffix(
-				if default { " \x1b[2m[\x1b[4mY\x1b[0;2m/n]\x1b[0m " }
-				else       { " \x1b[2m[y/\x1b[4mN\x1b[0;2m]\x1b[0m " }
+				if default { " \x1b[2m[\x1b[4mY\x1b[24m/n]\x1b[0m " }
+				else       { " \x1b[2m[y/\x1b[4mN\x1b[24m]\x1b[0m " }
 			)
 			.with_newline(false);
 
@@ -1106,84 +1365,156 @@ impl Msg {
 	}
 }
 
+/// # Internal.
+impl Msg {
+	/// # Replace Part.
+	fn replace_part(&mut self, id: TocId, content: &str) {
+		// Update the content.
+		let rng = self.toc.part_rng(id);
+		self.inner.replace_range(rng, content);
+
+		// Update the table of contents.
+		self.toc.resize_part(id, content.len());
+	}
+}
+
+/// # `MsgKind` One-Shots.
+impl Msg {
+	msg_kind!(aborted, Aborted, LightRed);
+	msg_kind!(crunched, Crunched, LightGreen);
+	msg_kind!(debug, Debug, LightCyan);
+	msg_kind!(done, Done, LightGreen);
+	msg_kind!(error, Error, LightRed);
+	msg_kind!(found, Found, LightGreen);
+	msg_kind!(info, Info, LightMagenta);
+	msg_kind!(notice, Notice, LightMagenta);
+	msg_kind!(review, Review, LightCyan);
+	msg_kind!(skipped, Skipped, LightYellow);
+	msg_kind!(success, Success, LightGreen);
+	msg_kind!(task, Task, Misc199);
+	msg_kind!(warning, Warning, LightYellow);
+}
 
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use brunch as _;
-	use rayon as _;
 
-	#[test]
-	fn t_msg() {
-		let mut msg = Msg::plain("My dear aunt sally.");
-		assert_eq!(&*msg, b"My dear aunt sally.");
+#[derive(Debug, Clone, Copy, Default)]
+/// # Table of Contents.
+struct Toc([usize; Self::SIZE]);
 
-		msg.set_prefix(MsgKind::Error);
-		assert!(msg.starts_with(MsgKind::Error.as_bytes()));
-		assert!(msg.ends_with(b"My dear aunt sally."));
+impl Toc {
+	/// # Table of Contents Size.
+	///
+	/// The struct's inner array holds the starting positions for each part,
+	/// plus an extra holding the exclusive end.
+	///
+	/// The specific number of parts varies by crate feature, but
+	/// [`TocId::Newline`] is always last. Add one for the extra end "part",
+	/// and one more to convert index to length.
+	const SIZE: usize = TocId::Newline as usize + 2;
 
-		msg.set_indent(1);
-		assert!(msg.starts_with(b"    "));
-		msg.set_indent(3);
-		assert!(msg.starts_with(b"            "));
-		msg.set_indent(0);
-		assert!(msg.starts_with(MsgKind::Error.as_bytes()));
-
-		msg.set_suffix(" Heyo");
-		assert!(msg.ends_with(b" Heyo"), "{:?}", msg.as_str());
-		msg.set_suffix("");
-		assert!(msg.ends_with(b"My dear aunt sally."));
-
-		msg.set_msg("My dear aunt");
-		assert!(msg.ends_with(b"My dear aunt"));
+	/// # Part Length.
+	const fn part_len(&self, id: TocId) -> Option<NonZeroUsize> {
+		let start = self.0[id as usize];   // All TocIds are in range.
+		let end = self.0[id as usize + 1]; // And so is +1.
+		if let Some(len) = end.checked_sub(start) { NonZeroUsize::new(len) }
+		else { None }
 	}
 
-	#[test]
-	fn t_strip_ansi() {
-		let mut msg = Msg::info("Hello \x1b[1mWorld!\x1b[0m")
-			.with_suffix(" \x1b[2m(foo)\x1b[0m");
-
-		// Strip it.
-		assert!(msg.strip_ansi());
-		assert_eq!(msg.as_str(), "Info: Hello World! (foo)\n");
-
-		// Already stripped!
-		assert!(! msg.strip_ansi());
-
-		// Test that without comes out the same.
-		assert_eq!(
-			msg,
-			Msg::info("Hello \x1b[1mWorld!\x1b[0m")
-				.with_suffix(" \x1b[2m(foo)\x1b[0m")
-				.without_ansi(),
-		);
+	/// # Part Range.
+	const fn part_rng(&self, id: TocId) -> Range<usize> {
+		let start = self.0[id as usize];
+		let end = self.0[id as usize + 1];
+		start..end
 	}
 
 	#[cfg(feature = "fitted")]
-	#[test]
-	fn t_fitted() {
-		let mut msg = Msg::plain("Hello World");
+	/// # Part Starts At.
+	const fn part_start(&self, id: TocId) -> usize { self.0[id as usize] }
 
-		assert_eq!(msg.fitted(5), &b"Hello"[..]);
-		assert_eq!(msg.fitted(20), &b"Hello World"[..]);
+	/// # Resize Part(s).
+	///
+	/// Change the size of `part`, realigning the subsequent boundaries as
+	/// needed.
+	fn resize_part(&mut self, id: TocId, new_len: usize) {
+		let old_len = self.part_len(id).map_or(0, NonZeroUsize::get);
 
-		// Try it with a new line.
-		msg.set_newline(true);
-		assert_eq!(msg.fitted(5), &b"Hello\n"[..]);
-
-		// Give it a prefix.
-		msg.set_prefix(MsgKind::Error);
-		assert_eq!(msg.fitted(5), Vec::<u8>::new());
-		assert_eq!(msg.fitted(12), &b"\x1b[91;1mError:\x1b[0m Hello\n"[..]);
-
-		// Colorize the message.
-		msg.set_msg("\x1b[1mHello\x1b[0m World");
-		assert_eq!(msg.fitted(12), &b"\x1b[91;1mError:\x1b[0m \x1b[1mHello\x1b[0m\x1b[0m\n"[..]);
-		assert_eq!(msg.fitted(11), &b"\x1b[91;1mError:\x1b[0m \x1b[1mHell\x1b[0m\n"[..]);
-
-		// Try it with Unicode!
-		msg.set_msg("Björk Guðmundsdóttir");
-		assert_eq!(msg.fitted(12), "\x1b[91;1mError:\x1b[0m Björk\n".as_bytes());
+		match old_len.cmp(&new_len) {
+			// The new length is bigger; increase the remaining positions.
+			Ordering::Less => {
+				let diff = new_len - old_len;
+				for v in self.0.iter_mut().skip(id as usize + 1) { *v += diff; }
+			},
+			// The new length is smaller; decrease the remaining positions.
+			Ordering::Greater => {
+				let diff = old_len - new_len;
+				for v in self.0.iter_mut().skip(id as usize + 1) { *v -= diff; }
+			},
+			// No change.
+			Ordering::Equal => {},
+		}
 	}
+}
+
+
+
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+/// # Table of Contents: Parts.
+///
+/// This enum holds the name/index of each [`Toc`] "chapter".
+enum TocId {
+	/// # Indentation.
+	Indent = 0_u8,
+
+	#[cfg(feature = "timestamps")]
+	/// # Timestamps.
+	Timestamp = 1_u8,
+
+	#[cfg(feature = "timestamps")]
+	/// # Prefix.
+	Prefix = 2_u8,
+
+	#[cfg(feature = "timestamps")]
+	/// # Message.
+	Message = 3_u8,
+
+	#[cfg(feature = "timestamps")]
+	/// # Suffix.
+	Suffix = 4_u8,
+
+	#[cfg(feature = "timestamps")]
+	/// # Line Break.
+	Newline = 5_u8,
+
+	#[cfg(not(feature = "timestamps"))]
+	/// # Prefix.
+	Prefix = 1_u8,
+
+	#[cfg(not(feature = "timestamps"))]
+	/// # Message.
+	Message = 2_u8,
+
+	#[cfg(not(feature = "timestamps"))]
+	/// # Suffix.
+	Suffix = 3_u8,
+
+	#[cfg(not(feature = "timestamps"))]
+	/// # Line Break.
+	Newline = 4_u8,
+}
+
+impl TocId {
+	#[cfg(feature = "timestamps")]
+	/// # Parts w/ Ansi.
+	///
+	/// These parts _might_ have formatting.
+	const ANSI_PARTS: [Self; 4] = [
+		Self::Timestamp, Self::Prefix, Self::Message, Self::Suffix,
+	];
+
+	#[cfg(not(feature = "timestamps"))]
+	/// # Parts w/ Ansi.
+	///
+	/// These parts _might_ have formatting.
+	const ANSI_PARTS: [Self; 3] = [Self::Prefix, Self::Message, Self::Suffix];
 }

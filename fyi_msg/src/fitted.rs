@@ -4,7 +4,7 @@
 This optional module contains methods for counting the display width of byte strings, and/or figuring out the closest char index to chop on to make something fit.
 */
 
-use crate::iter::NoAnsi;
+use crate::ansi::NoAnsi;
 use unicode_width::UnicodeWidthChar;
 
 
