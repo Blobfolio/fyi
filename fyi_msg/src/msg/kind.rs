@@ -6,7 +6,10 @@ use crate::{
 	ansi::AnsiColor,
 	Msg,
 };
-use std::fmt;
+use std::{
+	borrow::Cow,
+	fmt,
+};
 
 
 
@@ -88,27 +91,13 @@ impl MsgKind {
 		}
 	}
 
+	#[inline]
 	#[must_use]
 	/// # As String Slice (Prefix).
 	///
 	/// Return the kind as a string slice, formatted and with a trailing `": "`,
 	/// same as [`Msg`] uses for prefixes.
-	///
-	/// ## Examples
-	///
-	/// ```
-	/// use fyi_msg::MsgKind;
-	///
-	/// assert_eq!(
-	///     MsgKind::Error.as_str_prefix(),
-	///     "\x1b[1;91mError:\x1b[0m ",
-	/// );
-	/// assert_eq!(
-	///     MsgKind::Success.as_str_prefix(),
-	///     "\x1b[1;92mSuccess:\x1b[0m ",
-	/// );
-	/// ```
-	pub const fn as_str_prefix(self) -> &'static str {
+	pub(crate) const fn as_str_prefix(self) -> &'static str {
 		match self {
 			#[cfg(feature = "bin_kinds")] Self::None | Self::Blank | Self::Custom => "",
 			#[cfg(not(feature = "bin_kinds"))] Self::None => "",
@@ -249,6 +238,133 @@ impl MsgKind {
 	pub fn into_msg<S>(self, msg: S) -> Msg
 	where S: AsRef<str> { Msg::new(self, msg) }
 }
+
+
+
+/// # Into Message Prefix.
+///
+/// This trait provides everything necessary to format prefixes passed to
+/// [`Msg::new`], [`Msg::set_prefix`], and [`Msg::with_prefix`].
+///
+/// More specifically, it allows users to choose between the "easy" built-in
+/// [`MsgKind`] prefixes and custom ones, with or without Ansi formatting.
+///
+/// Custom prefixes can be any of the usual string types — `&str`,
+/// `String`/`&String`, or `Cow<str>`/`&Cow<str>` — optionally tupled with an
+/// [`AnsiColor`] for formatting.
+///
+/// See [`Msg::new`] for more details.
+pub trait IntoMsgPrefix {
+	/// # Prefix Length.
+	///
+	/// Returns the total byte length of the fully-rendered prefix, including
+	/// any Ansi sequences and trailing `": "` separator.
+	fn prefix_len(&self) -> usize;
+
+	/// # Push Prefix.
+	///
+	/// Push the complete prefix to an existing string.
+	fn prefix_push(&self, dst: &mut String);
+
+	#[inline]
+	/// # Prefix String.
+	///
+	/// Returns the complete prefix for rendering.
+	///
+	/// [`MsgKind`] prefixes are static and require no allocation, but custom
+	/// types (unless empty) do to join all the pieces together.
+	fn prefix_str(&self) -> Cow<str> {
+		let mut out = String::with_capacity(self.prefix_len());
+		self.prefix_push(&mut out);
+		Cow::Owned(out)
+	}
+}
+
+impl IntoMsgPrefix for MsgKind {
+	#[inline]
+	/// # Prefix Length.
+	fn prefix_len(&self) -> usize { self.as_str_prefix().len() }
+
+	#[inline]
+	/// # Prefix String.
+	fn prefix_str(&self) -> Cow<str> { Cow::Borrowed(self.as_str_prefix()) }
+
+	#[inline]
+	/// # Push Prefix.
+	fn prefix_push(&self, dst: &mut String) { dst.push_str(self.as_str_prefix()); }
+}
+
+/// # Helper: `IntoMsgPrefix`.
+macro_rules! into_prefix {
+	($($ty:ty),+) => ($(
+		impl IntoMsgPrefix for $ty {
+			#[inline]
+			/// # Prefix Length.
+			fn prefix_len(&self) -> usize {
+				let len = self.len();
+				if len == 0 { 0 }
+				else { len + 2 } // For the ": " separator.
+			}
+
+			#[inline]
+			/// # Push Prefix.
+			fn prefix_push(&self, dst: &mut String) {
+				if ! self.is_empty() {
+					dst.push_str(self);
+					dst.push_str(": ");
+				}
+			}
+		}
+
+		impl IntoMsgPrefix for ($ty, AnsiColor) {
+			#[inline]
+			/// # Prefix Length.
+			fn prefix_len(&self) -> usize {
+				let len = self.0.len();
+				if len == 0 { 0 }
+				else {
+					self.1.as_str_bold().len() + self.0.len() +
+					AnsiColor::RESET_PREFIX.len()
+				}
+			}
+
+			#[inline]
+			/// # Push Prefix.
+			fn prefix_push(&self, dst: &mut String) {
+				if ! self.0.is_empty() {
+					dst.push_str(self.1.as_str_bold());
+					dst.push_str(&self.0);
+					dst.push_str(AnsiColor::RESET_PREFIX);
+				}
+			}
+		}
+
+		impl IntoMsgPrefix for ($ty, u8) {
+			#[inline]
+			/// # Prefix Length.
+			fn prefix_len(&self) -> usize {
+				let len = self.0.len();
+				if len == 0 { 0 }
+				else {
+					let color = AnsiColor::from_u8(self.1);
+					color.as_str_bold().len() + self.0.len() +
+					AnsiColor::RESET_PREFIX.len()
+				}
+			}
+
+			#[inline]
+			/// # Push Prefix.
+			fn prefix_push(&self, dst: &mut String) {
+				if ! self.0.is_empty() {
+					dst.push_str(AnsiColor::from_u8(self.1).as_str_bold());
+					dst.push_str(&self.0);
+					dst.push_str(AnsiColor::RESET_PREFIX);
+				}
+			}
+		}
+	)+);
+}
+into_prefix!(&str, &String, String, &Cow<'_, str>, Cow<'_, str>);
 
 
 

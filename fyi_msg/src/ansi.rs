@@ -3,7 +3,6 @@
 */
 
 use std::{
-	borrow::Borrow,
 	fmt,
 	hash,
 };
@@ -13,16 +12,6 @@ use std::{
 include!(concat!(env!("OUT_DIR"), "/ansi-color.rs"));
 
 
-
-impl AsRef<str> for AnsiColor {
-	#[inline]
-	fn as_ref(&self) -> &str { self.as_str() }
-}
-
-impl Borrow<str> for AnsiColor {
-	#[inline]
-	fn borrow(&self) -> &str { self.as_str() }
-}
 
 impl fmt::Display for AnsiColor {
 	#[inline]
@@ -107,6 +96,11 @@ impl AnsiColor {
 	/// );
 	/// ```
 	pub const RESET: &'static str = "\x1b[0m";
+
+	/// # Prefix Reset.
+	///
+	/// Same as [`AnsiColor::RESET`], but with a colon before and space after.
+	pub(crate) const RESET_PREFIX: &'static str = ":\x1b[0m ";
 }
 
 

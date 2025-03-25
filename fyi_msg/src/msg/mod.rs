@@ -5,13 +5,11 @@
 pub(super) mod kind;
 
 use crate::{
-	ansi::{
-		AnsiColor,
-		NoAnsi,
-	},
+	ansi::NoAnsi,
 	MsgKind,
 };
 #[cfg(feature = "progress")] use crate::BeforeAfter;
+use kind::IntoMsgPrefix;
 use std::{
 	borrow::{
 		Borrow,
@@ -137,13 +135,11 @@ macro_rules! msg_kind {
 /// efficiently in place (per-part) and printed to `STDOUT` with [`Msg::print`]
 /// or `STDERR` with [`Msg::eprint`] (or via [`Display`](fmt::Display)).
 ///
-/// Take a look at `examples/msg`, which demonstrates most of the options.
-///
 /// There are two crate feature gates that augment this struct (at the expense
 /// of additional dependencies):
 ///
-/// * `fitted` adds the [`Msg::fitted`] method, which returns a string slice that _should_ fit within a given display width, shrinking the message part of the message as necessary to make room (leaving prefixes and suffixes in tact).
-/// * `timestamps` adds [`Msg::with_timestamp`] and [`Msg::set_timestamp`] methods for adding a local datetime value before the prefix.
+/// * `fitted` adds [`Msg::fitted`] for obtaining a slice trimmed to a specific display width.
+/// * `timestamps` adds [`Msg::set_timestamp`]/[`Msg::with_timestamp`] for inserting a local datetime value before the prefix.
 ///
 /// Everything else comes stock!
 ///
@@ -156,11 +152,10 @@ macro_rules! msg_kind {
 ///     .print();
 /// ```
 ///
-/// There are a bunch of built-in prefix types, each of which (except
-/// [`MsgKind::Confirm`]) has a corresponding "quick" method on this struct,
-/// like [`Msg::error`], [`Msg::success`], etc. See [`MsgKind`] for the full
-/// list. These are equivalent to chaining [`Msg::new`] and [`Msg::with_newline`]
-/// for the given type.
+/// There are a bunch of built-in prefix types ([`MsgKind`]), each of which
+/// (except [`MsgKind::None`] and [`MsgKind::Confirm`]) has a corresponding
+/// "quick" method on this struct to save the effort of chaining [`Msg::new`]
+/// and [`Msg::with_newline`].
 ///
 /// ```
 /// use fyi_msg::{Msg, MsgKind};
@@ -169,16 +164,18 @@ macro_rules! msg_kind {
 /// Msg::success("You did it!").print();
 /// ```
 ///
-/// Confirmations have a convenience macro instead, [`confirm`](crate::confirm),
+/// Confirmations have a convenience _macro_ instead, [`confirm`](crate::confirm),
 /// that handles all the setup and prompting, returning a simple `bool`
 /// indicating the yes/noness of the user response.
 ///
-/// Again, the `examples/msg` demo covers just about all the possibilities.
+/// Take a look at `examples/msg.rs` for a breakdown of the various options.
 ///
 /// ## Conversion
 ///
-/// `Msg` objects are essentially just fancy strings that can be borrowed with
-/// [`Msg::as_str`] or stolen with [`Msg::into_string`].
+/// `Msg` objects are essentially just fancy strings.
+///
+/// You can borrow the the result with [`Msg::as_str`]/[`Msg::as_bytes`] or
+/// steal it with [`Msg::into_string`]/[`Msg::into_bytes`].
 pub struct Msg {
 	/// # Actual Message.
 	inner: String,
@@ -303,98 +300,79 @@ impl PartialOrd for Msg {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
 }
 
-/// # Construction.
+/// ## Construction.
 impl Msg {
 	#[must_use]
+	#[expect(clippy::needless_pass_by_value, reason = "Impl is on referenced and owned types.")]
 	/// # New Message.
 	///
-	/// This creates a new message with a built-in prefix (which can be
-	/// [`MsgKind::None`](crate::MsgKind::None), though in that case, [`Msg::from`]
-	/// is better).
+	/// This creates a new [`Msg`] with prefix and message parts.
 	///
-	/// If your prefix choice is built-in and known at compile time and you
-	/// want the message to have a trailing line break, consider using the
-	/// corresponding dedicated method instead ([`Msg::error`], [`Msg::success`],
-	/// etc.), as it will be slightly faster.
+	/// The prefix can be a built-in [`MsgKind`], or something custom, with or
+	/// without Ansi formatting.
 	///
-	/// ## Examples
+	/// Custom prefixes can be any of the usual string types — `&str`,
+	/// `String`/`&String`, or `Cow<str>`/`&Cow<str>` — optionally tupled with
+	/// an [`AnsiColor`](crate::ansi::AnsiColor) for sex appeal.
 	///
-	/// ```no_run
-	/// use fyi_msg::{Msg, MsgKind};
-	/// let msg = Msg::new(MsgKind::Info, "This is a message.");
-	/// ```
-	pub fn new<S>(kind: MsgKind, msg: S) -> Self
-	where S: AsRef<str> {
-		let msg = msg.as_ref();
-		let prefix = kind.as_str_prefix();
-
-		if prefix.is_empty() { Self::from(msg) }
-		else {
-			let mut inner = String::with_capacity(prefix.len() + msg.len());
-
-			// Add the prefix.
-			inner.push_str(prefix);
-			let p_end = inner.len();
-
-			// Add the content.
-			inner.push_str(msg);
-			let m_end = inner.len();
-
-			// Done!
-			Self {
-				inner,
-				toc: toc!(p_end, m_end),
-			}
-		}
-	}
-
-	#[expect(clippy::similar_names, reason = "It's fine.")]
-	#[must_use]
-	/// # New w/ Custom Prefix.
+	/// Custom prefixes should _not_ include the `": "` separator, as that is
+	/// appended automatically to all non-empty values.
 	///
-	/// This creates a new message with a user-defined prefix and color.
-	///
-	/// Prefixes are automatically separated from the message content by a
-	/// same-colored `": "`. If `prefix` doesn't already end that way, it will
-	/// be adjusted accordingly (unless totally empty).
+	/// To create a message without a prefix, just pass the content to
+	/// [`Msg::from`] instead.
 	///
 	/// ## Examples
 	///
 	/// ```no_run
-	/// use fyi_msg::{Msg, MsgKind};
+	/// use fyi_msg::{
+	///     ansi::AnsiColor,
+	///     Msg,
+	///     MsgKind,
+	/// };
 	///
+	/// // Built-in prefix. Easy!
 	/// assert_eq!(
-	///     Msg::custom("Prefix", 199, "This message has a pink prefix."),
-	///     Msg::custom("Prefix: ", 199, "This message has a pink prefix."),
+	///     Msg::new(MsgKind::Info, "This is a message."),
+	///     "\x1b[1;95mInfo:\x1b[0m This is a message.",
+	/// );
+	///
+	/// // Custom prefix, no formatting.
+	/// assert_eq!(
+	///     Msg::new("Best Picture", "C.H.U.D."),
+	///     "Best Picture: C.H.U.D.",
+	/// );
+	///
+	/// // Custom prefix, red and bold.
+	/// assert_eq!(
+	///     Msg::new(("Crap", AnsiColor::Red), "Something broke!"),
+	///     "\x1b[1;31mCrap:\x1b[0m Something broke!"
+	/// );
+	///
+	/// // Same as above, but with the color as a `u8`.
+	/// assert_eq!(
+	///     Msg::new(("Crap", 1), "Something broke!"),
+	///     "\x1b[1;31mCrap:\x1b[0m Something broke!"
+	/// );
+	///
+	/// // If for some reason you pass an empty string, the prefix will be
+	/// // omitted.
+	/// assert_eq!(
+	///     Msg::new(("", AnsiColor::Misc199), "Plain Jane."),
+	///     "Plain Jane.",
 	/// );
 	/// ```
-	pub fn custom<C, S1, S2>(prefix: S1, color: C, msg: S2) -> Self
+	pub fn new<P, S>(prefix: P, msg: S) -> Self
 	where
-		C: Into<AnsiColor>,
-		S1: AsRef<str>,
-		S2: AsRef<str>,
+		P: IntoMsgPrefix,
+		S: AsRef<str>,
 	{
 		let msg = msg.as_ref();
 
-		// If there's no prefix, skip the trouble and forward to Msg::from.
-		let prefix: &str = prefix.as_ref().trim_end();
-		let Some(last) = prefix.chars().last() else { return Self::from(msg); };
-		let colon = last.is_alphanumeric();
-		let color = <C as Into<AnsiColor>>::into(color).as_str_bold();
+		let p_end = prefix.prefix_len();
+		let mut inner = String::with_capacity(p_end + msg.len());
+		prefix.prefix_push(&mut inner);
 
-		// Add the prefix first.
-		let mut inner = String::with_capacity(
-			color.len() + prefix.len() + usize::from(colon) +
-			AnsiColor::RESET.len() + 1 + msg.len()
-		);
-		inner.push_str(color);
-		inner.push_str(prefix);
-		if colon { inner.push(':'); }
-		inner.push_str(AnsiColor::RESET);
-		inner.push(' ');
-		let p_end = inner.len();
-
-		// Then the content.
+		// Add the content.
 		inner.push_str(msg);
 		let m_end = inner.len();
 
@@ -406,7 +384,7 @@ impl Msg {
 	}
 }
 
-/// # Getters.
+/// ## Getters.
 impl Msg {
 	#[inline]
 	#[must_use]
@@ -471,9 +449,10 @@ impl Msg {
 	/// ## Examples
 	///
 	/// ```
+	/// use fyi_msg::ansi::AnsiColor;
 	/// use fyi_msg::Msg;
 	///
-	/// let msg = Msg::custom("Name", 4, "Björk")
+	/// let msg = Msg::new(("Name", AnsiColor::Blue), "Björk")
 	///     .with_suffix(" (the Great)")
 	///     .with_newline(true); // Trailing line breaks are fine.
 	///
@@ -505,6 +484,8 @@ impl Msg {
 	/// assert!(msg.fitted(6).is_none());
 	/// ```
 	pub fn fitted(&self, width: usize) -> Option<Cow<str>> {
+		use crate::ansi::AnsiColor;
+
 		// Width won't be bigger than length; we might not even need to check!
 		if self.inner.len() <= width { return Some(Cow::Borrowed(self.as_str())); }
 
@@ -624,57 +605,7 @@ impl Msg {
 	pub fn len(&self) -> usize { self.inner.len() }
 }
 
-#[cfg(feature = "progress")]
-/// ## Bytes Saved Suffix.
-///
-/// A lot of our own programs crunch data and report the savings as a suffix.
-/// This section just adds a quick helper for that.
-impl Msg {
-	#[cfg_attr(docsrs, doc(cfg(feature = "progress")))]
-	#[must_use]
-	/// # Bytes Saved Suffix.
-	///
-	/// A lot of our own programs using this lib crunch data and report the
-	/// savings as a suffix. This method just provides a quick way to generate
-	/// that.
-	pub fn with_bytes_saved(mut self, state: BeforeAfter) -> Self {
-		use dactyl::{NicePercent, NiceU64};
-
-		if let Some(saved) = state.less() {
-			let saved = NiceU64::from(saved);
-			let buf = state.less_percent().map_or_else(
-				// Just the bytes.
-				|| {
-					let mut buf = String::with_capacity(24 + saved.len());
-					buf.push_str(" \x1b[2m(Saved ");
-					buf.push_str(saved.as_str());
-					buf.push_str(" bytes.)\x1b[0m");
-					buf
-				},
-				// With percent.
-				|per| {
-					let per = NicePercent::from(per);
-					let mut buf = String::with_capacity(26 + saved.len() + per.len());
-					buf.push_str(" \x1b[2m(Saved ");
-					buf.push_str(saved.as_str());
-					buf.push_str(" bytes, ");
-					buf.push_str(per.as_str());
-					buf.push_str(".)\x1b[0m");
-					buf
-				}
-			);
-
-			self.replace_part(TocId::Suffix, &buf);
-		}
-		else {
-			self.replace_part(TocId::Suffix, " \x1b[2m(No savings.)\x1b[0m");
-		}
-
-		self
-	}
-}
-
-/// # Setters.
+/// ## Setters.
 impl Msg {
 	/// # Set Indentation.
 	///
@@ -746,8 +677,8 @@ impl Msg {
 	///
 	/// ## Examples
 	///
-	/// Messages created with [`Msg::from`], [`Msg::custom`], [`Msg::new`],
-	/// and [`MsgKind::into_msg`] have no trailing line break by default:
+	/// Messages created with [`Msg::from`], [`Msg::new`], and
+	/// [`MsgKind::into_msg`] have no trailing line break by default:
 	///
 	/// ```
 	/// use fyi_msg::Msg;
@@ -776,14 +707,24 @@ impl Msg {
 		self.replace_part(TocId::Newline, out);
 	}
 
-	/// # Set Prefix (Built-In).
+	#[expect(clippy::needless_pass_by_value, reason = "Impl is on referenced and owned types.")]
+	/// # Set Prefix.
 	///
-	/// (Re)set the message prefix.
+	/// (Re/un)set the message prefix.
+	///
+	/// As with [`Msg::new`], prefixes can be a built-in [`MsgKind`] or custom
+	/// string, with or without formatting.
+	///
+	/// To remove the prefix entirely, pass [`MsgKind::None`] or `""`.
 	///
 	/// ## Examples
 	///
 	/// ```
-	/// use fyi_msg::{Msg, MsgKind};
+	/// use fyi_msg::{
+	///     ansi::AnsiColor,
+	///     Msg,
+	///     MsgKind,
+	/// };
 	///
 	/// let mut msg = Msg::new(MsgKind::Error, "Uh oh!");
 	/// assert_eq!(
@@ -798,56 +739,19 @@ impl Msg {
 	///     "\x1b[1;93mWarning:\x1b[0m Uh oh!"
 	/// );
 	///
+	/// // Escalate it to profanity.
+	/// msg.set_prefix(("Shit", AnsiColor::Misc199));
+	/// assert_eq!(
+	///     msg,
+	///     "\x1b[1;38;5;199mShit:\x1b[0m Uh oh!"
+	/// );
+	///
 	/// // Remove the prefix altogether.
 	/// msg.set_prefix(MsgKind::None);
 	/// assert_eq!(msg, "Uh oh!");
 	/// ```
-	pub fn set_prefix(&mut self, kind: MsgKind) {
-		self.replace_part(TocId::Prefix, kind.as_str_prefix());
-	}
-
-	#[expect(clippy::similar_names, reason = "It's fine.")]
-	/// # Set Prefix (Custom).
-	///
-	/// (Re)set the message prefix.
-	///
-	/// ## Examples
-	///
-	/// ```
-	/// use fyi_msg::Msg;
-	///
-	/// let mut msg = Msg::from("The best color.");
-	/// msg.set_custom_prefix("Pink", 199);
-	///
-	/// assert_eq!(
-	///     msg,
-	///     "\x1b[1;38;5;199mPink:\x1b[0m The best color.",
-	/// );
-	/// ```
-	pub fn set_custom_prefix<C, S>(&mut self, prefix: S, color: C)
-	where C: Into<AnsiColor>, S: AsRef<str> {
-		let prefix: &str = prefix.as_ref().trim_end();
-
-		// If not empty, format it.
-		if let Some(last) = prefix.chars().last() {
-			// Figure out the rest of the prefix parts.
-			let colon = last.is_alphanumeric();
-			let color = <C as Into<AnsiColor>>::into(color).as_str_bold();
-
-			let mut out = String::with_capacity(
-				color.len() + prefix.len() + usize::from(colon) + AnsiColor::RESET.len() + 1
-			);
-			out.push_str(color);
-			out.push_str(prefix);
-			if colon { out.push(':'); }
-			out.push_str(AnsiColor::RESET);
-			out.push(' ');
-
-			self.replace_part(TocId::Prefix, &out);
-		}
-		else {
-			self.replace_part(TocId::Prefix, "");
-		}
+	pub fn set_prefix<P: IntoMsgPrefix>(&mut self, prefix: P) {
+		self.replace_part(TocId::Prefix, &prefix.prefix_str());
 	}
 
 	/// # Set Suffix.
@@ -942,7 +846,7 @@ impl Msg {
 	}
 }
 
-/// # Builder Setters.
+/// ## Builder Setters.
 impl Msg {
 	#[must_use]
 	/// # With Flags.
@@ -1045,8 +949,8 @@ impl Msg {
 	///
 	/// ## Examples
 	///
-	/// Messages created with [`Msg::from`], [`Msg::custom`], [`Msg::new`],
-	/// and [`MsgKind::into_msg`] have no trailing line break by default:
+	/// Messages created with [`Msg::from`], [`Msg::new`], and
+	/// [`MsgKind::into_msg`] have no trailing line break by default:
 	///
 	/// ```
 	/// use fyi_msg::Msg;
@@ -1086,49 +990,40 @@ impl Msg {
 
 	#[inline]
 	#[must_use]
-	/// # With Prefix (Built-In).
+	/// # With Prefix.
 	///
-	/// (Re)set the message prefix.
+	/// (Re/un)set the message prefix.
+	///
+	/// As with [`Msg::new`], prefixes can be a built-in [`MsgKind`] or custom
+	/// string, with or without formatting.
+	///
+	/// To remove the prefix entirely, pass [`MsgKind::None`] or `""`.
 	///
 	/// ## Examples
 	///
 	/// ```
 	/// use fyi_msg::{Msg, MsgKind};
 	///
-	/// let msg = Msg::from("Uh oh!")
-	///     .with_prefix(MsgKind::Error);
+	/// // A built-in.
 	/// assert_eq!(
-	///     msg,
-	///     "\x1b[1;91mError:\x1b[0m Uh oh!"
+	///     Msg::from("Uh oh!").with_prefix(MsgKind::Error),
+	///     "\x1b[1;91mError:\x1b[0m Uh oh!",
+	/// );
+	///
+	/// // A custom and plain prefix.
+	/// assert_eq!(
+	///     Msg::from("Uh oh!").with_prefix("Nope"),
+	///     "Nope: Uh oh!",
+	/// );
+	///
+	/// // A custom and blue prefix.
+	/// assert_eq!(
+	///     Msg::from("Uh oh!").with_prefix(("Meh", 4)),
+	///     "\x1b[1;34mMeh:\x1b[0m Uh oh!",
 	/// );
 	/// ```
-	pub fn with_prefix(mut self, kind: MsgKind) -> Self {
-		self.set_prefix(kind);
-		self
-	}
-
-	#[inline]
-	#[must_use]
-	/// # With Prefix (Custom).
-	///
-	/// (Re)set the message prefix.
-	///
-	/// ## Examples
-	///
-	/// ```
-	/// use fyi_msg::Msg;
-	///
-	/// let msg = Msg::from("The best color.")
-	///     .with_custom_prefix("Pink", 199);
-	///
-	/// assert_eq!(
-	///     msg,
-	///     "\x1b[1;38;5;199mPink:\x1b[0m The best color.",
-	/// );
-	/// ```
-	pub fn with_custom_prefix<C, S>(mut self, prefix: S, color: C) -> Self
-	where C: Into<AnsiColor>, S: AsRef<str> {
-		self.set_custom_prefix(prefix, color);
+	pub fn with_prefix<P: IntoMsgPrefix>(mut self, prefix: P) -> Self {
+		self.set_prefix(prefix);
 		self
 	}
 
@@ -1362,6 +1257,53 @@ impl Msg {
 			if stderr { err.eprint(); }
 			else { err.print(); }
 		}
+	}
+}
+
+#[cfg(feature = "progress")]
+/// ## Miscellaneous.
+impl Msg {
+	#[cfg_attr(docsrs, doc(cfg(feature = "progress")))]
+	#[must_use]
+	/// # Bytes Saved Suffix.
+	///
+	/// A lot of our own programs using this lib crunch data and report the
+	/// savings as a suffix. This method just provides a quick way to generate
+	/// that.
+	pub fn with_bytes_saved(mut self, state: BeforeAfter) -> Self {
+		use dactyl::{NicePercent, NiceU64};
+
+		if let Some(saved) = state.less() {
+			let saved = NiceU64::from(saved);
+			let buf = state.less_percent().map_or_else(
+				// Just the bytes.
+				|| {
+					let mut buf = String::with_capacity(24 + saved.len());
+					buf.push_str(" \x1b[2m(Saved ");
+					buf.push_str(saved.as_str());
+					buf.push_str(" bytes.)\x1b[0m");
+					buf
+				},
+				// With percent.
+				|per| {
+					let per = NicePercent::from(per);
+					let mut buf = String::with_capacity(26 + saved.len() + per.len());
+					buf.push_str(" \x1b[2m(Saved ");
+					buf.push_str(saved.as_str());
+					buf.push_str(" bytes, ");
+					buf.push_str(per.as_str());
+					buf.push_str(".)\x1b[0m");
+					buf
+				}
+			);
+
+			self.replace_part(TocId::Suffix, &buf);
+		}
+		else {
+			self.replace_part(TocId::Suffix, " \x1b[2m(No savings.)\x1b[0m");
+		}
+
+		self
 	}
 }
 

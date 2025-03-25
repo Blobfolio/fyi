@@ -151,7 +151,10 @@ pub(super) fn parse_msg(kind: MsgKind) -> Result<(Msg, Settings), FyiError> {
 
 	let msg = msg.ok_or(FyiError::NoMessage)?;
 	let msg =
-		if matches!(kind, MsgKind::Custom) { Msg::custom(prefix, color, msg) }
+		if matches!(kind, MsgKind::Custom) {
+			let color = fyi_msg::ansi::AnsiColor::from_u8(color);
+			Msg::new((&prefix, color), msg)
+		}
 		else { Msg::new(kind, msg) }
 			.with_flags(flags.msg_flags());
 

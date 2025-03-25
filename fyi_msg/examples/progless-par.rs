@@ -21,7 +21,10 @@ fn main() -> std::process::ExitCode {
 /// # Do it.
 fn main() {
 	use dactyl::NiceU16;
-	use fyi_msg::Progless;
+	use fyi_msg::{
+		ansi::AnsiColor,
+		Progless,
+	};
 	use rayon::prelude::*;
 	use std::time::Duration;
 
@@ -29,7 +32,7 @@ fn main() {
 
 	// Initiate a progress bar.
 	let pbar = Progless::try_from(FILE_TYPES.len()).unwrap()
-		.with_title(Some(Msg::custom("Scanning", 199, "Pretending to look for \"message\" file types…")));
+		.with_title(Some(Msg::new(("Scanning", AnsiColor::Misc199), "Pretending to look for \"message\" file types…")));
 
 	FILE_TYPES.par_iter()
 		.map(|&t| (t, Duration::from_millis(t.len() as u64 * 3)))
@@ -41,7 +44,7 @@ fn main() {
 			if txt.starts_with("message/") {
 				// Note this shouldn't fail in practice, but if STDERR is tied
 				// up for whatever reason the original message is passed back.
-				let _res = pbar.push_msg(Msg::custom("Found", 199, txt));
+				let _res = pbar.push_msg(Msg::new(("Found", AnsiColor::Misc199), txt));
 			}
 
 			// Simulate work.
@@ -60,7 +63,7 @@ fn main() {
 	pbar.try_reset(nums.len() as u32).unwrap();
 
 	// Change the title.
-	pbar.set_title(Some(Msg::custom("Crunching", 199, "Playing with numbers now…")));
+	pbar.set_title(Some(Msg::new(("Crunching", AnsiColor::Misc199), "Playing with numbers now…")));
 
 	// Loop through the new tasks.
 	nums.into_par_iter()

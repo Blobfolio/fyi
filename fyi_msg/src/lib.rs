@@ -108,9 +108,9 @@ mod msg;
 #[cfg(feature = "progress")] mod progress;
 
 pub use msg::{
+	Msg,
 	MsgFlags,
 	kind::MsgKind,
-	Msg,
 };
 
 #[cfg(feature = "fitted")]

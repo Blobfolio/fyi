@@ -13,6 +13,7 @@ pub(super) mod signals;
 
 
 use crate::{
+	ansi::AnsiColor,
 	Msg,
 	MsgKind,
 	ProglessError,
@@ -1518,9 +1519,8 @@ impl Progless {
 	/// It's a sort of default…
 	pub fn set_reticulating_splines<S>(&self, app: S)
 	where S: AsRef<str> {
-		self.inner.set_title(Some(Msg::custom(
-			app.as_ref(),
-			199,
+		self.inner.set_title(Some(Msg::new(
+			(app.as_ref(), AnsiColor::Misc199),
 			"Reticulating splines\u{2026}"
 		)));
 	}

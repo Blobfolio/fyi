@@ -5,6 +5,7 @@
 /// Do it.
 fn main() {
 	use fyi_msg::{
+		ansi::AnsiColor,
 		confirm,
 		Msg,
 		MsgKind,
@@ -16,11 +17,11 @@ fn main() {
 
 	println!();
 
-	Msg::custom("Pink", 199, "This message has a custom pink prefix.")
+	Msg::new(("Pink", AnsiColor::Misc199), "This message has a custom pink prefix.")
 		.with_newline(true)
 		.print();
 
-	Msg::custom("Blue", 4, "This message has a custom blue prefix.")
+	Msg::new(("Blue", AnsiColor::Blue), "This message has a custom blue prefix.")
 		.with_newline(true)
 		.print();
 
