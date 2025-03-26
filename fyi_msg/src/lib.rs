@@ -116,6 +116,7 @@ pub use msg::{
 #[cfg(feature = "fitted")]
 #[cfg_attr(docsrs, doc(cfg(feature = "fitted")))]
 pub use fitted::{
+	fit_to_width,
 	length_width,
 	width,
 };

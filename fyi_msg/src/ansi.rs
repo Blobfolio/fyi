@@ -411,6 +411,83 @@ impl NoAnsiState<u8> {
 
 
 
+#[cfg(feature = "fitted")]
+/// # Only Ansi Iterator.
+///
+/// This iterator yields the Ansi sequences within a string, but nothing else.
+/// It is effectively the opposite of the [`NoAnsi`] iterator.
+///
+/// Internally, we use this to find and preserve sequences that would otherwise
+/// be lost when chopping a string to its display width.
+pub(crate) struct OnlyAnsi<'a>(&'a str);
+
+#[cfg(feature = "fitted")]
+impl<'a> OnlyAnsi<'a> {
+	#[inline]
+	#[must_use]
+	/// # New Instance.
+	///
+	/// Initialize an iterator for the given string slice.
+	pub(crate) const fn new(src: &'a str) -> Self { Self(src) }
+}
+
+#[cfg(feature = "fitted")]
+impl<'a> Iterator for OnlyAnsi<'a> {
+	type Item = &'a str;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		loop {
+			// Advance to the next escape.
+			self.0 = self.0.trim_start_matches(|c: char| c != '\x1b');
+			if self.0.len() < 3 { return None; }
+
+			// CSI sequence.
+			if let Some(rest) = self.0.strip_prefix("\x1b[") {
+				for (k, c) in rest.char_indices() {
+					if matches!(c, '\x40'..='\x7E') {
+						let Some((stub, rest)) = self.0.split_at_checked(2 + k + c.len_utf8()) else { break; };
+						self.0 = rest;
+						return Some(stub);
+					}
+				}
+
+				// Unterminated sequence… we're done!
+				self.0 = "";
+				return None;
+			}
+			// OSC sequence.
+			else if let Some(rest) = self.0.strip_prefix("\x1b]") {
+				let mut chars = rest.char_indices().peekable();
+				while let Some((k, c)) = chars.next() {
+					match c {
+						// Single-char stops.
+						NoAnsiState::<char>::OE | NoAnsiState::<char>::BELL => {
+							let Some((stub, rest)) = self.0.split_at_checked(2 + k + c.len_utf8()) else { break; };
+							self.0 = rest;
+							return Some(stub);
+						},
+						// Multi-char stop.
+						NoAnsiState::<char>::ESCAPE => if let Some((k, '\\')) = chars.peek() {
+							let Some((stub, rest)) = self.0.split_at_checked(2 + k + c.len_utf8()) else { break; };
+							self.0 = rest;
+							return Some(stub);
+						},
+						_ => {},
+					}
+				}
+
+				// Unterminated sequence… we're done!
+				self.0 = "";
+				return None;
+			}
+
+			// Fake-out! Advance to the next character and loop back around.
+			self.0 = self.0.get(1..)?;
+		}
+	}
+}
+
+
 
 #[cfg(test)]
 mod test {
@@ -462,6 +539,30 @@ mod test {
 		] {
 			let stripped: Vec<u8> = NoAnsi::<u8, _>::new(i.iter().copied()).collect();
 			assert_eq!(stripped, b"AC", "Bytes: {i:?}");
+		}
+	}
+
+	#[cfg(feature = "fitted")]
+	#[test]
+	fn t_only_ansi_osc() {
+		// Verify two-byte endings are properly accounted for when mixed and
+		// matched.
+		for (raw, expected) in [
+			("One \x1b]Two\x07 Three", "\x1b]Two\x07"),
+			("One \x1b]Twoœ Three", "\x1b]Twoœ"),
+			("One \x1b]Two\x1b\\ Three", "\x1b]Two\x1b\\"),
+			("One \x1b]Two\x1b\x1b\\ Three", "\x1b]Two\x1b\x1b\\"),
+			("One \x1b]Two\x1bHi\x1b\\ Three", "\x1b]Two\x1bHi\x1b\\"),
+			("One \x1b]Two\x1b\x07 Three", "\x1b]Two\x1b\x07"),
+			("One \x1b]Two\x1bœ Three", "\x1b]Two\x1bœ"),
+			("One \x1b]Two\x1b\x1bœ Three", "\x1b]Two\x1b\x1bœ"),
+			("One \x1b]Two\x1b\x1b\x1bœ Three", "\x1b]Two\x1b\x1b\x1bœ"),
+		] {
+			assert_eq!(
+				OnlyAnsi::new(raw).collect::<String>(),
+				expected,
+				"Raw: {raw:?}",
+			);
 		}
 	}
 

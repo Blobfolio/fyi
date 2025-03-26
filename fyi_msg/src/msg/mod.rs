@@ -104,16 +104,14 @@ macro_rules! msg_kind {
 			let msg = msg.as_ref();
 			let prefix = MsgKind::$kind.as_str_prefix();
 
-			// Prefix first.
-			let mut inner = String::with_capacity(prefix.len() + msg.len() + 1);
+			// Join the prefix and message.
+			let p_end = prefix.len();
+			let mut inner = String::with_capacity(p_end + msg.len() + 1);
 			inner.push_str(prefix);
-			let p_end = inner.len();
-
-			// Add the content.
 			inner.push_str(msg);
 			let m_end = inner.len();
 
-			// Add a new line.
+			// Finish with a new line.
 			inner.push('\n');
 
 			// Done!
@@ -303,7 +301,7 @@ impl PartialOrd for Msg {
 /// ## Construction.
 impl Msg {
 	#[must_use]
-	#[expect(clippy::needless_pass_by_value, reason = "Impl is on referenced and owned types.")]
+	#[expect(clippy::needless_pass_by_value, reason = "Trait covers owned and referenced types.")]
 	/// # New Message.
 	///
 	/// This creates a new [`Msg`] with prefix and message parts.
@@ -371,8 +369,6 @@ impl Msg {
 		let p_end = prefix.prefix_len();
 		let mut inner = String::with_capacity(p_end + msg.len());
 		prefix.prefix_push(&mut inner);
-
-		// Add the content.
 		inner.push_str(msg);
 		let m_end = inner.len();
 
@@ -441,10 +437,9 @@ impl Msg {
 	/// are not supported, unless the cumulative width of all lines fits, or
 	/// the chop is made to the first line.
 	///
-	/// (Trailing line breaks appended with [`Msg::with_newline`] are fine;
-	/// the above only applies when breaks live somewhere in the _middle_.)
-	///
-	/// See [`fitted::width`](crate::fitted::width) for more details.
+	/// Display widths can vary by environment, so the result may come up a bit
+	/// fat or skinny if there's Unicode afoot. See [`fitted::width`](crate::fitted::width)
+	/// for a more detailed explanation.
 	///
 	/// ## Examples
 	///
@@ -483,9 +478,26 @@ impl Msg {
 	/// // Fitting fails once the entirety of the message part is lost.
 	/// assert!(msg.fitted(6).is_none());
 	/// ```
+	///
+	/// This method is Ansi-aware and will preserve any "cut" sequences to
+	/// prevent display-related weirdness from lost resets, etc.
+	///
+	/// ```
+	/// use fyi_msg::Msg;
+	///
+	/// let msg = Msg::from("\x1b[1;91mHello\x1b[0m \x1b[1;92mWorld\x1b[0m");
+	/// let stub = msg.fitted(4).unwrap();
+	/// assert_eq!(
+	///     stub,
+	///     "\x1b[1;91mHell\x1b[0m\x1b[1;92m\x1b[0m",
+	/// );
+	///
+	/// // Preserved sequences might end up canceling each other out as in this
+	/// // example, but might not. The important thing is this remains true:
+	/// eprintln!("{stub}");
+	/// eprintln!("I'm not red!");
+	/// ```
 	pub fn fitted(&self, width: usize) -> Option<Cow<str>> {
-		use crate::ansi::AnsiColor;
-
 		// Width won't be bigger than length; we might not even need to check!
 		if self.inner.len() <= width { return Some(Cow::Borrowed(self.as_str())); }
 
@@ -496,36 +508,33 @@ impl Msg {
 		// Everything fits!
 		if keep == all.len() { return Some(Cow::Borrowed(self.as_str())); }
 
-		// It doesn't fit, but might if chopped…
+		// It doesn't fit, but might if chopped!
 		if keep != 0 {
-			// We might have to rebuild slightly.
-			let newline = self.toc.part_len(TocId::Newline).is_some();
-			let chopped = &all[..keep];
+			// Make sure we still have at least one byte of the message part.
+			let from = self.toc.part_start(TocId::Message);
+			if from < keep {
+				let (chopped, killed) = all.split_at_checked(keep)?;
+				// And that no mid-content line breaks are present.
+				if ! chopped.trim_matches('\n').bytes().any(|b| b == b'\n') {
+					let mut ansi_iter = crate::ansi::OnlyAnsi::new(killed);
+					let first_ansi = ansi_iter.next();
+					let newline = self.toc.part_len(TocId::Newline).is_some();
 
-			let from = self.toc.part_start(TocId::Suffix);
-			let ansi: bool =
-				// Is the chop in the suffix part?
-				if from <= keep { chopped[from..keep].contains('\x1b') }
-				// Is the chop in the message part?
-				else {
-					let from = self.toc.part_start(TocId::Message);
-					if from < keep { chopped[from..keep].contains('\x1b') }
-					// We can't afford to lose the entire message!
-					else { return None; }
-				};
+					// We'll need to allocate if we lost Ansi sequences or the
+					// trailing line break.
+					if newline || first_ansi.is_some() {
+						let mut out = chopped.to_owned();
+						if let Some(first_ansi) = first_ansi {
+							out.push_str(first_ansi);
+							out.extend(ansi_iter);
+						}
+						if newline { out.push('\n'); }
+						return Some(Cow::Owned(out));
+					}
 
-			// Only accept chops spanning a single line.
-			if ! chopped.bytes().any(|b| b == b'\n') {
-				// We have to build a new string.
-				if newline || ansi {
-					let mut out = chopped.to_owned();
-					if ansi { out.push_str(AnsiColor::RESET); }
-					if newline { out.push('\n'); }
-					return Some(Cow::Owned(out));
+					// Otherwise the slice can be passed through as-is.
+					return Some(Cow::Borrowed(chopped));
 				}
-
-				// We can send the stub as-is.
-				return Some(Cow::Borrowed(chopped));
 			}
 		}
 
@@ -625,6 +634,9 @@ impl Msg {
 	/// msg.set_indent(2);
 	/// assert_eq!(msg, "        Hello world.");
 	///
+	/// msg.set_indent(3);
+	/// assert_eq!(msg, "            Hello world.");
+	///
 	/// // …
 	///
 	/// msg.set_indent(7);
@@ -633,10 +645,13 @@ impl Msg {
 	/// msg.set_indent(8);
 	/// assert_eq!(msg, "                                Hello world.");
 	///
-	/// // Pass as big a number as you want, but indentation maxes out at
-	/// // eight.
+	/// msg.set_indent(9);
+	/// assert_eq!(msg, "                                Hello world."); // Same as 8.
+	///
+	/// // …
+	///
 	/// msg.set_indent(u8::MAX);
-	/// assert_eq!(msg, "                                Hello world.");
+	/// assert_eq!(msg, "                                Hello world."); // Same as 8.
 	///
 	/// // Back to zero!
 	/// msg.set_indent(0);
@@ -902,6 +917,9 @@ impl Msg {
 	/// let msg = Msg::from("Hello world.").with_indent(2);
 	/// assert_eq!(msg, "        Hello world.");
 	///
+	/// let msg = Msg::from("Hello world.").with_indent(3);
+	/// assert_eq!(msg, "            Hello world.");
+	///
 	/// // …
 	///
 	/// let msg = Msg::from("Hello world.").with_indent(7);
@@ -910,11 +928,13 @@ impl Msg {
 	/// let msg = Msg::from("Hello world.").with_indent(8);
 	/// assert_eq!(msg, "                                Hello world.");
 	///
-	/// // The tabs dry up after eight.
-	/// assert_eq!(
-	///     Msg::from("Hello world.").with_indent(8),
-	///     Msg::from("Hello world.").with_indent(u8::MAX),
-	/// );
+	/// let msg = Msg::from("Hello world.").with_indent(9);
+	/// assert_eq!(msg, "                                Hello world."); // Same as 8.
+	///
+	/// // …
+	///
+	/// let msg = Msg::from("Hello world.").with_indent(u8::MAX);
+	/// assert_eq!(msg, "                                Hello world."); // Same as 8.
 	/// ```
 	pub fn with_indent(mut self, tabs: u8) -> Self {
 		self.set_indent(tabs);
@@ -1459,4 +1479,50 @@ impl TocId {
 	///
 	/// These parts _might_ have formatting.
 	const ANSI_PARTS: [Self; 3] = [Self::Prefix, Self::Message, Self::Suffix];
+}
+
+
+
+#[cfg(all(test, feature = "fitted"))]
+mod test {
+	use super::*;
+
+	#[test]
+	fn t_fitted() {
+		// Double-check that Ansi splits receive an extra reset.
+		assert_eq!(
+			Msg::from("\x1b[1mAll bold!\x1b[0m").fitted(3).unwrap(),
+			"\x1b[1mAll\x1b[0m",
+		);
+
+		// And new lines get restored.
+		assert_eq!(
+			Msg::from("\x1b[1mAll bold!\x1b[0m").with_newline(true).fitted(3).unwrap(),
+			"\x1b[1mAll\x1b[0m\n",
+		);
+
+		// Multi-line is allowed if the space is on the end.
+		assert_eq!(
+			Msg::from("\n\nSpace\nd").with_newline(true).fitted(4).unwrap(),
+			"\n\nSpac\n",
+		);
+		assert_eq!(
+			Msg::from("\n\nSpace\nd").with_newline(true).fitted(5).unwrap(),
+			"\n\nSpace\n\n",
+		);
+
+		// Or if everything fits anyway.
+		assert_eq!(
+			Msg::from("\n\nSpace\nd").with_newline(true).fitted(6).unwrap(),
+			"\n\nSpace\nd\n",
+		);
+
+		// Or if the result has all its content on one line.
+		assert_eq!(Msg::from("Spa\nced").fitted(2).unwrap(), "Sp");
+		assert_eq!(Msg::from("Spa\nced").fitted(3).unwrap(), "Spa\n");
+		assert_eq!(Msg::from("\nSpa\nced").fitted(3).unwrap(), "\nSpa\n");
+
+		// But not if content spans two lines.
+		assert!(Msg::from("Spa\nced").fitted(4).is_none());
+	}
 }

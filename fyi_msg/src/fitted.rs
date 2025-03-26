@@ -4,10 +4,140 @@
 This optional module contains methods for counting the display width of byte strings, and/or figuring out the closest char index to chop on to make something fit.
 */
 
-use crate::ansi::NoAnsi;
+use crate::ansi::{
+	NoAnsi,
+	OnlyAnsi,
+};
+use std::borrow::Cow;
 use unicode_width::UnicodeWidthChar;
 
 
+
+#[must_use]
+/// # Fit to Width.
+///
+/// Return a version of the string cropped to the target display `width`.
+///
+/// This method works line-by-line, truncating any that are too long. Line
+/// breaks are preserved (even if the line gets chopped), except in cases where
+/// a line has to be completely dropped.
+///
+/// Allocations are only made if alteration is required, otherwise the original
+/// is passed back through.
+///
+/// ## Examples
+///
+/// ```
+/// use fyi_msg::fit_to_width;
+///
+/// // A single line string that fits as-is.
+/// assert_eq!(
+///     fit_to_width("Hello World", 11),
+///     "Hello World",
+/// );
+///
+/// // A single line with trailing break that doesn't _quite_ fit. Note the
+/// // "d" is dropped, but not the trailing "\n".
+/// assert_eq!(
+///     fit_to_width("Hello World\n", 10),
+///     "Hello Worl\n",
+/// );
+///
+/// // Same as above, but with a stupid "\r\n" break, which is also supported.
+/// assert_eq!(
+///     fit_to_width("Hello World\r\n", 10),
+///     "Hello Worl\r\n",
+/// );
+///
+/// // Multi-line trim!
+/// assert_eq!(
+///     fit_to_width("\
+///         Apples\n\
+///         Bananas\n\
+///         Carrots\n\
+///     ", 6),
+///     "\
+///     Apples\n\
+///     Banana\n\
+///     Carrot\n\
+///     ",
+/// );
+/// ```
+///
+/// This method does not "parse" Ansi sequences, but will recognize and
+/// preserve them (even in chopped regions) to prevent any accidental
+/// display weirdness.
+///
+/// ```
+/// use fyi_msg::fit_to_width;
+///
+/// let s = "\x1b[1mHello World\x1b[0m";
+/// assert_eq!(
+///     fit_to_width(s, 5),
+///     "\x1b[1mHello\x1b[0m", // The reset was saved!
+/// );
+/// ```
+pub fn fit_to_width(src: &str, width: usize) -> Cow<str> {
+	/// # Trailing Line Break?
+	fn terminator(src: &str) -> &str {
+		if src.ends_with("\r\n") { "\r\n" }
+		else if src.ends_with('\n') { "\n" }
+		else { "" }
+	}
+
+	// Easy aborts.
+	if src.is_empty() || width == 0 { return Cow::Borrowed(""); }
+	if src.len() <= width { return Cow::Borrowed(src); }
+
+	let mut lines = src.split_inclusive('\n');
+
+	// First pass: run through the lines unless/until we find one that doesn't
+	// fit the specified width.
+	let mut split = 0;
+	for line in lines.by_ref() {
+		let keep = length_width(line.as_bytes(), width);
+
+		// Everything fits!
+		if keep == line.len() { split += keep; }
+		// Second pass: build a new string with only the bits that fit.
+		else {
+			// Start with the good line(s).
+			let mut out = String::with_capacity(src.len());
+			out.push_str(&src[..split]);
+
+			// This should never fail.
+			let Some((keep, kill)) = line.split_at_checked(keep) else {
+				return Cow::Borrowed("");
+			};
+
+			// Keep the keepable, "lost" ANSI formatting, and/or trailing
+			// line breaks.
+			out.push_str(keep);
+			for seq in OnlyAnsi::new(kill) { out.push_str(seq); }
+			out.push_str(terminator(line));
+
+			// The rest of the lines.
+			for line in lines {
+				let keep = length_width(line.as_bytes(), width);
+				if keep == line.len() { out.push_str(line); }
+				else {
+					// This should never fail.
+					let Some((keep, kill)) = line.split_at_checked(keep) else {
+						return Cow::Borrowed("");
+					};
+					out.push_str(keep);
+					for seq in OnlyAnsi::new(kill) { out.push_str(seq); }
+					out.push_str(terminator(line));
+				}
+			}
+
+			return Cow::Owned(out);
+		}
+	}
+
+	// Everything fit!
+	Cow::Borrowed(src)
+}
 
 #[must_use]
 /// # Length Width.
@@ -88,8 +218,7 @@ pub fn length_width(bytes: &[u8], stop: usize) -> usize {
 /// to determine width.
 ///
 /// Note: line breaks are ignored; the cumulative width of all lines is
-/// returned. If you're trying to calculate *line* widths, split the slice
-/// first and pass each chunk separately.
+/// returned. If you're trying to calculate *line* widths.
 ///
 /// **This requires the `fitted` crate feature.**
 ///
