@@ -421,25 +421,14 @@ impl Msg {
 	#[cfg(feature = "fitted")]
 	#[cfg_attr(docsrs, doc(cfg(feature = "fitted")))]
 	#[must_use]
-	/// # Capped to Width.
+	#[inline]
+	/// # Fit to Width.
 	///
-	/// Return a string representation of the message with its display width
-	/// capped to `width`, selectively trimming from the end of the
-	/// suffix/message parts of the [`Msg`] as necessary to make it work.
+	/// Return the message as a string with its lines capped to the given
+	/// display `width`.
 	///
-	/// The _other_ parts — prefix, line break, etc. — are always passed
-	/// through in their entirety; if they themselves are too wide, `None` is
-	/// returned instead.
-	///
-	/// ## Limitations
-	///
-	/// Messages with _content_ spanning multiple lines — e.g. `"Hello\nWorld"` —
-	/// are not supported, unless the cumulative width of all lines fits, or
-	/// the chop is made to the first line.
-	///
-	/// Display widths can vary by environment, so the result may come up a bit
-	/// fat or skinny if there's Unicode afoot. See [`fitted::width`](crate::fitted::width)
-	/// for a more detailed explanation.
+	/// This is essentially just a convenience wrapper around [`fitted::width`](crate::fitted::width);
+	/// refer to that method documentation for more details.
 	///
 	/// ## Examples
 	///
@@ -457,89 +446,30 @@ impl Msg {
 	///     "\x1b[1;34mName:\x1b[0m Björk (the Great)\n",
 	/// );
 	///
-	/// // Fit it to 20 columns; lose some suffix.
+	/// // Fitting to 20 columns loses some of the suffix, but the trailing
+	/// // line break is preserved.
 	/// assert_eq!(
-	///     msg.fitted(20).as_deref(),
-	///     Some("\x1b[1;34mName:\x1b[0m Björk (the Gre\n"),
+	///     msg.fitted(20),
+	///     "\x1b[1;34mName:\x1b[0m Björk (the Gre\n",
 	/// );
 	///
-	/// // Fit it to 10 columns; lose all suffix, some message.
+	/// // Fitting to 10 columns drops the suffix entirely, loses a bit of
+	/// // the message part, but the line break hangs on.
+	/// // the trailing line break.
 	/// assert_eq!(
-	///     msg.fitted(10).as_deref(),
-	///     Some("\x1b[1;34mName:\x1b[0m Björ\n"),
+	///     msg.fitted(10),
+	///     "\x1b[1;34mName:\x1b[0m Björ\n",
 	/// );
 	///
-	/// // Fit it to 7 columns; we've still got a "B"!
+	/// // Fitting to 4 columns kills most everything, but the ANSI reset and
+	/// // line break are preserved.
 	/// assert_eq!(
-	///     msg.fitted(7).as_deref(),
-	///     Some("\x1b[1;34mName:\x1b[0m B\n"),
+	///     msg.fitted(4),
+	///     "\x1b[1;34mName\x1b[0m\n",
 	/// );
-	///
-	/// // Fitting fails once the entirety of the message part is lost.
-	/// assert!(msg.fitted(6).is_none());
 	/// ```
-	///
-	/// This method is ANSI-aware and will preserve any "cut" sequences to
-	/// prevent display-related weirdness from lost resets, etc.
-	///
-	/// ```
-	/// use fyi_msg::Msg;
-	///
-	/// let msg = Msg::from("\x1b[1;91mHello\x1b[0m \x1b[1;92mWorld\x1b[0m");
-	/// let stub = msg.fitted(4).unwrap();
-	/// assert_eq!(
-	///     stub,
-	///     "\x1b[1;91mHell\x1b[0m\x1b[1;92m\x1b[0m",
-	/// );
-	///
-	/// // Preserved sequences might end up canceling each other out as in this
-	/// // example, but might not. The important thing is this remains true:
-	/// eprintln!("{stub}");
-	/// eprintln!("I'm not red!");
-	/// ```
-	pub fn fitted(&self, width: usize) -> Option<Cow<str>> {
-		// Width won't be bigger than length; we might not even need to check!
-		if self.inner.len() <= width { return Some(Cow::Borrowed(self.as_str())); }
-
-		// Calculate the whole width and see where we land.
-		let all = self.as_str();
-		let keep = crate::length_width(all, width);
-
-		// Everything fits!
-		if keep == all.len() { return Some(Cow::Borrowed(self.as_str())); }
-
-		// It doesn't fit, but might if chopped!
-		if keep != 0 {
-			// Make sure we still have at least one byte of the message part.
-			let from = self.toc.part_start(TocId::Message);
-			if from < keep {
-				let (chopped, killed) = all.split_at_checked(keep)?;
-				// And that no mid-content line breaks are present.
-				if ! chopped.trim_matches('\n').bytes().any(|b| b == b'\n') {
-					let mut ansi_iter = crate::ansi::OnlyAnsi::new(killed);
-					let first_ansi = ansi_iter.next();
-					let newline = self.toc.part_len(TocId::Newline).is_some();
-
-					// We'll need to allocate if we lost ANSI sequences or the
-					// trailing line break.
-					if newline || first_ansi.is_some() {
-						let mut out = chopped.to_owned();
-						if let Some(first_ansi) = first_ansi {
-							out.push_str(first_ansi);
-							out.extend(ansi_iter);
-						}
-						if newline { out.push('\n'); }
-						return Some(Cow::Owned(out));
-					}
-
-					// Otherwise the slice can be passed through as-is.
-					return Some(Cow::Borrowed(chopped));
-				}
-			}
-		}
-
-		// Nope!
-		None
+	pub fn fitted(&self, width: usize) -> Cow<str> {
+		crate::fit_to_width(self.as_str(), width)
 	}
 
 	#[inline]
@@ -1389,10 +1319,6 @@ impl Toc {
 		start..end
 	}
 
-	#[cfg(feature = "fitted")]
-	/// # Part Starts At.
-	const fn part_start(&self, id: TocId) -> usize { self.0[id as usize] }
-
 	/// # Resize Part(s).
 	///
 	/// Change the size of `part`, realigning the subsequent boundaries as
@@ -1479,50 +1405,4 @@ impl TocId {
 	///
 	/// These parts _might_ have formatting.
 	const ANSI_PARTS: [Self; 3] = [Self::Prefix, Self::Message, Self::Suffix];
-}
-
-
-
-#[cfg(all(test, feature = "fitted"))]
-mod test {
-	use super::*;
-
-	#[test]
-	fn t_fitted() {
-		// Double-check that ANSI splits receive an extra reset.
-		assert_eq!(
-			Msg::from("\x1b[1mAll bold!\x1b[0m").fitted(3).unwrap(),
-			"\x1b[1mAll\x1b[0m",
-		);
-
-		// And new lines get restored.
-		assert_eq!(
-			Msg::from("\x1b[1mAll bold!\x1b[0m").with_newline(true).fitted(3).unwrap(),
-			"\x1b[1mAll\x1b[0m\n",
-		);
-
-		// Multi-line is allowed if the space is on the end.
-		assert_eq!(
-			Msg::from("\n\nSpace\nd").with_newline(true).fitted(4).unwrap(),
-			"\n\nSpac\n",
-		);
-		assert_eq!(
-			Msg::from("\n\nSpace\nd").with_newline(true).fitted(5).unwrap(),
-			"\n\nSpace\n\n",
-		);
-
-		// Or if everything fits anyway.
-		assert_eq!(
-			Msg::from("\n\nSpace\nd").with_newline(true).fitted(6).unwrap(),
-			"\n\nSpace\nd\n",
-		);
-
-		// Or if the result has all its content on one line.
-		assert_eq!(Msg::from("Spa\nced").fitted(2).unwrap(), "Sp");
-		assert_eq!(Msg::from("Spa\nced").fitted(3).unwrap(), "Spa\n");
-		assert_eq!(Msg::from("\nSpa\nced").fitted(3).unwrap(), "\nSpa\n");
-
-		// But not if content spans two lines.
-		assert!(Msg::from("Spa\nced").fitted(4).is_none());
-	}
 }

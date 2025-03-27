@@ -255,6 +255,22 @@ mod tests {
 	use super::*;
 
 	#[test]
+	fn t_fit_to_width() {
+		for &(slice, stop, expected) in &[
+			("Hello\nWorld", 4, "Hell\nWorl"),
+			("\x1b[1mHello\x1b[0m\n\x1b[2mWorld\x1b[0m", 4, "\x1b[1mHell\x1b[0m\n\x1b[2mWorl\x1b[0m"),
+			("\n\nHello\n\n", 4, "\n\nHell\n\n"),
+			("\n\nHello\n\n", 5, "\n\nHello\n\n"),
+			("\n\nHello\n\n", 500, "\n\nHello\n\n"),
+		] {
+			assert_eq!(
+				fit_to_width(slice, stop),
+				expected,
+			);
+		}
+	}
+
+	#[test]
 	fn t_length_width() {
 		for &(slice, stop, expected) in &[
 			("Hello", 5, 5),
