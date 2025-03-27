@@ -1,5 +1,5 @@
 /*!
-# FYI Msg: Ansi Helpers
+# FYI Msg: ANSI Helpers
 */
 
 use std::{
@@ -15,9 +15,9 @@ include!(concat!(env!("OUT_DIR"), "/ansi-color.rs"));
 
 impl fmt::Display for AnsiColor {
 	#[inline]
-	/// # Print Ansi Sequence.
+	/// # Print ANSI Sequence.
 	///
-	/// Print the full Ansi sequence for the selected color, e.g.
+	/// Print the full ANSI sequence for the selected color, e.g.
 	/// `"\x1b[38;5;199m"`.
 	///
 	/// ## Examples
@@ -78,7 +78,7 @@ impl PartialEq<AnsiColor> for u8 {
 }
 
 impl AnsiColor {
-	/// # Ansi Reset Sequence.
+	/// # ANSI Reset Sequence.
 	///
 	/// This tiny sequence resets all style/color attributes back to the
 	/// terminal defaults.
@@ -106,20 +106,20 @@ impl AnsiColor {
 
 
 #[derive(Debug, Clone)]
-/// # Ansi-Stripping Iterator.
+/// # ANSI-Stripping Iterator.
 ///
-/// This iterator strips Ansi [CSI](https://en.wikipedia.org/wiki/ANSI_escape_code#CSI_(Control_Sequence_Introducer)_sequences) and [OSC](https://en.wikipedia.org/wiki/ANSI_escape_code#OSC_(Operating_System_Command)_sequences) sequences
+/// This iterator strips ANSI [CSI](https://en.wikipedia.org/wiki/ANSI_escape_code#CSI_(Control_Sequence_Introducer)_sequences) and [OSC](https://en.wikipedia.org/wiki/ANSI_escape_code#OSC_(Operating_System_Command)_sequences) sequences
 /// from existing `char`/`u8` iterators.
 ///
-/// Note that other types of (less common) Ansi sequences and miscellaneous
+/// Note that other types of (less common) ANSI sequences and miscellaneous
 /// control characters may remain.
 pub struct NoAnsi<U: Copy + fmt::Debug, I: Iterator<Item=U>> {
 	/// # Iterator.
 	iter: I,
 
-	/// # Ansi Match State.
+	/// # ANSI Match State.
 	///
-	/// This keeps track of whether and where we are inside an Ansi sequence.
+	/// This keeps track of whether and where we are inside an ANSI sequence.
 	state: NoAnsiState<U>,
 
 	/// # Byte Position.
@@ -132,7 +132,7 @@ impl<U: Copy + fmt::Debug, I: Iterator<Item=U>> NoAnsi<U, I> {
 	/// # Bytes Traversed.
 	///
 	/// Return the number of bytes traversed by the iterator (so far),
-	/// including any Ansi sequences that have been ignored.
+	/// including any ANSI sequences that have been ignored.
 	///
 	/// ## Examples
 	///
@@ -142,7 +142,7 @@ impl<U: Copy + fmt::Debug, I: Iterator<Item=U>> NoAnsi<U, I> {
 	/// let raw = "\x1b[1mHello\x1b[0m";
 	/// let mut iter = NoAnsi::<char, _>::new(raw.chars());
 	///
-	/// // The leading Ansi sequence is ignored; the first thing we get back
+	/// // The leading ANSI sequence is ignored; the first thing we get back
 	/// // from the iterator is the H.
 	/// assert_eq!(iter.next(), Some('H'));
 	///
@@ -412,9 +412,9 @@ impl NoAnsiState<u8> {
 
 
 #[cfg(feature = "fitted")]
-/// # Only Ansi Iterator.
+/// # Only ANSI Iterator.
 ///
-/// This iterator yields the Ansi sequences within a string, but nothing else.
+/// This iterator yields the ANSI sequences within a string, but nothing else.
 /// It is effectively the opposite of the [`NoAnsi`] iterator.
 ///
 /// Internally, we use this to find and preserve sequences that would otherwise

@@ -22,14 +22,14 @@ fn main() {
 	build_msg_kinds();
 }
 
-/// # Build Ansi Color Enum.
+/// # Build ANSI Color Enum.
 ///
 /// This enum has 256 variants; it's a lot less painful to generate the more
 /// verbose routines programmatically. Haha.
 fn build_ansi_color() {
 	use fmt::Write;
 
-	// Build up a list of 256 Ansi colors, naming the ones we can.
+	// Build up a list of 256 ANSI colors, naming the ones we can.
 	static COLORS: [&str; 256] = [
 		"Black",
 		"Red",
@@ -145,9 +145,9 @@ fn build_ansi_color() {
 	// Start with the definition.
 	out.push_str("#[repr(u8)]
 #[derive(Debug, Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
-/// # Ansi Colors (8/16/256).
+/// # ANSI Colors (8/16/256).
 ///
-/// This enum is used to print colored text to Ansi-capable terminals. (When
+/// This enum is used to print colored text to ANSI-capable terminals. (When
 /// in doubt, stick with the first sixteen variants; support for those is near
 /// universal.)
 ///
@@ -214,7 +214,7 @@ impl AnsiColor {\n");
 	out.push_str("\t#[must_use]
 	/// # As String Slice.
 	///
-	/// Return the full Ansi sequence for the selected color as a string
+	/// Return the full ANSI sequence for the selected color as a string
 	/// slice.
 	///
 	/// ## Examples
@@ -246,7 +246,7 @@ impl AnsiColor {\n");
 	out.push_str("\t#[must_use]
 	/// # As String Slice (Bold).
 	///
-	/// Return the full Ansi sequence for the selected color as a string
+	/// Return the full ANSI sequence for the selected color as a string
 	/// slice, bolded.
 	pub(crate) const fn as_str_bold(self) -> &'static str {
 		match self {\n");

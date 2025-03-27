@@ -19,11 +19,11 @@ use unicode_width::UnicodeWidthChar;
 /// Return a version of the string cropped to the target display `width`.
 ///
 /// This method works line-by-line, truncating any that are too long. Line
-/// breaks are preserved (even if the line gets chopped), except in cases where
-/// a line has to be completely dropped.
+/// breaks and ANSI formatting sequences are always preserved, even if they
+/// appear in otherwise "cut" regions.
 ///
 /// Allocations are only made if alteration is required, otherwise the original
-/// is passed back through.
+/// slice is passed back through.
 ///
 /// ## Examples
 ///
@@ -64,7 +64,7 @@ use unicode_width::UnicodeWidthChar;
 /// );
 /// ```
 ///
-/// This method does not "parse" Ansi sequences, but will recognize and
+/// This method does not "parse" ANSI sequences, but will recognize and
 /// preserve them (even in chopped regions) to prevent any accidental
 /// display weirdness.
 ///
@@ -75,6 +75,14 @@ use unicode_width::UnicodeWidthChar;
 /// assert_eq!(
 ///     fit_to_width(s, 5),
 ///     "\x1b[1mHello\x1b[0m", // The reset was saved!
+/// );
+///
+/// // If there are multiple sequences in the cut, they'll be added back in
+/// // one big lump at the end, minus their original content.
+/// let s = "\x1b[1mHello\x1b[0m \x1b[91mWorld\x1b[0m";
+/// assert_eq!(
+///     fit_to_width(s, 5),
+///     "\x1b[1mHello\x1b[0m\x1b[91m\x1b[0m",
 /// );
 /// ```
 pub fn fit_to_width(src: &str, width: usize) -> Cow<str> {
@@ -95,7 +103,7 @@ pub fn fit_to_width(src: &str, width: usize) -> Cow<str> {
 	// fit the specified width.
 	let mut split = 0;
 	for line in lines.by_ref() {
-		let keep = length_width(line.as_bytes(), width);
+		let keep = length_width(line, width);
 
 		// Everything fits!
 		if keep == line.len() { split += keep; }
@@ -118,7 +126,7 @@ pub fn fit_to_width(src: &str, width: usize) -> Cow<str> {
 
 			// The rest of the lines.
 			for line in lines {
-				let keep = length_width(line.as_bytes(), width);
+				let keep = length_width(line, width);
 				if keep == line.len() { out.push_str(line); }
 				else {
 					// This should never fail.
@@ -143,12 +151,7 @@ pub fn fit_to_width(src: &str, width: usize) -> Cow<str> {
 /// # Length Width.
 ///
 /// Return the maximum byte *length* for the slice that fits a given display
-/// *width*, such that `slice[0..len]` will be a valid substring likely to fit.
-///
-/// This method accepts raw bytes for performance reasons, but is Unicode-safe;
-/// the return value will always be a valid char boundary. In cases where the
-/// input contains invalid UTF-8, only the leading ASCII bytes will be
-/// considered/counted.
+/// *width*, such that `slice[..len]` will be a valid substring likely to fit.
 ///
 /// See the documentation for [`width`] for more information.
 ///
@@ -159,106 +162,90 @@ pub fn fit_to_width(src: &str, width: usize) -> Cow<str> {
 /// ```
 /// // Split to a display width of five.
 /// let full: &str = "\x1b[2mBjörk\x1b[0m Guðmundsdóttir";
-/// let idx = fyi_msg::length_width(full.as_bytes(), 5);
+/// let idx = fyi_msg::length_width(full, 5);
 /// assert_eq!(
 ///     &full[..idx],
 ///     "\x1b[2mBjörk\x1b[0m",
 /// );
+///
+/// // Be careful with strings containing ANSI sequences or line breaks,
+/// // though; they can be lost depending on where the max width falls.
+/// let idx = fyi_msg::length_width(full, 4);
+/// assert_eq!(
+///     &full[..idx],
+///     "\x1b[2mBjör", // No reset!
+/// );
+///
+/// // Were you to send the above to the printer, this would happen:
+/// println!("{}", &full[..idx]); // Looks fine.
+/// println!("Something else!");  // This is dim too!
+///
+/// // To avoid this, use `fit_to_width` instead.
+/// let fitted = fyi_msg::fit_to_width(&full, 4);
+/// assert_eq!(
+///     fitted,
+///     "\x1b[2mBjör\x1b[0m",     // There we are!
+/// );
+/// println!("{fitted}");         // Looks the same as before.
+/// println!("Something else!");  // Now this looks fine too.
 /// ```
-pub fn length_width(bytes: &[u8], stop: usize) -> usize {
-	// Split on first non-ASCII character.
-	let (a, b): (&[u8], &[u8]) = bytes.iter()
-		.position(|b| ! b.is_ascii())
-		.map_or((bytes, &[]), |pos| bytes.split_at(pos));
-
-	// Short circuit.
-	if a.len() <= stop && b.is_empty() { return bytes.len(); }
-
-	// Iterate through the ASCII parts first, assuming length and width are
-	// equivalent for non-control characters.
+pub fn length_width(src: &str, max_width: usize) -> usize {
 	let mut width = 0;
-	let mut iter = NoAnsi::<u8, _>::new(a.iter().copied());
+	let mut iter = NoAnsi::<char, _>::new(src.chars());
 	while let Some(v) = iter.next() {
-		if v != 0 && ! v.is_ascii_control() {
-			if width == stop { return iter.byte_pos() - 1; }
-			width += 1;
+		width += UnicodeWidthChar::width(v).unwrap_or(0);
+		// This one won't fit; rewind!
+		if max_width < width {
+			return iter.byte_pos() - v.len_utf8();
 		}
 	}
 
-	// If we're still here, stringify the rest and keep going!
-	if ! b.is_empty() {
-		let Ok(b) = std::str::from_utf8(b) else { return a.len(); };
-		let mut iter = NoAnsi::<char, _>::new(b.chars());
-		while let Some(v) = iter.next() {
-			width += UnicodeWidthChar::width(v).unwrap_or(0);
-			// This one won't fit; rewind!
-			if stop < width {
-				return a.len() + iter.byte_pos() - v.len_utf8();
-			}
-		}
-	}
-
-	// The original length fits just fine.
-	bytes.len()
+	// All good!
+	src.len()
 }
 
 #[must_use]
 /// # Width.
 ///
-/// Find the "display width" of a byte string.
-///
-/// This method accepts raw bytes for performance reasons, but is Unicode-safe.
-/// In cases where the input contains invalid UTF-8, only the leading ASCII
-/// bytes will be considered/counted.
+/// Find the (total) "display width" of a string slice.
 ///
 /// Like anything having to do with width vs length, this should be considered
-/// at best an approximation. For ASCII, every byte that is not a control
-/// character or part of an ANSI [CSI](https://en.wikipedia.org/wiki/ANSI_escape_code#CSI_(Control_Sequence_Introducer)_sequences) or [OSC](https://en.wikipedia.org/wiki/ANSI_escape_code#OSC_(Operating_System_Command)_sequences) sequence
-/// is counted as having a length of 1. For Unicode, the [`unicode_width`](https://crates.io/crates/unicode-width) crate is used
-/// to determine width.
+/// at best an approximation. The [`unicode_width`](https://crates.io/crates/unicode-width) crate
+/// is used under-the-hood; refer to their documentation for more details on
+/// how terrible Unicode is. Haha.
 ///
-/// Note: line breaks are ignored; the cumulative width of all lines is
-/// returned. If you're trying to calculate *line* widths.
+/// This method is ANSI-aware and will automatically skip past any
+/// [CSI](https://en.wikipedia.org/wiki/ANSI_escape_code#CSI_(Control_Sequence_Introducer)_sequences) or [OSC](https://en.wikipedia.org/wiki/ANSI_escape_code#OSC_(Operating_System_Command)_sequences)
+/// sequences it encounters.
 ///
 /// **This requires the `fitted` crate feature.**
 ///
 /// ## Examples
 ///
 /// ```
-/// // Line breaks have no width:
-/// assert_ne!(
-///     fyi_msg::width(b"Hello World"),
-///     fyi_msg::width(b"Hello\nWorld"),
+/// use fyi_msg::width;
+///
+/// // The problem with length is inclusivity:
+/// assert_eq!("\x1b[1mBjörk\x1b[0m".len(), 14);
+///
+/// // Even without the ANSI, the length is still too high:
+/// assert_eq!("Björk".len(), 6);
+///
+/// // Width is just what it looks like:
+/// assert_eq!(width("\x1b[1mBjörk\x1b[0m"), 5);
+/// assert_eq!(
+///     width("Björk"), // Unicode.
+///     width("Bjork"), // ASCII.
 /// );
+///
+/// // Be careful with multi-line content; widths are _total_.
+/// assert_eq!(width("Hello World"),  11);
+/// assert_eq!(width("Hello\nWorld"), 10); // Line breaks have no width.
 /// ```
-pub fn width(bytes: &[u8]) -> usize {
-	// Short circuit.
-	if bytes.is_empty() { return 0; }
-
-	// Split on first non-ASCII character.
-	let (a, b): (&[u8], &[u8]) = bytes.iter()
-		.position(|b| ! b.is_ascii())
-		.map_or((bytes, &[]), |pos| bytes.split_at(pos));
-
-	// For the ASCII half, assume length and width are equivalent, except for
-	// control characters.
-	let mut width: usize = NoAnsi::<u8, _>::new(a.iter().copied())
-		.fold(0, |acc, v|
-			if v == 0 || v.is_ascii_control() { acc }
-			else { acc + 1 }
-		);
-
-	// For the rest (if any), use the Unicode width estimate.
-	if ! b.is_empty() {
-		if let Ok(chars) = std::str::from_utf8(b) {
-			width += NoAnsi::<char, _>::new(chars.chars())
-				.fold(0, |acc, v|
-					UnicodeWidthChar::width(v).map_or(acc, |w| acc + w)
-				);
-		}
-	}
-
-	width
+pub fn width(src: &str) -> usize {
+	NoAnsi::<char, _>::new(src.chars()).fold(0, |acc, v|
+		UnicodeWidthChar::width(v).map_or(acc, |w| acc + w)
+	)
 }
 
 
@@ -281,7 +268,7 @@ mod tests {
 			("\x1b[2mHello\x1b[0m World", 5, 13),
 		] {
 			assert_eq!(
-				length_width(slice.as_bytes(), stop),
+				length_width(slice, stop),
 				expected,
 				"Invalid length/width for {slice:?} fit to {stop}."
 			);
@@ -300,7 +287,7 @@ mod tests {
 			("Björk \x1b[2mGuðmundsdóttir\x1b[0m", 20),
 		] {
 			assert_eq!(
-				width(slice.as_bytes()), expected,
+				width(slice), expected,
 				"Invalid width for {slice:?}."
 			);
 		}

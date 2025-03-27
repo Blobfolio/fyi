@@ -247,7 +247,7 @@ impl MsgKind {
 /// [`Msg::new`], [`Msg::set_prefix`], and [`Msg::with_prefix`].
 ///
 /// More specifically, it allows users to choose between the "easy" built-in
-/// [`MsgKind`] prefixes and custom ones, with or without Ansi formatting.
+/// [`MsgKind`] prefixes and custom ones, with or without ANSI formatting.
 ///
 /// Custom prefixes can be any of the usual string types — `&str`,
 /// `String`/`&String`, or `Cow<str>`/`&Cow<str>` — optionally tupled with an
@@ -258,7 +258,7 @@ pub trait IntoMsgPrefix {
 	/// # Prefix Length.
 	///
 	/// Returns the total byte length of the fully-rendered prefix, including
-	/// any Ansi sequences and trailing `": "` separator.
+	/// any ANSI sequences and trailing `": "` separator.
 	fn prefix_len(&self) -> usize;
 
 	/// # Push Prefix.

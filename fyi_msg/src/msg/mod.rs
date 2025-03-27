@@ -307,7 +307,7 @@ impl Msg {
 	/// This creates a new [`Msg`] with prefix and message parts.
 	///
 	/// The prefix can be a built-in [`MsgKind`], or something custom, with or
-	/// without Ansi formatting.
+	/// without ANSI formatting.
 	///
 	/// Custom prefixes can be any of the usual string types — `&str`,
 	/// `String`/`&String`, or `Cow<str>`/`&Cow<str>` — optionally tupled with
@@ -479,7 +479,7 @@ impl Msg {
 	/// assert!(msg.fitted(6).is_none());
 	/// ```
 	///
-	/// This method is Ansi-aware and will preserve any "cut" sequences to
+	/// This method is ANSI-aware and will preserve any "cut" sequences to
 	/// prevent display-related weirdness from lost resets, etc.
 	///
 	/// ```
@@ -503,7 +503,7 @@ impl Msg {
 
 		// Calculate the whole width and see where we land.
 		let all = self.as_str();
-		let keep = crate::length_width(all.as_bytes(), width);
+		let keep = crate::length_width(all, width);
 
 		// Everything fits!
 		if keep == all.len() { return Some(Cow::Borrowed(self.as_str())); }
@@ -520,7 +520,7 @@ impl Msg {
 					let first_ansi = ansi_iter.next();
 					let newline = self.toc.part_len(TocId::Newline).is_some();
 
-					// We'll need to allocate if we lost Ansi sequences or the
+					// We'll need to allocate if we lost ANSI sequences or the
 					// trailing line break.
 					if newline || first_ansi.is_some() {
 						let mut out = chopped.to_owned();
@@ -609,7 +609,7 @@ impl Msg {
 	/// assert_eq!(
 	///     Msg::done("Goodbye.").len(),
 	///     26,
-	/// ); // Don't forget about Ansi…
+	/// ); // Don't forget about ANSI…
 	/// ```
 	pub fn len(&self) -> usize { self.inner.len() }
 }
@@ -819,7 +819,7 @@ impl Msg {
 		else { self.replace_part(TocId::Timestamp, ""); };
 	}
 
-	/// # Strip Ansi Formatting.
+	/// # Strip ANSI Formatting.
 	///
 	/// Remove colors, bold, etc. from the message.
 	///
@@ -1096,7 +1096,7 @@ impl Msg {
 	}
 
 	#[must_use]
-	/// # Without Ansi Formatting.
+	/// # Without ANSI Formatting.
 	///
 	/// Remove colors, bold, etc. from the message.
 	///
@@ -1467,7 +1467,7 @@ enum TocId {
 
 impl TocId {
 	#[cfg(feature = "timestamps")]
-	/// # Parts w/ Ansi.
+	/// # Parts w/ ANSI.
 	///
 	/// These parts _might_ have formatting.
 	const ANSI_PARTS: [Self; 4] = [
@@ -1475,7 +1475,7 @@ impl TocId {
 	];
 
 	#[cfg(not(feature = "timestamps"))]
-	/// # Parts w/ Ansi.
+	/// # Parts w/ ANSI.
 	///
 	/// These parts _might_ have formatting.
 	const ANSI_PARTS: [Self; 3] = [Self::Prefix, Self::Message, Self::Suffix];
@@ -1489,7 +1489,7 @@ mod test {
 
 	#[test]
 	fn t_fitted() {
-		// Double-check that Ansi splits receive an extra reset.
+		// Double-check that ANSI splits receive an extra reset.
 		assert_eq!(
 			Msg::from("\x1b[1mAll bold!\x1b[0m").fitted(3).unwrap(),
 			"\x1b[1mAll\x1b[0m",
