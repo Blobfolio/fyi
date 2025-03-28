@@ -1533,7 +1533,8 @@ impl Progless {
 
 /// # Sanitize [`Progless`] Task.
 ///
-/// This method strips ANSI sequences and normalizes whitespace
+/// This method strips ANSI sequences and normalizes whitespace, returning the
+/// result if non-empty.
 fn progless_task(src: &str) -> Option<String> {
 	let src = src.trim_end();
 	if src.is_empty() { return None; }
