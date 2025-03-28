@@ -22,8 +22,7 @@ use unicode_width::UnicodeWidthChar;
 /// breaks and ANSI formatting sequences are always preserved, even if they
 /// appear in otherwise "cut" regions.
 ///
-/// Allocations are only made if alteration is required, otherwise the original
-/// slice is passed back through.
+/// Allocations are only made if alteration is required.
 ///
 /// ## Examples
 ///

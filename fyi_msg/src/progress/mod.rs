@@ -5,7 +5,6 @@
 pub(super) mod ba;
 pub(super) mod error;
 mod steady;
-mod task;
 
 #[cfg(any(feature = "signals_sigint", feature = "signals_sigwinch"))]
 pub(super) mod signals;
@@ -13,7 +12,10 @@ pub(super) mod signals;
 
 
 use crate::{
-	ansi::AnsiColor,
+	ansi::{
+		AnsiColor,
+		NoAnsi,
+	},
 	Msg,
 	MsgKind,
 	ProglessError,
@@ -60,7 +62,6 @@ use std::{
 	},
 };
 use steady::ProglessSteady;
-use task::ProglessTask;
 
 
 
@@ -207,7 +208,7 @@ struct ProglessInner {
 	done_total: AtomicU64,
 
 	/// # Active Task List.
-	doing: Mutex<BTreeSet<ProglessTask>>,
+	doing: Mutex<BTreeSet<String>>,
 }
 
 impl Default for ProglessInner {
@@ -384,7 +385,7 @@ impl ProglessInner {
 	fn add(&self, txt: &str) -> bool {
 		if
 			self.running() &&
-			ProglessTask::new(txt).is_some_and(|m| mutex!(self.doing).insert(m))
+			progless_task(txt).is_some_and(|m| mutex!(self.doing).insert(m))
 		{
 			self.flags.fetch_or(TICK_DOING, SeqCst);
 			true
@@ -465,11 +466,9 @@ impl ProglessInner {
 
 				// Check for a direct hit first as it is relatively unlikely
 				// the label would have been reformatted for storage.
-				ptr.remove(txt.as_bytes()) ||
+				ptr.remove(txt) ||
 				// Then again, maybe it was…
-				ProglessTask::new(txt).is_some_and(|task|
-					task != *txt && ptr.remove(&task)
-				)
+				progless_task(txt).is_some_and(|task| ptr.remove(&task))
 			};
 
 			// If we removed an entry, set the tick flag and increment.
@@ -967,7 +966,7 @@ impl ProglessBuffer {
 	/// # Update Tasks.
 	fn set_doing(
 		&mut self,
-		doing: &BTreeSet<ProglessTask>,
+		doing: &BTreeSet<String>,
 		width: NonZeroU8,
 		height: NonZeroU8,
 	) {
@@ -989,10 +988,13 @@ impl ProglessBuffer {
 			2 <= width &&
 			usize::from(! self.title.is_empty()) + 1 + doing.len() <= usize::from(height.get())
 		{
-			for line in doing.iter().filter_map(|line| line.fitted(width)) {
-				self.doing.extend_from_slice(PREFIX);
-				self.doing.extend_from_slice(line);
-				self.lines_doing += 1;
+			for line in doing {
+				let keep = crate::length_width(line, width);
+				if keep != 0 {
+					self.doing.extend_from_slice(PREFIX);
+					self.doing.extend(line.bytes().take(keep));
+					self.lines_doing += 1;
+				}
 			}
 		}
 	}
@@ -1528,6 +1530,25 @@ impl Progless {
 }
 
 
+
+/// # Sanitize [`Progless`] Task.
+///
+/// This method strips ANSI sequences and normalizes whitespace
+fn progless_task(src: &str) -> Option<String> {
+	let src = src.trim_end();
+	if src.is_empty() { return None; }
+
+	let mut out = String::with_capacity(src.len());
+	for c in NoAnsi::<char, _>::new(src.chars()) {
+		// Convert all whitespace to regular spaces.
+		if c.is_whitespace() { out.push(' '); }
+		// Keep all other non-control characters as-are.
+		else if ! c.is_control() { out.push(c); }
+	}
+
+	if out.is_empty() { None }
+	else { Some(out) }
+}
 
 #[cfg(unix)]
 #[must_use]
