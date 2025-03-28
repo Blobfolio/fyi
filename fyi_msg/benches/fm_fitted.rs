@@ -8,6 +8,7 @@ use brunch::{
 };
 
 use fyi_msg::{
+	fit_to_width,
 	length_width,
 	width,
 };
@@ -37,4 +38,12 @@ benches!(
 
 	Bench::new("fyi_msg::length_width(UNICODE + ANSI, 22)")
 		.run(|| length_width(UNICODE_ANSI, 22)),
+
+	Bench::spacer(),
+
+	Bench::new("fyi_msg::fit_to_width(UNICODE, 22)")
+		.run(|| fit_to_width(UNICODE, 22)),
+
+	Bench::new("fyi_msg::fit_to_width(UNICODE + ANSI, 22)")
+		.run(|| fit_to_width(UNICODE_ANSI, 22)),
 );

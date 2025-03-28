@@ -86,21 +86,22 @@ use unicode_width::UnicodeWidthChar;
 /// ```
 pub fn fit_to_width(src: &str, width: usize) -> Cow<str> {
 	/// # Trailing Line Break?
-	fn terminator(src: &str) -> &str {
-		if src.ends_with("\r\n") { "\r\n" }
-		else if src.ends_with('\n') { "\n" }
-		else { "" }
+	const fn terminator(src: &str) -> &str {
+		match src.as_bytes() {
+			[.., b'\r', b'\n'] => "\r\n",
+			[.., b'\n'] => "\n",
+			_ => "",
+		}
 	}
 
 	// Easy aborts.
 	if src.is_empty() || width == 0 { return Cow::Borrowed(""); }
 	if src.len() <= width { return Cow::Borrowed(src); }
 
-	let mut lines = src.split_inclusive('\n');
-
 	// First pass: run through the lines unless/until we find one that doesn't
 	// fit the specified width.
 	let mut split = 0;
+	let mut lines = src.split_inclusive('\n');
 	for line in lines.by_ref() {
 		let keep = length_width(line, width);
 
@@ -108,34 +109,30 @@ pub fn fit_to_width(src: &str, width: usize) -> Cow<str> {
 		if keep == line.len() { split += keep; }
 		// Second pass: build a new string with only the bits that fit.
 		else {
-			// Start with the good line(s).
+			macro_rules! split_push {
+				($line:ident, $keep:ident, $out:ident) => (
+					// This should never fail.
+					let Some((keep, kill)) = $line.split_at_checked($keep) else {
+						return Cow::Borrowed("");
+					};
+
+					// Keep the fitable, "lost" ANSI, and trailing breaks.
+					$out.push_str(keep);
+					$out.extend(OnlyAnsi::new(kill));
+					$out.push_str(terminator($line));
+				);
+			}
+
+			// Start with what we know to fit.
 			let mut out = String::with_capacity(src.len());
 			out.push_str(&src[..split]);
+			split_push!(line, keep, out);
 
-			// This should never fail.
-			let Some((keep, kill)) = line.split_at_checked(keep) else {
-				return Cow::Borrowed("");
-			};
-
-			// Keep the keepable, "lost" ANSI formatting, and/or trailing
-			// line breaks.
-			out.push_str(keep);
-			for seq in OnlyAnsi::new(kill) { out.push_str(seq); }
-			out.push_str(terminator(line));
-
-			// The rest of the lines.
+			// Do the same for the remaining lines.
 			for line in lines {
 				let keep = length_width(line, width);
 				if keep == line.len() { out.push_str(line); }
-				else {
-					// This should never fail.
-					let Some((keep, kill)) = line.split_at_checked(keep) else {
-						return Cow::Borrowed("");
-					};
-					out.push_str(keep);
-					for seq in OnlyAnsi::new(kill) { out.push_str(seq); }
-					out.push_str(terminator(line));
-				}
+				else { split_push!(line, keep, out); }
 			}
 
 			return Cow::Owned(out);
