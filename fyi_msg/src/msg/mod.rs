@@ -229,21 +229,27 @@ impl PartialEq<Vec<u8>> for Msg {
 
 /// # Helper: `PartialEq` Aliases.
 ///
-/// Flip the existing `PartialEq<$ty>` around, and implement symmetric traits
-/// for `&$ty`.
+/// Use the existing `a == b` implementation to cover `b == a`, `a == &b`, and
+/// `&b == a` variations.
 macro_rules! partial_eq {
 	($($ty:ty),+) => ($(
 		impl PartialEq<&$ty> for Msg {
 			#[inline]
-			fn eq(&self, other: &&$ty) -> bool { *self == **other }
+			fn eq(&self, other: &&$ty) -> bool {
+				<Msg as PartialEq<$ty>>::eq(self, *other)
+			}
 		}
 		impl PartialEq<Msg> for $ty {
 			#[inline]
-			fn eq(&self, other: &Msg) -> bool { *other == *self }
+			fn eq(&self, other: &Msg) -> bool {
+				<Msg as PartialEq<$ty>>::eq(other, self)
+			}
 		}
 		impl PartialEq<Msg> for &$ty {
 			#[inline]
-			fn eq(&self, other: &Msg) -> bool { *other == **self }
+			fn eq(&self, other: &Msg) -> bool {
+				<Msg as PartialEq<$ty>>::eq(other, *self)
+			}
 		}
 	)+);
 }

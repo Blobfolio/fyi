@@ -303,13 +303,12 @@ Used by [`Msg::with_flags`] to set multiple properties in one go.")
 
 /// # Build/Save `MsgKind`.
 ///
-/// Message kinds are individually referenced in various places throughout
-/// `fyi` and `fyi_msg`. This method defines the enum, but also sets up an
-/// `ALL` array that can be accessed in those non-match situations to help make
-/// sure we didn't forget to cross-populate something.
+/// The `MsgKind` enum doesn't feel all that complicated, but there are a lot
+/// of little ways inconsistencies can creep in. Building the trickier pieces
+/// programmatically helps ensure nothing is missed.
 ///
-/// Last but not least, this also generates the Msg::xxx one-shot helpers,
-/// since doing that manually would make it easy to miss new additions.
+/// This generates code for the definition, an `ALL` constant,
+/// `MsgKind::as_str_prefix`, and the `Msg::kind` helpers.
 fn build_msg_kinds() {
 	use std::fmt::Write;
 
@@ -322,24 +321,24 @@ fn build_msg_kinds() {
 	const NUM_KINDS: usize = 15;
 
 	/// # Message Kinds.
-	const KINDS: [&str; NUM_KINDS] = [
-		"None",
-		"Aborted",
-		"Confirm",
-		"Crunched",
-		"Debug",
-		"Done",
-		"Error",
-		"Found",
-		"Info",
-		"Notice",
-		"Review",
-		"Skipped",
-		"Success",
-		"Task",
-		"Warning",
-		#[cfg(feature = "bin_kinds")] "Blank",
-		#[cfg(feature = "bin_kinds")] "Custom",
+	const KINDS: [(&str, &str); NUM_KINDS] = [
+		("None", ""),
+		("Aborted", "\x1b[1;91mAborted:\x1b[0m "),
+		("Confirm", "\x1b[1;38;5;208mConfirm:\x1b[0m "),
+		("Crunched", "\x1b[1;92mCrunched:\x1b[0m "),
+		("Debug", "\x1b[1;96mDebug:\x1b[0m "),
+		("Done", "\x1b[1;92mDone:\x1b[0m "),
+		("Error", "\x1b[1;91mError:\x1b[0m "),
+		("Found", "\x1b[1;92mFound:\x1b[0m "),
+		("Info", "\x1b[1;95mInfo:\x1b[0m "),
+		("Notice", "\x1b[1;95mNotice:\x1b[0m "),
+		("Review", "\x1b[1;96mReview:\x1b[0m "),
+		("Skipped", "\x1b[1;93mSkipped:\x1b[0m "),
+		("Success", "\x1b[1;92mSuccess:\x1b[0m "),
+		("Task", "\x1b[1;38;5;199mTask:\x1b[0m "),
+		("Warning", "\x1b[1;93mWarning:\x1b[0m "),
+		#[cfg(feature = "bin_kinds")] ("Blank", ""),
+		#[cfg(feature = "bin_kinds")] ("Custom", ""),
 	];
 
 	/// # Hidden Kinds.
@@ -378,7 +377,7 @@ fn build_msg_kinds() {
 /// );
 /// ```
 pub enum MsgKind {"#);
-	for kind in KINDS {
+	for (kind, _) in KINDS {
 		if kind != "None" { out.push('\n'); }
 		if HIDDEN.contains(&kind) { out.push_str("\t#[doc(hidden)]\n"); }
 		writeln!(&mut out, "\t{kind},").unwrap();
@@ -396,19 +395,52 @@ pub enum MsgKind {"#);
 	).unwrap();
 	for chunk in KINDS.chunks(8) {
 		out.push_str("\t\t");
-		for c in chunk { write!(&mut out, "Self::{c}, ").unwrap(); }
+		for (kind, _) in chunk { write!(&mut out, "Self::{kind}, ").unwrap(); }
 		out.push('\n');
 	}
-	out.push_str("\t];\n}\n");
+	out.push_str("\t];\n");
+
+	// And a crate-wide method to expose the preformatted prefix string.
+	#[cfg(feature = "bin_kinds")]      let wild = "_";
+	#[cfg(not(feature = "bin_kinds"))] let wild = "Self::None";
+
+	out.push_str("\t#[inline]
+	#[must_use]
+	/// # As String Slice (Prefix).
+	///
+	/// Return the kind as a string slice, formatted and with a trailing `\": \"`,
+	/// same as [`Msg`] uses for prefixes.
+	pub(crate) const fn as_str_prefix(self) -> &'static str {
+		match self {\n");
+	for (kind, prefix) in KINDS {
+		// Skip empties.
+		if prefix.is_empty() {continue; }
+
+		// While we're here, check the predictable parts were typed correctly.
+		assert!(
+			prefix.starts_with("\x1b[1;") &&
+			prefix.ends_with(&format!("m{kind}:\x1b[0m ")),
+			"BUG: {kind}::as_str_prefix is wrong!",
+		);
+
+		writeln!(&mut out, "\t\t\tSelf::{kind} => {prefix:?},").unwrap();
+	}
+	writeln!(
+		&mut out,
+		"\t\t\t{wild} => \"\",
+		}}
+	}}
+}}").unwrap();
 
 	// Generate helper methods for (most) of the kinds. (Might as well do this
 	// here.)
-	out.push_str("/// # `MsgKind` One-Shots.
+	out.push_str("/// ## [`MsgKind`] One-Shots.
 impl Msg {\n");
-	for kind in KINDS {
-		// Skip a couple.
-		if matches!(kind, "Blank" | "Confirm" | "Custom" | "None") { continue; }
+	for (kind, prefix) in KINDS {
+		// Skip the empties and "Confirm" (since it has a macro).
+		if prefix.is_empty() || kind == "Confirm" { continue; }
 
+		let prefix_len = prefix.len();
 		writeln!(
 			&mut out,
 			"\t#[must_use]
@@ -427,23 +459,18 @@ impl Msg {\n");
 	/// );
 	/// ```
 	pub fn {kind_low}<S: AsRef<str>>(msg: S) -> Self {{
+			// Glue it all together.
 			let msg = msg.as_ref();
-			let prefix = MsgKind::{kind}.as_str_prefix();
-
-			// Join the prefix and message.
-			let p_end = prefix.len();
-			let m_end = p_end + msg.len();
+			let m_end = {prefix_len} + msg.len();
 			let mut inner = String::with_capacity(m_end + 1);
-			inner.push_str(prefix);
+			inner.push_str({prefix:?});
 			inner.push_str(msg);
-
-			// Finish with a new line.
 			inner.push('\\n');
 
 			// Done!
 			Self {{
 				inner,
-				toc: super::toc!(p_end, m_end, true),
+				toc: super::toc!({prefix_len}, m_end, true),
 			}}
 	}}",
 			kind=kind,

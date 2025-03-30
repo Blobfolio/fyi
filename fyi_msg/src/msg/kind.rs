@@ -91,33 +91,6 @@ impl MsgKind {
 		}
 	}
 
-	#[inline]
-	#[must_use]
-	/// # As String Slice (Prefix).
-	///
-	/// Return the kind as a string slice, formatted and with a trailing `": "`,
-	/// same as [`Msg`] uses for prefixes.
-	pub(crate) const fn as_str_prefix(self) -> &'static str {
-		match self {
-			#[cfg(feature = "bin_kinds")] Self::None | Self::Blank | Self::Custom => "",
-			#[cfg(not(feature = "bin_kinds"))] Self::None => "",
-			Self::Aborted =>  "\x1b[1;91mAborted:\x1b[0m ",
-			Self::Confirm =>  "\x1b[1;38;5;208mConfirm:\x1b[0m ",
-			Self::Crunched => "\x1b[1;92mCrunched:\x1b[0m ",
-			Self::Debug =>    "\x1b[1;96mDebug:\x1b[0m ",
-			Self::Done =>     "\x1b[1;92mDone:\x1b[0m ",
-			Self::Error =>    "\x1b[1;91mError:\x1b[0m ",
-			Self::Found =>    "\x1b[1;92mFound:\x1b[0m ",
-			Self::Info =>     "\x1b[1;95mInfo:\x1b[0m ",
-			Self::Notice =>   "\x1b[1;95mNotice:\x1b[0m ",
-			Self::Review =>   "\x1b[1;96mReview:\x1b[0m ",
-			Self::Skipped =>  "\x1b[1;93mSkipped:\x1b[0m ",
-			Self::Success =>  "\x1b[1;92mSuccess:\x1b[0m ",
-			Self::Task =>     "\x1b[1;38;5;199mTask:\x1b[0m ",
-			Self::Warning =>  "\x1b[1;93mWarning:\x1b[0m ",
-		}
-	}
-
 	#[cfg(feature = "bin_kinds")]
 	#[doc(hidden)]
 	#[must_use]
