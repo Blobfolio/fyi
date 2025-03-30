@@ -307,6 +307,9 @@ Used by [`Msg::with_flags`] to set multiple properties in one go.")
 /// `fyi` and `fyi_msg`. This method defines the enum, but also sets up an
 /// `ALL` array that can be accessed in those non-match situations to help make
 /// sure we didn't forget to cross-populate something.
+///
+/// Last but not least, this also generates the Msg::xxx one-shot helpers,
+/// since doing that manually would make it easy to miss new additions.
 fn build_msg_kinds() {
 	use std::fmt::Write;
 
@@ -352,21 +355,28 @@ fn build_msg_kinds() {
 ///
 /// ## Examples
 ///
-/// ```no_run
+/// ```
 /// use fyi_msg::{Msg, MsgKind};
 ///
+/// // Error: Oh no!
 /// assert_eq!(
 ///     Msg::new(MsgKind::Error, "Oh no!"),
 ///     MsgKind::Error.into_msg("Oh no!"),
 /// );
 /// ```
 ///
-/// When you know the prefix at compile time and want a trailing line break,
-/// it is more efficient to call the corresponding method on the [`Msg`]
-/// struct, like [`Msg::error`], [`Msg::success`], etc.
+/// Most kinds have their own dedicated [`Msg`] helper method which, unlike the
+/// previous examples, comes with a line break at the end.
 ///
-/// Alternatively, you can just call [`Msg::new`] with the prefix, which is
-/// what [`MsgKind::into_msg`] does anyway.
+/// ```
+/// use fyi_msg::{Msg, MsgKind};
+///
+/// // Error: Oh no!\n
+/// assert_eq!(
+///     Msg::error("Oh no!"),
+///     Msg::new(MsgKind::Error, "Oh no!").with_newline(true),
+/// );
+/// ```
 pub enum MsgKind {"#);
 	for kind in KINDS {
 		if kind != "None" { out.push('\n'); }
@@ -391,29 +401,60 @@ pub enum MsgKind {"#);
 	}
 	out.push_str("\t];\n}\n");
 
-	File::create(out_path("msg-kinds.rs"))
-		.and_then(|mut f| f.write_all(out.as_bytes()).and_then(|()| f.flush()))
-		.expect("Unable to save msg-kinds.rs");
-
-	// While we're here, let's also make a simple unit test to verify we
-	// (manually) created all the necessary Msg::kind methods.
-	out.truncate(0);
-	out.push_str("\t#[test]
-	fn t_msg_built_ins() {\n");
+	// Generate helper methods for (most) of the kinds. (Might as well do this
+	// here.)
+	out.push_str("/// # `MsgKind` One-Shots.
+impl Msg {\n");
 	for kind in KINDS {
-		if ! matches!(kind, "Blank" | "Confirm" | "Custom" | "None") {
-			writeln!(
-				&mut out,
-				"\t\tassert!(! Msg::{}(\"Hello world\").is_empty());",
-				kind.to_ascii_lowercase(),
-			).unwrap();
-		}
+		// Skip a couple.
+		if matches!(kind, "Blank" | "Confirm" | "Custom" | "None") { continue; }
+
+		writeln!(
+			&mut out,
+			"\t#[must_use]
+	/// # New {kind}.
+	///
+	/// Create a new [`Msg`] with a built-in [`MsgKind::{kind}`] prefix _and_ trailing line break.
+	///
+	/// ## Examples.
+	///
+	/// ```
+	/// use fyi_msg::{{Msg, MsgKind}};
+	///
+	/// assert_eq!(
+	///     Msg::{kind_low}(\"Hello World\"),
+	///     Msg::new(MsgKind::{kind}, \"Hello World\").with_newline(true),
+	/// );
+	/// ```
+	pub fn {kind_low}<S: AsRef<str>>(msg: S) -> Self {{
+			let msg = msg.as_ref();
+			let prefix = MsgKind::{kind}.as_str_prefix();
+
+			// Join the prefix and message.
+			let p_end = prefix.len();
+			let m_end = p_end + msg.len();
+			let mut inner = String::with_capacity(m_end + 1);
+			inner.push_str(prefix);
+			inner.push_str(msg);
+
+			// Finish with a new line.
+			inner.push('\\n');
+
+			// Done!
+			Self {{
+				inner,
+				toc: super::toc!(p_end, m_end, true),
+			}}
+	}}",
+			kind=kind,
+			kind_low=kind.to_ascii_lowercase(),
+		).unwrap();
 	}
 	out.push_str("}\n");
 
-	File::create(out_path("msg-kinds-tests.rs"))
+	File::create(out_path("msg-kinds.rs"))
 		.and_then(|mut f| f.write_all(out.as_bytes()).and_then(|()| f.flush()))
-		.expect("Unable to save msg-kinds-tests.rs");
+		.expect("Unable to save msg-kinds.rs");
 }
 
 /// # Output Path.

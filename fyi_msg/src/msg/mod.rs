@@ -4,6 +4,7 @@
 
 pub(super) mod kind;
 
+#[expect(unused_imports, reason = "For docs.")]
 use crate::{
 	ansi::NoAnsi,
 	MsgKind,
@@ -34,7 +35,7 @@ include!(concat!(env!("OUT_DIR"), "/msg-flags.rs"));
 /// # Helper: `Toc` Setup.
 macro_rules! toc {
 	($p_end:expr, $m_end:expr) => (
-		Toc([
+		$crate::msg::Toc([
 			0,      // Indentation.
 			0,      // Timestamp.
 			0,      // Prefix.
@@ -45,7 +46,7 @@ macro_rules! toc {
 		])
 	);
 	($p_end:expr, $m_end:expr, true) => (
-		Toc([
+		$crate::msg::Toc([
 			0,          // Indentation.
 			0,          // Timestamp.
 			0,          // Prefix.
@@ -61,7 +62,7 @@ macro_rules! toc {
 /// # Helper: `Toc` Setup.
 macro_rules! toc {
 	($p_end:expr, $m_end:expr) => (
-		Toc([
+		$crate::msg::Toc([
 			0,      // Indentation.
 			0,      // Prefix.
 			$p_end, // Message.
@@ -71,7 +72,7 @@ macro_rules! toc {
 		])
 	);
 	($p_end:expr, $m_end:expr, true) => (
-		Toc([
+		$crate::msg::Toc([
 			0,          // Indentation.
 			0,          // Prefix.
 			$p_end,     // Message.
@@ -81,47 +82,7 @@ macro_rules! toc {
 		])
 	);
 }
-
-/// # Helper: `MsgKind` Built-Ins.
-macro_rules! msg_kind {
-	($fn:ident, $kind:ident, $color:ident) => (
-		#[must_use]
-		#[doc = concat!("# New ", stringify!($kind), ".")]
-		///
-		#[doc = concat!("Create a new [`Msg`] with a [`MsgKind::", stringify!($kind), "`] prefix and trailing line break.")]
-		///
-		/// ## Examples
-		///
-		/// ```
-		/// use fyi_msg::{Msg, MsgKind};
-		///
-		/// assert_eq!(
-		#[doc = concat!("    Msg::", stringify!($fn), "(\"Hello World\"),")]
-		#[doc = concat!("    Msg::new(MsgKind::", stringify!($kind), ", \"Hello World\").with_newline(true),")]
-		/// );
-		/// ```
-		pub fn $fn<S: AsRef<str>>(msg: S) -> Self {
-			let msg = msg.as_ref();
-			let prefix = MsgKind::$kind.as_str_prefix();
-
-			// Join the prefix and message.
-			let p_end = prefix.len();
-			let mut inner = String::with_capacity(p_end + msg.len() + 1);
-			inner.push_str(prefix);
-			inner.push_str(msg);
-			let m_end = inner.len();
-
-			// Finish with a new line.
-			inner.push('\n');
-
-			// Done!
-			Self {
-				inner,
-				toc: toc!(p_end, m_end, true),
-			}
-		}
-	);
-}
+use toc; // kind.rs needs this.
 
 
 
@@ -1268,23 +1229,6 @@ impl Msg {
 		// Update the table of contents.
 		self.toc.resize_part(id, content.len());
 	}
-}
-
-/// # `MsgKind` One-Shots.
-impl Msg {
-	msg_kind!(aborted, Aborted, LightRed);
-	msg_kind!(crunched, Crunched, LightGreen);
-	msg_kind!(debug, Debug, LightCyan);
-	msg_kind!(done, Done, LightGreen);
-	msg_kind!(error, Error, LightRed);
-	msg_kind!(found, Found, LightGreen);
-	msg_kind!(info, Info, LightMagenta);
-	msg_kind!(notice, Notice, LightMagenta);
-	msg_kind!(review, Review, LightCyan);
-	msg_kind!(skipped, Skipped, LightYellow);
-	msg_kind!(success, Success, LightGreen);
-	msg_kind!(task, Task, Misc199);
-	msg_kind!(warning, Warning, LightYellow);
 }
 
 

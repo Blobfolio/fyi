@@ -194,7 +194,7 @@ bench BENCH="":
 	cargo +nightly rustdoc \
 		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
 		--release \
-		--all-features \
+		--features fitted,progress,signals,timestamps \
 		--target-dir "{{ cargo_dir }}" \
 		-- \
 		--cfg docsrs
