@@ -47,6 +47,10 @@ brunch = "0.9.*"
 rayon = "1.10.*"
 
 [[bench]]
+name = "fm_ansi"
+harness = false
+
+[[bench]]
 name = "fm_fitted"
 harness = false
 required-features = [ "fitted" ]

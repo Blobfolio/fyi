@@ -5,6 +5,7 @@
 use std::{
 	fmt,
 	hash,
+	ops::Range,
 };
 
 
@@ -370,7 +371,7 @@ impl<I: Iterator<Item=u8>> Iterator for NoAnsi<u8, I> {
 /// # Parsing State.
 ///
 /// This short list is all we need to guide our output.
-enum NoAnsiState<U: Copy + fmt::Debug> {
+pub(crate) enum NoAnsiState<U: Copy + fmt::Debug> {
 	/// # No particular state.
 	None,
 
@@ -386,27 +387,27 @@ enum NoAnsiState<U: Copy + fmt::Debug> {
 
 impl NoAnsiState<char> {
 	/// # Escape Character.
-	const ESCAPE: char = '\x1b';
+	pub(crate) const ESCAPE: char = '\x1b';
 
 	/// # Bell Character.
-	const BELL: char = '\x07';
+	pub(crate) const BELL: char = '\x07';
 
 	/// # OE Character.
-	const OE: char = '\u{0153}';
+	pub(crate) const OE: char = '\u{0153}';
 }
 
 impl NoAnsiState<u8> {
 	/// # Escape Character.
-	const ESCAPE: u8 = b'\x1b';
+	pub(crate) const ESCAPE: u8 = b'\x1b';
 
 	/// # Bell Character.
-	const BELL: u8 = b'\x07';
+	pub(crate) const BELL: u8 = b'\x07';
 
 	/// # OE Character (part one).
-	const OE_1: u8 = 197;
+	pub(crate) const OE_1: u8 = 197;
 
 	/// # OE Character (part two).
-	const OE_2: u8 = 147;
+	pub(crate) const OE_2: u8 = 147;
 }
 
 
@@ -436,55 +437,58 @@ impl<'a> Iterator for OnlyAnsi<'a> {
 	type Item = &'a str;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		loop {
-			// Advance to the next escape.
-			self.0 = self.0.trim_start_matches(|c: char| c != '\x1b');
-			if self.0.len() < 3 { return None; }
-
-			// CSI sequence.
-			if let Some(rest) = self.0.strip_prefix("\x1b[") {
-				for (k, c) in rest.char_indices() {
-					if matches!(c, '\x40'..='\x7E') {
-						let Some((stub, rest)) = self.0.split_at_checked(2 + k + c.len_utf8()) else { break; };
-						self.0 = rest;
-						return Some(stub);
-					}
-				}
-
-				// Unterminated sequence… we're done!
-				self.0 = "";
-				return None;
-			}
-			// OSC sequence.
-			else if let Some(rest) = self.0.strip_prefix("\x1b]") {
-				let mut chars = rest.char_indices().peekable();
-				while let Some((k, c)) = chars.next() {
-					match c {
-						// Single-char stops.
-						NoAnsiState::<char>::OE | NoAnsiState::<char>::BELL => {
-							let Some((stub, rest)) = self.0.split_at_checked(2 + k + c.len_utf8()) else { break; };
-							self.0 = rest;
-							return Some(stub);
-						},
-						// Multi-char stop.
-						NoAnsiState::<char>::ESCAPE => if let Some((k, '\\')) = chars.peek() {
-							let Some((stub, rest)) = self.0.split_at_checked(2 + k + c.len_utf8()) else { break; };
-							self.0 = rest;
-							return Some(stub);
-						},
-						_ => {},
-					}
-				}
-
-				// Unterminated sequence… we're done!
-				self.0 = "";
-				return None;
-			}
-
-			// Fake-out! Advance to the next character and loop back around.
-			self.0 = self.0.get(1..)?;
-		}
+		let rng = next_ansi(self.0)?;
+		let end = rng.end;
+		let next = self.0.get(rng);               // Shouldn't ever fail.
+		self.0 = self.0.get(end..).unwrap_or(""); // Shouldn't ever fail.
+		next
 	}
+}
+
+
+
+/// # Next ANSI Sequence.
+///
+/// Find and return the range corresponding to the first/next ANSI sequence
+/// within the string, or `None`.
+pub(crate) fn next_ansi(src: &str) -> Option<Range<usize>> {
+	// Find the start of the range.
+	let len = src.len();
+	let start = src.as_bytes()
+		.windows(2)
+		.position(|pair| matches!(pair, b"\x1b[" | b"\x1b]"))?;
+
+	// Now let's look for the end.
+	let mut end = None;
+	let mut chars = src.get(start..)?.char_indices().skip(1);
+	match chars.next() {
+		// CSI sequence.
+		Some((1, '[')) => {
+			end = chars.find_map(|(k, c)| matches!(c, '\x40'..='\x7E').then_some(k + c.len_utf8()));
+		},
+		// OSC sequence.
+		Some((1, ']')) => {
+			// These unfortunately have one- and two-byte stops. Haha.
+			let mut chars = chars.peekable();
+			while let Some((k, c)) = chars.next() {
+				match c {
+					NoAnsiState::<char>::OE | NoAnsiState::<char>::BELL => {
+						end = Some(k + c.len_utf8());
+						break;
+					},
+					NoAnsiState::<char>::ESCAPE => if let Some((k, '\\')) = chars.peek() {
+						end = Some(k + c.len_utf8());
+						break;
+					},
+					_ => {},
+				}
+			}
+		},
+		// Unreachable.
+		_ => {},
+	}
+
+	Some(start..start + end.unwrap_or(len))
 }
 
 
@@ -542,28 +546,56 @@ mod test {
 		}
 	}
 
+	#[test]
+	fn t_next_ansi() {
+		// Most cases are covered elsewhere, but let's make sure multi-byte
+		// positioning works out as expected.
+		assert_eq!(
+			next_ansi("Björk \x1b[2mGuðmundsdóttir\x1b[0m"),
+			Some(7..11),
+		);
+	}
+
 	#[cfg(feature = "fitted")]
 	#[test]
-	fn t_only_ansi_osc() {
-		// Verify two-byte endings are properly accounted for when mixed and
-		// matched.
-		for (raw, expected) in [
-			("One \x1b]Two\x07 Three", "\x1b]Two\x07"),
-			("One \x1b]Twoœ Three", "\x1b]Twoœ"),
-			("One \x1b]Two\x1b\\ Three", "\x1b]Two\x1b\\"),
-			("One \x1b]Two\x1b\x1b\\ Three", "\x1b]Two\x1b\x1b\\"),
-			("One \x1b]Two\x1bHi\x1b\\ Three", "\x1b]Two\x1bHi\x1b\\"),
-			("One \x1b]Two\x1b\x07 Three", "\x1b]Two\x1b\x07"),
-			("One \x1b]Two\x1bœ Three", "\x1b]Two\x1bœ"),
-			("One \x1b]Two\x1b\x1bœ Three", "\x1b]Two\x1b\x1bœ"),
-			("One \x1b]Two\x1b\x1b\x1bœ Three", "\x1b]Two\x1b\x1b\x1bœ"),
+	fn t_only_ansi() {
+		// This library doesn't use OSC sequences, so let's explicitly check
+		// a bunch of different permutations.
+		for raw in [
+			"One \x1b]Two\x07 Three",
+			"One \x1b]Twoœ Three",
+			"One \x1b]Two\x1b\\ Three",
+			"One \x1b]Two\x1b\x1b\\ Three",
+			"One \x1b]Two\x1bHi\x1b\\ Three",
+			"One \x1b]Two\x1b\x07 Three",
+			"One \x1b]Two\x1bœ Three",
+			"One \x1b]Two\x1b\x1bœ Three",
+			"One \x1b]Two\x1b\x1b\x1bœ Three",
 		] {
+			let expected = raw
+				.strip_prefix("One ").unwrap_or(raw)
+				.strip_suffix(" Three").unwrap_or(raw);
+
 			assert_eq!(
 				OnlyAnsi::new(raw).collect::<String>(),
 				expected,
 				"Raw: {raw:?}",
 			);
 		}
+
+		// This library has a lot of CSI sequences, so no need to go overboard.
+		assert_eq!(
+			OnlyAnsi::new("\x1b[1mHello World\x1b[m").collect::<String>(),
+			"\x1b[1m\x1b[m",
+		);
+		assert_eq!(
+			OnlyAnsi::new("Hello World\x1b[m").collect::<String>(),
+			"\x1b[m",
+		);
+		assert_eq!(
+			OnlyAnsi::new("A\x1b[1m\x1b[2mB\x1b[0mC").collect::<String>(),
+			"\x1b[1m\x1b[2m\x1b[0m",
+		);
 	}
 
 	#[test]

@@ -6,7 +6,10 @@ pub(super) mod kind;
 
 #[expect(unused_imports, reason = "For docs.")]
 use crate::{
-	ansi::NoAnsi,
+	ansi::{
+		NoAnsi,
+		NoAnsiState,
+	},
 	MsgKind,
 };
 #[cfg(feature = "progress")] use crate::BeforeAfter;
@@ -746,10 +749,31 @@ impl Msg {
 		// the content as needed.
 		let mut changed = false;
 		for id in TocId::ANSI_PARTS {
-			let old = &self.inner[self.toc.part_rng(id)];
-			if old.contains('\x1b') {
-				let new: String = NoAnsi::<char, _>::new(old.chars()).collect();
-				self.replace_part(id, &new);
+			// The original part location and size.
+			let old_rng = self.toc.part_rng(id);
+			let old_len = old_rng.len();
+
+			// Remove ANSI in-place across the part range, but wait to
+			// reconcile the table of contents until the end.
+			let mut removed = 0;
+			let mut start = old_rng.start;
+			let mut stop = old_rng.end;
+			while let Some(mut ansi_rng) = self.inner.get(start..stop).and_then(crate::ansi::next_ansi) {
+				// Make the range absolute.
+				ansi_rng.start += start;
+				ansi_rng.end += start;
+
+				// Update the counters and remove the chunk from the buffer.
+				let ansi_len = ansi_rng.len();
+				removed += ansi_len;    // We removed the whole range.
+				start = ansi_rng.start; // Pick up from here next time around.
+				stop -= ansi_len;       // But stop earlier, since we removed shit.
+				self.inner.replace_range(ansi_rng, "");
+			}
+
+			// Update the table of contents, if necessary.
+			if removed != 0 {
+				self.toc.resize_part(id, old_len - removed);
 				changed = true;
 			}
 		}
@@ -1355,4 +1379,68 @@ impl TocId {
 	///
 	/// These parts _might_ have formatting.
 	const ANSI_PARTS: [Self; 3] = [Self::Prefix, Self::Message, Self::Suffix];
+}
+
+
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn t_strip_ansi() {
+		// Create an ANSIfull message and make sure its various parts turn out
+		// as expected.
+		let mut msg = Msg::error("Oops: \x1b[2mDaisy\x1b[0m.")
+			.with_suffix(" \x1b[1mYikes!\x1b[0m");
+		assert_eq!(
+			msg,
+			"\x1b[1;91mError:\x1b[0m Oops: \x1b[2mDaisy\x1b[0m. \x1b[1mYikes!\x1b[0m\n",
+		);
+		assert_eq!(
+			&msg.inner[msg.toc.part_rng(TocId::Prefix)],
+			"\x1b[1;91mError:\x1b[0m ",
+		);
+		assert_eq!(
+			&msg.inner[msg.toc.part_rng(TocId::Message)],
+			"Oops: \x1b[2mDaisy\x1b[0m.",
+		);
+		assert_eq!(
+			&msg.inner[msg.toc.part_rng(TocId::Suffix)],
+			" \x1b[1mYikes!\x1b[0m",
+		);
+		assert_eq!(
+			&msg.inner[msg.toc.part_rng(TocId::Newline)],
+			"\n",
+		);
+
+		// Strip the ANSI and reverify.
+		msg.strip_ansi();
+		assert_eq!(
+			msg,
+			"Error: Oops: Daisy. Yikes!\n",
+		);
+		assert_eq!(
+			&msg.inner[msg.toc.part_rng(TocId::Prefix)],
+			"Error: ",
+		);
+		assert_eq!(
+			&msg.inner[msg.toc.part_rng(TocId::Message)],
+			"Oops: Daisy.",
+		);
+		assert_eq!(
+			&msg.inner[msg.toc.part_rng(TocId::Suffix)],
+			" Yikes!",
+		);
+		assert_eq!(
+			&msg.inner[msg.toc.part_rng(TocId::Newline)],
+			"\n",
+		);
+
+		// Make sure double-stripping doesn't break anything.
+		assert_eq!(
+			msg.clone().without_ansi(),
+			msg,
+		);
+	}
 }
