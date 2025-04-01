@@ -16,13 +16,14 @@ use unicode_width::UnicodeWidthChar;
 #[must_use]
 /// # Fit to Width.
 ///
-/// Return a version of the string cropped to the target display `width`.
+/// Slice (and maybe rejigger) a string to make it fit within a given display
+/// width.
 ///
-/// This method works line-by-line, truncating any that are too long. Line
-/// breaks and ANSI formatting sequences are always preserved, even if they
-/// appear in otherwise "cut" regions.
+/// Unlike [`length_width`], this method works line-by-line,
+/// evaluating/truncating each individually to keep them within `width` columns.
 ///
-/// Allocations are only made if alteration is required.
+/// ANSI formatting sequences and line breaks are always preserved; a new
+/// string will be allocated to stitch everything back together when necessary.
 ///
 /// ## Examples
 ///

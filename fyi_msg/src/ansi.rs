@@ -161,7 +161,7 @@ impl<I: Iterator<Item=char>> NoAnsi<char, I> {
 	#[inline]
 	/// # New.
 	///
-	/// Create a new instance from an existing `Iterator<Item=Char>`.
+	/// Create a new instance from an existing `Iterator<Item=char>`.
 	///
 	/// ## Examples
 	///
@@ -187,17 +187,12 @@ impl<I: Iterator<Item=char>> Iterator for NoAnsi<char, I> {
 	type Item = char;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		loop {
-			// If we need to backtrack, empty and return the buffer.
-			if let NoAnsiState::NeverMind(next) = self.state {
-				self.state = NoAnsiState::None;
-				self.pos += next.len_utf8();
-				return Some(next);
-			}
-
-			// Check the next character!
-			let mut next = self.iter.next()?;
+		// One character at a time.
+		while let Some(mut next) = self.state.take().or_else(|| self.iter.next()) {
+			// Increment the position counter before we get too far afield.
 			self.pos += next.len_utf8();
+
+			// What it means varies by state.
 			match self.state {
 				// We aren't in any particular state.
 				NoAnsiState::None =>
@@ -207,11 +202,11 @@ impl<I: Iterator<Item=char>> Iterator for NoAnsi<char, I> {
 							Some('[') => {
 								self.state = NoAnsiState::Csi;
 								self.pos += 1;
-							}
+							},
 							Some(']') => {
 								self.state = NoAnsiState::Osc;
 								self.pos += 1;
-							}
+							},
 							Some(next) => {
 								self.state = NoAnsiState::NeverMind(next);
 								return Some(NoAnsiState::<char>::ESCAPE);
@@ -249,6 +244,9 @@ impl<I: Iterator<Item=char>> Iterator for NoAnsi<char, I> {
 				NoAnsiState::NeverMind(_) => {},
 			}
 		}
+
+		// We're done!
+		None
 	}
 
 	fn size_hint(&self) -> (usize, Option<usize>) {
@@ -287,17 +285,12 @@ impl<I: Iterator<Item=u8>> Iterator for NoAnsi<u8, I> {
 	type Item = u8;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		loop {
-			// If we need to backtrack, empty and return the buffer.
-			if let NoAnsiState::NeverMind(next) = self.state {
-				self.state = NoAnsiState::None;
-				self.pos += 1;
-				return Some(next);
-			}
-
-			// Check the next character!
-			let mut next = self.iter.next()?;
+		// One byte at a time.
+		while let Some(mut next) = self.state.take().or_else(|| self.iter.next()) {
+			// Increment the position counter before we get too far afield.
 			self.pos += 1;
+
+			// What it means varies by state.
 			match self.state {
 				// We aren't in any particular state.
 				NoAnsiState::None =>
@@ -307,11 +300,11 @@ impl<I: Iterator<Item=u8>> Iterator for NoAnsi<u8, I> {
 							Some(b'[') => {
 								self.state = NoAnsiState::Csi;
 								self.pos += 1;
-							}
+							},
 							Some(b']') => {
 								self.state = NoAnsiState::Osc;
 								self.pos += 1;
-							}
+							},
 							Some(next) => {
 								self.state = NoAnsiState::NeverMind(next);
 								return Some(NoAnsiState::<u8>::ESCAPE);
@@ -357,6 +350,9 @@ impl<I: Iterator<Item=u8>> Iterator for NoAnsi<u8, I> {
 				NoAnsiState::NeverMind(_) => {},
 			}
 		}
+
+		// We're done!
+		None
 	}
 
 	fn size_hint(&self) -> (usize, Option<usize>) {
@@ -383,6 +379,20 @@ pub(crate) enum NoAnsiState<U: Copy + fmt::Debug> {
 
 	/// # Lookahead buffer for false escapes.
 	NeverMind(U),
+}
+
+impl<U: Copy + fmt::Debug> NoAnsiState<U> {
+	/// # Take Value.
+	///
+	/// If `Self::NeverMind`, reset `self` to `Self::None` and return the
+	/// buffered value.
+	pub(crate) const fn take(&mut self) -> Option<U> {
+		if let Self::NeverMind(c) = *self {
+			*self = Self::None;
+			Some(c)
+		}
+		else { None }
+	}
 }
 
 impl NoAnsiState<char> {
@@ -512,7 +522,49 @@ mod test {
 	}
 
 	#[test]
-	fn t_noansi_osc() {
+	fn t_ansi_csi() {
+		// This library does a lot with ANSI CSI sequences so the functionality
+		// is well covered, but no harm adding a few more checks.
+		const LIST: [&str; 4] = [
+			"One \x1b[1mTwo\x1b[0m Three",
+			"\x1b[38;5;199mBjörk\x1b[m \x1b[1mBjörk\x1b[0m \x1b[1;2;91mBjörk\x1b[0m",
+			"\x1b\x1b[1mFakeout!\x1b[0m",
+			"text/plain",
+		];
+
+		for (raw, expected) in LIST.iter().zip([
+			"One Two Three",
+			"Björk Björk Björk",
+			"\x1bFakeout!",
+			"text/plain",
+		]) {
+			assert_eq!(
+				NoAnsi::<char, _>::new(raw.chars()).collect::<String>(),
+				expected,
+			);
+
+			assert_eq!(
+				NoAnsi::<u8, _>::new(raw.bytes()).collect::<Vec<u8>>(),
+				expected.as_bytes(),
+			);
+		}
+
+		#[cfg(feature = "fitted")]
+		for (raw, expected) in LIST.iter().zip([
+			"\x1b[1m\x1b[0m",
+			"\x1b[38;5;199m\x1b[m\x1b[1m\x1b[0m\x1b[1;2;91m\x1b[0m",
+			"\x1b[1m\x1b[0m",
+			"",
+		]) {
+			assert_eq!(
+				OnlyAnsi::new(raw).collect::<String>(),
+				expected,
+			);
+		}
+	}
+
+	#[test]
+	fn t_ansi_osc() {
 		// Verify two-byte endings are properly accounted for when mixed and
 		// matched.
 		for i in [
@@ -531,6 +583,13 @@ mod test {
 
 			let stripped: Vec<u8> = NoAnsi::<u8, _>::new(i.bytes()).collect();
 			assert_eq!(stripped, b"One  Three", "Bytes: {:?}", i.as_bytes());
+
+			#[cfg(feature = "fitted")]
+			assert_eq!(
+				OnlyAnsi::new(i).collect::<String>(),
+				i.strip_prefix("One ").and_then(|j| j.strip_suffix(" Three")).unwrap(),
+				"Raw: {i:?}",
+			);
 		}
 
 		// Additionally test byte stripping when the oe is split. This isn't
@@ -554,47 +613,11 @@ mod test {
 			next_ansi("Björk \x1b[2mGuðmundsdóttir\x1b[0m"),
 			Some(7..11),
 		);
-	}
 
-	#[cfg(feature = "fitted")]
-	#[test]
-	fn t_only_ansi() {
-		// This library doesn't use OSC sequences, so let's explicitly check
-		// a bunch of different permutations.
-		for raw in [
-			"One \x1b]Two\x07 Three",
-			"One \x1b]Twoœ Three",
-			"One \x1b]Two\x1b\\ Three",
-			"One \x1b]Two\x1b\x1b\\ Three",
-			"One \x1b]Two\x1bHi\x1b\\ Three",
-			"One \x1b]Two\x1b\x07 Three",
-			"One \x1b]Two\x1bœ Three",
-			"One \x1b]Two\x1b\x1bœ Three",
-			"One \x1b]Two\x1b\x1b\x1bœ Three",
-		] {
-			let expected = raw
-				.strip_prefix("One ").unwrap_or(raw)
-				.strip_suffix(" Three").unwrap_or(raw);
-
-			assert_eq!(
-				OnlyAnsi::new(raw).collect::<String>(),
-				expected,
-				"Raw: {raw:?}",
-			);
-		}
-
-		// This library has a lot of CSI sequences, so no need to go overboard.
+		// And so do unclosed tags.
 		assert_eq!(
-			OnlyAnsi::new("\x1b[1mHello World\x1b[m").collect::<String>(),
-			"\x1b[1m\x1b[m",
-		);
-		assert_eq!(
-			OnlyAnsi::new("Hello World\x1b[m").collect::<String>(),
-			"\x1b[m",
-		);
-		assert_eq!(
-			OnlyAnsi::new("A\x1b[1m\x1b[2mB\x1b[0mC").collect::<String>(),
-			"\x1b[1m\x1b[2m\x1b[0m",
+			next_ansi("\x1b[38"),
+			Some(0..4),
 		);
 	}
 

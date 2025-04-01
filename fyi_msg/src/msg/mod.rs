@@ -109,6 +109,7 @@ use toc; // kind.rs needs this.
 ///
 /// ```
 /// use fyi_msg::{Msg, MsgKind};
+///
 /// Msg::new(MsgKind::Success, "You did it!")
 ///     .with_newline(true)
 ///     .print();
@@ -397,7 +398,7 @@ impl Msg {
 	/// Return the message as a string with its lines capped to the given
 	/// display `width`.
 	///
-	/// This is essentially just a convenience wrapper around [`fitted::width`](crate::fitted::width);
+	/// This is essentially just a convenience wrapper around [`fit_to_width`](crate::fit_to_width);
 	/// refer to that method documentation for more details.
 	///
 	/// ## Examples
