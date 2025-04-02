@@ -188,7 +188,7 @@ pub fn fit_to_width(src: &str, width: usize) -> Cow<str> {
 /// ```
 pub fn length_width(src: &str, max_width: usize) -> usize {
 	let mut width = 0;
-	let mut iter = NoAnsi::<char, _>::new(src.chars());
+	let mut iter = NoAnsi::new(src);
 	while let Some(v) = iter.next() {
 		width += UnicodeWidthChar::width(v).unwrap_or(0);
 		// This one won't fit; rewind!
@@ -240,7 +240,7 @@ pub fn length_width(src: &str, max_width: usize) -> usize {
 /// assert_eq!(width("Hello\nWorld"), 10); // Line breaks have no width.
 /// ```
 pub fn width(src: &str) -> usize {
-	NoAnsi::<char, _>::new(src.chars()).fold(0, |acc, v|
+	NoAnsi::new(src).fold(0, |acc, v|
 		UnicodeWidthChar::width(v).map_or(acc, |w| acc + w)
 	)
 }

@@ -3,7 +3,7 @@
 */
 
 use crate::{
-	ansi::AnsiColor,
+	AnsiColor,
 	Msg,
 };
 use std::{
@@ -149,8 +149,7 @@ impl MsgKind {
 	/// ## Examples
 	///
 	/// ```
-	/// use fyi_msg::ansi::AnsiColor;
-	/// use fyi_msg::MsgKind;
+	/// use fyi_msg::{AnsiColor, MsgKind};
 	///
 	/// assert_eq!(
 	///     MsgKind::Info.prefix_color(),

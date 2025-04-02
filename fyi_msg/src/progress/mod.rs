@@ -1540,7 +1540,7 @@ fn progless_task(src: &str) -> Option<String> {
 	if src.is_empty() { return None; }
 
 	let mut out = String::with_capacity(src.len());
-	for c in NoAnsi::<char, _>::new(src.chars()) {
+	for c in NoAnsi::new(src) {
 		// Convert all whitespace to regular spaces.
 		if c.is_whitespace() { out.push(' '); }
 		// Keep all other non-control characters as-are.

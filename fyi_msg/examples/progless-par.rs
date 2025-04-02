@@ -22,7 +22,7 @@ fn main() -> std::process::ExitCode {
 fn main() {
 	use dactyl::NiceU16;
 	use fyi_msg::{
-		ansi::AnsiColor,
+		AnsiColor,
 		Progless,
 	};
 	use rayon::prelude::*;

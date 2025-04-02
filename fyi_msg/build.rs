@@ -196,7 +196,7 @@ impl AnsiColor {\n");
 	/// ## Examples
 	///
 	/// ```
-	/// use fyi_msg::ansi::AnsiColor;
+	/// use fyi_msg::AnsiColor;
 	///
 	/// assert_eq!(
 	///     AnsiColor::from_u8(5),
@@ -220,7 +220,7 @@ impl AnsiColor {\n");
 	/// ## Examples
 	///
 	/// ```
-	/// use fyi_msg::ansi::AnsiColor;
+	/// use fyi_msg::AnsiColor;
 	///
 	/// assert_eq!(
 	///     AnsiColor::DarkOrange.as_str(),

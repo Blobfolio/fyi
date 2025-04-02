@@ -21,7 +21,7 @@ fn main() -> std::process::ExitCode {
 /// # Do it.
 fn main() {
 	use fyi_msg::{
-		ansi::AnsiColor,
+		AnsiColor,
 		MsgKind,
 		Progless,
 	};

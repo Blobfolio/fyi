@@ -5,13 +5,8 @@
 pub(super) mod kind;
 
 #[expect(unused_imports, reason = "For docs.")]
-use crate::{
-	ansi::{
-		NoAnsi,
-		NoAnsiState,
-	},
-	MsgKind,
-};
+use crate::MsgKind;
+
 #[cfg(feature = "progress")] use crate::BeforeAfter;
 use kind::IntoMsgPrefix;
 use std::{
@@ -282,7 +277,7 @@ impl Msg {
 	///
 	/// Custom prefixes can be any of the usual string types — `&str`,
 	/// `String`/`&String`, or `Cow<str>`/`&Cow<str>` — optionally tupled with
-	/// an [`AnsiColor`](crate::ansi::AnsiColor) for sex appeal.
+	/// an [`AnsiColor`](crate::AnsiColor) for sex appeal.
 	///
 	/// Custom prefixes should _not_ include the `": "` separator, as that is
 	/// appended automatically to all non-empty values.
@@ -294,7 +289,7 @@ impl Msg {
 	///
 	/// ```no_run
 	/// use fyi_msg::{
-	///     ansi::AnsiColor,
+	///     AnsiColor,
 	///     Msg,
 	///     MsgKind,
 	/// };
@@ -404,8 +399,7 @@ impl Msg {
 	/// ## Examples
 	///
 	/// ```
-	/// use fyi_msg::ansi::AnsiColor;
-	/// use fyi_msg::Msg;
+	/// use fyi_msg::{AnsiColor, Msg};
 	///
 	/// let msg = Msg::new(("Name", AnsiColor::Blue), "Björk")
 	///     .with_suffix(" (the Great)")
@@ -637,7 +631,7 @@ impl Msg {
 	///
 	/// ```
 	/// use fyi_msg::{
-	///     ansi::AnsiColor,
+	///     AnsiColor,
 	///     Msg,
 	///     MsgKind,
 	/// };

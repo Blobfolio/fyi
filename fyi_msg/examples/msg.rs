@@ -5,7 +5,7 @@
 /// Do it.
 fn main() {
 	use fyi_msg::{
-		ansi::AnsiColor,
+		AnsiColor,
 		confirm,
 		Msg,
 		MsgKind,

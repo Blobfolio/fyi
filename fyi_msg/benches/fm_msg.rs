@@ -7,7 +7,7 @@ use brunch::{
 	benches,
 };
 use fyi_msg::{
-	ansi::AnsiColor,
+	AnsiColor,
 	Msg,
 	MsgKind,
 };

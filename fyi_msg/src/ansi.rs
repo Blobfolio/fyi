@@ -8,6 +8,20 @@ use std::{
 	ops::Range,
 };
 
+#[cfg(any(feature = "fitted", feature = "progress"))]
+use std::str::Chars;
+
+
+
+/// # Escape Character.
+const ANSI_ESCAPE: char = '\x1b';
+
+/// # Bell Character.
+const ANSI_BELL: char = '\x07';
+
+/// # OE Character.
+const ANSI_OE: char = '\u{0153}';
+
 
 
 include!(concat!(env!("OUT_DIR"), "/ansi-color.rs"));
@@ -24,7 +38,7 @@ impl fmt::Display for AnsiColor {
 	/// ## Examples
 	///
 	/// ```
-	/// use fyi_msg::ansi::AnsiColor;
+	/// use fyi_msg::AnsiColor;
 	///
 	/// assert_eq!(
 	///     AnsiColor::LightMagenta.to_string(),
@@ -50,7 +64,7 @@ impl From<u8> for AnsiColor {
 	/// method.
 	///
 	/// ```
-	/// use fyi_msg::ansi::AnsiColor;
+	/// use fyi_msg::AnsiColor;
 	///
 	/// // All the colors of the termbow!
 	/// for i in u8::MIN..=u8::MAX {
@@ -87,7 +101,7 @@ impl AnsiColor {
 	/// ## Examples
 	///
 	/// ```
-	/// use fyi_msg::ansi::AnsiColor;
+	/// use fyi_msg::AnsiColor;
 	///
 	/// // Only "Blue" prints, well, blue.
 	/// println!(
@@ -106,22 +120,21 @@ impl AnsiColor {
 
 
 
+#[cfg(any(feature = "fitted", feature = "progress"))]
 #[derive(Debug, Clone)]
 /// # ANSI-Stripping Iterator.
 ///
 /// This iterator strips ANSI [CSI](https://en.wikipedia.org/wiki/ANSI_escape_code#CSI_(Control_Sequence_Introducer)_sequences) and [OSC](https://en.wikipedia.org/wiki/ANSI_escape_code#OSC_(Operating_System_Command)_sequences) sequences
-/// from existing `char`/`u8` iterators.
+/// from a string slice.
 ///
 /// Note that other types of (less common) ANSI sequences and miscellaneous
 /// control characters may remain.
-pub struct NoAnsi<U: Copy + fmt::Debug, I: Iterator<Item=U>> {
-	/// # Iterator.
-	iter: I,
+pub(crate) struct NoAnsi<'a> {
+	/// # (Remaining) Source.
+	iter: Chars<'a>,
 
-	/// # ANSI Match State.
-	///
-	/// This keeps track of whether and where we are inside an ANSI sequence.
-	state: NoAnsiState<U>,
+	/// # Buffer Character.
+	buf: Option<char>,
 
 	/// # Byte Position.
 	///
@@ -129,7 +142,35 @@ pub struct NoAnsi<U: Copy + fmt::Debug, I: Iterator<Item=U>> {
 	pos: usize,
 }
 
-impl<U: Copy + fmt::Debug, I: Iterator<Item=U>> NoAnsi<U, I> {
+#[cfg(any(feature = "fitted", feature = "progress"))]
+impl<'a> NoAnsi<'a> {
+	#[inline]
+	#[must_use]
+	/// # New.
+	///
+	/// Create a new instance from a string slice.
+	///
+	/// ## Examples
+	///
+	/// ```ignore
+	/// use fyi_msg::ansi::NoAnsi;
+	///
+	/// let fmt: &str = "\x1b[1mHello\x1b[0m \x1b[38;5;199mWorld!\x1b[m";
+	/// assert_eq!(
+	///     NoAnsi::new(fmt).collect::<String>(),
+	///     "Hello World!",
+	/// );
+	/// ```
+	pub(crate) fn new(src: &'a str) -> Self {
+		Self {
+			iter: src.chars(),
+			buf: None,
+			pos: 0,
+		}
+	}
+
+	#[inline]
+	#[must_use]
 	/// # Bytes Traversed.
 	///
 	/// Return the number of bytes traversed by the iterator (so far),
@@ -137,11 +178,11 @@ impl<U: Copy + fmt::Debug, I: Iterator<Item=U>> NoAnsi<U, I> {
 	///
 	/// ## Examples
 	///
-	/// ```
+	/// ```ignore
 	/// use fyi_msg::ansi::NoAnsi;
 	///
 	/// let raw = "\x1b[1mHello\x1b[0m";
-	/// let mut iter = NoAnsi::<char, _>::new(raw.chars());
+	/// let mut iter = NoAnsi::new(raw);
 	///
 	/// // The leading ANSI sequence is ignored; the first thing we get back
 	/// // from the iterator is the H.
@@ -154,98 +195,71 @@ impl<U: Copy + fmt::Debug, I: Iterator<Item=U>> NoAnsi<U, I> {
 	///     "\x1b[1mH",
 	/// );
 	/// ```
-	pub const fn byte_pos(&self) -> usize { self.pos }
-}
+	pub(crate) const fn byte_pos(&self) -> usize { self.pos }
 
-impl<I: Iterator<Item=char>> NoAnsi<char, I> {
-	#[inline]
-	/// # New.
+	#[cold]
+	/// # Drain OSC Sequence.
 	///
-	/// Create a new instance from an existing `Iterator<Item=char>`.
-	///
-	/// ## Examples
-	///
-	/// ```
-	/// use fyi_msg::ansi::NoAnsi;
-	///
-	/// let fmt: &str = "\x1b[1mHello\x1b[0m \x1b[38;5;199mWorld!\x1b[m";
-	/// assert_eq!(
-	///     NoAnsi::<char, _>::new(fmt.chars()).collect::<String>(),
-	///     "Hello World!",
-	/// );
-	/// ```
-	pub const fn new(iter: I) -> Self {
-		Self {
-			iter,
-			state: NoAnsiState::None,
-			pos: 0,
+	/// Advance the wrapped iterator until an ANSI OSC break is found.
+	fn drain_osc(&mut self) {
+		while let Some(c) = self.buf.take().or_else(|| self.iter.next()) {
+			self.pos += c.len_utf8();
+			match c {
+				ANSI_OE | ANSI_BELL => { break; },
+				ANSI_ESCAPE => {
+					// This is only actually the end if
+					// followed by a backslash.
+					match self.iter.next() {
+						Some('\\') => {
+							self.pos += 1;
+							break;
+						},
+						// Save for next time.
+						Some(c) => { self.buf.replace(c); },
+						_ => {},
+					}
+				},
+				_ => {},
+			}
 		}
 	}
 }
 
-impl<I: Iterator<Item=char>> Iterator for NoAnsi<char, I> {
+#[cfg(any(feature = "fitted", feature = "progress"))]
+impl Iterator for NoAnsi<'_> {
 	type Item = char;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		// One character at a time.
-		while let Some(mut next) = self.state.take().or_else(|| self.iter.next()) {
-			// Increment the position counter before we get too far afield.
+		while let Some(next) = self.buf.take().or_else(|| self.iter.next()) {
+			if ANSI_ESCAPE == next {
+				match self.iter.next() {
+					// New CSI sequence.
+					Some('[') => {
+						// Count the opening bytes, then drain (and count) the
+						// remainder of the sequence.
+						self.pos += 2;
+						for c in self.iter.by_ref() {
+							self.pos += c.len_utf8();
+							if matches!(c, '\x40'..='\x7E') { break; }
+						}
+						continue;
+					},
+					// New OSC sequence.
+					Some(']') => {
+						self.pos += 2;
+						self.drain_osc();
+						continue;
+					},
+					// Save for next time.
+					Some(c) => { self.buf.replace(c); },
+					None => {},
+				}
+			}
+
 			self.pos += next.len_utf8();
-
-			// What it means varies by state.
-			match self.state {
-				// We aren't in any particular state.
-				NoAnsiState::None =>
-					// We might be entering a sequence.
-					if next == NoAnsiState::<char>::ESCAPE {
-						match self.iter.next() {
-							Some('[') => {
-								self.state = NoAnsiState::Csi;
-								self.pos += 1;
-							},
-							Some(']') => {
-								self.state = NoAnsiState::Osc;
-								self.pos += 1;
-							},
-							Some(next) => {
-								self.state = NoAnsiState::NeverMind(next);
-								return Some(NoAnsiState::<char>::ESCAPE);
-							},
-							None => return Some(NoAnsiState::<char>::ESCAPE),
-						}
-					}
-					else { return Some(next); },
-
-				// We're in a CSI sequence, ignoring until escaped.
-				NoAnsiState::Csi => if matches!(next, '\x40'..='\x7E') {
-					self.state = NoAnsiState::None;
-				},
-
-				// We're in an OSC sequence, ignoring until escaped.
-				NoAnsiState::Osc => loop {
-					match next {
-						NoAnsiState::<char>::OE | NoAnsiState::<char>::BELL => {
-							self.state = NoAnsiState::None;
-							break;
-						},
-						NoAnsiState::<char>::ESCAPE => {
-							next = self.iter.next()?;
-							self.pos += next.len_utf8();
-							if next == '\\' {
-								self.state = NoAnsiState::None;
-								break;
-							}
-						},
-						_ => break,
-					}
-				},
-
-				// Unreachable.
-				NoAnsiState::NeverMind(_) => {},
-			}
+			return Some(next);
 		}
 
-		// We're done!
 		None
 	}
 
@@ -253,171 +267,6 @@ impl<I: Iterator<Item=char>> Iterator for NoAnsi<char, I> {
 		let (_, max) = self.iter.size_hint();
 		(0, max)
 	}
-}
-
-impl<I: Iterator<Item=u8>> NoAnsi<u8, I> {
-	#[inline]
-	/// # New.
-	///
-	/// Create a new instance from an existing `Iterator<Item=u8>`.
-	///
-	/// ## Examples
-	///
-	/// ```
-	/// use fyi_msg::ansi::NoAnsi;
-	///
-	/// let fmt: &[u8] = b"\x1b[1mHello\x1b[0m \x1b[38;5;199mWorld!\x1b[m";
-	/// assert_eq!(
-	///     NoAnsi::<u8, _>::new(fmt.iter().copied()).collect::<Vec<u8>>(),
-	///     b"Hello World!",
-	/// );
-	/// ```
-	pub const fn new(iter: I) -> Self {
-		Self {
-			iter,
-			state: NoAnsiState::None,
-			pos: 0,
-		}
-	}
-}
-
-impl<I: Iterator<Item=u8>> Iterator for NoAnsi<u8, I> {
-	type Item = u8;
-
-	fn next(&mut self) -> Option<Self::Item> {
-		// One byte at a time.
-		while let Some(mut next) = self.state.take().or_else(|| self.iter.next()) {
-			// Increment the position counter before we get too far afield.
-			self.pos += 1;
-
-			// What it means varies by state.
-			match self.state {
-				// We aren't in any particular state.
-				NoAnsiState::None =>
-					// We might be entering a sequence.
-					if next == NoAnsiState::<u8>::ESCAPE {
-						match self.iter.next() {
-							Some(b'[') => {
-								self.state = NoAnsiState::Csi;
-								self.pos += 1;
-							},
-							Some(b']') => {
-								self.state = NoAnsiState::Osc;
-								self.pos += 1;
-							},
-							Some(next) => {
-								self.state = NoAnsiState::NeverMind(next);
-								return Some(NoAnsiState::<u8>::ESCAPE);
-							},
-							None => return Some(NoAnsiState::<u8>::ESCAPE),
-						}
-					}
-					else { return Some(next); },
-
-				// We're in a CSI sequence, ignoring until escaped.
-				NoAnsiState::Csi => if matches!(next, b'\x40'..=b'\x7E') {
-					self.state = NoAnsiState::None;
-				},
-
-				// We're in an OSC sequence, ignoring until escaped.
-				NoAnsiState::Osc => loop {
-					match next {
-						NoAnsiState::<u8>::BELL => {
-							self.state = NoAnsiState::None;
-							break;
-						},
-						NoAnsiState::<u8>::OE_1 => {
-							next = self.iter.next()?;
-							self.pos += 1;
-							if next == NoAnsiState::<u8>::OE_2 {
-								self.state = NoAnsiState::None;
-								break;
-							}
-						},
-						NoAnsiState::<u8>::ESCAPE => {
-							next = self.iter.next()?;
-							self.pos += 1;
-							if next == b'\\' {
-								self.state = NoAnsiState::None;
-								break;
-							}
-						},
-						_ => break,
-					}
-				},
-
-				// Unreachable.
-				NoAnsiState::NeverMind(_) => {},
-			}
-		}
-
-		// We're done!
-		None
-	}
-
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		let (_, max) = self.iter.size_hint();
-		(0, max)
-	}
-}
-
-
-
-#[derive(Debug, Clone, Copy)]
-/// # Parsing State.
-///
-/// This short list is all we need to guide our output.
-pub(crate) enum NoAnsiState<U: Copy + fmt::Debug> {
-	/// # No particular state.
-	None,
-
-	/// # Inside a CSI sequence.
-	Csi,
-
-	/// # Inside an OSC sequence.
-	Osc,
-
-	/// # Lookahead buffer for false escapes.
-	NeverMind(U),
-}
-
-impl<U: Copy + fmt::Debug> NoAnsiState<U> {
-	/// # Take Value.
-	///
-	/// If `Self::NeverMind`, reset `self` to `Self::None` and return the
-	/// buffered value.
-	pub(crate) const fn take(&mut self) -> Option<U> {
-		if let Self::NeverMind(c) = *self {
-			*self = Self::None;
-			Some(c)
-		}
-		else { None }
-	}
-}
-
-impl NoAnsiState<char> {
-	/// # Escape Character.
-	pub(crate) const ESCAPE: char = '\x1b';
-
-	/// # Bell Character.
-	pub(crate) const BELL: char = '\x07';
-
-	/// # OE Character.
-	pub(crate) const OE: char = '\u{0153}';
-}
-
-impl NoAnsiState<u8> {
-	/// # Escape Character.
-	pub(crate) const ESCAPE: u8 = b'\x1b';
-
-	/// # Bell Character.
-	pub(crate) const BELL: u8 = b'\x07';
-
-	/// # OE Character (part one).
-	pub(crate) const OE_1: u8 = 197;
-
-	/// # OE Character (part two).
-	pub(crate) const OE_2: u8 = 147;
 }
 
 
@@ -479,16 +328,20 @@ pub(crate) fn next_ansi(src: &str) -> Option<Range<usize>> {
 		// OSC sequence.
 		Some((1, ']')) => {
 			// These unfortunately have one- and two-byte stops. Haha.
-			let mut chars = chars.peekable();
-			while let Some((k, c)) = chars.next() {
+			let mut buf = None;
+			while let Some((k, c)) = buf.take().or_else(|| chars.next()) {
 				match c {
-					NoAnsiState::<char>::OE | NoAnsiState::<char>::BELL => {
+					ANSI_OE | ANSI_BELL => {
 						end = Some(k + c.len_utf8());
 						break;
 					},
-					NoAnsiState::<char>::ESCAPE => if let Some((k, '\\')) = chars.peek() {
-						end = Some(k + c.len_utf8());
-						break;
+					ANSI_ESCAPE => match chars.next() {
+						Some((k, '\\')) => {
+							end = Some(k + c.len_utf8());
+							break;
+						},
+						Some(nope) => { buf.replace(nope); },
+						None => {},
 					},
 					_ => {},
 				}
@@ -507,20 +360,7 @@ pub(crate) fn next_ansi(src: &str) -> Option<Range<usize>> {
 mod test {
 	use super::*;
 
-	#[test]
-	fn t_oe() {
-		// Just check we split it right.
-		let a = [
-			NoAnsiState::<u8>::OE_1,
-			NoAnsiState::<u8>::OE_2,
-		];
-		let b = std::str::from_utf8(a.as_slice()).expect("Invalid UTF-8");
-		assert_eq!(
-			b,
-			NoAnsiState::<char>::OE.to_string(),
-		);
-	}
-
+	#[cfg(any(feature = "fitted", feature = "progress"))]
 	#[test]
 	fn t_ansi_csi() {
 		// This library does a lot with ANSI CSI sequences so the functionality
@@ -539,13 +379,8 @@ mod test {
 			"text/plain",
 		]) {
 			assert_eq!(
-				NoAnsi::<char, _>::new(raw.chars()).collect::<String>(),
+				NoAnsi::new(raw).collect::<String>(),
 				expected,
-			);
-
-			assert_eq!(
-				NoAnsi::<u8, _>::new(raw.bytes()).collect::<Vec<u8>>(),
-				expected.as_bytes(),
 			);
 		}
 
@@ -563,6 +398,7 @@ mod test {
 		}
 	}
 
+	#[cfg(any(feature = "fitted", feature = "progress"))]
 	#[test]
 	fn t_ansi_osc() {
 		// Verify two-byte endings are properly accounted for when mixed and
@@ -578,11 +414,8 @@ mod test {
 			"One \x1b]Two\x1b\x1bœ Three",     // Escape Escape oe.
 			"One \x1b]Two\x1b\x1b\x1bœ Three", // Escape Escape Escape oe.
 		] {
-			let stripped: String = NoAnsi::<char, _>::new(i.chars()).collect();
+			let stripped: String = NoAnsi::new(i).collect();
 			assert_eq!(stripped, "One  Three", "Chars: {:?}", i.as_bytes());
-
-			let stripped: Vec<u8> = NoAnsi::<u8, _>::new(i.bytes()).collect();
-			assert_eq!(stripped, b"One  Three", "Bytes: {:?}", i.as_bytes());
 
 			#[cfg(feature = "fitted")]
 			assert_eq!(
@@ -590,18 +423,6 @@ mod test {
 				i.strip_prefix("One ").and_then(|j| j.strip_suffix(" Three")).unwrap(),
 				"Raw: {i:?}",
 			);
-		}
-
-		// Additionally test byte stripping when the oe is split. This isn't
-		// valid UTF-8, but the byte iterator doesn't necessarily require that.
-		for i in [
-			[b'A', NoAnsiState::<u8>::ESCAPE, b']', b'B', NoAnsiState::<u8>::OE_1, NoAnsiState::<u8>::ESCAPE, b'\\', b'C'].as_slice(),
-			[b'A', NoAnsiState::<u8>::ESCAPE, b']', b'B', NoAnsiState::<u8>::OE_1, NoAnsiState::<u8>::ESCAPE, NoAnsiState::<u8>::ESCAPE, b'\\', b'C'].as_slice(),
-			[b'A', NoAnsiState::<u8>::ESCAPE, b']', b'B', NoAnsiState::<u8>::OE_1, NoAnsiState::<u8>::BELL, b'C'].as_slice(),
-			[b'A', NoAnsiState::<u8>::ESCAPE, b']', b'B', NoAnsiState::<u8>::OE_1, NoAnsiState::<u8>::OE_1, NoAnsiState::<u8>::OE_2, b'C'].as_slice(),
-		] {
-			let stripped: Vec<u8> = NoAnsi::<u8, _>::new(i.iter().copied()).collect();
-			assert_eq!(stripped, b"AC", "Bytes: {i:?}");
 		}
 	}
 
@@ -621,6 +442,7 @@ mod test {
 		);
 	}
 
+	#[cfg(any(feature = "fitted", feature = "progress"))]
 	#[test]
 	fn t_byte_pos() {
 		for s in [
@@ -631,12 +453,7 @@ mod test {
 			"One \x1b]Twoœ Three",
 		] {
 			// Make sure string bytes are counted correctly.
-			let mut iter = NoAnsi::<char, _>::new(s.chars());
-			while iter.next().is_some() { }
-			assert_eq!(s.len(), iter.byte_pos());
-
-			// And byte bytes.
-			let mut iter = NoAnsi::<u8, _>::new(s.bytes());
+			let mut iter = NoAnsi::new(s);
 			while iter.next().is_some() { }
 			assert_eq!(s.len(), iter.byte_pos());
 		}
