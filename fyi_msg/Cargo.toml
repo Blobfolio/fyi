@@ -17,9 +17,6 @@ features = [ "fitted", "progress", "signals", "timestamps" ]
 default-target = "x86_64-unknown-linux-gnu"
 targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
-[build-dependencies]
-argyle = "0.12.0"
-
 [dependencies.dactyl]
 version = "0.10.*"
 optional = true

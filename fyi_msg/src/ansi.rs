@@ -457,5 +457,11 @@ mod test {
 			while iter.next().is_some() { }
 			assert_eq!(s.len(), iter.byte_pos());
 		}
+
+		// Let's test one more explicitly.
+		let raw = "\x1b[1mHello\x1b[0m";
+		let mut iter = NoAnsi::new(raw);
+		assert_eq!(iter.next(), Some('H'));
+		assert_eq!(&raw[..iter.byte_pos()], "\x1b[1mH");
 	}
 }

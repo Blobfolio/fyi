@@ -25,6 +25,8 @@ use unicode_width::UnicodeWidthChar;
 /// ANSI formatting sequences and line breaks are always preserved; a new
 /// string will be allocated to stitch everything back together when necessary.
 ///
+/// **This requires the `fitted` crate feature.**
+///
 /// ## Examples
 ///
 /// ```

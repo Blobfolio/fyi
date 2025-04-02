@@ -10,7 +10,6 @@ use crate::FyiError;
 use dactyl::traits::BytesToUnsigned;
 use fyi_msg::{
 	Msg,
-	MsgFlags,
 	MsgKind,
 };
 use std::{
@@ -45,19 +44,17 @@ impl Settings {
 		else { Err(FyiError::Passthrough(self.exit)) }
 	}
 
+	/// # Indent?
+	const fn indent(self) -> bool { self.flags.contains(Flags::Indent) }
+
 	/// # Stderr?
 	pub(super) const fn stderr(self) -> bool { self.flags.contains(Flags::Stderr) }
 
+	/// # Timestamp?
+	const fn timestamp(self) -> bool { self.flags.contains(Flags::Timestamp) }
+
 	/// # Default Yes?
 	pub(super) const fn yes(self) -> bool { self.flags.contains(Flags::Yes) }
-
-	/// # Convert to `Msg` Flags.
-	const fn msg_flags(self) -> MsgFlags {
-		let mut flags = MsgFlags::Newline;
-		if self.flags.contains(Flags::Indent) { flags.set(MsgFlags::Indent); }
-		if self.flags.contains(Flags::Timestamp) { flags.set(MsgFlags::Timestamp); }
-		flags
-	}
 
 	/// # New.
 	const fn new() -> Self {
@@ -156,7 +153,9 @@ pub(super) fn parse_msg(kind: MsgKind) -> Result<(Msg, Settings), FyiError> {
 			Msg::new((&prefix, color), msg)
 		}
 		else { Msg::new(kind, msg) }
-			.with_flags(flags.msg_flags());
+			.with_timestamp(flags.timestamp())
+			.with_indent(u8::from(flags.indent()))
+			.with_newline(true);
 
 	Ok((msg, flags))
 }

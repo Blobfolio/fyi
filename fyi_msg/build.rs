@@ -4,7 +4,6 @@
 
 #![allow(unused_mut, reason = "It is conditionally used.")]
 
-use argyle::FlagsBuilder;
 use std::{
 	fmt,
 	fs::File,
@@ -14,11 +13,32 @@ use std::{
 
 
 
+/// # ANSI-to-Web Conversion Table.
+static HEX: [&str; 256] = [
+	"#000000", "#800000", "#008000", "#808000", "#000080", "#800080", "#008080", "#c0c0c0", "#808080", "#ff0000", "#00ff00", "#ffff00", "#0000ff", "#ff00ff", "#00ffff", "#ffffff",
+	"#000000", "#00005f", "#000087", "#0000af", "#0000d7", "#0000ff", "#005f00", "#005f5f", "#005f87", "#005faf", "#005fd7", "#005fff", "#008700", "#00875f", "#008787", "#0087af",
+	"#0087d7", "#0087ff", "#00af00", "#00af5f", "#00af87", "#00afaf", "#00afd7", "#00afff", "#00d700", "#00d75f", "#00d787", "#00d7af", "#00d7d7", "#00d7ff", "#00ff00", "#00ff5f",
+	"#00ff87", "#00ffaf", "#00ffd7", "#00ffff", "#5f0000", "#5f005f", "#5f0087", "#5f00af", "#5f00d7", "#5f00ff", "#5f5f00", "#5f5f5f", "#5f5f87", "#5f5faf", "#5f5fd7", "#5f5fff",
+	"#5f8700", "#5f875f", "#5f8787", "#5f87af", "#5f87d7", "#5f87ff", "#5faf00", "#5faf5f", "#5faf87", "#5fafaf", "#5fafd7", "#5fafff", "#5fd700", "#5fd75f", "#5fd787", "#5fd7af",
+	"#5fd7d7", "#5fd7ff", "#5fff00", "#5fff5f", "#5fff87", "#5fffaf", "#5fffd7", "#5fffff", "#870000", "#87005f", "#870087", "#8700af", "#8700d7", "#8700ff", "#875f00", "#875f5f",
+	"#875f87", "#875faf", "#875fd7", "#875fff", "#878700", "#87875f", "#878787", "#8787af", "#8787d7", "#8787ff", "#87af00", "#87af5f", "#87af87", "#87afaf", "#87afd7", "#87afff",
+	"#87d700", "#87d75f", "#87d787", "#87d7af", "#87d7d7", "#87d7ff", "#87ff00", "#87ff5f", "#87ff87", "#87ffaf", "#87ffd7", "#87ffff", "#af0000", "#af005f", "#af0087", "#af00af",
+	"#af00d7", "#af00ff", "#af5f00", "#af5f5f", "#af5f87", "#af5faf", "#af5fd7", "#af5fff", "#af8700", "#af875f", "#af8787", "#af87af", "#af87d7", "#af87ff", "#afaf00", "#afaf5f",
+	"#afaf87", "#afafaf", "#afafd7", "#afafff", "#afd700", "#afd75f", "#afd787", "#afd7af", "#afd7d7", "#afd7ff", "#afff00", "#afff5f", "#afff87", "#afffaf", "#afffd7", "#afffff",
+	"#d70000", "#d7005f", "#d70087", "#d700af", "#d700d7", "#d700ff", "#d75f00", "#d75f5f", "#d75f87", "#d75faf", "#d75fd7", "#d75fff", "#d78700", "#d7875f", "#d78787", "#d787af",
+	"#d787d7", "#d787ff", "#d7af00", "#d7af5f", "#d7af87", "#d7afaf", "#d7afd7", "#d7afff", "#d7d700", "#d7d75f", "#d7d787", "#d7d7af", "#d7d7d7", "#d7d7ff", "#d7ff00", "#d7ff5f",
+	"#d7ff87", "#d7ffaf", "#d7ffd7", "#d7ffff", "#ff0000", "#ff005f", "#ff0087", "#ff00af", "#ff00d7", "#ff00ff", "#ff5f00", "#ff5f5f", "#ff5f87", "#ff5faf", "#ff5fd7", "#ff5fff",
+	"#ff8700", "#ff875f", "#ff8787", "#ff87af", "#ff87d7", "#ff87ff", "#ffaf00", "#ffaf5f", "#ffaf87", "#ffafaf", "#ffafd7", "#ffafff", "#ffd700", "#ffd75f", "#ffd787", "#ffd7af",
+	"#ffd7d7", "#ffd7ff", "#ffff00", "#ffff5f", "#ffff87", "#ffffaf", "#ffffd7", "#ffffff", "#080808", "#121212", "#1c1c1c", "#262626", "#303030", "#3a3a3a", "#444444", "#4e4e4e",
+	"#585858", "#626262", "#6c6c6c", "#767676", "#808080", "#8a8a8a", "#949494", "#9e9e9e", "#a8a8a8", "#b2b2b2", "#bcbcbc", "#c6c6c6", "#d0d0d0", "#dadada", "#e4e4e4", "#eeeeee",
+];
+
+
+
 /// # Build stuff!
 fn main() {
 	println!("cargo:rerun-if-env-changed=CARGO_PKG_VERSION");
 	build_ansi_color();
-	build_msg_flags();
 	build_msg_kinds();
 }
 
@@ -119,44 +139,35 @@ fn build_ansi_color() {
 		"Misc251", "Misc252", "Misc253", "Misc254", "Misc255",
 	];
 
-	// And the corresponding hex codes, for documentation.
-	static HEX: [&str; 256] = [
-		"#000000", "#800000", "#008000", "#808000", "#000080", "#800080", "#008080", "#c0c0c0", "#808080", "#ff0000", "#00ff00", "#ffff00", "#0000ff", "#ff00ff", "#00ffff", "#ffffff",
-		"#000000", "#00005f", "#000087", "#0000af", "#0000d7", "#0000ff", "#005f00", "#005f5f", "#005f87", "#005faf", "#005fd7", "#005fff", "#008700", "#00875f", "#008787", "#0087af",
-		"#0087d7", "#0087ff", "#00af00", "#00af5f", "#00af87", "#00afaf", "#00afd7", "#00afff", "#00d700", "#00d75f", "#00d787", "#00d7af", "#00d7d7", "#00d7ff", "#00ff00", "#00ff5f",
-		"#00ff87", "#00ffaf", "#00ffd7", "#00ffff", "#5f0000", "#5f005f", "#5f0087", "#5f00af", "#5f00d7", "#5f00ff", "#5f5f00", "#5f5f5f", "#5f5f87", "#5f5faf", "#5f5fd7", "#5f5fff",
-		"#5f8700", "#5f875f", "#5f8787", "#5f87af", "#5f87d7", "#5f87ff", "#5faf00", "#5faf5f", "#5faf87", "#5fafaf", "#5fafd7", "#5fafff", "#5fd700", "#5fd75f", "#5fd787", "#5fd7af",
-		"#5fd7d7", "#5fd7ff", "#5fff00", "#5fff5f", "#5fff87", "#5fffaf", "#5fffd7", "#5fffff", "#870000", "#87005f", "#870087", "#8700af", "#8700d7", "#8700ff", "#875f00", "#875f5f",
-		"#875f87", "#875faf", "#875fd7", "#875fff", "#878700", "#87875f", "#878787", "#8787af", "#8787d7", "#8787ff", "#87af00", "#87af5f", "#87af87", "#87afaf", "#87afd7", "#87afff",
-		"#87d700", "#87d75f", "#87d787", "#87d7af", "#87d7d7", "#87d7ff", "#87ff00", "#87ff5f", "#87ff87", "#87ffaf", "#87ffd7", "#87ffff", "#af0000", "#af005f", "#af0087", "#af00af",
-		"#af00d7", "#af00ff", "#af5f00", "#af5f5f", "#af5f87", "#af5faf", "#af5fd7", "#af5fff", "#af8700", "#af875f", "#af8787", "#af87af", "#af87d7", "#af87ff", "#afaf00", "#afaf5f",
-		"#afaf87", "#afafaf", "#afafd7", "#afafff", "#afd700", "#afd75f", "#afd787", "#afd7af", "#afd7d7", "#afd7ff", "#afff00", "#afff5f", "#afff87", "#afffaf", "#afffd7", "#afffff",
-		"#d70000", "#d7005f", "#d70087", "#d700af", "#d700d7", "#d700ff", "#d75f00", "#d75f5f", "#d75f87", "#d75faf", "#d75fd7", "#d75fff", "#d78700", "#d7875f", "#d78787", "#d787af",
-		"#d787d7", "#d787ff", "#d7af00", "#d7af5f", "#d7af87", "#d7afaf", "#d7afd7", "#d7afff", "#d7d700", "#d7d75f", "#d7d787", "#d7d7af", "#d7d7d7", "#d7d7ff", "#d7ff00", "#d7ff5f",
-		"#d7ff87", "#d7ffaf", "#d7ffd7", "#d7ffff", "#ff0000", "#ff005f", "#ff0087", "#ff00af", "#ff00d7", "#ff00ff", "#ff5f00", "#ff5f5f", "#ff5f87", "#ff5faf", "#ff5fd7", "#ff5fff",
-		"#ff8700", "#ff875f", "#ff8787", "#ff87af", "#ff87d7", "#ff87ff", "#ffaf00", "#ffaf5f", "#ffaf87", "#ffafaf", "#ffafd7", "#ffafff", "#ffd700", "#ffd75f", "#ffd787", "#ffd7af",
-		"#ffd7d7", "#ffd7ff", "#ffff00", "#ffff5f", "#ffff87", "#ffffaf", "#ffffd7", "#ffffff", "#080808", "#121212", "#1c1c1c", "#262626", "#303030", "#3a3a3a", "#444444", "#4e4e4e",
-		"#585858", "#626262", "#6c6c6c", "#767676", "#808080", "#8a8a8a", "#949494", "#9e9e9e", "#a8a8a8", "#b2b2b2", "#bcbcbc", "#c6c6c6", "#d0d0d0", "#dadada", "#e4e4e4", "#eeeeee",
-	];
-
 	// This'll be kinda big, so let's start with a decent buffer.
 	let mut out = String::with_capacity(65_536);
 
 	// Start with the definition.
-	out.push_str("#[repr(u8)]
+	writeln!(
+		&mut out,
+		"#[repr(u8)]
 #[derive(Debug, Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
 /// # ANSI Colors (8/16/256).
 ///
-/// This enum is used to print colored text to ANSI-capable terminals. (When
-/// in doubt, stick with the first sixteen variants; support for those is near
-/// universal.)
+/// This enum is used to print colored text to ANSI-capable[^note] terminals.
 ///
 /// Owing to deviations from _proper_ standards, only some variants have nice
 /// names; the rest are simply designated by code (e.g. [`AnsiColor::Misc217`]
-/// for `#217`).
+/// for `#217`, a sort of mortician's blush).
 ///
-/// A decent visual breakdown of the rendered colors can be found [here](https://misc.flogisoft.com/bash/tip_colors_and_formatting#foreground_text1).
-pub enum AnsiColor {\n");
+/// [^note]: Most modern software will happily render the full range, but if
+/// (ancient) backward compatibility is a concern, stick with the first sixteen
+/// choices, as they've been around _forever_.
+///
+/// ## Reference
+///
+/// The actual color rendered will vary by software, but should look something
+/// like the following:
+///
+/// {}
+pub enum AnsiColor {{",
+		AnsiTable
+	).unwrap();
 	for (k, (v, h)) in COLORS.iter().zip(HEX.iter()).enumerate() {
 		// Give it a title.
 		if v.starts_with("Misc") {
@@ -270,35 +281,6 @@ impl AnsiColor {\n");
 	File::create(out_path("ansi-color.rs"))
 		.and_then(|mut f| f.write_all(out.as_bytes()).and_then(|()| f.flush()))
 		.expect("Unable to save ansi-color.rs");
-}
-
-/// # Build/Save `MsgFlags`.
-///
-/// Use `FlagsBuilder` to generate a simple bitflag enum for the message flags.
-fn build_msg_flags() {
-	let mut builder = FlagsBuilder::new("MsgFlags")
-		.public()
-		.with_docs("# Message Flags.
-
-Used by [`Msg::with_flags`] to set multiple properties in one go.")
-		.with_flag("Indent", Some("# Indent Message (four spaces).\n\nEquivalent to passing one to [`Msg::with_indent`]."))
-		.with_flag("Newline", Some("# End Message w/ Line Break.\n\nEquivalent to passing true to [`Msg::with_newline`]."));
-
-	#[cfg(feature = "timestamps")]
-	{
-		builder = builder.with_flag("Timestamp", Some("# Timestamp Message.\n\nEquivalent to passing true to [`Msg::with_timestamp`]."));
-	}
-
-	// Save it manually so we can note the timestamps feature-gate.
-	let out = builder.to_string()
-		.replace(
-			"\t#[doc = \"# Timestamp",
-			"\t#[cfg_attr(docsrs, doc(cfg(feature = \"timestamps\")))]\n\t#[doc = \"# Timestamp",
-		);
-
-	File::create(out_path("msg-flags.rs"))
-		.and_then(|mut f| f.write_all(out.as_bytes()).and_then(|()| f.flush()))
-		.expect("Unable to save msg-flags.rs");
 }
 
 /// # Build/Save `MsgKind`.
@@ -491,6 +473,27 @@ fn out_path(stub: &str) -> PathBuf {
 	std::fs::canonicalize(std::env::var("OUT_DIR").expect("Missing OUT_DIR."))
 		.expect("Missing OUT_DIR.")
 		.join(stub)
+}
+
+
+
+/// # Print a Pretty ANSI Table.
+///
+/// This is used to output an HTML "table" showing the approximate ANSI colors
+/// and codes.
+struct AnsiTable;
+
+impl fmt::Display for AnsiTable {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.write_str(r##"<div style="display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: stretch; color: #fff; font-size: 13px; font-weight: bold; text-align: center; line-height: 40px;">"##)?;
+		for (k, color) in HEX.iter().enumerate() {
+			write!(
+				f,
+				r##"<div style="width: 40px; height: 40px; margin: 0 1px 1px 0; background: {color}" title="{k:03}">{k:03}</div>"##,
+			).unwrap();
+		}
+		f.write_str("</div>")
+	}
 }
 
 

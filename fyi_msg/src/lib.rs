@@ -110,7 +110,6 @@ mod msg;
 pub use ansi::AnsiColor;
 pub use msg::{
 	Msg,
-	MsgFlags,
 	kind::MsgKind,
 };
 

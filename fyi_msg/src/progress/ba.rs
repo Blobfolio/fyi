@@ -20,7 +20,7 @@ use std::num::NonZeroU64;
 ///
 /// Usage is as simple as:
 ///
-/// ```no_run
+/// ```
 /// use fyi_msg::BeforeAfter;
 ///
 /// let mut ba = BeforeAfter::start(123_u64);
