@@ -706,7 +706,7 @@ impl Msg {
 			out.push_str("\x1b[0;2m]\x1b[0m ");
 			self.replace_part(TocId::Timestamp, &out);
 		}
-		else { self.replace_part(TocId::Timestamp, ""); };
+		else { self.replace_part(TocId::Timestamp, ""); }
 	}
 
 	/// # Strip ANSI Formatting.
