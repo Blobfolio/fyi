@@ -304,12 +304,12 @@ fn sigint_two_strike() -> Arc<AtomicBool> {
 	// callbacks can be race-prone, but our inner operations are atomic.
 	unsafe {
 		let t_switch = Arc::clone(&switch);
-		if signal_hook::low_level::register(SIGINT, move || {
+		if signal_hook::low_level::register(SIGINT, move ||
 			// Terminate the process if the switch was already true.
 			if t_switch.swap(true, SeqCst) { signal_hook::low_level::exit(1); }
 			// Otherwise just unhide the cursor.
 			else { eprint!("{}", Progless::CURSOR_UNHIDE); }
-		}).is_err() { sigint_error(); }
+		).is_err() { sigint_error(); }
 	}
 
 	switch
@@ -332,12 +332,12 @@ fn sigint_keepalive() -> Arc<AtomicBool> {
 	// callbacks can be race-prone, but our inner operations are atomic.
 	unsafe {
 		let t_switch = Arc::clone(&switch);
-		if signal_hook::low_level::register(SIGINT, move || {
+		if signal_hook::low_level::register(SIGINT, move ||
 			// Unhide the cursor.
 			if ! t_switch.swap(true, SeqCst) {
 				eprint!("{}", Progless::CURSOR_UNHIDE);
 			}
-		}).is_err() { sigint_error(); }
+		).is_err() { sigint_error(); }
 	}
 
 	switch

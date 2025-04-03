@@ -21,6 +21,7 @@ fn main() -> std::process::ExitCode {
 /// # Do it.
 fn main() {
 	use fyi_msg::{
+		AnsiColor,
 		MsgKind,
 		Progless,
 	};
@@ -30,7 +31,7 @@ fn main() {
 
 	// Initiate a progress bar.
 	let pbar = Progless::try_from(FILE_TYPES.len()).unwrap()
-		.with_title(Some(Msg::custom("Scanning", 199, "Pretending to look at files one by one…")));
+		.with_title(Some(Msg::new(("Scanning", AnsiColor::Misc199), "Pretending to look at files one by one…")));
 
 	FILE_TYPES.iter()
 		.map(|&t| Duration::from_millis(t.len() as u64 / 2))

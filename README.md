@@ -8,11 +8,7 @@ FYI is a simple CLI tool for x86-64 Linux machines that prints an arbitrary
 status-style message, optionally indented, timestamped, and/or prefixed.
 You know, stuff like:
 
-* **Error:** Something broke!
-* **Warning:** I can't keep doing this!
-* **Success:** Life is good!
-
-(Github doesn't display colored text, but just imagine the error prefix in ![#ff0000](https://via.placeholder.com/15/ff0000/000000?text=+), the success in ![#27ae60](https://via.placeholder.com/15/27ae60/000000?text=+), etc.)
+![Example FYI terminal output.](skel/screenshot.png.webp)
 
 That's it!
 
@@ -54,15 +50,19 @@ cargo install \
 
 The primary usage is to generate a message with one of the default prefixes,
 like: `fyi <PREFIX> [flags] [options] <MSG>`, where the prefix is one of:
-* ![#27ae60](https://via.placeholder.com/15/27ae60/000000?text=+) crunched
-* ![#5dade2](https://via.placeholder.com/15/5dade2/000000?text=+) debug
-* ![#27ae60](https://via.placeholder.com/15/27ae60/000000?text=+) done
-* ![#ff0000](https://via.placeholder.com/15/ff0000/000000?text=+) error
-* ![#9b59b6](https://via.placeholder.com/15/9b59b6/000000?text=+) info
-* ![#9b59b6](https://via.placeholder.com/15/9b59b6/000000?text=+) notice 
-* ![#27ae60](https://via.placeholder.com/15/27ae60/000000?text=+) success
-* ![#ff1493](https://via.placeholder.com/15/ff1493/000000?text=+) task
-* ![#f1c40f](https://via.placeholder.com/15/f1c40f/000000?text=+) warning 
+* aborted
+* crunched
+* debug
+* done
+* error
+* found
+* info
+* notice 
+* review
+* skipped
+* success
+* task
+* warning 
 
 The following flags and options are available.
 

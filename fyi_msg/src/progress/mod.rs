@@ -5,7 +5,6 @@
 pub(super) mod ba;
 pub(super) mod error;
 mod steady;
-mod task;
 
 #[cfg(any(feature = "signals_sigint", feature = "signals_sigwinch"))]
 pub(super) mod signals;
@@ -13,6 +12,10 @@ pub(super) mod signals;
 
 
 use crate::{
+	ansi::{
+		AnsiColor,
+		NoAnsi,
+	},
 	Msg,
 	MsgKind,
 	ProglessError,
@@ -59,7 +62,6 @@ use std::{
 	},
 };
 use steady::ProglessSteady;
-use task::ProglessTask;
 
 
 
@@ -206,7 +208,7 @@ struct ProglessInner {
 	done_total: AtomicU64,
 
 	/// # Active Task List.
-	doing: Mutex<BTreeSet<ProglessTask>>,
+	doing: Mutex<BTreeSet<String>>,
 }
 
 impl Default for ProglessInner {
@@ -383,7 +385,7 @@ impl ProglessInner {
 	fn add(&self, txt: &str) -> bool {
 		if
 			self.running() &&
-			ProglessTask::new(txt).is_some_and(|m| mutex!(self.doing).insert(m))
+			progless_task(txt).is_some_and(|m| mutex!(self.doing).insert(m))
 		{
 			self.flags.fetch_or(TICK_DOING, SeqCst);
 			true
@@ -464,11 +466,9 @@ impl ProglessInner {
 
 				// Check for a direct hit first as it is relatively unlikely
 				// the label would have been reformatted for storage.
-				ptr.remove(txt.as_bytes()) ||
+				ptr.remove(txt) ||
 				// Then again, maybe it was…
-				ProglessTask::new(txt).is_some_and(|task|
-					task != *txt && ptr.remove(&task)
-				)
+				progless_task(txt).is_some_and(|task| ptr.remove(&task))
 			};
 
 			// If we removed an entry, set the tick flag and increment.
@@ -966,7 +966,7 @@ impl ProglessBuffer {
 	/// # Update Tasks.
 	fn set_doing(
 		&mut self,
-		doing: &BTreeSet<ProglessTask>,
+		doing: &BTreeSet<String>,
 		width: NonZeroU8,
 		height: NonZeroU8,
 	) {
@@ -988,10 +988,13 @@ impl ProglessBuffer {
 			2 <= width &&
 			usize::from(! self.title.is_empty()) + 1 + doing.len() <= usize::from(height.get())
 		{
-			for line in doing.iter().filter_map(|line| line.fitted(width)) {
-				self.doing.extend_from_slice(PREFIX);
-				self.doing.extend_from_slice(line);
-				self.lines_doing += 1;
+			for line in doing {
+				let keep = crate::length_width(line, width);
+				if keep != 0 {
+					self.doing.extend_from_slice(PREFIX);
+					self.doing.extend(line.bytes().take(keep));
+					self.lines_doing += 1;
+				}
 			}
 		}
 	}
@@ -1005,13 +1008,14 @@ impl ProglessBuffer {
 		if 2 <= height.get() {
 			if let Some(title) = title {
 				let title = title.fitted(usize::from(width.get()));
-				let slice: &[u8] = title.as_ref();
-
-				// Truncate to first line.
-				let end = slice.iter().copied().position(|b| b == b'\n').unwrap_or(slice.len());
-				if end != 0 {
-					self.title.extend_from_slice(&slice[..end]);
-					self.title.push(b'\n');
+				if ! title.is_empty() {
+					// Truncate to first line.
+					let slice = title.as_bytes();
+					let end = slice.iter().copied().position(|b| b == b'\n').unwrap_or(slice.len());
+					if end != 0 {
+						self.title.extend_from_slice(&slice[..end]);
+						self.title.push(b'\n');
+					}
 				}
 			}
 		}
@@ -1518,15 +1522,34 @@ impl Progless {
 	/// It's a sort of default…
 	pub fn set_reticulating_splines<S>(&self, app: S)
 	where S: AsRef<str> {
-		self.inner.set_title(Some(Msg::custom(
-			app.as_ref(),
-			199,
+		self.inner.set_title(Some(Msg::new(
+			(app.as_ref(), AnsiColor::Misc199),
 			"Reticulating splines\u{2026}"
 		)));
 	}
 }
 
 
+
+/// # Sanitize [`Progless`] Task.
+///
+/// This method strips ANSI sequences and normalizes whitespace, returning the
+/// result if non-empty.
+fn progless_task(src: &str) -> Option<String> {
+	let src = src.trim_end();
+	if src.is_empty() { return None; }
+
+	let mut out = String::with_capacity(src.len());
+	for c in NoAnsi::new(src) {
+		// Convert all whitespace to regular spaces.
+		if c.is_whitespace() { out.push(' '); }
+		// Keep all other non-control characters as-are.
+		else if ! c.is_control() { out.push(c); }
+	}
+
+	if out.is_empty() { None }
+	else { Some(out) }
+}
 
 #[cfg(unix)]
 #[must_use]

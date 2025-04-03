@@ -20,7 +20,7 @@ use std::num::NonZeroU64;
 ///
 /// Usage is as simple as:
 ///
-/// ```no_run
+/// ```
 /// use fyi_msg::BeforeAfter;
 ///
 /// let mut ba = BeforeAfter::start(123_u64);
@@ -80,7 +80,7 @@ impl BeforeAfter {
 	///
 	/// An `after` value of `0_u64` is equivalent to `None`, meaning the
 	/// difference methods won't return any values.
-	pub fn stop(&mut self, after: u64) {
+	pub const fn stop(&mut self, after: u64) {
 		self.after = NonZeroU64::new(after);
 	}
 

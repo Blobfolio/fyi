@@ -1,6 +1,6 @@
 [package]
 name = "fyi_msg"
-version = "1.8.1"
+version = "2.0.0"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
 rust-version = "1.85"
@@ -17,11 +17,9 @@ features = [ "fitted", "progress", "signals", "timestamps" ]
 default-target = "x86_64-unknown-linux-gnu"
 targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
-[build-dependencies]
-argyle = "0.12.0"
-
-[dependencies]
-dactyl = "0.10.*"
+[dependencies.dactyl]
+version = "0.10.*"
+optional = true
 
 [dependencies.signal-hook]
 version = "0.3.*"
@@ -46,11 +44,7 @@ brunch = "0.9.*"
 rayon = "1.10.*"
 
 [[bench]]
-name = "fm_buffer"
-harness = false
-
-[[bench]]
-name = "fm_buffer_mut"
+name = "fm_ansi"
 harness = false
 
 [[bench]]
@@ -84,7 +78,7 @@ fitted = [ "unicode-width" ]
 timestamps = [ "utc2k" ]
 
 # Enable the Progless struct, a Msg-like progress bar.
-progress = [ "fitted", "terminal_size" ]
+progress = [ "dactyl", "fitted", "terminal_size" ]
 
 # ADVANCED: Add SIGWINCH signal support to the Progless struct, reducing
 # resize-related latency.
