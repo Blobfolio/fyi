@@ -15,8 +15,6 @@ SUBCOMMANDS:
     debug       Debug: Hello World
     done        Done: Hello World
     error       Error: Hello World
-    failed      Failed: Hello World
-    finished    Finished: Hello World
     found       Found: Hello World
     info        Info: Hello World
     notice      Notice: Hello World
