@@ -13,6 +13,125 @@ use std::{
 
 
 
+#[cfg(feature = "bin_kinds")]
+/// # Total Kinds.
+const NUM_KINDS: usize = 17;
+
+#[cfg(not(feature = "bin_kinds"))]
+/// # Total Kinds.
+const NUM_KINDS: usize = 15;
+
+/// # Message Kinds.
+static KINDS: [(&str, &str); NUM_KINDS] = [
+	("None", ""),
+	("Aborted", "\x1b[1;91mAborted:\x1b[0m "),
+	("Confirm", "\x1b[1;38;5;208mConfirm:\x1b[0m "),
+	("Crunched", "\x1b[1;92mCrunched:\x1b[0m "),
+	("Debug", "\x1b[1;96mDebug:\x1b[0m "),
+	("Done", "\x1b[1;92mDone:\x1b[0m "),
+	("Error", "\x1b[1;91mError:\x1b[0m "),
+	("Found", "\x1b[1;92mFound:\x1b[0m "),
+	("Info", "\x1b[1;95mInfo:\x1b[0m "),
+	("Notice", "\x1b[1;95mNotice:\x1b[0m "),
+	("Review", "\x1b[1;96mReview:\x1b[0m "),
+	("Skipped", "\x1b[1;93mSkipped:\x1b[0m "),
+	("Success", "\x1b[1;92mSuccess:\x1b[0m "),
+	("Task", "\x1b[1;38;5;199mTask:\x1b[0m "),
+	("Warning", "\x1b[1;93mWarning:\x1b[0m "),
+	#[cfg(feature = "bin_kinds")] ("Blank", ""),
+	#[cfg(feature = "bin_kinds")] ("Custom", ""),
+];
+
+// Build up a list of 256 ANSI colors, naming the ones we can.
+static COLORS: [&str; 256] = [
+	"Black",
+	"Red",
+	"Green",
+	"Yellow",
+	"Blue",
+	"Magenta",
+	"Cyan",
+	"LightGrey",
+	"DarkGrey",
+	"LightRed",
+	"LightGreen",
+	"LightYellow",
+	"LightBlue",
+	"LightMagenta",
+	"LightCyan",
+	"White",
+	"Misc016",
+	"NavyBlue",
+	"DarkBlue",
+	"Misc019", "Misc020", "Misc021",
+	"DarkGreen",
+	"Misc023", "Misc024", "Misc025", "Misc026", "Misc027", "Misc028", "Misc029",
+	"Misc030", "Misc031", "Misc032", "Misc033", "Misc034", "Misc035",
+	"DarkCyan",
+	"LightSeaGreen",
+	"Misc038", "Misc039", "Misc040", "Misc041", "Misc042", "Misc043",
+	"DarkTurquoise",
+	"Misc045", "Misc046", "Misc047", "Misc048",
+	"MediumSpringGreen",
+	"Misc050", "Misc051", "Misc052", "Misc053", "Misc054", "Misc055", "Misc056",
+	"BlueViolet",
+	"Misc058", "Misc059", "Misc060", "Misc061", "Misc062", "Misc063", "Misc064",
+	"Misc065", "Misc066",
+	"SteelBlue",
+	"Misc068",
+	"CornflowerBlue",
+	"Misc070", "Misc071", "Misc072", "Misc073", "Misc074", "Misc075", "Misc076",
+	"Misc077", "Misc078", "Misc079",
+	"MediumTurquoise",
+	"Misc081", "Misc082", "Misc083", "Misc084", "Misc085", "Misc086", "Misc087",
+	"Misc088", "Misc089", "Misc090", "Misc091", "Misc092", "Misc093", "Misc094",
+	"Misc095", "Misc096", "Misc097", "Misc098", "Misc099", "Misc100", "Misc101",
+	"Misc102",
+	"LightSlateGrey",
+	"MediumPurple",
+	"LightSlateBlue",
+	"Misc106", "Misc107",
+	"DarkSeaGreen",
+	"Misc109", "Misc110", "Misc111", "Misc112", "Misc113", "Misc114", "Misc115",
+	"Misc116", "Misc117", "Misc118", "Misc119", "Misc120", "Misc121", "Misc122",
+	"Misc123", "Misc124", "Misc125",
+	"MediumVioletRed",
+	"Misc127", "Misc128", "Misc129", "Misc130", "Misc131", "Misc132", "Misc133",
+	"Misc134", "Misc135",
+	"DarkGoldenrod",
+	"Misc137",
+	"RosyBrown",
+	"Misc139", "Misc140", "Misc141", "Misc142",
+	"DarkKhaki",
+	"Misc144", "Misc145", "Misc146",
+	"LightSteelBlue",
+	"Misc148", "Misc149", "Misc150", "Misc151", "Misc152", "Misc153",
+	"GreenYellow",
+	"Misc155", "Misc156", "Misc157", "Misc158", "Misc159", "Misc160", "Misc161",
+	"Misc162", "Misc163", "Misc164", "Misc165", "Misc166", "Misc167", "Misc168",
+	"Misc169",
+	"Orchid",
+	"Misc171", "Misc172", "Misc173", "Misc174", "Misc175", "Misc176",
+	"Violet",
+	"Misc178", "Misc179",
+	"Tan",
+	"Misc181", "Misc182", "Misc183", "Misc184", "Misc185", "Misc186", "Misc187",
+	"Misc188", "Misc189", "Misc190", "Misc191", "Misc192", "Misc193", "Misc194",
+	"Misc195", "Misc196", "Misc197", "Misc198", "Misc199", "Misc200", "Misc201",
+	"Misc202", "Misc203", "Misc204", "Misc205", "Misc206", "Misc207",
+	"DarkOrange",
+	"Misc209",
+	"LightCoral",
+	"Misc211", "Misc212", "Misc213", "Misc214",
+	"SandyBrown",
+	"Misc216", "Misc217", "Misc218", "Misc219", "Misc220", "Misc221", "Misc222",
+	"Misc223", "Misc224", "Misc225", "Misc226", "Misc227", "Misc228", "Misc229",
+	"Misc230", "Misc231", "Misc232", "Misc233", "Misc234", "Misc235", "Misc236",
+	"Misc237", "Misc238", "Misc239", "Misc240", "Misc241", "Misc242", "Misc243",
+	"Misc244", "Misc245", "Misc246", "Misc247", "Misc248", "Misc249", "Misc250",
+	"Misc251", "Misc252", "Misc253", "Misc254", "Misc255",
+];
+
 /// # ANSI-to-Web Conversion Table.
 static HEX: [&str; 256] = [
 	"#000000", "#800000", "#008000", "#808000", "#000080", "#800080", "#008080", "#c0c0c0", "#808080", "#ff0000", "#00ff00", "#ffff00", "#0000ff", "#ff00ff", "#00ffff", "#ffffff",
@@ -48,96 +167,6 @@ fn main() {
 /// verbose routines programmatically. Haha.
 fn build_ansi_color() {
 	use fmt::Write;
-
-	// Build up a list of 256 ANSI colors, naming the ones we can.
-	static COLORS: [&str; 256] = [
-		"Black",
-		"Red",
-		"Green",
-		"Yellow",
-		"Blue",
-		"Magenta",
-		"Cyan",
-		"LightGrey",
-		"DarkGrey",
-		"LightRed",
-		"LightGreen",
-		"LightYellow",
-		"LightBlue",
-		"LightMagenta",
-		"LightCyan",
-		"White",
-		"Misc016",
-		"NavyBlue",
-		"DarkBlue",
-		"Misc019", "Misc020", "Misc021",
-		"DarkGreen",
-		"Misc023", "Misc024", "Misc025", "Misc026", "Misc027", "Misc028", "Misc029",
-		"Misc030", "Misc031", "Misc032", "Misc033", "Misc034", "Misc035",
-		"DarkCyan",
-		"LightSeaGreen",
-		"Misc038", "Misc039", "Misc040", "Misc041", "Misc042", "Misc043",
-		"DarkTurquoise",
-		"Misc045", "Misc046", "Misc047", "Misc048",
-		"MediumSpringGreen",
-		"Misc050", "Misc051", "Misc052", "Misc053", "Misc054", "Misc055", "Misc056",
-		"BlueViolet",
-		"Misc058", "Misc059", "Misc060", "Misc061", "Misc062", "Misc063", "Misc064",
-		"Misc065", "Misc066",
-		"SteelBlue",
-		"Misc068",
-		"CornflowerBlue",
-		"Misc070", "Misc071", "Misc072", "Misc073", "Misc074", "Misc075", "Misc076",
-		"Misc077", "Misc078", "Misc079",
-		"MediumTurquoise",
-		"Misc081", "Misc082", "Misc083", "Misc084", "Misc085", "Misc086", "Misc087",
-		"Misc088", "Misc089", "Misc090", "Misc091", "Misc092", "Misc093", "Misc094",
-		"Misc095", "Misc096", "Misc097", "Misc098", "Misc099", "Misc100", "Misc101",
-		"Misc102",
-		"LightSlateGrey",
-		"MediumPurple",
-		"LightSlateBlue",
-		"Misc106", "Misc107",
-		"DarkSeaGreen",
-		"Misc109", "Misc110", "Misc111", "Misc112", "Misc113", "Misc114", "Misc115",
-		"Misc116", "Misc117", "Misc118", "Misc119", "Misc120", "Misc121", "Misc122",
-		"Misc123", "Misc124", "Misc125",
-		"MediumVioletRed",
-		"Misc127", "Misc128", "Misc129", "Misc130", "Misc131", "Misc132", "Misc133",
-		"Misc134", "Misc135",
-		"DarkGoldenrod",
-		"Misc137",
-		"RosyBrown",
-		"Misc139", "Misc140", "Misc141", "Misc142",
-		"DarkKhaki",
-		"Misc144", "Misc145", "Misc146",
-		"LightSteelBlue",
-		"Misc148", "Misc149", "Misc150", "Misc151", "Misc152", "Misc153",
-		"GreenYellow",
-		"Misc155", "Misc156", "Misc157", "Misc158", "Misc159", "Misc160", "Misc161",
-		"Misc162", "Misc163", "Misc164", "Misc165", "Misc166", "Misc167", "Misc168",
-		"Misc169",
-		"Orchid",
-		"Misc171", "Misc172", "Misc173", "Misc174", "Misc175", "Misc176",
-		"Violet",
-		"Misc178", "Misc179",
-		"Tan",
-		"Misc181", "Misc182", "Misc183", "Misc184", "Misc185", "Misc186", "Misc187",
-		"Misc188", "Misc189", "Misc190", "Misc191", "Misc192", "Misc193", "Misc194",
-		"Misc195", "Misc196", "Misc197", "Misc198", "Misc199", "Misc200", "Misc201",
-		"Misc202", "Misc203", "Misc204", "Misc205", "Misc206", "Misc207",
-		"DarkOrange",
-		"Misc209",
-		"LightCoral",
-		"Misc211", "Misc212", "Misc213", "Misc214",
-		"SandyBrown",
-		"Misc216", "Misc217", "Misc218", "Misc219", "Misc220", "Misc221", "Misc222",
-		"Misc223", "Misc224", "Misc225", "Misc226", "Misc227", "Misc228", "Misc229",
-		"Misc230", "Misc231", "Misc232", "Misc233", "Misc234", "Misc235", "Misc236",
-		"Misc237", "Misc238", "Misc239", "Misc240", "Misc241", "Misc242", "Misc243",
-		"Misc244", "Misc245", "Misc246", "Misc247", "Misc248", "Misc249", "Misc250",
-		"Misc251", "Misc252", "Misc253", "Misc254", "Misc255",
-	];
 
 	// This'll be kinda big, so let's start with a decent buffer.
 	let mut out = String::with_capacity(65_536);
@@ -293,35 +322,6 @@ impl AnsiColor {\n");
 /// `MsgKind::as_str_prefix`, and the `Msg::kind` helpers.
 fn build_msg_kinds() {
 	use std::fmt::Write;
-
-	#[cfg(feature = "bin_kinds")]
-	/// # Total Kinds.
-	const NUM_KINDS: usize = 17;
-
-	#[cfg(not(feature = "bin_kinds"))]
-	/// # Total Kinds.
-	const NUM_KINDS: usize = 15;
-
-	/// # Message Kinds.
-	const KINDS: [(&str, &str); NUM_KINDS] = [
-		("None", ""),
-		("Aborted", "\x1b[1;91mAborted:\x1b[0m "),
-		("Confirm", "\x1b[1;38;5;208mConfirm:\x1b[0m "),
-		("Crunched", "\x1b[1;92mCrunched:\x1b[0m "),
-		("Debug", "\x1b[1;96mDebug:\x1b[0m "),
-		("Done", "\x1b[1;92mDone:\x1b[0m "),
-		("Error", "\x1b[1;91mError:\x1b[0m "),
-		("Found", "\x1b[1;92mFound:\x1b[0m "),
-		("Info", "\x1b[1;95mInfo:\x1b[0m "),
-		("Notice", "\x1b[1;95mNotice:\x1b[0m "),
-		("Review", "\x1b[1;96mReview:\x1b[0m "),
-		("Skipped", "\x1b[1;93mSkipped:\x1b[0m "),
-		("Success", "\x1b[1;92mSuccess:\x1b[0m "),
-		("Task", "\x1b[1;38;5;199mTask:\x1b[0m "),
-		("Warning", "\x1b[1;93mWarning:\x1b[0m "),
-		#[cfg(feature = "bin_kinds")] ("Blank", ""),
-		#[cfg(feature = "bin_kinds")] ("Custom", ""),
-	];
 
 	/// # Hidden Kinds.
 	const HIDDEN: [&str; 2] = ["Blank", "Custom"];
@@ -489,7 +489,8 @@ impl fmt::Display for AnsiTable {
 		for (k, color) in HEX.iter().enumerate() {
 			write!(
 				f,
-				r##"<div style="width: 40px; height: 40px; margin: 0 1px 1px 0; background: {color}" title="{k:03}">{k:03}</div>"##,
+				r##"<div style="width: 40px; height: 40px; margin: 0 1px 1px 0; background: {color}" title="{} ({k:03})">{k:03}</div>"##,
+				COLORS[k],
 			).unwrap();
 		}
 		f.write_str("</div>")

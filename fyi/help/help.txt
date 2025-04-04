@@ -10,16 +10,3 @@ SUBCOMMANDS:
     blank       Print blank line(s).
     confirm     Ask a Yes/No question, exiting 0 or 1 respectively.
     print       Print a message without a prefix (or with a custom one).
-    aborted     Aborted: Hello World
-    crunched    Crunched: Hello World
-    debug       Debug: Hello World
-    done        Done: Hello World
-    error       Error: Hello World
-    found       Found: Hello World
-    info        Info: Hello World
-    notice      Notice: Hello World
-    review      Review: Hello World
-    skipped     Skipped: Hello World
-    success     Success: Hello World
-    task        Task: Hello World
-    warning     Warning: Hello World
