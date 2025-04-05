@@ -204,50 +204,35 @@ impl PartialEq<str> for Msg {
 	#[inline]
 	fn eq(&self, other: &str) -> bool { self.as_str() == other }
 }
-impl PartialEq<Cow<'_, str>> for Msg {
+impl PartialEq<Msg> for str {
 	#[inline]
-	fn eq(&self, other: &Cow<'_, str>) -> bool { self.as_str() == other.as_ref() }
+	fn eq(&self, other: &Msg) -> bool { <Msg as PartialEq<Self>>::eq(other, self) }
 }
-impl PartialEq<String> for Msg {
-	#[inline]
-	fn eq(&self, other: &String) -> bool { self.as_str() == other.as_str() }
-}
+
 impl PartialEq<[u8]> for Msg {
 	#[inline]
 	fn eq(&self, other: &[u8]) -> bool { self.as_bytes() == other }
 }
-impl PartialEq<Vec<u8>> for Msg {
+impl PartialEq<Msg> for [u8] {
 	#[inline]
-	fn eq(&self, other: &Vec<u8>) -> bool { self.as_bytes() == other.as_slice() }
+	fn eq(&self, other: &Msg) -> bool { <Msg as PartialEq<Self>>::eq(other, self) }
 }
 
-/// # Helper: `PartialEq` Aliases.
-///
-/// Use the existing `a == b` implementation to cover `b == a`, `a == &b`, and
-/// `&b == a` variations.
-macro_rules! partial_eq {
-	($($ty:ty),+) => ($(
-		impl PartialEq<&$ty> for Msg {
+/// # Helper: Reciprocal `PartialEq`.
+macro_rules! eq {
+	($parent:ty: $($ty:ty),+) => ($(
+		impl PartialEq<$ty> for Msg {
 			#[inline]
-			fn eq(&self, other: &&$ty) -> bool {
-				<Msg as PartialEq<$ty>>::eq(self, *other)
-			}
+			fn eq(&self, other: &$ty) -> bool { <Self as PartialEq<$parent>>::eq(self, other) }
 		}
 		impl PartialEq<Msg> for $ty {
 			#[inline]
-			fn eq(&self, other: &Msg) -> bool {
-				<Msg as PartialEq<$ty>>::eq(other, self)
-			}
-		}
-		impl PartialEq<Msg> for &$ty {
-			#[inline]
-			fn eq(&self, other: &Msg) -> bool {
-				<Msg as PartialEq<$ty>>::eq(other, *self)
-			}
+			fn eq(&self, other: &Msg) -> bool { <Msg as PartialEq<$parent>>::eq(other, self) }
 		}
 	)+);
 }
-partial_eq!(str, Cow<'_, str>, String, [u8], Vec<u8>);
+eq!(str:  &str,  &String,  String,  &Cow<'_, str>,  Cow<'_, str>,  &Box<str>,  Box<str>);
+eq!([u8]: &[u8], &Vec<u8>, Vec<u8>, &Cow<'_, [u8]>, Cow<'_, [u8]>, &Box<[u8]>, Box<[u8]>);
 
 impl Ord for Msg {
 	#[inline]
