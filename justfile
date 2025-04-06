@@ -18,7 +18,8 @@
 pkg_id      := "fyi"
 pkg_name    := "FYI"
 pkg_dir1    := justfile_directory() + "/fyi"
-pkg_dir2    := justfile_directory() + "/fyi_msg"
+pkg_dir2    := justfile_directory() + "/fyi_ansi"
+pkg_dir3    := justfile_directory() + "/fyi_msg"
 
 cargo_dir   := "/tmp/" + pkg_id + "-cargo"
 cargo_bin   := cargo_dir + "/release/" + pkg_id
@@ -134,6 +135,7 @@ bench BENCH="":
 	[ ! -d "{{ justfile_directory() }}/target" ] || rm -rf "{{ justfile_directory() }}/target"
 	[ ! -d "{{ pkg_dir1 }}/target" ] || rm -rf "{{ pkg_dir1 }}/target"
 	[ ! -d "{{ pkg_dir2 }}/target" ] || rm -rf "{{ pkg_dir2 }}/target"
+	[ ! -d "{{ pkg_dir3 }}/target" ] || rm -rf "{{ pkg_dir3 }}/target"
 
 	cargo update -w
 
@@ -153,32 +155,35 @@ bench BENCH="":
 		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo clippy \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo clippy \
 		--features=fitted \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo clippy \
 		--features=timestamps \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo clippy \
 		--features=fitted,timestamps \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo clippy \
 		--features=progress \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo clippy \
 		--features=signals_sigwinch \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo clippy \
 		--features=signals_sigint \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo clippy \
 		--all-features \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 
 
@@ -193,6 +198,12 @@ bench BENCH="":
 	# Make the docs.
 	cargo +nightly rustdoc \
 		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--release \
+		--target-dir "{{ cargo_dir }}" \
+		-- \
+		--cfg docsrs
+	cargo +nightly rustdoc \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--release \
 		--features fitted,progress,signals,timestamps \
 		--target-dir "{{ cargo_dir }}" \
@@ -244,32 +255,35 @@ bench BENCH="":
 		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo test \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
 		--features=fitted \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo test \
 		--features=timestamps \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo test \
 		--features=fitted,timestamps \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo test \
 		--features=progress \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo test \
 		--features=signals_sigwinch \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo test \
 		--features=signals_sigint \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo test \
 		--all-features \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 
 	fyi task "Testing Lib (Release)."
@@ -279,38 +293,42 @@ bench BENCH="":
 		--target-dir "{{ cargo_dir }}"
 	cargo test \
 		--release \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--release \
 		--features=fitted \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo test \
 		--release \
 		--features=timestamps \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo test \
 		--release \
 		--features=fitted,timestamps \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo test \
 		--release \
 		--features=progress \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo test \
 		--release \
 		--features=signals_sigwinch \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo test \
 		--release \
 		--features=signals_sigint \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 	cargo test \
 		--release \
 		--all-features \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 
 
@@ -335,6 +353,7 @@ version:
 	# Set the release version!
 	just _version "{{ pkg_dir1 }}" "$_ver2"
 	just _version "{{ pkg_dir2 }}" "$_ver2"
+	just _version "{{ pkg_dir3 }}" "$_ver2"
 
 
 # Set version for real.

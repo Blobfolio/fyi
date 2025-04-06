@@ -55,7 +55,17 @@ jobs:
       run: |
         cargo clippy --workspace --release --target ${{ matrix.target }}
 
-    - name: Clippy (Lib)
+    - name: Clippy (fyi_ansi)
+      run: |
+        cargo clippy --manifest-path fyi_ansi/Cargo.toml --target ${{ matrix.target }}
+        cargo clippy --manifest-path fyi_ansi/Cargo.toml --release --target ${{ matrix.target }}
+
+    - name: Tests (fyi_ansi)
+      run: |
+       cargo test --manifest-path fyi_ansi/Cargo.toml --target ${{ matrix.target }}
+       cargo test --manifest-path fyi_ansi/Cargo.toml --release --target ${{ matrix.target }}
+
+    - name: Clippy (fyi_msg)
       run: |
         cargo clippy --manifest-path fyi_msg/Cargo.toml --target ${{ matrix.target }}
         cargo clippy --manifest-path fyi_msg/Cargo.toml --features=fitted --target ${{ matrix.target }}
@@ -64,7 +74,7 @@ jobs:
         cargo clippy --manifest-path fyi_msg/Cargo.toml --features=progress --target ${{ matrix.target }}
         cargo clippy --manifest-path fyi_msg/Cargo.toml --all-features --target ${{ matrix.target }}
 
-    - name: Tests (Lib/Debug)
+    - name: Tests (fyi_msg/Debug)
       run: |
         cargo test --manifest-path fyi_msg/Cargo.toml --target ${{ matrix.target }}
         cargo test --manifest-path fyi_msg/Cargo.toml --features=fitted --target ${{ matrix.target }}
@@ -73,7 +83,7 @@ jobs:
         cargo test --manifest-path fyi_msg/Cargo.toml --features=progress --target ${{ matrix.target }}
         cargo test --manifest-path fyi_msg/Cargo.toml --all-features --target ${{ matrix.target }}
 
-    - name: Tests (Lib/Release)
+    - name: Tests (fyi_msg/Release)
       run: |
         cargo test --manifest-path fyi_msg/Cargo.toml --release --target ${{ matrix.target }}
         cargo test --manifest-path fyi_msg/Cargo.toml --release --features=fitted --target ${{ matrix.target }}
