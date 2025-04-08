@@ -253,11 +253,11 @@ mod macros {
 	/// //   ^ bold on, color to pink   ^ bold off, color to default
 	/// );
 	///
-	/// // Opposites work both ways, of course, so !
+	/// // Of course, OFF switches have their opposites too.
 	/// assert_eq!(
 	///     ansi!((!dim) > "I'm not dim!"),
 	///     "\x1b[22mI'm not dim!\x1b[2m",
-	/// //   ^ dim off          ^ dim on
+	/// //   ^ dim off           ^ dim on
 	/// );
 	///
 	/// // For advanced/terrible use cases, use the "~" modifier to define
