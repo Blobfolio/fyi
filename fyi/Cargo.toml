@@ -182,6 +182,9 @@ subcommands = [ "confirm", "print", "aborted", "crunched", "debug", "done", "err
 [build-dependencies]
 argyle = "0.12.*"
 
+[build-dependencies.fyi_ansi]
+path = "../fyi_ansi"
+
 [build-dependencies.fyi_msg]
 features = [ "bin_kinds", "timestamps" ]
 path = "../fyi_msg"
@@ -189,6 +192,9 @@ path = "../fyi_msg"
 [dependencies]
 argyle = "0.12.*"
 dactyl = "0.10.*"
+
+[dependencies.fyi_ansi]
+path = "../fyi_ansi"
 
 [dependencies.fyi_msg]
 path = "../fyi_msg"

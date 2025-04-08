@@ -37,7 +37,11 @@ impl fmt::Display for FyiError {
 		if let Self::InvalidCli(s) = self {
 			write!(
 				f,
-				"Invalid CLI argument(s); run \x1b[2mfyi {} --help\x1b[0m for usage.",
+				concat!(
+					"Invalid CLI argument(s); run ",
+					fyi_ansi::dim!("fyi {} --help"),
+					" for usage.",
+				),
 				s.command(),
 			)
 		}

@@ -6,6 +6,10 @@ use argyle::{
 	FlagsBuilder,
 	KeyWordsBuilder,
 };
+use fyi_ansi::{
+	ansi,
+	csi,
+};
 use fyi_msg::{
 	Msg,
 	MsgKind,
@@ -180,7 +184,7 @@ fn helper(cmd: MsgKind) {{
 
 	// The middle varies by command.
 	handle.write_all(match cmd {{",
-		help_top=format!(
+		help_top=concat!(
 			r#"
                       ;\
                      |' \
@@ -188,7 +192,7 @@ fn helper(cmd: MsgKind) {{
  / `-.              /: : |
 |  ,-.`-.          ,': : |
 \  :  `. `.       ,'-. : |
- \ ;    ;  `-.__,'    `-.|         {}{}{}
+ \ ;    ;  `-.__,'    `-.|         "#, ansi!((199) ~ (cornflower_blue) "FYI"), " v", env!("CARGO_PKG_VERSION"), csi!(), r#"
   \ ;   ;  :::  ,::'`:.  `.        Simple CLI status messages.
    \ `-. :  `    :.    `.  \
     \   \    ,   ;   ,:    (\
@@ -205,11 +209,7 @@ fn helper(cmd: MsgKind) {{
             '`      ,'
                  ,-'
 
-"#,
-			"\x1b[38;5;199mFYI\x1b[0;38;5;69m v",
-			env!("CARGO_PKG_VERSION"),
-			"\x1b[0m"
-		)
+"#),
 	);
 	for (kind, help) in help_text {
 		writeln!(&mut out, "\t\tMsgKind::{kind} => {help:?},").unwrap();

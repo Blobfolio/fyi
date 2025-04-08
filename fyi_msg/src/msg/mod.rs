@@ -8,6 +8,11 @@ pub(super) mod kind;
 use crate::MsgKind;
 
 #[cfg(feature = "progress")] use crate::BeforeAfter;
+use fyi_ansi::{
+	ansi,
+	dim,
+	underline,
+};
 use kind::IntoMsgPrefix;
 use std::{
 	borrow::{
@@ -686,9 +691,9 @@ impl Msg {
 		if enabled {
 			let now = utc2k::FmtUtc2k::now_local();
 			let mut out = String::with_capacity(24 + now.len());
-			out.push_str("\x1b[2m[\x1b[0;34m");
+			out.push_str(ansi!((dim) ~ (reset, blue) "["));
 			out.push_str(now.as_str());
-			out.push_str("\x1b[0;2m]\x1b[0m ");
+			out.push_str(concat!(ansi!((reset, dim) "]"), " "));
 			self.replace_part(TocId::Timestamp, &out);
 		}
 		else { self.replace_part(TocId::Timestamp, ""); }
@@ -1118,8 +1123,8 @@ impl Msg {
 		// in case it is needed again.
 		let q = self.clone()
 			.with_suffix(
-				if default { " \x1b[2m[\x1b[4mY\x1b[24m/n]\x1b[0m " }
-				else       { " \x1b[2m[y/\x1b[4mN\x1b[24m]\x1b[0m " }
+				if default { concat!(" ", dim!("[", underline!(>"Y"), "/n]"), " ") }
+				else       { concat!(" ", dim!("[y/", underline!(>"N"), "]"), " ") },
 			)
 			.with_newline(false);
 
@@ -1141,7 +1146,13 @@ impl Msg {
 
 			// Print an error and do it all over again.
 			result.truncate(0);
-			let err = Self::error("Invalid input; enter \x1b[91mN\x1b[0m or \x1b[92mY\x1b[0m.");
+			let err = Self::error(concat!(
+				"Invalid input; enter ",
+				ansi!((light_red) "N"),
+				" or ",
+				ansi!((light_green) "Y"),
+				".",
+			));
 			if stderr { err.eprint(); }
 			else { err.print(); }
 		}
@@ -1160,6 +1171,7 @@ impl Msg {
 	/// that.
 	pub fn with_bytes_saved(mut self, state: BeforeAfter) -> Self {
 		use dactyl::{NicePercent, NiceU64};
+		use fyi_ansi::csi;
 
 		if let Some(saved) = state.less() {
 			let saved = NiceU64::from(saved);
@@ -1167,20 +1179,20 @@ impl Msg {
 				// Just the bytes.
 				|| {
 					let mut buf = String::with_capacity(24 + saved.len());
-					buf.push_str(" \x1b[2m(Saved ");
+					buf.push_str(concat!(" ", csi!(dim), "(Saved "));
 					buf.push_str(saved.as_str());
-					buf.push_str(" bytes.)\x1b[0m");
+					buf.push_str(concat!(" bytes.)", csi!()));
 					buf
 				},
 				// With percent.
 				|per| {
 					let per = NicePercent::from(per);
 					let mut buf = String::with_capacity(26 + saved.len() + per.len());
-					buf.push_str(" \x1b[2m(Saved ");
+					buf.push_str(concat!(" ", csi!(dim), "(Saved "));
 					buf.push_str(saved.as_str());
 					buf.push_str(" bytes, ");
 					buf.push_str(per.as_str());
-					buf.push_str(".)\x1b[0m");
+					buf.push_str(concat!(".)", csi!()));
 					buf
 				}
 			);
@@ -1188,7 +1200,10 @@ impl Msg {
 			self.replace_part(TocId::Suffix, &buf);
 		}
 		else {
-			self.replace_part(TocId::Suffix, " \x1b[2m(No savings.)\x1b[0m");
+			self.replace_part(
+				TocId::Suffix,
+				concat!(" ", dim!("(No savings.)")),
+			);
 		}
 
 		self

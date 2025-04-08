@@ -4,6 +4,7 @@
 
 #![allow(unused_mut, reason = "It is conditionally used.")]
 
+use fyi_ansi::ansi;
 use std::{
 	fmt,
 	fs::File,
@@ -24,20 +25,20 @@ const NUM_KINDS: usize = 15;
 /// # Message Kinds.
 static KINDS: [(&str, &str); NUM_KINDS] = [
 	("None", ""),
-	("Aborted", "\x1b[1;91mAborted:\x1b[0m "),
-	("Confirm", "\x1b[1;38;5;208mConfirm:\x1b[0m "),
-	("Crunched", "\x1b[1;92mCrunched:\x1b[0m "),
-	("Debug", "\x1b[1;96mDebug:\x1b[0m "),
-	("Done", "\x1b[1;92mDone:\x1b[0m "),
-	("Error", "\x1b[1;91mError:\x1b[0m "),
-	("Found", "\x1b[1;92mFound:\x1b[0m "),
-	("Info", "\x1b[1;95mInfo:\x1b[0m "),
-	("Notice", "\x1b[1;95mNotice:\x1b[0m "),
-	("Review", "\x1b[1;96mReview:\x1b[0m "),
-	("Skipped", "\x1b[1;93mSkipped:\x1b[0m "),
-	("Success", "\x1b[1;92mSuccess:\x1b[0m "),
-	("Task", "\x1b[1;38;5;199mTask:\x1b[0m "),
-	("Warning", "\x1b[1;93mWarning:\x1b[0m "),
+	("Aborted",  concat!(ansi!((bold, light_red)     "Aborted:"),  " ")),
+	("Confirm",  concat!(ansi!((bold, dark_orange)   "Confirm:"),  " ")),
+	("Crunched", concat!(ansi!((bold, light_green)   "Crunched:"), " ")),
+	("Debug",    concat!(ansi!((bold, light_cyan)    "Debug:"),    " ")),
+	("Done",     concat!(ansi!((bold, light_green)   "Done:"),     " ")),
+	("Error",    concat!(ansi!((bold, light_red)     "Error:"),    " ")),
+	("Found",    concat!(ansi!((bold, light_green)   "Found:"),    " ")),
+	("Info",     concat!(ansi!((bold, light_magenta) "Info:"),     " ")),
+	("Notice",   concat!(ansi!((bold, light_magenta) "Notice:"),   " ")),
+	("Review",   concat!(ansi!((bold, light_cyan)    "Review:"),   " ")),
+	("Skipped",  concat!(ansi!((bold, light_yellow)  "Skipped:"),  " ")),
+	("Success",  concat!(ansi!((bold, light_green)   "Success:"),  " ")),
+	("Task",     concat!(ansi!((bold, 199)           "Task:"),     " ")),
+	("Warning",  concat!(ansi!((bold, light_yellow)  "Warning:"),  " ")),
 	#[cfg(feature = "bin_kinds")] ("Blank", ""),
 	#[cfg(feature = "bin_kinds")] ("Custom", ""),
 ];
@@ -270,15 +271,7 @@ impl AnsiColor {\n");
 	pub const fn as_str(self) -> &'static str {
 		match self {\n");
 	for (k, v) in COLORS.iter().enumerate() {
-		if k < 8 {
-			writeln!(&mut out, "\t\t\tSelf::{v} => \"\\x1b[3{k}m\",").unwrap();
-		}
-		else if k < 16 {
-			writeln!(&mut out, "\t\t\tSelf::{v} => \"\\x1b[9{}m\",", k - 8).unwrap();
-		}
-		else {
-			writeln!(&mut out, "\t\t\tSelf::{v} => \"\\x1b[38;5;{k}m\",").unwrap();
-		}
+		writeln!(&mut out, "\t\t\tSelf::{v} => fyi_ansi::csi!({k}),").unwrap();
 	}
 	out.push_str("\t\t}\n\t}\n");
 
@@ -291,15 +284,7 @@ impl AnsiColor {\n");
 	pub(crate) const fn as_str_bold(self) -> &'static str {
 		match self {\n");
 	for (k, v) in COLORS.iter().enumerate() {
-		if k < 8 {
-			writeln!(&mut out, "\t\t\tSelf::{v} => \"\\x1b[1;3{k}m\",").unwrap();
-		}
-		else if k < 16 {
-			writeln!(&mut out, "\t\t\tSelf::{v} => \"\\x1b[1;9{}m\",", k - 8).unwrap();
-		}
-		else {
-			writeln!(&mut out, "\t\t\tSelf::{v} => \"\\x1b[1;38;5;{k}m\",").unwrap();
-		}
+		writeln!(&mut out, "\t\t\tSelf::{v} => fyi_ansi::csi!(bold, {k}),").unwrap();
 	}
 	out.push_str("\t\t}\n\t}\n");
 
