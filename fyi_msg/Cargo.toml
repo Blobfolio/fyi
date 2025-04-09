@@ -1,6 +1,6 @@
 [package]
 name = "fyi_msg"
-version = "2.0.0"
+version = "2.0.1"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
 rust-version = "1.85"
