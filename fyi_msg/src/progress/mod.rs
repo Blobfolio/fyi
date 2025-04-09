@@ -30,6 +30,10 @@ use dactyl::{
 		SaturatingFrom,
 	},
 };
+use fyi_ansi::{
+	ansi,
+	csi,
+};
 use std::{
 	collections::BTreeSet,
 	io::{
@@ -852,9 +856,14 @@ impl ProglessBuffer {
 			// by itself to give them some indication of progress.
 			if width.get() < 40 {
 				&mut [
-					IoSlice::new("\x1b[J \x1b[0;1;96m» \x1b[0;1m".as_bytes()), // Clear + Prefix.
+					IoSlice::new(concat!(
+						"\x1b[J ",
+						csi!(reset, bold, light_cyan),
+						"» ",
+						csi!(!fg),
+					).as_bytes()), // Clear + Prefix.
 					IoSlice::new(self.percent.as_bytes()), // Percent.
-					IoSlice::new(b"\x1b[0m\r"), // Reset and rewind.
+					IoSlice::new(concat!(csi!(), "\r").as_bytes()), // Reset and rewind.
 				]
 			}
 			// Otherwise give it all we've got!
@@ -873,27 +882,30 @@ impl ProglessBuffer {
 					IoSlice::new(&self.title),
 
 					// Elapsed.
-					IoSlice::new(b"\x1b[0;2m[\x1b[0;1m"),
+					IoSlice::new(ansi!((reset, dim) ~ (reset, bold) "[").as_bytes()),
 					IoSlice::new(self.elapsed.as_bytes()),
-					IoSlice::new(b"\x1b[0;2m]  [\x1b[0;1;96m"),
+					IoSlice::new(ansi!((reset, dim) ~ (reset, bold, light_cyan) "]  [").as_bytes()),
 
 					// Bars.
 					IoSlice::new(self.bar_done),
-					IoSlice::new(b"\x1b[0;1;34m"),
+					IoSlice::new(csi!(blue).as_bytes()),
 					IoSlice::new(self.bar_undone),
-					IoSlice::new(b"\x1b[0;2m]\x1b[0;1;96m  "),
+					IoSlice::new(concat!(
+						ansi!((reset, dim) ~ (reset, bold, light_cyan) "]"),
+						"  ",
+					).as_bytes()),
 
 					// Done/total.
 					IoSlice::new(self.done.as_bytes()),
-					IoSlice::new(b"\x1b[0;2m/\x1b[0;1;34m"),
+					IoSlice::new(ansi!((reset, dim) ~ (reset, bold, blue) "/").as_bytes()),
 					IoSlice::new(self.total.as_bytes()),
 
 					// Percent.
-					IoSlice::new(b"\x1b[0;1m  "),
+					IoSlice::new(concat!(csi!(!fg), "  ").as_bytes()),
 					IoSlice::new(self.percent.as_bytes()),
 
 					// Tasks.
-					IoSlice::new(b"\x1b[0;35m"),
+					IoSlice::new(csi!(reset, magenta).as_bytes()),
 					IoSlice::new(&self.doing),
 
 					// The end!

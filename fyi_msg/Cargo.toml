@@ -1,6 +1,6 @@
 [package]
 name = "fyi_msg"
-version = "2.0.0"
+version = "2.0.1"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
 rust-version = "1.85"
@@ -17,9 +17,15 @@ features = [ "fitted", "progress", "signals", "timestamps" ]
 default-target = "x86_64-unknown-linux-gnu"
 targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
+[build-dependencies.fyi_ansi]
+version = "2.0.*"
+
 [dependencies.dactyl]
 version = "0.10.*"
 optional = true
+
+[dependencies.fyi_ansi]
+version = "2.0.*"
 
 [dependencies.signal-hook]
 version = "0.3.*"

@@ -8,6 +8,11 @@ pub(super) mod kind;
 use crate::MsgKind;
 
 #[cfg(feature = "progress")] use crate::BeforeAfter;
+use fyi_ansi::{
+	ansi,
+	dim,
+	underline,
+};
 use kind::IntoMsgPrefix;
 use std::{
 	borrow::{
@@ -204,50 +209,35 @@ impl PartialEq<str> for Msg {
 	#[inline]
 	fn eq(&self, other: &str) -> bool { self.as_str() == other }
 }
-impl PartialEq<Cow<'_, str>> for Msg {
+impl PartialEq<Msg> for str {
 	#[inline]
-	fn eq(&self, other: &Cow<'_, str>) -> bool { self.as_str() == other.as_ref() }
+	fn eq(&self, other: &Msg) -> bool { <Msg as PartialEq<Self>>::eq(other, self) }
 }
-impl PartialEq<String> for Msg {
-	#[inline]
-	fn eq(&self, other: &String) -> bool { self.as_str() == other.as_str() }
-}
+
 impl PartialEq<[u8]> for Msg {
 	#[inline]
 	fn eq(&self, other: &[u8]) -> bool { self.as_bytes() == other }
 }
-impl PartialEq<Vec<u8>> for Msg {
+impl PartialEq<Msg> for [u8] {
 	#[inline]
-	fn eq(&self, other: &Vec<u8>) -> bool { self.as_bytes() == other.as_slice() }
+	fn eq(&self, other: &Msg) -> bool { <Msg as PartialEq<Self>>::eq(other, self) }
 }
 
-/// # Helper: `PartialEq` Aliases.
-///
-/// Use the existing `a == b` implementation to cover `b == a`, `a == &b`, and
-/// `&b == a` variations.
-macro_rules! partial_eq {
-	($($ty:ty),+) => ($(
-		impl PartialEq<&$ty> for Msg {
+/// # Helper: Reciprocal `PartialEq`.
+macro_rules! eq {
+	($parent:ty: $($ty:ty),+) => ($(
+		impl PartialEq<$ty> for Msg {
 			#[inline]
-			fn eq(&self, other: &&$ty) -> bool {
-				<Msg as PartialEq<$ty>>::eq(self, *other)
-			}
+			fn eq(&self, other: &$ty) -> bool { <Self as PartialEq<$parent>>::eq(self, other) }
 		}
 		impl PartialEq<Msg> for $ty {
 			#[inline]
-			fn eq(&self, other: &Msg) -> bool {
-				<Msg as PartialEq<$ty>>::eq(other, self)
-			}
-		}
-		impl PartialEq<Msg> for &$ty {
-			#[inline]
-			fn eq(&self, other: &Msg) -> bool {
-				<Msg as PartialEq<$ty>>::eq(other, *self)
-			}
+			fn eq(&self, other: &Msg) -> bool { <Msg as PartialEq<$parent>>::eq(other, self) }
 		}
 	)+);
 }
-partial_eq!(str, Cow<'_, str>, String, [u8], Vec<u8>);
+eq!(str:  &str,  &String,  String,  &Cow<'_, str>,  Cow<'_, str>,  &Box<str>,  Box<str>);
+eq!([u8]: &[u8], &Vec<u8>, Vec<u8>, &Cow<'_, [u8]>, Cow<'_, [u8]>, &Box<[u8]>, Box<[u8]>);
 
 impl Ord for Msg {
 	#[inline]
@@ -701,9 +691,9 @@ impl Msg {
 		if enabled {
 			let now = utc2k::FmtUtc2k::now_local();
 			let mut out = String::with_capacity(24 + now.len());
-			out.push_str("\x1b[2m[\x1b[0;34m");
+			out.push_str(ansi!((dim) ~ (reset, blue) "["));
 			out.push_str(now.as_str());
-			out.push_str("\x1b[0;2m]\x1b[0m ");
+			out.push_str(concat!(ansi!((reset, dim) "]"), " "));
 			self.replace_part(TocId::Timestamp, &out);
 		}
 		else { self.replace_part(TocId::Timestamp, ""); }
@@ -1133,8 +1123,8 @@ impl Msg {
 		// in case it is needed again.
 		let q = self.clone()
 			.with_suffix(
-				if default { " \x1b[2m[\x1b[4mY\x1b[24m/n]\x1b[0m " }
-				else       { " \x1b[2m[y/\x1b[4mN\x1b[24m]\x1b[0m " }
+				if default { concat!(" ", dim!("[", underline!(>"Y"), "/n]"), " ") }
+				else       { concat!(" ", dim!("[y/", underline!(>"N"), "]"), " ") },
 			)
 			.with_newline(false);
 
@@ -1156,7 +1146,13 @@ impl Msg {
 
 			// Print an error and do it all over again.
 			result.truncate(0);
-			let err = Self::error("Invalid input; enter \x1b[91mN\x1b[0m or \x1b[92mY\x1b[0m.");
+			let err = Self::error(concat!(
+				"Invalid input; enter ",
+				ansi!((light_red) "N"),
+				" or ",
+				ansi!((light_green) "Y"),
+				".",
+			));
 			if stderr { err.eprint(); }
 			else { err.print(); }
 		}
@@ -1175,6 +1171,7 @@ impl Msg {
 	/// that.
 	pub fn with_bytes_saved(mut self, state: BeforeAfter) -> Self {
 		use dactyl::{NicePercent, NiceU64};
+		use fyi_ansi::csi;
 
 		if let Some(saved) = state.less() {
 			let saved = NiceU64::from(saved);
@@ -1182,20 +1179,20 @@ impl Msg {
 				// Just the bytes.
 				|| {
 					let mut buf = String::with_capacity(24 + saved.len());
-					buf.push_str(" \x1b[2m(Saved ");
+					buf.push_str(concat!(" ", csi!(dim), "(Saved "));
 					buf.push_str(saved.as_str());
-					buf.push_str(" bytes.)\x1b[0m");
+					buf.push_str(concat!(" bytes.)", csi!()));
 					buf
 				},
 				// With percent.
 				|per| {
 					let per = NicePercent::from(per);
 					let mut buf = String::with_capacity(26 + saved.len() + per.len());
-					buf.push_str(" \x1b[2m(Saved ");
+					buf.push_str(concat!(" ", csi!(dim), "(Saved "));
 					buf.push_str(saved.as_str());
 					buf.push_str(" bytes, ");
 					buf.push_str(per.as_str());
-					buf.push_str(".)\x1b[0m");
+					buf.push_str(concat!(".)", csi!()));
 					buf
 				}
 			);
@@ -1203,7 +1200,10 @@ impl Msg {
 			self.replace_part(TocId::Suffix, &buf);
 		}
 		else {
-			self.replace_part(TocId::Suffix, " \x1b[2m(No savings.)\x1b[0m");
+			self.replace_part(
+				TocId::Suffix,
+				concat!(" ", dim!("(No savings.)")),
+			);
 		}
 
 		self

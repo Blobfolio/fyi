@@ -1,0 +1,10 @@
+[package]
+name = "fyi_ansi"
+version = "2.0.1"
+authors = ["Josh Stoik <josh@blobfolio.com>"]
+edition = "2024"
+rust-version = "1.85"
+description = "Compile-time ANSI formatting macros for FYI."
+license = "WTFPL"
+repository = "https://github.com/Blobfolio/fyi"
+readme = "README.md"

@@ -6,19 +6,27 @@ use argyle::{
 	FlagsBuilder,
 	KeyWordsBuilder,
 };
+use fyi_ansi::{
+	ansi,
+	csi,
+};
 use fyi_msg::{
 	Msg,
 	MsgKind,
 };
-use std::path::{
-	Path,
-	PathBuf,
+use std::{
+	borrow::Cow,
+	collections::{
+		BTreeMap,
+		BTreeSet,
+	},
+	fmt::Write as _,
+	fs::File,
+	io::Write,
+	path::PathBuf,
 };
 
 
-
-/// # Generic Help.
-const HELP: &str = include_str!("help/help.txt");
 
 /// # Manifest.
 const MANIFEST: &str = include_str!(env!("CARGO_MANIFEST_PATH"));
@@ -42,100 +50,8 @@ fn main() {
 	// Build the flags.
 	write_flags();
 
-	// Handle the top.
-	write_help(
-		help_path("top"),
-		format!(
-			r#"
-                      ;\
-                     |' \
-  _                  ; : ;
- / `-.              /: : |
-|  ,-.`-.          ,': : |
-\  :  `. `.       ,'-. : |
- \ ;    ;  `-.__,'    `-.|         {}{}{}
-  \ ;   ;  :::  ,::'`:.  `.        Simple CLI status messages.
-   \ `-. :  `    :.    `.  \
-    \   \    ,   ;   ,:    (\
-     \   :., :.    ,'o)): ` `-.
-    ,/,' ;' ,::"'`.`---'   `.  `-._
-  ,/  :  ; '"      `;'          ,--`.
- ;/   :; ;             ,:'     (   ,:)
-   ,.,:.    ; ,:.,  ,-._ `.     \""'/
-   '::'     `:'`  ,'(  \`._____.-'"'
-      ;,   ;  `.  `. `._`-.  \\
-      ;:.  ;:       `-._`-.\  \`.
-       '`:. :        |' `. `\  ) \
-          ` ;:       |    `--\__,'
-            '`      ,'
-                 ,-'
-"#,
-			"\x1b[38;5;199mFYI\x1b[0;38;5;69m v",
-			env!("CARGO_PKG_VERSION"),
-			"\x1b[0m"
-		).as_bytes()
-	);
-
-	// A few files are already static; let's just copy them to the "generated"
-	// directory for consistency.
-	copy_path("blank");
-	copy_path("confirm");
-	copy_path("help");
-	copy_path("print");
-	copy_path("generic-bottom");
-
-	// The rest get manually built.
-	for kind in MsgKind::ALL {
-		// Before we get to work, let's make sure we remembered to add
-		// manual and subcommand entries for it in the Cargo.toml manifest.
-		let cmd = kind.command();
-		if ! cmd.is_empty() {
-			assert!(
-				MANIFEST.contains(&format!(r#"cmd = "{cmd}""#)),
-				"Manifest missing subcommand entry for {cmd}.",
-			);
-			assert!(
-				MANIFEST.contains(&format!(r#""../release/man/fyi-{cmd}.1.gz""#)),
-				"Manifest missing manual entry for {cmd}.",
-			);
-		}
-
-		// Some of the kinds are already accounted for and can be skipped.
-		if kind.is_empty() || matches!(kind, MsgKind::Confirm) { continue; }
-		let name = kind.as_str();
-
-		// Let's double-check there's a mention in the top-level help's
-		// SUBCOMMANDS section for this kind.
-		assert!(
-			HELP.contains(&format!("{name}: Hello World")),
-			"Top-level help is missing subcommand entry for {name}.",
-		);
-
-		// And generate the help!
-		write_help(
-			help_path(&name.to_ascii_lowercase()),
-			format!(
-				include_str!("./help/generic.txt"),
-				name,
-				Msg::new(kind, "Hello World").as_str(),
-				name.to_lowercase(),
-			).as_bytes()
-		);
-	}
-}
-
-/// # Out path.
-fn copy_path(name: &str) {
-	write_help(help_path(name), &std::fs::read(format!("help/{name}.txt")).expect("Failed to open file."));
-}
-
-/// # Output path (help).
-fn help_path(name: &str) -> PathBuf {
-	PathBuf::from(format!(
-		"{}/help-{}.txt",
-		std::env::var("OUT_DIR").expect("Missing OUT_DIR"),
-		name
-	))
+	// Build the help.
+	write_help();
 }
 
 /// # Output Path.
@@ -200,13 +116,120 @@ fn write_flags() {
 		.save(out_path("flags.rs"));
 }
 
-/// # Write file.
-fn write_help<P>(path: P, data: &[u8])
-where P: AsRef<Path> {
+/// # Write Help.
+fn write_help() {
+	let mut help_text = BTreeMap::new();
+	help_text.insert("Blank", Cow::Borrowed(include_str!("help/blank.txt")));
+	help_text.insert("Custom", Cow::Borrowed(include_str!("help/print.txt")));
+	help_text.insert("Confirm", Cow::Borrowed(include_str!("help/confirm.txt")));
+
+	let mut help_subcommands = BTreeSet::new();
+
+	// The rest get manually built.
+	for kind in MsgKind::ALL {
+		// Before we get to work, let's make sure we remembered to add
+		// manual and subcommand entries for it in the Cargo.toml manifest.
+		let cmd = kind.command();
+		if ! cmd.is_empty() {
+			assert!(
+				MANIFEST.contains(&format!(r#"cmd = "{cmd}""#)),
+				"Manifest missing subcommand entry for {cmd}.",
+			);
+			assert!(
+				MANIFEST.contains(&format!(r#""../release/man/fyi-{cmd}.1.gz""#)),
+				"Manifest missing manual entry for {cmd}.",
+			);
+		}
+
+		// Some of the kinds are already accounted for and can be skipped.
+		if kind.is_empty() || matches!(kind, MsgKind::Confirm) { continue; }
+		let name = kind.as_str();
+
+		// SUBCOMMANDS in the main help.
+		help_subcommands.insert(format!("    {cmd:<12}{name}: Hello World"));
+
+		assert!(
+			help_text.insert(kind.as_str(), Cow::Owned(format!(
+				include_str!("./help/generic.txt"),
+				name,
+				Msg::new(kind, "Hello World").as_str(),
+				cmd,
+			))).is_none(),
+			"BUG: duplicate kind help: {kind}",
+		);
+	}
+
+	// Finish the main help, and add it to the list.
+	let mut main = include_str!("./help/help.txt").trim().to_owned();
+	main.push('\n');
+	for line in help_subcommands {
+		main.push_str(&line);
+		main.push('\n');
+	}
+	help_text.insert("None", Cow::Owned(main));
+
+	// Finally, make some code!
+	let mut out = format!(
+		"#[cold]
+/// # Help Page.
+///
+/// Print the appropriate help screen given the CLI arguments used.
+fn helper(cmd: MsgKind) {{
 	use std::io::Write;
 
-	let mut file = std::fs::File::create(path).expect("Unable to create file.");
-	file.write_all(data).expect("Write failed.");
-	file.write_all(b"\n").expect("Write failed.");
-	file.flush().expect("Flush failed.");
+	let mut handle = std::io::stdout().lock();
+
+	// The top is always the same.
+	handle.write_all({help_top:?}.as_bytes()).unwrap();
+
+	// The middle varies by command.
+	handle.write_all(match cmd {{",
+		help_top=concat!(
+			r#"
+                      ;\
+                     |' \
+  _                  ; : ;
+ / `-.              /: : |
+|  ,-.`-.          ,': : |
+\  :  `. `.       ,'-. : |
+ \ ;    ;  `-.__,'    `-.|         "#, ansi!((199) ~ (cornflower_blue) "FYI"), " v", env!("CARGO_PKG_VERSION"), csi!(), r#"
+  \ ;   ;  :::  ,::'`:.  `.        Simple CLI status messages.
+   \ `-. :  `    :.    `.  \
+    \   \    ,   ;   ,:    (\
+     \   :., :.    ,'o)): ` `-.
+    ,/,' ;' ,::"'`.`---'   `.  `-._
+  ,/  :  ; '"      `;'          ,--`.
+ ;/   :; ;             ,:'     (   ,:)
+   ,.,:.    ; ,:.,  ,-._ `.     \""'/
+   '::'     `:'`  ,'(  \`._____.-'"'
+      ;,   ;  `.  `. `._`-.  \\
+      ;:.  ;:       `-._`-.\  \`.
+       '`:. :        |' `. `\  ) \
+          ` ;:       |    `--\__,'
+            '`      ,'
+                 ,-'
+
+"#),
+	);
+	for (kind, help) in help_text {
+		writeln!(&mut out, "\t\tMsgKind::{kind} => {help:?},").unwrap();
+	}
+	writeln!(
+		&mut out,
+		"\t}}.as_bytes()).unwrap();
+
+	// The bottom is _usually_ the same.
+	if ! matches!(cmd, MsgKind::Blank | MsgKind::Confirm | MsgKind::Custom | MsgKind::None) {{
+		handle.write_all({help_bottom:?}.as_bytes()).unwrap();
+	}}
+
+	let _res = handle.flush();
+}}",
+		help_bottom=include_str!("help/generic-bottom.txt"),
+	).unwrap();
+
+	// Save it.
+	File::create(out_path("help.rs"))
+		.and_then(|mut f| f.write_all(out.as_bytes()).and_then(|()| f.flush()))
+		.expect("Unable to save help.rs.");
 }

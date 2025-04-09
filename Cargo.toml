@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
 	"fyi",
+	"fyi_ansi",
     "fyi_msg",
 ]
 

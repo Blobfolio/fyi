@@ -2,6 +2,7 @@
 # FYI Msg: ANSI Helpers
 */
 
+use fyi_ansi::csi;
 use std::{
 	fmt,
 	hash,
@@ -110,12 +111,12 @@ impl AnsiColor {
 	///     AnsiColor::RESET,
 	/// );
 	/// ```
-	pub const RESET: &'static str = "\x1b[0m";
+	pub const RESET: &'static str = csi!();
 
 	/// # Prefix Reset.
 	///
 	/// Same as [`AnsiColor::RESET`], but with a colon before and space after.
-	pub(crate) const RESET_PREFIX: &'static str = ":\x1b[0m ";
+	pub(crate) const RESET_PREFIX: &'static str = concat!(":", csi!(), " ");
 }
 
 
