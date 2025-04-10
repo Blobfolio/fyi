@@ -10,8 +10,8 @@ use crate::MsgKind;
 #[cfg(feature = "progress")] use crate::BeforeAfter;
 use fyi_ansi::{
 	ansi,
+	csi,
 	dim,
-	underline,
 };
 use kind::IntoMsgPrefix;
 use std::{
@@ -691,7 +691,9 @@ impl Msg {
 		if enabled {
 			let now = utc2k::FmtUtc2k::now_local();
 			let mut out = String::with_capacity(24 + now.len());
-			out.push_str(ansi!((dim) ~ (reset, blue) "["));
+			out.push_str(csi!(dim));
+			out.push('[');
+			out.push_str(csi!(reset, blue));
 			out.push_str(now.as_str());
 			out.push_str(concat!(ansi!((reset, dim) "]"), " "));
 			self.replace_part(TocId::Timestamp, &out);
@@ -1123,8 +1125,8 @@ impl Msg {
 		// in case it is needed again.
 		let q = self.clone()
 			.with_suffix(
-				if default { concat!(" ", dim!("[", underline!(>"Y"), "/n]"), " ") }
-				else       { concat!(" ", dim!("[y/", underline!(>"N"), "]"), " ") },
+				if default { concat!(" ", dim!("[", csi!(underline), "Y", csi!(!underline), "/n]"), " ") }
+				else       { concat!(" ", dim!("[y/", csi!(underline), "N", csi!(!underline), "]"), " ") },
 			)
 			.with_newline(false);
 

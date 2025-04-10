@@ -8,7 +8,8 @@
 [![license](https://img.shields.io/badge/license-wtfpl-ff1493?style=flat-square)](https://en.wikipedia.org/wiki/WTFPL)
 
 This crate exports two simple compile-time ANSI formatting macros — `csi` and
-`ansi` — as well as shortcut helpers for `bold`, `dim`, and `underline`.
+`ansi` — as well as shortcut helpers for `blink`, `bold`, `dim`,
+`italic`, `strike`, and `underline`.
 
 ## Examples
 
@@ -25,20 +26,22 @@ assert_eq!(
 );
 ```
 
-The `dim`, `bold`, and `underline` macros are only shortcuts, but can
-help declutter your code when there's only the one style being toggled.
+The `bold`, `dim`, etc., macros are only shortcuts, but can help declutter
+your code when there's only the one style being toggled.
 
 ```rust
-use fyi_ansi::{bold, dim, underline};
+use fyi_ansi::{blink, bold, dim, italic, strike, underline};
 
 // Same as with `ansi`, they terminate with a blanket reset by default.
-assert_eq!(bold!("I'm bold!"),              "\x1b[1mI'm bold!\x1b[0m");
-assert_eq!(dim!("I'm dim!"),                "\x1b[2mI'm dim!\x1b[0m");
-assert_eq!(underline!("I'm underlined!"),   "\x1b[4mI'm underlined!\x1b[0m");
-
-// And same as `ansi`, the ">" modifier will make them terminate more
-// selectively instead.
-assert_eq!(bold!(> "I'm bold!"),            "\x1b[1mI'm bold!\x1b[21m");
-assert_eq!(dim!(> "I'm dim!"),              "\x1b[2mI'm dim!\x1b[22m");
-assert_eq!(underline!(> "I'm underlined!"), "\x1b[4mI'm underlined!\x1b[24m");
+assert_eq!(bold!("I'm bold!"),            "\x1b[1mI'm bold!\x1b[0m");
+assert_eq!(dim!("I'm dim!"),              "\x1b[2mI'm dim!\x1b[0m");
+assert_eq!(italic!("I'm italic!"),        "\x1b[3mI'm italic!\x1b[0m");
+assert_eq!(underline!("I'm underlined!"), "\x1b[4mI'm underlined!\x1b[0m");
+assert_eq!(blink!("I'm annoying!"),       "\x1b[5mI'm annoying!\x1b[0m");
+assert_eq!(strike!("I'm struck!"),        "\x1b[9mI'm struck!\x1b[0m");
 ```
+
+## Stability
+
+This library is currently under development and subject to breaking changes
+between dot releases, though the basic API is pretty well set.
