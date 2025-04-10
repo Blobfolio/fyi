@@ -192,7 +192,7 @@ fn helper(cmd: MsgKind) {{
  / `-.              /: : |
 |  ,-.`-.          ,': : |
 \  :  `. `.       ,'-. : |
- \ ;    ;  `-.__,'    `-.|         "#, ansi!((199) ~ (cornflower_blue) "FYI"), " v", env!("CARGO_PKG_VERSION"), csi!(), r#"
+ \ ;    ;  `-.__,'    `-.|         "#, csi!(199), "FYI", ansi!((cornflower_blue) " v", env!("CARGO_PKG_VERSION")), r#"
   \ ;   ;  :::  ,::'`:.  `.        Simple CLI status messages.
    \ `-. :  `    :.    `.  \
     \   \    ,   ;   ,:    (\

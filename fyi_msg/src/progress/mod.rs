@@ -30,10 +30,7 @@ use dactyl::{
 		SaturatingFrom,
 	},
 };
-use fyi_ansi::{
-	ansi,
-	csi,
-};
+use fyi_ansi::csi;
 use std::{
 	collections::BTreeSet,
 	io::{
@@ -882,22 +879,36 @@ impl ProglessBuffer {
 					IoSlice::new(&self.title),
 
 					// Elapsed.
-					IoSlice::new(ansi!((reset, dim) ~ (reset, bold) "[").as_bytes()),
+					IoSlice::new(concat!(
+						csi!(reset, dim),
+						"[",
+						csi!(reset, bold),
+					).as_bytes()),
 					IoSlice::new(self.elapsed.as_bytes()),
-					IoSlice::new(ansi!((reset, dim) ~ (reset, bold, light_cyan) "]  [").as_bytes()),
+					IoSlice::new(concat!(
+						csi!(reset, dim),
+						"]  [",
+						csi!(reset, bold, light_cyan),
+					).as_bytes()),
 
 					// Bars.
 					IoSlice::new(self.bar_done),
 					IoSlice::new(csi!(blue).as_bytes()),
 					IoSlice::new(self.bar_undone),
 					IoSlice::new(concat!(
-						ansi!((reset, dim) ~ (reset, bold, light_cyan) "]"),
+						csi!(reset, dim),
+						"]",
+						csi!(reset, bold, light_cyan),
 						"  ",
 					).as_bytes()),
 
 					// Done/total.
 					IoSlice::new(self.done.as_bytes()),
-					IoSlice::new(ansi!((reset, dim) ~ (reset, bold, blue) "/").as_bytes()),
+					IoSlice::new(concat!(
+						csi!(reset, dim),
+						"/",
+						csi!(reset, bold, blue),
+					).as_bytes()),
 					IoSlice::new(self.total.as_bytes()),
 
 					// Percent.

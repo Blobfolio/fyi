@@ -73,12 +73,18 @@ fn macro_codes() -> BTreeMap<Cow<'static, str>, Cow<'static, str>> {
 	// Reset bold, dim, underline.
 	out.insert(Cow::Borrowed("!bold"), Cow::Borrowed("21"));
 	out.insert(Cow::Borrowed("!dim"), Cow::Borrowed("22"));
+	out.insert(Cow::Borrowed("!italic"), Cow::Borrowed("23"));
 	out.insert(Cow::Borrowed("!underline"), Cow::Borrowed("24"));
+	out.insert(Cow::Borrowed("!blink"), Cow::Borrowed("25"));
+	out.insert(Cow::Borrowed("!strike"), Cow::Borrowed("29"));
 
 	// Enable bold, dim, underline.
 	out.insert(Cow::Borrowed("bold"), Cow::Borrowed("1"));
 	out.insert(Cow::Borrowed("dim"), Cow::Borrowed("2"));
+	out.insert(Cow::Borrowed("italic"), Cow::Borrowed("3"));
 	out.insert(Cow::Borrowed("underline"), Cow::Borrowed("4"));
+	out.insert(Cow::Borrowed("blink"), Cow::Borrowed("5"));
+	out.insert(Cow::Borrowed("strike"), Cow::Borrowed("9"));
 
 	// Now the colors!
 	for (k, v) in (u8::MIN..=u8::MAX).zip(COLORS.iter().map(|(v, _)| v)) {
