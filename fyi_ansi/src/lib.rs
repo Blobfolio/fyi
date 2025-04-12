@@ -428,9 +428,9 @@ mod macros {
 	///
 	/// // Strike, then full reset.
 	/// assert_eq!(
-	///     strike!("TODO: Eat."),
-	///     "\x1b[9mTODO: Eat.\x1b[0m",
-	///                    // ^ reset *all* styles to default
+	///     strike!("Buy cereal."),
+	///     "\x1b[9mBuy cereal.\x1b[0m",
+	///                     // ^ reset *all* styles to default
 	/// );
 	///
 	/// // The same results can be obtained via `ansi`.
