@@ -2,9 +2,6 @@
 # FYI: Build
 */
 
-#![allow(unused_mut, reason = "It is conditionally used.")]
-
-use fyi_ansi::ansi;
 use std::{
 	fmt,
 	fs::File,
@@ -13,35 +10,6 @@ use std::{
 };
 
 
-
-#[cfg(feature = "bin_kinds")]
-/// # Total Kinds.
-const NUM_KINDS: usize = 17;
-
-#[cfg(not(feature = "bin_kinds"))]
-/// # Total Kinds.
-const NUM_KINDS: usize = 15;
-
-/// # Message Kinds.
-static KINDS: [(&str, &str); NUM_KINDS] = [
-	("None", ""),
-	("Aborted",  concat!(ansi!((bold, light_red)     "Aborted:"),  " ")),
-	("Confirm",  concat!(ansi!((bold, dark_orange)   "Confirm:"),  " ")),
-	("Crunched", concat!(ansi!((bold, light_green)   "Crunched:"), " ")),
-	("Debug",    concat!(ansi!((bold, light_cyan)    "Debug:"),    " ")),
-	("Done",     concat!(ansi!((bold, light_green)   "Done:"),     " ")),
-	("Error",    concat!(ansi!((bold, light_red)     "Error:"),    " ")),
-	("Found",    concat!(ansi!((bold, light_green)   "Found:"),    " ")),
-	("Info",     concat!(ansi!((bold, light_magenta) "Info:"),     " ")),
-	("Notice",   concat!(ansi!((bold, light_magenta) "Notice:"),   " ")),
-	("Review",   concat!(ansi!((bold, light_cyan)    "Review:"),   " ")),
-	("Skipped",  concat!(ansi!((bold, light_yellow)  "Skipped:"),  " ")),
-	("Success",  concat!(ansi!((bold, light_green)   "Success:"),  " ")),
-	("Task",     concat!(ansi!((bold, 199)           "Task:"),     " ")),
-	("Warning",  concat!(ansi!((bold, light_yellow)  "Warning:"),  " ")),
-	#[cfg(feature = "bin_kinds")] ("Blank", ""),
-	#[cfg(feature = "bin_kinds")] ("Custom", ""),
-];
 
 // COLORS: [(name, hex)].
 include!("skel/ansi256.rs");
@@ -52,7 +20,6 @@ include!("skel/ansi256.rs");
 fn main() {
 	println!("cargo:rerun-if-env-changed=CARGO_PKG_VERSION");
 	build_ansi_color();
-	build_msg_kinds();
 }
 
 /// # Build ANSI Color Enum.
@@ -188,160 +155,6 @@ impl AnsiColor {\n");
 	File::create(out_path("ansi-color.rs"))
 		.and_then(|mut f| f.write_all(out.as_bytes()).and_then(|()| f.flush()))
 		.expect("Unable to save ansi-color.rs");
-}
-
-/// # Build/Save `MsgKind`.
-///
-/// The `MsgKind` enum doesn't feel all that complicated, but there are a lot
-/// of little ways inconsistencies can creep in. Building the trickier pieces
-/// programmatically helps ensure nothing is missed.
-///
-/// This generates code for the definition, an `ALL` constant,
-/// `MsgKind::as_str_prefix`, and the `Msg::kind` helpers.
-fn build_msg_kinds() {
-	use std::fmt::Write;
-
-	/// # Hidden Kinds.
-	const HIDDEN: [&str; 2] = ["Blank", "Custom"];
-
-	let mut out = String::with_capacity(8192);
-	out.push_str(r#"#[expect(missing_docs, reason = "Redudant.")]
-#[derive(Debug, Copy, Clone, Eq, Hash, PartialEq)]
-/// # Message Kind.
-///
-/// This enum contains built-in prefixes for [`Msg`](crate::Msg). These are
-/// generally only used to initiate a new message with this prefix, like:
-///
-/// ## Examples
-///
-/// ```
-/// use fyi_msg::{Msg, MsgKind};
-///
-/// // Error: Oh no!
-/// assert_eq!(
-///     Msg::new(MsgKind::Error, "Oh no!"),
-///     MsgKind::Error.into_msg("Oh no!"),
-/// );
-/// ```
-///
-/// Most kinds have their own dedicated [`Msg`] helper method which, unlike the
-/// previous examples, comes with a line break at the end.
-///
-/// ```
-/// use fyi_msg::{Msg, MsgKind};
-///
-/// // Error: Oh no!\n
-/// assert_eq!(
-///     Msg::error("Oh no!"),
-///     Msg::new(MsgKind::Error, "Oh no!").with_newline(true),
-/// );
-/// ```
-pub enum MsgKind {"#);
-	for (kind, _) in KINDS {
-		if kind != "None" { out.push('\n'); }
-		if HIDDEN.contains(&kind) { out.push_str("\t#[doc(hidden)]\n"); }
-		writeln!(&mut out, "\t{kind},").unwrap();
-	}
-	out.push_str("}\n");
-
-	// Add a constant containing all kinds to make iteration easier.
-	writeln!(
-		&mut out,
-		"impl MsgKind {{
-	/// # All Variants.
-	///
-	/// This array can be used to cheaply iterate through all message kinds.
-	pub const ALL: [Self; {NUM_KINDS}] = ["
-	).unwrap();
-	for chunk in KINDS.chunks(8) {
-		out.push_str("\t\t");
-		for (kind, _) in chunk { write!(&mut out, "Self::{kind}, ").unwrap(); }
-		out.push('\n');
-	}
-	out.push_str("\t];\n");
-
-	// And a crate-wide method to expose the preformatted prefix string.
-	#[cfg(feature = "bin_kinds")]      let wild = "_";
-	#[cfg(not(feature = "bin_kinds"))] let wild = "Self::None";
-
-	out.push_str("\t#[inline]
-	#[must_use]
-	/// # As String Slice (Prefix).
-	///
-	/// Return the kind as a string slice, formatted and with a trailing `\": \"`,
-	/// same as [`Msg`] uses for prefixes.
-	pub(crate) const fn as_str_prefix(self) -> &'static str {
-		match self {\n");
-	for (kind, prefix) in KINDS {
-		// Skip empties.
-		if prefix.is_empty() {continue; }
-
-		// While we're here, check the predictable parts were typed correctly.
-		assert!(
-			prefix.starts_with("\x1b[1;") &&
-			prefix.ends_with(&format!("m{kind}:\x1b[0m ")),
-			"BUG: {kind}::as_str_prefix is wrong!",
-		);
-
-		writeln!(&mut out, "\t\t\tSelf::{kind} => {prefix:?},").unwrap();
-	}
-	writeln!(
-		&mut out,
-		"\t\t\t{wild} => \"\",
-		}}
-	}}
-}}").unwrap();
-
-	// Generate helper methods for (most) of the kinds. (Might as well do this
-	// here.)
-	out.push_str("/// ## [`MsgKind`] One-Shots.
-impl Msg {\n");
-	for (kind, prefix) in KINDS {
-		// Skip the empties and "Confirm" (since it has a macro).
-		if prefix.is_empty() || kind == "Confirm" { continue; }
-
-		let prefix_len = prefix.len();
-		writeln!(
-			&mut out,
-			"\t#[must_use]
-	/// # New {kind}.
-	///
-	/// Create a new [`Msg`] with a built-in [`MsgKind::{kind}`] prefix _and_ trailing line break.
-	///
-	/// ## Examples.
-	///
-	/// ```
-	/// use fyi_msg::{{Msg, MsgKind}};
-	///
-	/// assert_eq!(
-	///     Msg::{kind_low}(\"Hello World\"),
-	///     Msg::new(MsgKind::{kind}, \"Hello World\").with_newline(true),
-	/// );
-	/// ```
-	pub fn {kind_low}<S: AsRef<str>>(msg: S) -> Self {{
-			// Glue it all together.
-			let msg = msg.as_ref();
-			let m_end = {prefix_len} + msg.len();
-			let mut inner = String::with_capacity(m_end + 1);
-			inner.push_str({prefix:?});
-			inner.push_str(msg);
-			inner.push('\\n');
-
-			// Done!
-			Self {{
-				inner,
-				toc: super::toc!({prefix_len}, m_end, true),
-			}}
-	}}",
-			kind=kind,
-			kind_low=kind.to_ascii_lowercase(),
-		).unwrap();
-	}
-	out.push_str("}\n");
-
-	File::create(out_path("msg-kinds.rs"))
-		.and_then(|mut f| f.write_all(out.as_bytes()).and_then(|()| f.flush()))
-		.expect("Unable to save msg-kinds.rs");
 }
 
 /// # Output Path.
