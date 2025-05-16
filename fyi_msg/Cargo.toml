@@ -1,9 +1,9 @@
 [package]
 name = "fyi_msg"
-version = "2.0.2"
+version = "2.1.0"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.87"
 description = "Simple ANSI-formatted, prefixed messages for console printing."
 license = "WTFPL"
 repository = "https://github.com/Blobfolio/fyi"
@@ -16,9 +16,6 @@ rustdoc-args = ["--cfg", "docsrs"]
 features = [ "fitted", "progress", "signals", "timestamps" ]
 default-target = "x86_64-unknown-linux-gnu"
 targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
-
-[build-dependencies.fyi_ansi]
-version = "2.0.*"
 
 [dependencies.dactyl]
 version = "0.10.*"
@@ -46,7 +43,7 @@ features = [ "local" ]
 optional = true
 
 [dev-dependencies]
-brunch = "0.9.*"
+brunch = "0.10.*"
 rayon = "1.10.*"
 
 [[bench]]
