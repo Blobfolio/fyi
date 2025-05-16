@@ -349,7 +349,7 @@ impl Msg {
 	///     b"Hello world",
 	/// );
 	/// ```
-	pub fn as_bytes(&self) -> &[u8] { self.inner.as_bytes() }
+	pub const fn as_bytes(&self) -> &[u8] { self.inner.as_bytes() }
 
 	#[inline]
 	#[must_use]
@@ -367,7 +367,7 @@ impl Msg {
 	///     "Hello world",
 	/// );
 	/// ```
-	pub fn as_str(&self) -> &str { self.inner.as_str() }
+	pub const fn as_str(&self) -> &str { self.inner.as_str() }
 
 	#[cfg(feature = "fitted")]
 	#[cfg_attr(docsrs, doc(cfg(feature = "fitted")))]
@@ -472,7 +472,7 @@ impl Msg {
 	/// // One way to get an empty message.
 	/// assert!(Msg::from("").is_empty());
 	/// ```
-	pub fn is_empty(&self) -> bool { self.inner.is_empty() }
+	pub const fn is_empty(&self) -> bool { self.inner.is_empty() }
 
 	#[inline]
 	#[must_use]
@@ -491,7 +491,7 @@ impl Msg {
 	///     26,
 	/// ); // Don't forget about ANSI…
 	/// ```
-	pub fn len(&self) -> usize { self.inner.len() }
+	pub const fn len(&self) -> usize { self.inner.len() }
 }
 
 /// ## Setters.
