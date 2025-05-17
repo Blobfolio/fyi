@@ -38,7 +38,7 @@ version = "0.2.*"
 optional = true
 
 [dependencies.utc2k]
-version = "0.12.*"
+version = "0.13.*"
 features = [ "local" ]
 optional = true
 
