@@ -355,6 +355,11 @@ version:
 	just _version "{{ pkg_dir2 }}" "$_ver2"
 	just _version "{{ pkg_dir3 }}" "$_ver2"
 
+	# Update the msg->ansi dependency version to match.
+	toml set "{{ pkg_dir3 }}/Cargo.toml" dependencies.fyi_ansi.version "$_ver2" > /tmp/Cargo.toml
+	just _fix-chown "/tmp/Cargo.toml"
+	mv "/tmp/Cargo.toml" "{{ pkg_dir3 }}/Cargo.toml"
+
 
 # Set version for real.
 @_version DIR VER:
