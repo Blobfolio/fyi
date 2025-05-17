@@ -371,12 +371,6 @@ version:
 	mv "/tmp/Cargo.toml" "{{ DIR }}/Cargo.toml"
 
 
-# Init dependencies.
-@_init:
-	# env RUSTUP_PERMIT_COPY_RENAME=true rustup default beta
-	# env RUSTUP_PERMIT_COPY_RENAME=true rustup component add clippy
-
-
 # Fix file/directory permissions.
 @_fix-chmod PATH:
 	[ ! -e "{{ PATH }}" ] || find "{{ PATH }}" -type f -exec chmod 0644 {} +
