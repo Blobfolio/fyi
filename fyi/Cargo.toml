@@ -191,7 +191,7 @@ path = "../fyi_msg"
 
 [dependencies]
 argyle = "0.12.*"
-dactyl = "0.10.*"
+dactyl = "0.11.*"
 
 [dependencies.fyi_ansi]
 path = "../fyi_ansi"
