@@ -4,7 +4,7 @@
 <br>
 [![crates.io](https://img.shields.io/crates/v/fyi_msg.svg?style=flat-square&label=crates.io)](https://crates.io/crates/fyi_msg)
 [![ci](https://img.shields.io/github/actions/workflow/status/Blobfolio/fyi/ci.yaml?style=flat-square&label=ci)](https://github.com/Blobfolio/fyi/actions)
-[![deps.rs](https://deps.rs/repo/github/blobfolio/fyi/status.svg?style=flat-square&label=deps.rs)](https://deps.rs/repo/github/blobfolio/fyi)<br>
+[![deps.rs](https://deps.rs/crate/fyi_msg/latest/status.svg?style=flat-square&label=deps.rs)](https://deps.rs/crate/fyi_msg/)<br>
 [![license](https://img.shields.io/badge/license-wtfpl-ff1493?style=flat-square)](https://en.wikipedia.org/wiki/WTFPL)
 
 This crate contains the objects providing the heart of the [FYI command line application](https://github.com/blobfolio/fyi), namely `Msg`, a simple struct for status-like messages that can be easily printed to `STDOUT` or `STDERR`.

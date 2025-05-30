@@ -5,7 +5,7 @@
 <br>
 [![crates.io](https://img.shields.io/crates/v/fyi_ansi.svg?style=flat-square&label=crates.io)](https://crates.io/crates/fyi_ansi)
 [![ci](https://img.shields.io/github/actions/workflow/status/Blobfolio/fyi/ci.yaml?style=flat-square&label=ci)](https://github.com/Blobfolio/fyi/actions)
-[![deps.rs](https://deps.rs/repo/github/blobfolio/fyi/status.svg?style=flat-square&label=deps.rs)](https://deps.rs/repo/github/blobfolio/fyi)<br>
+[![deps.rs](https://deps.rs/crate/fyi_ansi/latest/status.svg?style=flat-square&label=deps.rs)](https://deps.rs/crate/fyi_ansi/)<br>
 [![license](https://img.shields.io/badge/license-wtfpl-ff1493?style=flat-square)](https://en.wikipedia.org/wiki/WTFPL)
 
 This crate exports two simple compile-time ANSI formatting macros — [`csi`] and
