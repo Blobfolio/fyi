@@ -690,11 +690,12 @@ impl Msg {
 	pub fn set_timestamp(&mut self, enabled: bool) {
 		if enabled {
 			let now = utc2k::FmtUtc2k::now_local();
-			let mut out = String::with_capacity(24 + now.len());
+			let now_s = now.as_str();
+			let mut out = String::with_capacity(24 + now_s.len());
 			out.push_str(csi!(dim));
 			out.push('[');
 			out.push_str(csi!(reset, blue));
-			out.push_str(now.as_str());
+			out.push_str(now_s);
 			out.push_str(concat!(ansi!((reset, dim) "]"), " "));
 			self.replace_part(TocId::Timestamp, &out);
 		}
