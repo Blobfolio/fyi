@@ -188,10 +188,11 @@ struct ProglessInner {
 	/// same storage to improve consistency and reduce atomic ops.
 	last_size: AtomicU16,
 
-	/// # Generation Counter.
+	/// # Cycle Number.
 	///
-	/// This relatively cheap counter increments each time a new progress run
-	/// is started.
+	/// This value is incremented with each call to [`Progless::reset`] and
+	/// serves as a control to help prevent a [`ProglessTaskGuard`] from one
+	/// cycle affecting the totals of a subsequent one.
 	cycle: AtomicU8,
 
 	/// # Start Time.
@@ -1099,8 +1100,9 @@ impl ProglessBuffer {
 /// manually incrementing the counts to let the user know what's happening.
 ///
 /// Doing this, a list of active tasks will be maintained and printed along
-/// with the progress. Removing a task automatically increments the done count,
-/// so if you're tracking tasks, you should *not* call [`Progless::increment`].
+/// with the numerical progress. Removing a task automatically increments the
+/// done count, so you should *not* call [`Progless::increment`] when using
+/// this feature.
 ///
 /// ```no_run
 /// # use fyi_msg::Progless;
@@ -1418,57 +1420,56 @@ impl Progless {
 	/// # Add (Named) Task.
 	///
 	/// This method can be used to add an active "task" to the [`Progless`]
-	/// output, bound to the lifetime of the returned [`ProglessTaskGuard`].
+	/// output, letting the user know what, specifically, is being worked on
+	/// at any given moment.
 	///
-	/// When the guard is dropped, the "task" will be removed from the output
-	/// and the done count will be incremented by one.
+	/// The "task" is bound to the lifetime of the returned [guard](ProglessTaskGuard).
+	/// When (the guard is) dropped, the "task" will automatically vanish from
+	/// the [`Progless`] output, and the done count will increase by one.
 	///
-	/// This is intended for progressions over named things, like file lists,
-	/// where users might want to know _which_ thing(s) are _actively_ being
-	/// worked on from moment to moment.
+	/// Multiple active "tasks" can exist simultaneously — parallelization,
+	/// etc. — but there has to be enough room on the screen for the set or it
+	/// won't be displayed.
 	///
-	/// For other kinds of workloads, use [`Progless::increment`] instead to
-	/// anonymously update the counts as needed.
+	/// In practice, this works best for progressions that step one or a dozen
+	/// or so items at a time.
+	///
+	/// See [`Progless::increment`] as an alternative that avoids the whole
+	/// "task" concept.
 	///
 	/// ## Examples
 	///
 	/// ```no_run
 	/// use fyi_msg::Progless;
+	/// # fn download(_url: &str) -> Option<String> { todo!() }
+	/// # let urls = Vec::<&str>::new();
 	///
-	/// // Let's do something with the current directory's child paths…
-	/// let paths = std::fs::read_dir(".")
-	///     .unwrap()
-	///     .filter_map(|res| res.ok().map(|e| e.path()))
-	///     .collect::<Vec<_>>();
-	///
-	/// // Initialize the progress.
-	/// let pbar = Progless::try_from(paths.len()).unwrap();
-	///
-	/// // Do the work!
-	/// for p in &paths {
-	///     // Announce that `p` is underway!
-	///     let task = pbar.task(p.to_string_lossy());
+	/// // Download stuff from the internet?
+	/// let pbar = Progless::try_from(urls.len()).unwrap();
+	/// for url in &urls {
+	///     // Add the URL to the progress output so the user knows who to
+	///     // blame for major slowdowns, etc.
+	///     let task = pbar.task(url);
     ///
     ///     // Do some work that might take a while.
-    ///     let Ok(p) = std::fs::canonicalize(p) else { continue; };
-    ///     if let Ok(meta) = p.metadata() {
+    ///     if let Some(raw) = download(url) {
     ///         // …
     ///     }
     ///
-    ///     // Drop the guard when finished.
+    ///     // One down, N to go!
     ///     drop(task);
 	/// }
 	///
 	/// // Progress is done!
 	/// pbar.finish();
 	/// ```
-	pub fn task<S>(&self, txt: S) -> Option<ProglessTaskGuard>
+	pub fn task<S>(&self, txt: S) -> Option<ProglessTaskGuard<'_>>
 	where S: AsRef<str> {
 		self.inner.add_guard(txt.as_ref())
 			.map(|task| ProglessTaskGuard::from_parts(
 				task,
 				self.inner.cycle(),
-				Arc::clone(&self.inner),
+				&self.inner,
 			))
 	}
 
@@ -1518,15 +1519,10 @@ impl Progless {
 	#[inline]
 	/// # Set Done.
 	///
-	/// Set the done count to a specific value.
+	/// Set the done count to a specific (absolute) value.
 	///
-	/// In general, you should either use [`Progless::add`]/[`Progless::remove`]
-	/// or [`Progless::increment`] rather than this method, as they ensure any
-	/// changes made are *relative*.
-	///
-	/// This method *overrides* the done value instead, so can cause
-	/// regressions if you're doing task work in parallel and one thread
-	/// finishes before another, etc.
+	/// In general, relative adjustments should be preferred for consistency.
+	/// Consider [`Progless::increment`] or [`Progless::task`] instead.
 	pub fn set_done(&self, done: u32) { self.inner.set_done(done); }
 
 	#[inline]

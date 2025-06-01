@@ -16,41 +16,41 @@ use super::Progless;
 /// This guard is returned by [`Progless::task`].
 ///
 /// When dropped, the task will automatically be removed from the [`Progless`]
-/// output, and its done count will be incremented by one.
+/// output and the done count will be increased by one.
 ///
-/// To drop it _without_ incrementing the done count, use
+/// To drop it _without_ incrementing the done count — because you e.g.
+/// changed your mind or need to come back to it later — use
 /// [`ProglessTaskGuard::cancel`].
-pub struct ProglessTaskGuard {
+pub struct ProglessTaskGuard<'a> {
 	/// # Task Name.
 	task: String,
 
 	/// # Increment on Drop?
 	inc: bool,
 
-	/// # Generation.
+	/// # Cycle Number.
 	///
-	/// This is a simple sanity control to help prevent a guard from one
-	/// progress cycle affecting the totals of a subsequent one (i.e. after
-	/// [`Progless::reset`])
+	/// This value is used to prevent a guard from one [`Progless`] cycle
+	/// affecting the totals of a subsequent one (after e.g. a reset).
 	cycle: u8,
 
 	/// # Linked [`Progless`] Instance.
-	progress: Arc<ProglessInner>,
+	progress: &'a Arc<ProglessInner>,
 }
 
-impl Drop for ProglessTaskGuard {
+impl Drop for ProglessTaskGuard<'_> {
 	#[inline]
 	fn drop(&mut self) {
 		self.progress.remove_guard(self.task.as_str(), self.cycle, self.inc);
 	}
 }
 
-impl ProglessTaskGuard {
+impl<'a> ProglessTaskGuard<'a> {
 	/// # From Parts.
 	pub(super) const fn from_parts(
 		task: String,
 		cycle: u8,
-		progress: Arc<ProglessInner>,
+		progress: &'a Arc<ProglessInner>,
 	) -> Self {
 		Self { task, inc: true, cycle, progress }
 	}
