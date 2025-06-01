@@ -127,6 +127,7 @@ pub use progress::{
 	ba::BeforeAfter,
 	Progless,
 	error::ProglessError,
+	guard::ProglessTaskGuard,
 };
 
 // Re-export.
