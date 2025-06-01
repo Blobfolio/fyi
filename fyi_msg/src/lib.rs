@@ -130,6 +130,7 @@ pub use progress::{
 };
 
 // Re-export.
+pub use fyi_ansi;
 #[cfg_attr(docsrs, doc(cfg(feature = "signal-hook")))]
 #[cfg(feature = "signal-hook")] pub use signal_hook;
 
