@@ -41,11 +41,6 @@ assert_eq!(underline!("I'm underlined!"), "\x1b[4mI'm underlined!\x1b[0m");
 assert_eq!(blink!("I'm annoying!"),       "\x1b[5mI'm annoying!\x1b[0m");
 assert_eq!(strike!("I'm struck!"),        "\x1b[9mI'm struck!\x1b[0m");
 ```
-
-## Stability
-
-This library is currently under development and subject to breaking changes
-between dot releases, though the basic API is pretty well set.
 */
 
 #![forbid(unsafe_code)]

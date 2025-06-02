@@ -38,7 +38,7 @@ fn main() {
 		.map(|&t| (t, Duration::from_millis(t.len() as u64 * 3)))
 		.for_each(|(txt, delay)| {
 			// Start a new task.
-			pbar.add(txt);
+			let task = pbar.task(txt);
 
 			// Example `push_msg` usage.
 			if txt.starts_with("message/") {
@@ -50,8 +50,8 @@ fn main() {
 			// Simulate work.
 			std::thread::sleep(delay);
 
-			// Remove said task, which increments the "done" count by one.
-			pbar.remove(txt);
+			// Remove said task, incrementing the done count by one.
+			drop(task);
 		});
 
 	// Let's do it again! We could start a new Progless, but let's keep the
@@ -69,12 +69,12 @@ fn main() {
 	nums.into_par_iter()
 		.for_each(|n| {
 			let nice = NiceU16::from(n);
-			pbar.add(nice.as_str());
+			let task = pbar.task(nice.as_str());
 
 			// Simulate work.
 			std::thread::sleep(Duration::from_millis(99));
 
-			pbar.remove(nice.as_str());
+			drop(task);
 		});
 
 	// We're really done now.

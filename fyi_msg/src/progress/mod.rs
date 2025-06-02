@@ -5,6 +5,7 @@
 pub(super) mod ba;
 pub(super) mod error;
 mod steady;
+pub(super) mod guard;
 
 #[cfg(any(feature = "signals_sigint", feature = "signals_sigwinch"))]
 pub(super) mod signals;
@@ -19,6 +20,7 @@ use crate::{
 	Msg,
 	MsgKind,
 	ProglessError,
+	ProglessTaskGuard,
 };
 use dactyl::{
 	NiceClock,
@@ -186,6 +188,13 @@ struct ProglessInner {
 	/// same storage to improve consistency and reduce atomic ops.
 	last_size: AtomicU16,
 
+	/// # Cycle Number.
+	///
+	/// This value is incremented with each call to [`Progless::reset`] and
+	/// serves as a control to help prevent a [`ProglessTaskGuard`] from one
+	/// cycle affecting the totals of a subsequent one.
+	cycle: AtomicU8,
+
 	/// # Start Time.
 	///
 	/// The instant the object was first created. All timings are derived from
@@ -221,6 +230,7 @@ impl Default for ProglessInner {
 
 			last_size: AtomicU16::new(0),
 
+			cycle: AtomicU8::new(0),
 			started: Instant::now(),
 			elapsed: AtomicU32::new(0),
 
@@ -364,6 +374,10 @@ impl ProglessInner {
 /// # Getters.
 impl ProglessInner {
 	#[inline]
+	/// # Cycle Number.
+	fn cycle(&self) -> u8 { self.cycle.load(SeqCst) }
+
+	#[inline]
 	/// # Is Ticking.
 	///
 	/// This is `true` so long as `done` does not equal `total`, and `total`
@@ -376,22 +390,46 @@ impl ProglessInner {
 
 /// # Setters.
 impl ProglessInner {
-	/// # Add a task.
+	/// # Add Task Guard.
 	///
-	/// The progress bar can optionally keep track of tasks that are actively
-	/// "in progress", which can be particularly useful when operating in
-	/// parallel.
+	/// Add a new task to the `doing` list, returning a copy of the sanitized
+	/// text that was used (if any).
 	///
-	/// Returns `true` if the task was accepted.
-	fn add(&self, txt: &str) -> bool {
-		if
-			self.running() &&
-			progless_task(txt).is_some_and(|m| mutex!(self.doing).insert(m))
-		{
-			self.flags.fetch_or(TICK_DOING, SeqCst);
-			true
+	/// If the instance is inactive, `None` is returned.
+	fn add_guard(&self, task: &str) -> Option<String> {
+		if self.running() {
+			// Sanitize the task and try to add it to the list.
+			if let Some(task) = progless_task(task) {
+				if mutex!(self.doing).insert(task.clone()) {
+					self.flags.fetch_or(TICK_DOING, SeqCst);
+					return Some(task);
+				}
+			}
+
+			// Return an empty string if the task came up empty or wasn't
+			// unique.
+			Some(String::new())
 		}
-		else { false }
+		else { None }
+	}
+
+	/// # Remove Task Guard.
+	///
+	/// Remove the task (if any) from the list and increment the done count
+	/// by one (unless `! increment`), if the instance is still running and
+	/// the cycle hasn't changed.
+	///
+	/// This is called by [`ProglessTaskGuard::drop`].
+	fn remove_guard(&self, task: &str, cycle: u8, increment: bool) {
+		if self.running() && self.cycle.load(SeqCst) == cycle {
+			// Remove the task, if any.
+			if ! task.is_empty() && mutex!(self.doing).remove(task) {
+				self.flags.fetch_or(TICK_DOING, SeqCst);
+			}
+
+			// Increment?
+			if increment { self.increment_n(1); }
+		}
 	}
 
 	#[inline]
@@ -453,33 +491,6 @@ impl ProglessInner {
 		Ok(())
 	}
 
-	/// # Remove a task.
-	///
-	/// This is the equal and opposite companion to `add`. Calling this will
-	/// automatically increment the done count by one, so should not be used
-	/// in cases where you're triggering done changes manually.
-	fn remove(&self, txt: &str) {
-		if self.running() {
-			// Try to remove the task.
-			let removed: bool = {
-				let txt = txt.trim_end();
-				let mut ptr = mutex!(self.doing);
-
-				// Check for a direct hit first as it is relatively unlikely
-				// the label would have been reformatted for storage.
-				ptr.remove(txt) ||
-				// Then again, maybe it was…
-				progless_task(txt).is_some_and(|task| ptr.remove(&task))
-			};
-
-			// If we removed an entry, set the tick flag and increment.
-			if removed {
-				self.flags.fetch_or(TICK_DOING, SeqCst);
-				self.increment_n(1);
-			}
-		}
-	}
-
 	/// # Reset.
 	///
 	/// Stop the current run (if any), clear the done/doing metrics, and assign
@@ -492,6 +503,7 @@ impl ProglessInner {
 	/// one.
 	fn reset(&self, total: NonZeroU32) {
 		self.stop();
+		self.cycle.fetch_add(1, SeqCst); // Bump the cycle.
 		self.done_total.store(u64::from(total.get()), SeqCst);
 		self.flags.store(TICK_RESET, SeqCst);
 	}
@@ -1084,13 +1096,13 @@ impl ProglessBuffer {
 /// those from [`rayon`](https://crates.io/crates/rayon) without any special fuss.
 ///
 /// When doing parallel work, many tasks might be "in progress" simultaneously.
-/// To that end, you may wish to use the [`Progless::add`] and [`Progless::remove`]
-/// methods at the start and end of each iteration instead of manually
-/// incrementing the counts.
+/// To that end, you may wish to use the [`Progless::task`] instead of
+/// manually incrementing the counts to let the user know what's happening.
 ///
 /// Doing this, a list of active tasks will be maintained and printed along
-/// with the progress. Removing a task automatically increments the done count,
-/// so if you're tracking tasks, you should *not* call [`Progless::increment`].
+/// with the numerical progress. Removing a task automatically increments the
+/// done count, so you should *not* call [`Progless::increment`] when using
+/// this feature.
 ///
 /// ```no_run
 /// # use fyi_msg::Progless;
@@ -1102,12 +1114,13 @@ impl ProglessBuffer {
 ///
 /// // Iterate in Parallel.
 /// (0..1001).into_par_iter().for_each(|i| {
-///     let task: String = format!("Task #{}.", i);
-///     pbar.add(&task);
+///     // Announce the new task at the start.
+///     let task = pbar.task(format!("Task #{}.", i));
 ///
 ///     // Do some work.
 ///
-///     pbar.remove(&task);
+///     // Drop the guard when finished.
+///     drop(task);
 /// });
 ///
 /// // ... snip
@@ -1387,43 +1400,6 @@ impl Progless {
 /// # Passthrough Setters.
 impl Progless {
 	#[inline]
-	/// # Add a task.
-	///
-	/// The progress bar can optionally keep track of tasks that are actively
-	/// "in progress", which can be particularly useful when operating in
-	/// parallel.
-	///
-	/// Any `AsRef<str>` value will do. See the module documentation for
-	/// example usage.
-	///
-	/// Returns `true` if the task was accepted. (If `false`, you should use
-	/// [`Progless::increment`] to mark the task as done instead of
-	/// [`Progless::remove`].)
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use fyi_msg::Progless;
-	///
-	/// // Initialize with a `u32` total.
-	/// let pbar = Progless::try_from(1001_u32).unwrap();
-	///
-	/// // Iterate your taskwork or whatever.
-	/// for i in 0..1001 {
-	///     let task: String = format!("Task #{}.", i);
-    ///     pbar.add(&task);
-    ///
-    ///     // Do some work.
-    ///
-    ///     pbar.remove(&task);
-	/// }
-	///
-	/// pbar.finish();
-	/// ```
-	pub fn add<S>(&self, txt: S) -> bool
-	where S: AsRef<str> { self.inner.add(txt.as_ref()) }
-
-	#[inline]
 	/// # Increment Done.
 	///
 	/// Increase the completed count by exactly one. This is safer to use than
@@ -1440,6 +1416,63 @@ impl Progless {
 	/// and more efficient than calling `increment()` a million times in a row.
 	pub fn increment_n(&self, n: u32) { self.inner.increment_n(n); }
 
+	#[must_use]
+	/// # Add (Named) Task.
+	///
+	/// This method can be used to add an active "task" to the [`Progless`]
+	/// output, letting the user know what, specifically, is being worked on
+	/// at any given moment.
+	///
+	/// The "task" is bound to the lifetime of the returned [guard](ProglessTaskGuard).
+	/// When (the guard is) dropped, the "task" will automatically vanish from
+	/// the [`Progless`] output, and the done count will increase by one.
+	///
+	/// Multiple active "tasks" can exist simultaneously — parallelization,
+	/// etc. — but there has to be enough room on the screen for the set or it
+	/// won't be displayed.
+	///
+	/// In practice, this works best for progressions that step one or a dozen
+	/// or so items at a time.
+	///
+	/// See [`Progless::increment`] as an alternative that avoids the whole
+	/// "task" concept.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use fyi_msg::Progless;
+	/// # fn download(_url: &str) -> Option<String> { todo!() }
+	/// # let urls = Vec::<&str>::new();
+	///
+	/// // Download stuff from the internet?
+	/// let pbar = Progless::try_from(urls.len()).unwrap();
+	/// for url in &urls {
+	///     // Add the URL to the progress output so the user knows who to
+	///     // blame for major slowdowns, etc.
+	///     let task = pbar.task(url);
+    ///
+    ///     // Do some work that might take a while.
+    ///     if let Some(raw) = download(url) {
+    ///         // …
+    ///     }
+    ///
+    ///     // One down, N to go!
+    ///     drop(task);
+	/// }
+	///
+	/// // Progress is done!
+	/// pbar.finish();
+	/// ```
+	pub fn task<S>(&self, txt: S) -> Option<ProglessTaskGuard<'_>>
+	where S: AsRef<str> {
+		self.inner.add_guard(txt.as_ref())
+			.map(|task| ProglessTaskGuard::from_parts(
+				task,
+				self.inner.cycle(),
+				&self.inner,
+			))
+	}
+
 	#[inline]
 	/// # Push Message.
 	///
@@ -1454,18 +1487,6 @@ impl Progless {
 	/// tied up the original message is passed back as an error in case you
 	/// want to try to deal with it yourself.
 	pub fn push_msg(&self, msg: Msg) -> Result<(), Msg> { self.inner.push_msg(msg) }
-
-	#[inline]
-	/// # Remove a task.
-	///
-	/// This is the equal and opposite companion to [`Progless::add`]. Calling
-	/// this will automatically increment the done count by one, so should not
-	/// be used in cases where you're triggering done changes manually.
-	///
-	/// See [`Progless::add`] for more details. If you use one, you must use
-	/// both.
-	pub fn remove<S>(&self, txt: S)
-	where S: AsRef<str> { self.inner.remove(txt.as_ref()); }
 
 	/// # Reset.
 	///
@@ -1498,15 +1519,10 @@ impl Progless {
 	#[inline]
 	/// # Set Done.
 	///
-	/// Set the done count to a specific value.
+	/// Set the done count to a specific (absolute) value.
 	///
-	/// In general, you should either use [`Progless::add`]/[`Progless::remove`]
-	/// or [`Progless::increment`] rather than this method, as they ensure any
-	/// changes made are *relative*.
-	///
-	/// This method *overrides* the done value instead, so can cause
-	/// regressions if you're doing task work in parallel and one thread
-	/// finishes before another, etc.
+	/// In general, relative adjustments should be preferred for consistency.
+	/// Consider [`Progless::increment`] or [`Progless::task`] instead.
 	pub fn set_done(&self, done: u32) { self.inner.set_done(done); }
 
 	#[inline]
