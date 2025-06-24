@@ -43,7 +43,13 @@ fn build_macro() {
 	for (tag, code) in macro_codes() {
 		writeln!(&mut out, "\t\t({tag}) => ( \"{code}\" );").unwrap();
 	}
-	out.push_str("\t}\n");
+	out.push_str("\t\t($other:tt) => (
+			::std::compile_error!(::std::concat!(
+				\"Unrecognized CSI code: \", ::std::stringify!($other)
+			))
+		);
+	}
+");
 
 	File::create(out_path("codes.rs"))
 		.and_then(|mut f| f.write_all(out.as_bytes()).and_then(|()| f.flush()))

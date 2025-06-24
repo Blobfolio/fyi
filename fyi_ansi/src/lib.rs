@@ -191,6 +191,15 @@ mod macros {
 	/// //              ^                   ^ pointless
 	/// ```
 	///
+	/// Outright typos, at least, will make themselves known at compile-time.
+	///
+	/// ```compile_fail
+	/// use fyi_ansi::csi;
+	///
+	/// // Oops.
+	/// println!(concat!(csi!(blod), "I'm bold!", csi!()));
+	/// ```
+	///
 	/// ## ANSI 8/16/256 Color Reference
 	///
 	/// The actual color rendered will vary by software, but should look
