@@ -148,8 +148,7 @@ impl fmt::Display for AnsiTable {
 
 			write!(
 				f,
-				r##"<div style="width: 40px; height: 40px; margin: 0 1px 1px 0; background: {hex}" title="{}">{k:03}</div>"##,
-				buf,
+				r##"<div style="width: 40px; height: 40px; margin: 0 1px 1px 0; background: {hex}" title="{buf}">{k:03}</div>"##,
 			).unwrap();
 		}
 

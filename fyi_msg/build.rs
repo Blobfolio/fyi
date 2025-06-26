@@ -54,9 +54,8 @@ fn build_ansi_color() {
 /// The actual color rendered will vary by software, but should look something
 /// like the following:
 ///
-/// {}
+/// {AnsiTable}
 pub enum AnsiColor {{",
-		AnsiTable
 	).unwrap();
 	for (k, (v, h)) in COLORS.iter().enumerate() {
 		// Give it a title.
