@@ -2,7 +2,7 @@
 # FYI Msg - Progless Before/After
 */
 
-use dactyl::traits::IntDivFloat;
+use dactyl::NiceFloat;
 use std::num::NonZeroU64;
 
 
@@ -132,7 +132,7 @@ impl BeforeAfter {
 	/// the difference over `before`.
 	pub fn less_percent(&self) -> Option<f64> {
 		self.before.zip(self.less())
-			.and_then(|(b, l)| l.get().div_float(b.get()))
+			.and_then(|(b, l)| NiceFloat::div_u64(l.get(), b.get()).ok())
 	}
 
 	#[must_use]
@@ -169,6 +169,6 @@ impl BeforeAfter {
 	/// the difference over `before`.
 	pub fn more_percent(&self) -> Option<f64> {
 		self.before.zip(self.more())
-			.and_then(|(b, m)| m.get().div_float(b.get()))
+			.and_then(|(b, m)| NiceFloat::div_u64(m.get(), b.get()).ok())
 	}
 }
