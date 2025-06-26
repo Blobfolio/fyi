@@ -270,6 +270,9 @@ impl Iterator for NoAnsi<'_> {
 	}
 }
 
+#[cfg(any(feature = "fitted", feature = "progress"))]
+impl std::iter::FusedIterator for NoAnsi<'_> {}
+
 
 
 #[cfg(feature = "fitted")]
@@ -304,6 +307,9 @@ impl<'a> Iterator for OnlyAnsi<'a> {
 		next
 	}
 }
+
+#[cfg(feature = "fitted")]
+impl std::iter::FusedIterator for OnlyAnsi<'_> {}
 
 
 

@@ -399,16 +399,14 @@ impl ProglessInner {
 	fn add_guard(&self, task: &str) -> Option<String> {
 		if self.running() {
 			// Sanitize the task and try to add it to the list.
-			if let Some(task) = progless_task(task) {
-				if mutex!(self.doing).insert(task.clone()) {
-					self.flags.fetch_or(TICK_DOING, SeqCst);
-					return Some(task);
-				}
+			if let Some(task) = progless_task(task) && mutex!(self.doing).insert(task.clone()) {
+				self.flags.fetch_or(TICK_DOING, SeqCst);
+				Some(task)
 			}
 
 			// Return an empty string if the task came up empty or wasn't
 			// unique.
-			Some(String::new())
+			else { Some(String::new()) }
 		}
 		else { None }
 	}

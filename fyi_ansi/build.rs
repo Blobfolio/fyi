@@ -43,7 +43,13 @@ fn build_macro() {
 	for (tag, code) in macro_codes() {
 		writeln!(&mut out, "\t\t({tag}) => ( \"{code}\" );").unwrap();
 	}
-	out.push_str("\t}\n");
+	out.push_str("\t\t($other:tt) => (
+			::std::compile_error!(::std::concat!(
+				\"Unrecognized CSI code: \", ::std::stringify!($other)
+			))
+		);
+	}
+");
 
 	File::create(out_path("codes.rs"))
 		.and_then(|mut f| f.write_all(out.as_bytes()).and_then(|()| f.flush()))
@@ -142,8 +148,7 @@ impl fmt::Display for AnsiTable {
 
 			write!(
 				f,
-				r##"<div style="width: 40px; height: 40px; margin: 0 1px 1px 0; background: {hex}" title="{}">{k:03}</div>"##,
-				buf,
+				r##"<div style="width: 40px; height: 40px; margin: 0 1px 1px 0; background: {hex}" title="{buf}">{k:03}</div>"##,
 			).unwrap();
 		}
 

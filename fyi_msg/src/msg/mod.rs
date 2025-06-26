@@ -689,7 +689,7 @@ impl Msg {
 	/// ```
 	pub fn set_timestamp(&mut self, enabled: bool) {
 		if enabled {
-			let now = utc2k::FmtUtc2k::now_local();
+			let now = utc2k::Local2k::now().formatted();
 			let mut out = String::with_capacity(43);
 			out.push_str(concat!(csi!(dim), "[", csi!(reset, blue)));
 			out.push_str(now.as_str());

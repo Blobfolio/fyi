@@ -2,7 +2,7 @@
 # FYI Msg - Progless Before/After
 */
 
-use dactyl::traits::IntDivFloat;
+use dactyl::NiceFloat;
 use std::num::NonZeroU64;
 
 
@@ -116,12 +116,10 @@ impl BeforeAfter {
 	/// assert_eq!(ba.less(), NonZeroU64::new(10));
 	/// ```
 	pub const fn less(&self) -> Option<NonZeroU64> {
-		if let Some(b) = self.before {
-			if let Some(a) = self.after {
-				return NonZeroU64::new(b.get().saturating_sub(a.get()));
-			}
+		if let Some(b) = self.before && let Some(a) = self.after {
+			NonZeroU64::new(b.get().saturating_sub(a.get()))
 		}
-		None
+		else { None }
 	}
 
 	#[must_use]
@@ -130,9 +128,15 @@ impl BeforeAfter {
 	///
 	/// This is the same as [`BeforeAfter::less`], but returns a percentage of
 	/// the difference over `before`.
-	pub fn less_percent(&self) -> Option<f64> {
-		self.before.zip(self.less())
-			.and_then(|(b, l)| l.get().div_float(b.get()))
+	pub const fn less_percent(&self) -> Option<f64> {
+		if
+			let Some(b) = self.before &&
+			let Some(l) = self.less() &&
+			let Ok(out) = NiceFloat::div_u64(l.get(), b.get())
+		{
+			Some(out)
+		}
+		else { None }
 	}
 
 	#[must_use]
@@ -153,12 +157,10 @@ impl BeforeAfter {
 	/// assert_eq!(ba.more(), NonZeroU64::new(30));
 	/// ```
 	pub const fn more(&self) -> Option<NonZeroU64> {
-		if let Some(b) = self.before {
-			if let Some(a) = self.after {
-				return NonZeroU64::new(a.get().saturating_sub(b.get()));
-			}
+		if let Some(b) = self.before && let Some(a) = self.after {
+			NonZeroU64::new(a.get().saturating_sub(b.get()))
 		}
-		None
+		else { None }
 	}
 
 	#[must_use]
@@ -167,8 +169,14 @@ impl BeforeAfter {
 	///
 	/// This is the same as [`BeforeAfter::more`], but returns a percentage of
 	/// the difference over `before`.
-	pub fn more_percent(&self) -> Option<f64> {
-		self.before.zip(self.more())
-			.and_then(|(b, m)| m.get().div_float(b.get()))
+	pub const fn more_percent(&self) -> Option<f64> {
+		if
+			let Some(b) = self.before &&
+			let Some(m) = self.more() &&
+			let Ok(out) = NiceFloat::div_u64(m.get(), b.get())
+		{
+			Some(out)
+		}
+		else { None }
 	}
 }
