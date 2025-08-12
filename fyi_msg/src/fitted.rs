@@ -87,7 +87,7 @@ use unicode_width::UnicodeWidthChar;
 ///     "\x1b[1mHello\x1b[0m\x1b[91m\x1b[0m",
 /// );
 /// ```
-pub fn fit_to_width(src: &str, width: usize) -> Cow<str> {
+pub fn fit_to_width(src: &str, width: usize) -> Cow<'_, str> {
 	/// # Trailing Line Break?
 	const fn terminator(src: &str) -> &str {
 		match src.as_bytes() {

@@ -117,6 +117,7 @@ mod macros {
 		);
 	}
 
+	#[expect(clippy::doc_markdown, reason = "No.")]
 	#[macro_export(local_inner_macros)]
 	/// # ANSI CSI Sequence.
 	///
