@@ -393,7 +393,7 @@ pub trait IntoMsgPrefix {
 	///
 	/// [`MsgKind`] prefixes are static and require no allocation, but custom
 	/// types (unless empty) do to join all the pieces together.
-	fn prefix_str(&self) -> Cow<str> {
+	fn prefix_str(&self) -> Cow<'_, str> {
 		let mut out = String::with_capacity(self.prefix_len());
 		self.prefix_push(&mut out);
 		Cow::Owned(out)
@@ -407,7 +407,7 @@ impl IntoMsgPrefix for MsgKind {
 
 	#[inline]
 	/// # Prefix String.
-	fn prefix_str(&self) -> Cow<str> { Cow::Borrowed(self.as_str_prefix()) }
+	fn prefix_str(&self) -> Cow<'_, str> { Cow::Borrowed(self.as_str_prefix()) }
 
 	#[inline]
 	/// # Push Prefix.

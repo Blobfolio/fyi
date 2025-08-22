@@ -418,7 +418,7 @@ impl Msg {
 	///     "\x1b[1;34mName\x1b[0m\n",
 	/// );
 	/// ```
-	pub fn fitted(&self, width: usize) -> Cow<str> {
+	pub fn fitted(&self, width: usize) -> Cow<'_, str> {
 		crate::fit_to_width(self.as_str(), width)
 	}
 
