@@ -19,8 +19,8 @@ macro_rules! msg_kind {
 	// A neat counting trick adapted from The Little Book of Rust Macros, used
 	// here to figure out the size of the ALL array.
 	(@count $odd:tt) => ( 1 );
-    (@count $odd:tt $($a:tt $b:tt)+) => ( (msg_kind!(@count $($a)+) * 2) + 1 );
-    (@count $($a:tt $b:tt)+) =>         (  msg_kind!(@count $($a)+) * 2      );
+	(@count $odd:tt $($a:tt $b:tt)+) => ( (msg_kind!(@count $($a)+) * 2) + 1 );
+	(@count $($a:tt $b:tt)+) =>         (  msg_kind!(@count $($a)+) * 2      );
 
 	// Define MsgKind, MsgKind::ALL, and MsgKind::as_str_prefix.
 	(@build $($k:ident, $v:expr),+ $(,)?) => (
