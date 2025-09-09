@@ -26,7 +26,12 @@ cargo_bin   := cargo_dir + "/release/" + pkg_id
 doc_dir     := justfile_directory() + "/doc"
 release_dir := justfile_directory() + "/release"
 
-export RUSTFLAGS := "-C target-cpu=x86-64-v3"
+export RUSTFLAGS := "-Ctarget-cpu=x86-64-v3 -Cllvm-args=--cost-kind=throughput -Clinker-plugin-lto -Clink-arg=-fuse-ld=lld"
+export CC        := "clang"
+export CXX       := "clang++"
+export CFLAGS    := `llvm-config --cflags` + " -march=x86-64-v3 -Wall -Wextra -flto"
+export CXXFLAGS  := `llvm-config --cxxflags` + " -march=x86-64-v3 -Wall -Wextra -flto"
+export LDFLAGS   := `llvm-config --ldflags` + " -fuse-ld=lld -flto"
 
 
 
@@ -239,51 +244,10 @@ bench BENCH="":
 # Unit tests!
 @test:
 	clear
-	fyi task "Testing Bin (Debug)."
-	cargo test \
-		--manifest-path "{{ pkg_dir1 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-
 	fyi task "Testing Bin (Release)."
 	cargo test \
 		--release \
 		--manifest-path "{{ pkg_dir1 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-
-	fyi task "Testing Lib (Debug)."
-	cargo test \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-	cargo test \
-		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-	cargo test \
-		--features=fitted \
-		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-	cargo test \
-		--features=timestamps \
-		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-	cargo test \
-		--features=fitted,timestamps \
-		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-	cargo test \
-		--features=progress \
-		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-	cargo test \
-		--features=signals_sigwinch \
-		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-	cargo test \
-		--features=signals_sigint \
-		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-	cargo test \
-		--all-features \
-		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 
 	fyi task "Testing Lib (Release)."
@@ -327,6 +291,57 @@ bench BENCH="":
 		--target-dir "{{ cargo_dir }}"
 	cargo test \
 		--release \
+		--all-features \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+
+	just _test-debug
+
+
+# Test (Debug).
+_test-debug:
+	#!/usr/bin/env bash
+	set -e
+
+	unset -v RUSTFLAGS CC CXX CFLAGS CXXFLAGS LDFLAGS
+
+	fyi task "Testing Bin (Debug)."
+	cargo test \
+		--manifest-path "{{ pkg_dir1 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+
+	fyi task "Testing Lib (Debug)."
+	cargo test \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--features=fitted \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--features=timestamps \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--features=fitted,timestamps \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--features=progress \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--features=signals_sigwinch \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--features=signals_sigint \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
 		--all-features \
 		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
