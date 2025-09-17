@@ -79,8 +79,8 @@ fn main() {
 
 	println!();
 
-	// A prompt to STDERR.
-	if Msg::new(MsgKind::Confirm, "Did this print to STDERR?").eprompt_with_default(true) {
+	// A prompt to STDERR using the macro, defaulting to yes.
+	if confirm!(@stderr @yes "Was this message printed to STDERR?") {
 		Msg::from("Great!")
 			.with_newline(true)
 			.print();
@@ -91,8 +91,8 @@ fn main() {
 			.print();
 	}
 
-	// Here's that macro we mentioned earlier.
-	if confirm!(yes: "Was this example useful?") {
+	// A prompt that defaults to yes, but prints to STDOUT instead.
+	if confirm!(@yes "Was this example useful?") {
 		Msg::from("Great!")
 			.with_newline(true)
 			.print();
@@ -103,8 +103,8 @@ fn main() {
 			.print();
 	}
 
-	// Test confirmation with indentation.
-	if confirm!(yes: "Is this confirmation indented?", 1) {
+	// An indented prompt defaulting to yes.
+	if confirm!(@indent 1 @yes "Is this confirmation indented?") {
 		Msg::from("Great!")
 			.with_indent(1)
 			.with_newline(true)
@@ -117,7 +117,8 @@ fn main() {
 			.print();
 	}
 
-	if confirm!("Do you hate fun?", 2) {
+	// A differently-indented prompt, default to no.
+	if confirm!(@indent 2 "Do you hate fun?") {
 		Msg::from("That's weird.")
 			.with_indent(2)
 			.with_newline(true)
