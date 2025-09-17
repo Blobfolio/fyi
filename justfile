@@ -350,43 +350,27 @@ _test-debug:
 # Get/Set version.
 version:
 	#!/usr/bin/env bash
+	set -e
 
 	# Current version.
-	_ver1="$( toml get "{{ pkg_dir1 }}/Cargo.toml" package.version | \
-		sed 's/"//g' )"
+	_ver1="$( tomli query -f "{{ pkg_dir1 }}/Cargo.toml" package.version | \
+		sed 's/[" ]//g' )"
 
 	# Find out if we want to bump it.
+	set +e
 	_ver2="$( whiptail --inputbox "Set {{ pkg_name }} version:" --title "Release Version" 0 0 "$_ver1" 3>&1 1>&2 2>&3 )"
 
 	exitstatus=$?
 	if [ $exitstatus != 0 ] || [ "$_ver1" = "$_ver2" ]; then
 		exit 0
 	fi
-
-	fyi success "Setting version to $_ver2."
-
-	# Set the release version!
-	just _version "{{ pkg_dir1 }}" "$_ver2"
-	just _version "{{ pkg_dir3 }}" "$_ver2"
-
-	if fyi confirm "Update fyi_ansi too?"; then
-		just _version "{{ pkg_dir2 }}" "$_ver2"
-
-		# Update the msg->ansi dependency version to match.
-		toml set "{{ pkg_dir3 }}/Cargo.toml" dependencies.fyi_ansi.version "$_ver2" > /tmp/Cargo.toml
-		just _fix-chown "/tmp/Cargo.toml"
-		mv "/tmp/Cargo.toml" "{{ pkg_dir3 }}/Cargo.toml"
-	fi
-
-
-# Set version for real.
-@_version DIR VER:
-	[ -f "{{ DIR }}/Cargo.toml" ] || exit 1
+	set -e
 
 	# Set the release version!
-	toml set "{{ DIR }}/Cargo.toml" package.version "{{ VER }}" > /tmp/Cargo.toml
-	just _fix-chown "/tmp/Cargo.toml"
-	mv "/tmp/Cargo.toml" "{{ DIR }}/Cargo.toml"
+	tomli set -f "{{ pkg_dir1 }}/Cargo.toml" -i package.version "$_ver2"
+	tomli set -f "{{ pkg_dir3 }}/Cargo.toml" -i package.version "$_ver2"
+
+	fyi success "Set version to $_ver2 (except for fyi_ansi)."
 
 
 # Fix file/directory permissions.
