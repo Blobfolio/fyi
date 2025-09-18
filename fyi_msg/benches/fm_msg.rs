@@ -21,6 +21,8 @@ benches!(
 	Bench::new("fyi_msg::Msg::from()")
 		.run(|| Msg::from(TEXT)),
 
+	Bench::spacer(),
+
 	Bench::new("fyi_msg::Msg::error()")
 		.run(|| Msg::error(TEXT)),
 
@@ -32,6 +34,8 @@ benches!(
 
 	Bench::new("fyi_msg::Msg::new((Prefix, 199))")
 		.run(|| Msg::new(("Prefix", AnsiColor::Misc199), TEXT)),
+
+	Bench::spacer(),
 
 	Bench::new("fyi_msg::MsgKind::into_msg()")
 		.run(|| MsgKind::Error.into_msg(TEXT)),
