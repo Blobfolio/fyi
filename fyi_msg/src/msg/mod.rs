@@ -1134,15 +1134,15 @@ impl Msg {
 			if stderr { q.eprint(); }
 			else { q.print(); }
 
-			if let Some(res) = io::stdin().read_line(&mut result)
-				.ok()
-				.and_then(|_| match result.to_lowercase().trim() {
-					"" => Some(default),
-					"n" | "no" => Some(false),
-					"y" | "yes" => Some(true),
-					_ => None,
-				})
-			{ break res; }
+			if io::stdin().read_line(&mut result).is_ok() {
+				result.make_ascii_lowercase();
+				match result.trim() {
+					"" => return default,
+					"n" | "no" => return false,
+					"y" | "yes" => return true,
+					_ => {}
+				}
+			}
 
 			// Print an error and do it all over again.
 			result.truncate(0);

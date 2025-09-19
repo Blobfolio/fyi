@@ -144,8 +144,8 @@ mod macros {
 	#[macro_export(local_inner_macros)]
 	/// # Confirm.
 	///
-	/// This is a convenience macro for generating a confirmation message,
-	/// handling the prompting, and returning the response `bool`.
+	/// This convenience macro prints a message, prompts the user for a
+	/// yes/no response, and interprets/returns that value as a `bool`.
 	///
 	/// ## Example
 	///
@@ -161,47 +161,125 @@ mod macros {
 	/// if confirm!("Do you like chickens?") {
 	///     println!("That's great! They like you too!");
 	/// }
+	/// ```
 	///
-	/// // If you want to default to yes, prefix thusly:
-	/// if confirm!(yes: "Do you like chickens?") {
+	/// The following modifiers are supported:
+	/// * `@indent $literal`: indent the message `$literal` "tabs";
+	/// * `@stderr`: pop the question over STDERR (instead of STDOUT);
+	/// * `@yes`: default to "Y" (instead of "N");
+	///
+	/// ```no_run
+	/// # use fyi_msg::confirm;
+	/// // Indent one "tabs" (four spaces):
+	/// if confirm!(@indent 1 "Do you like chickens?") {
+	///     println!("    That's great! They like you too!");
+	/// }
+	///
+	/// // Print to STDERR instead of STDOUT:
+	/// if confirm!(@stderr "Do you like chickens?") {
 	///     println!("That's great! They like you too!");
 	/// }
 	///
-	/// // Indentation can be set with the macro too by appending a second
-	/// // argument:
-	/// if confirm!("Do you like chickens?", 1) {
-	///     println!("    That's great! They like you too!");
-	/// }
-	///
-	/// // The "yes:" prefix also works here.
-	/// if confirm!(yes: "Do you like chickens?", 1) {
-	///     println!("    That's great! They like you too!");
+	/// // Default to yes instead of no.
+	/// if confirm!(@yes "Do you like chickens?") {
+	///     println!("That's great! They like you too!");
 	/// }
 	/// ```
+	///
+	/// Modifiers can be stacked together any which way.
+	///
+	/// ```no_run
+	/// # use fyi_msg::confirm;
+	/// // Indent three "tabs" _and_ print to STDERR _and_ default to yes:
+	/// if confirm!(@indent 3 @stderr @yes "Do you like chickens?") {
+	///     println!("            That's great! They like you too!");
+	/// }
+	///
+	/// // Same as above.
+	/// if confirm!(@stderr @indent 3 @yes "Do you like chickens?") {
+	///     println!("            That's great! They like you too!");
+	/// }
+	///
+	/// // Same again.
+	/// if confirm!(@stderr @yes @indent 3 "Do you like chickens?") {
+	///     println!("            That's great! They like you too!");
+	/// }
+	///
+	/// // …
+	/// ```
 	macro_rules! confirm {
-		(yes: $text:expr) => (
-			$crate::Msg::new($crate::MsgKind::Confirm, $text).prompt_with_default(true)
-		);
-		(yes: $text:expr, $indent:expr) => (
+		// Maybe-indent.
+		($( @indent $indent:literal )? $text:expr) => (
 			$crate::Msg::new($crate::MsgKind::Confirm, $text)
-				.with_indent($indent)
+				$( .with_indent($indent) )?
+				.prompt()
+		);
+
+		// Maybe-indent, yes.
+		($( @indent $indent:literal )? @yes $text:expr) => (
+			$crate::Msg::new($crate::MsgKind::Confirm, $text)
+				$( .with_indent($indent) )?
 				.prompt_with_default(true)
 		);
-		(no: $text:expr) => (
-			$crate::Msg::new($crate::MsgKind::Confirm, $text).prompt()
+		// Maybe-indent, yes.
+		(@yes $( @indent $indent:literal )? $text:expr) => (
+			$crate::Msg::new($crate::MsgKind::Confirm, $text)
+				$( .with_indent($indent) )?
+				.prompt_with_default(true)
 		);
-		(no: $text:expr, $indent:expr) => (
+
+		// Maybe-indent, STDERR.
+		($( @indent $indent:literal )? @stderr $text:expr) => (
+			$crate::Msg::new($crate::MsgKind::Confirm, $text)
+				$( .with_indent($indent) )?
+				.eprompt()
+		);
+		(@stderr $( @indent $indent:literal )? $text:expr) => (
+			$crate::Msg::new($crate::MsgKind::Confirm, $text)
+				$( .with_indent($indent) )?
+				.eprompt()
+		);
+
+		// STDERR, yes.
+		(@stderr @yes $text:expr) => (
+			$crate::Msg::new($crate::MsgKind::Confirm, $text)
+				.eprompt_with_default(true)
+		);
+		(@yes @stderr $text:expr) => (
+			$crate::Msg::new($crate::MsgKind::Confirm, $text)
+				.eprompt_with_default(true)
+		);
+
+		// Indent, STDERR, yes.
+		(@indent $indent:literal @stderr @yes $text:expr) => (
 			$crate::Msg::new($crate::MsgKind::Confirm, $text)
 				.with_indent($indent)
-				.prompt()
+				.eprompt_with_default(true)
 		);
-		($text:expr) => (
-			$crate::Msg::new($crate::MsgKind::Confirm, $text).prompt()
-		);
-		($text:expr, $indent:expr) => (
+		(@indent $indent:literal @yes @stderr $text:expr) => (
 			$crate::Msg::new($crate::MsgKind::Confirm, $text)
 				.with_indent($indent)
-				.prompt()
+				.eprompt_with_default(true)
+		);
+		(@stderr @indent $indent:literal @yes $text:expr) => (
+			$crate::Msg::new($crate::MsgKind::Confirm, $text)
+				.with_indent($indent)
+				.eprompt_with_default(true)
+		);
+		(@stderr @yes @indent $indent:literal $text:expr) => (
+			$crate::Msg::new($crate::MsgKind::Confirm, $text)
+				.with_indent($indent)
+				.eprompt_with_default(true)
+		);
+		(@yes @indent $indent:literal @stderr $text:expr) => (
+			$crate::Msg::new($crate::MsgKind::Confirm, $text)
+				.with_indent($indent)
+				.eprompt_with_default(true)
+		);
+		(@yes @stderr @indent $indent:literal $text:expr) => (
+			$crate::Msg::new($crate::MsgKind::Confirm, $text)
+				.with_indent($indent)
+				.eprompt_with_default(true)
 		);
 	}
 }

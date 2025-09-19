@@ -50,7 +50,7 @@ fn main() {
 	pbar.finish();
 
 	// Go again?
-	if fyi_msg::confirm!(yes: "Count some more?") {
+	if fyi_msg::confirm!(@yes "Count some more?") {
 		pbar.reset(NonZeroU32::new(250).unwrap());
 		pbar.set_title(Some(Msg::task("More numbers…")));
 		for _ in 500..750 {

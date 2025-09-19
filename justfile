@@ -26,7 +26,12 @@ cargo_bin   := cargo_dir + "/release/" + pkg_id
 doc_dir     := justfile_directory() + "/doc"
 release_dir := justfile_directory() + "/release"
 
-export RUSTFLAGS := "-C target-cpu=x86-64-v3"
+export RUSTFLAGS := "-Ctarget-cpu=x86-64-v3 -Cllvm-args=--cost-kind=throughput -Clinker-plugin-lto -Clink-arg=-fuse-ld=lld"
+export CC        := "clang"
+export CXX       := "clang++"
+export CFLAGS    := `llvm-config --cflags` + " -march=x86-64-v3 -Wall -Wextra -flto"
+export CXXFLAGS  := `llvm-config --cxxflags` + " -march=x86-64-v3 -Wall -Wextra -flto"
+export LDFLAGS   := `llvm-config --ldflags` + " -fuse-ld=lld -flto"
 
 
 
@@ -239,51 +244,10 @@ bench BENCH="":
 # Unit tests!
 @test:
 	clear
-	fyi task "Testing Bin (Debug)."
-	cargo test \
-		--manifest-path "{{ pkg_dir1 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-
 	fyi task "Testing Bin (Release)."
 	cargo test \
 		--release \
 		--manifest-path "{{ pkg_dir1 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-
-	fyi task "Testing Lib (Debug)."
-	cargo test \
-		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-	cargo test \
-		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-	cargo test \
-		--features=fitted \
-		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-	cargo test \
-		--features=timestamps \
-		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-	cargo test \
-		--features=fitted,timestamps \
-		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-	cargo test \
-		--features=progress \
-		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-	cargo test \
-		--features=signals_sigwinch \
-		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-	cargo test \
-		--features=signals_sigint \
-		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
-		--target-dir "{{ cargo_dir }}"
-	cargo test \
-		--all-features \
-		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 
 	fyi task "Testing Lib (Release)."
@@ -331,47 +295,82 @@ bench BENCH="":
 		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
 		--target-dir "{{ cargo_dir }}"
 
+	just _test-debug
+
+
+# Test (Debug).
+_test-debug:
+	#!/usr/bin/env bash
+	set -e
+
+	unset -v RUSTFLAGS CC CXX CFLAGS CXXFLAGS LDFLAGS
+
+	fyi task "Testing Bin (Debug)."
+	cargo test \
+		--manifest-path "{{ pkg_dir1 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+
+	fyi task "Testing Lib (Debug)."
+	cargo test \
+		--manifest-path "{{ pkg_dir2 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--features=fitted \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--features=timestamps \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--features=fitted,timestamps \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--features=progress \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--features=signals_sigwinch \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--features=signals_sigint \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+	cargo test \
+		--all-features \
+		--manifest-path "{{ pkg_dir3 }}/Cargo.toml" \
+		--target-dir "{{ cargo_dir }}"
+
 
 # Get/Set version.
 version:
 	#!/usr/bin/env bash
+	set -e
 
 	# Current version.
-	_ver1="$( toml get "{{ pkg_dir1 }}/Cargo.toml" package.version | \
-		sed 's/"//g' )"
+	_ver1="$( tomli query -f "{{ pkg_dir1 }}/Cargo.toml" package.version | \
+		sed 's/[" ]//g' )"
 
 	# Find out if we want to bump it.
+	set +e
 	_ver2="$( whiptail --inputbox "Set {{ pkg_name }} version:" --title "Release Version" 0 0 "$_ver1" 3>&1 1>&2 2>&3 )"
 
 	exitstatus=$?
 	if [ $exitstatus != 0 ] || [ "$_ver1" = "$_ver2" ]; then
 		exit 0
 	fi
-
-	fyi success "Setting version to $_ver2."
-
-	# Set the release version!
-	just _version "{{ pkg_dir1 }}" "$_ver2"
-	just _version "{{ pkg_dir3 }}" "$_ver2"
-
-	if fyi confirm "Update fyi_ansi too?"; then
-		just _version "{{ pkg_dir2 }}" "$_ver2"
-
-		# Update the msg->ansi dependency version to match.
-		toml set "{{ pkg_dir3 }}/Cargo.toml" dependencies.fyi_ansi.version "$_ver2" > /tmp/Cargo.toml
-		just _fix-chown "/tmp/Cargo.toml"
-		mv "/tmp/Cargo.toml" "{{ pkg_dir3 }}/Cargo.toml"
-	fi
-
-
-# Set version for real.
-@_version DIR VER:
-	[ -f "{{ DIR }}/Cargo.toml" ] || exit 1
+	set -e
 
 	# Set the release version!
-	toml set "{{ DIR }}/Cargo.toml" package.version "{{ VER }}" > /tmp/Cargo.toml
-	just _fix-chown "/tmp/Cargo.toml"
-	mv "/tmp/Cargo.toml" "{{ DIR }}/Cargo.toml"
+	tomli set -f "{{ pkg_dir1 }}/Cargo.toml" -i package.version "$_ver2"
+	tomli set -f "{{ pkg_dir3 }}/Cargo.toml" -i package.version "$_ver2"
+
+	fyi success "Set version to $_ver2 (except for fyi_ansi)."
 
 
 # Fix file/directory permissions.
