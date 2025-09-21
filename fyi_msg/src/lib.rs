@@ -112,6 +112,8 @@ pub use msg::{
 	Msg,
 	kind::MsgKind,
 };
+#[cfg(feature = "bin_kinds")]
+pub use msg::kind::CliCommandArg;
 
 #[cfg(feature = "fitted")]
 #[cfg_attr(docsrs, doc(cfg(feature = "fitted")))]

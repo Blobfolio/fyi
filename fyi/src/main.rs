@@ -93,9 +93,9 @@ fn main() -> ExitCode {
 /// This lets us more easily bubble errors, which are printed and handled
 /// specially.
 fn main__() -> Result<(), FyiError> {
-	let kind = cli::parse_kind()?;
-	if matches!(kind, MsgKind::Blank) { return cli::parse_blank(); }
-	let (msg, flags) = cli::parse_msg(kind)?;
+	let (kind, args) = cli::parse_kind()?;
+	if matches!(kind, MsgKind::Blank) { return cli::parse_blank(args); }
+	let (msg, flags) = cli::parse_msg(kind, args)?;
 
 	if matches!(kind, MsgKind::Confirm) {
 		return

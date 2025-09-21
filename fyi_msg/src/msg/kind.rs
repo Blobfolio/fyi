@@ -126,7 +126,7 @@ macro_rules! msg_kind {
 	);
 
 	// Entry point!
-	($( $kind:ident $fn:ident $bytes:literal $color:tt $color_ident:ident, )+) => (
+	($( $kind:ident $fn:ident $str:literal $color:tt $color_ident:ident, )+) => (
 		#[cfg(feature = "bin_kinds")]
 		msg_kind!{
 			@build
@@ -148,20 +148,6 @@ macro_rules! msg_kind {
 		msg_kind!{
 			@msg
 			$( $kind $fn msg_kind!(@prefix $kind $color), )+
-		}
-
-		#[cfg(feature = "bin_kinds")]
-		impl From<&[u8]> for MsgKind {
-			/// # From Byte Slice.
-			fn from(src: &[u8]) -> Self {
-				match src.trim_ascii() {
-					b"blank" => Self::Blank,
-					b"confirm" | b"prompt" => Self::Confirm,
-					b"print" => Self::Custom,
-					$( $bytes => Self::$kind, )+
-					_ => Self::None,
-				}
-			}
 		}
 
 		impl MsgKind {
@@ -235,23 +221,63 @@ macro_rules! msg_kind {
 				}
 			}
 		}
+
+		#[expect(clippy::string_lit_as_bytes, reason = "We need to test equality.")]
+		/// # Command Sanity Check.
+		///
+		/// We had to manually duplicate some values to work around macro
+		/// limitations. Let's make sure we didn't mess anything up!
+		const _: () = {
+			$(
+				assert!(
+					stringify!($fn).len() == $str.len(),
+					"BUG: Function/string/bytes are not equal.",
+				);
+				let b1 = stringify!($fn).as_bytes();
+				let b2 = $str.as_bytes();
+				let mut i = 0;
+				while i < b1.len() {
+					assert!(
+						b1[i] == b2[i],
+						"BUG: Function/string/bytes are not equal.",
+					);
+					i += 1;
+				}
+			)+
+		};
+
+		#[cfg(feature = "bin_kinds")]
+		argyle::argue! {
+			/// # CLI Command Arguments.
+			pub CliCommandArg,
+
+			/// # CLI Command Argument Iterator.
+			pub CliCommandArgIter,
+
+			// Commands first, then version.
+			Blank   "blank",
+			Confirm "confirm" "prompt",
+			Custom  "print",
+			$( $kind $str, )+
+			Version "-V"      "--version" "version",
+		}
 	);
 }
 
 msg_kind! {
-	Aborted  aborted  b"aborted"  light_red     LightRed,
-	Crunched crunched b"crunched" light_green   LightGreen,
-	Debug    debug    b"debug"    light_cyan    LightCyan,
-	Done     done     b"done"     light_green   LightGreen,
-	Error    error    b"error"    light_red     LightRed,
-	Found    found    b"found"    light_green   LightGreen,
-	Info     info     b"info"     light_magenta LightMagenta,
-	Notice   notice   b"notice"   light_magenta LightMagenta,
-	Review   review   b"review"   light_cyan    LightCyan,
-	Skipped  skipped  b"skipped"  light_yellow  LightYellow,
-	Success  success  b"success"  light_green   LightGreen,
-	Task     task     b"task"     199           Misc199,
-	Warning  warning  b"warning"  light_yellow  LightYellow,
+	Aborted  aborted  "aborted"  light_red     LightRed,
+	Crunched crunched "crunched" light_green   LightGreen,
+	Debug    debug    "debug"    light_cyan    LightCyan,
+	Done     done     "done"     light_green   LightGreen,
+	Error    error    "error"    light_red     LightRed,
+	Found    found    "found"    light_green   LightGreen,
+	Info     info     "info"     light_magenta LightMagenta,
+	Notice   notice   "notice"   light_magenta LightMagenta,
+	Review   review   "review"   light_cyan    LightCyan,
+	Skipped  skipped  "skipped"  light_yellow  LightYellow,
+	Success  success  "success"  light_green   LightGreen,
+	Task     task     "task"     199           Misc199,
+	Warning  warning  "warning"  light_yellow  LightYellow,
 }
 
 impl Default for MsgKind {
