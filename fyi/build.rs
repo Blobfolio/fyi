@@ -2,10 +2,7 @@
 # FYI: Build
 */
 
-use argyle::{
-	FlagsBuilder,
-	KeyWordsBuilder,
-};
+use argyle::FlagsBuilder;
 use fyi_ansi::{
 	ansi,
 	csi,
@@ -44,9 +41,6 @@ fn main() {
 	println!("cargo:rerun-if-changed=help");
 	println!("cargo:rerun-if-env-changed=CARGO_PKG_VERSION");
 
-	// Build the CLI arguments.
-	write_cli();
-
 	// Build the flags.
 	write_flags();
 
@@ -61,49 +55,6 @@ fn out_path(stub: &str) -> PathBuf {
 	std::fs::canonicalize(std::env::var("OUT_DIR").expect("Missing OUT_DIR."))
 		.expect("Missing OUT_DIR.")
 		.join(stub)
-}
-
-/// # Generate CLI arguments.
-fn write_cli() {
-	// Main arguments first.
-	let mut builder = KeyWordsBuilder::default();
-	builder.push_commands(
-		MsgKind::ALL.into_iter().filter_map(|k| {
-			let cmd = k.command();
-			if cmd.is_empty() { None }
-			else { Some(cmd) }
-		})
-	);
-	builder.push_keys([
-		"-h", "--help",
-		"-V", "--version",
-	]);
-	builder.save(out_path("argyle-kind.rs"));
-
-	// Blank arguments.
-	builder = KeyWordsBuilder::default();
-	builder.push_keys([
-		"-h", "--help",
-		"--stderr",
-	]);
-	builder.push_keys_with_values(["-c", "--count"]);
-	builder.save(out_path("argyle-blank.rs"));
-
-	// Message arguments.
-	builder = KeyWordsBuilder::default();
-	builder.push_keys([
-		"-h", "--help",
-		"-i", "--indent",
-		"--stderr",
-		"-t", "--timestamp",
-		"-y", "--yes",
-	]);
-	builder.push_keys_with_values([
-		"-c", "--prefix-color",
-		"-e", "--exit",
-		"-p", "--prefix",
-	]);
-	builder.save(out_path("argyle-msg.rs"));
 }
 
 /// # Write flags (program settings bools).

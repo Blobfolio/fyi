@@ -24,6 +24,7 @@
 	clippy::format_push_string,
 	clippy::get_unwrap,
 	clippy::impl_trait_in_params,
+	clippy::implicit_clone,
 	clippy::lossy_float_literal,
 	clippy::missing_assert_message,
 	clippy::missing_docs_in_private_items,
@@ -33,7 +34,6 @@
 	clippy::rest_pat_in_fully_bound_structs,
 	clippy::semicolon_inside_block,
 	clippy::str_to_string,
-	clippy::string_to_string,
 	clippy::todo,
 	clippy::undocumented_unsafe_blocks,
 	clippy::unneeded_field_pattern,
@@ -93,9 +93,9 @@ fn main() -> ExitCode {
 /// This lets us more easily bubble errors, which are printed and handled
 /// specially.
 fn main__() -> Result<(), FyiError> {
-	let kind = cli::parse_kind()?;
-	if matches!(kind, MsgKind::Blank) { return cli::parse_blank(); }
-	let (msg, flags) = cli::parse_msg(kind)?;
+	let (kind, args) = cli::parse_kind()?;
+	if matches!(kind, MsgKind::Blank) { return cli::parse_blank(args); }
+	let (msg, flags) = cli::parse_msg(kind, args)?;
 
 	if matches!(kind, MsgKind::Confirm) {
 		return
