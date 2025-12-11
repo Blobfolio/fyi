@@ -368,9 +368,10 @@ version:
 
 	# Set the release version!
 	tomli set -f "{{ pkg_dir1 }}/Cargo.toml" -i package.version "$_ver2"
+	tomli set -f "{{ pkg_dir2 }}/Cargo.toml" -i package.version "$_ver2"
 	tomli set -f "{{ pkg_dir3 }}/Cargo.toml" -i package.version "$_ver2"
 
-	fyi success "Set version to $_ver2 (except for fyi_ansi)."
+	fyi success "Set version to $_ver2."
 
 
 # Fix file/directory permissions.
