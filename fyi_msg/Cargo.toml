@@ -26,7 +26,7 @@ version = "0.13.*"
 optional = true
 
 [dependencies.fyi_ansi]
-version = "2.2.*"
+version = "2.4.*"
 path = "../fyi_ansi"
 
 [dependencies.signal-hook]
