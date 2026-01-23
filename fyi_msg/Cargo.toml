@@ -1,6 +1,6 @@
 [package]
 name = "fyi_msg"
-version = "2.4.2"
+version = "2.4.3"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
 rust-version = "1.90"
@@ -18,7 +18,7 @@ default-target = "x86_64-unknown-linux-gnu"
 targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
 [dependencies.argyle]
-version = "0.14.*"
+version = "0.15.*"
 optional = true
 
 [dependencies.dactyl]
@@ -30,7 +30,7 @@ version = "2.4.*"
 path = "../fyi_ansi"
 
 [dependencies.signal-hook]
-version = "0.3.*"
+version = "0.4.*"
 default-features = false
 optional = true
 
@@ -43,7 +43,7 @@ version = "0.2.*"
 optional = true
 
 [dependencies.utc2k]
-version = "0.18.*"
+version = "0.19.*"
 features = [ "local" ]
 optional = true
 
