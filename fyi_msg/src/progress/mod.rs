@@ -378,6 +378,17 @@ impl ProglessInner {
 	fn cycle(&self) -> u8 { self.cycle.load(SeqCst) }
 
 	#[inline]
+	#[must_use]
+	/// # Current Done.
+	fn done(&self) -> Option<NonZeroU32> {
+		if self.running() {
+			let done_total = self.done_total.load(SeqCst);
+			NonZeroU32::new(done!(done_total) as u32)
+		}
+		else { None }
+	}
+
+	#[inline]
 	/// # Is Ticking.
 	///
 	/// This is `true` so long as `done` does not equal `total`, and `total`
@@ -1511,6 +1522,13 @@ impl Progless {
 		self.reset(total);
 		Ok(())
 	}
+
+	#[inline]
+	#[must_use]
+	/// # Current Done.
+	///
+	/// Return the current "done" amount, if any and the instance is running.
+	pub fn done(&self) -> Option<NonZeroU32> { self.inner.done() }
 
 	#[inline]
 	/// # Set Done.

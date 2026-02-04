@@ -1,6 +1,6 @@
 [package]
 name = "fyi_ansi"
-version = "2.4.3"
+version = "2.4.4"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
 rust-version = "1.90"
