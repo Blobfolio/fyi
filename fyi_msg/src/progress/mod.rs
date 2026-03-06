@@ -55,7 +55,6 @@ use std::{
 			AtomicU8,
 			AtomicU16,
 			AtomicU32,
-			AtomicU64,
 			Ordering::SeqCst,
 		},
 	},
@@ -64,7 +63,9 @@ use std::{
 		Instant,
 	},
 };
+#[cfg(feature = "signals_sigint")] use std::sync::Once;
 use steady::ProglessSteady;
+
 
 
 
@@ -80,33 +81,15 @@ static BAR_UNDONE: [u8; 256] = [b'-'; 256];
 /// position (i.e. everything _after_).
 const CLS: &[u8] = b"\x1b[J";
 
+#[cfg(feature = "signals_sigint")]
+/// # Printed Sigint Message.
+static PRINTED_SIGINT: Once = Once::new();
+
 /// # Helper: Mutex Unlock.
 ///
 /// This just moves tedious code out of the way.
 macro_rules! mutex {
 	($m:expr) => ($m.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
-}
-
-/// # Helper: Extract Done.
-///
-/// The `done` value is stored in the upper 32 bits of the 64-bit `done_total`.
-macro_rules! done {
-	($done_total:expr) => ($done_total >> 32);
-}
-
-/// # Helper: Extract Total.
-///
-/// The `total` value is stored in the lower 32 bits of the 64-bit `done_total`.
-macro_rules! total {
-	($done_total:expr) => ($done_total & 0x0000_0000_FFFF_FFFF_u64);
-}
-
-/// # Helper: Merge Done and Total.
-///
-/// Merge two `u32` values into a single `u64` by shifting the first into the
-/// upper bits.
-macro_rules! done_total {
-	($done:expr, $total:expr) => (($done << 32) | $total);
 }
 
 use mutex;
@@ -215,7 +198,7 @@ struct ProglessInner {
 	/// Like the screen dimensions, the done and total values are tightly
 	/// bound to one another so are merged together for storage to improve
 	/// consistency and reduce the atomic ops.
-	done_total: AtomicU64,
+	done_total: Mutex<ProglessDoneTotal>,
 
 	/// # Active Task List.
 	doing: Mutex<BTreeSet<String>>,
@@ -235,7 +218,7 @@ impl Default for ProglessInner {
 			elapsed: AtomicU32::new(0),
 
 			title: Mutex::new(None),
-			done_total: AtomicU64::new(1),
+			done_total: Mutex::new(ProglessDoneTotal::DEFAULT),
 			doing: Mutex::new(BTreeSet::default()),
 		}
 	}
@@ -246,7 +229,7 @@ impl From<NonZeroU32> for ProglessInner {
 	fn from(total: NonZeroU32) -> Self {
 		Self {
 			flags: AtomicU8::new(TICK_NEW),
-			done_total: AtomicU64::new(u64::from(total.get())),
+			done_total: Mutex::new(ProglessDoneTotal::new(total)),
 			..Self::default()
 		}
 	}
@@ -260,7 +243,7 @@ macro_rules! inner_nz_from {
 			fn from(total: $ty) -> Self {
 				Self {
 					flags: AtomicU8::new(TICK_NEW),
-					done_total: AtomicU64::new(u64::from(total.get())),
+					done_total: Mutex::new(ProglessDoneTotal::new(NonZeroU32::from(total))),
 					..Self::default()
 				}
 			}
@@ -283,11 +266,10 @@ macro_rules! inner_nz_tryfrom {
 			)]
 			#[allow(clippy::cast_possible_truncation, reason = "We're checking for fit.")]
 			fn try_from(total: $ty) -> Result<Self, Self::Error> {
-				let total = total.get();
-				if total <= 4_294_967_295 {
+				if let Some(total) = u32::try_from(total.get()).ok().and_then(NonZeroU32::new) {
 					Ok(Self {
 						flags: AtomicU8::new(TICK_NEW),
-						done_total: AtomicU64::new(total as u64),
+						done_total: Mutex::new(ProglessDoneTotal::new(total)),
 						..Self::default()
 					})
 				}
@@ -350,11 +332,7 @@ impl ProglessInner {
 			let mut handle = std::io::stderr().lock();
 
 			// Make sure "done" equals "total".
-			let done_total = self.done_total.load(SeqCst);
-			let total = total!(done_total);
-			if total != done!(done_total) {
-				self.done_total.store(done_total!(total, total), SeqCst);
-			}
+			mutex!(self.done_total).stop();
 
 			// Freeze the time.
 			self.elapsed.store(
@@ -382,10 +360,16 @@ impl ProglessInner {
 	/// # Current Done.
 	fn done(&self) -> Option<NonZeroU32> {
 		if self.running() {
-			let done_total = self.done_total.load(SeqCst);
-			NonZeroU32::new(done!(done_total) as u32)
+			let (done, _) = self.done_total();
+			NonZeroU32::new(done)
 		}
 		else { None }
+	}
+
+	#[must_use]
+	/// # Done/Total.
+	fn done_total(&self) -> (u32, NonZeroU32) {
+		mutex!(self.done_total).done_total()
 	}
 
 	#[inline]
@@ -448,14 +432,7 @@ impl ProglessInner {
 	/// and more efficient than calling `increment()` a million times in a row.
 	fn increment_n(&self, n: u32) {
 		if n != 0 && self.running() {
-			// Don't bother recasting the parts to u32; leaving them as-is
-			// moots addition overflow and simplifies the subsequent joining.
-			let done_total = self.done_total.load(SeqCst);
-			let done = done!(done_total) + u64::from(n);
-			let total = total!(done_total);
-
-			if done < total {
-				self.done_total.store(done_total!(done, total), SeqCst);
+			if mutex!(self.done_total).increment_n(n) {
 				self.flags.fetch_or(TICK_DONE | TICK_BAR, SeqCst);
 			}
 			// Time to call it quits!
@@ -513,7 +490,7 @@ impl ProglessInner {
 	fn reset(&self, total: NonZeroU32) {
 		self.stop();
 		self.cycle.fetch_add(1, SeqCst); // Bump the cycle.
-		self.done_total.store(u64::from(total.get()), SeqCst);
+		mutex!(self.done_total).set_total(total);
 		self.flags.store(TICK_RESET, SeqCst);
 	}
 
@@ -524,17 +501,11 @@ impl ProglessInner {
 	/// better.
 	fn set_done(&self, done: u32) {
 		if self.running() {
-			let done = u64::from(done);
-			let done_total = self.done_total.load(SeqCst);
-			if done != done!(done_total) {
-				let total = total!(done_total);
-				if done < total {
-					self.done_total.store(done_total!(done, total), SeqCst);
-					self.flags.fetch_or(TICK_DONE | TICK_BAR, SeqCst);
-				}
-				// Time to call it quits!
-				else { self.stop(); }
+			if mutex!(self.done_total).set_done(done) {
+				self.flags.fetch_or(TICK_DONE | TICK_BAR, SeqCst);
 			}
+			// Time to call it quits!
+			else { self.stop(); }
 		}
 	}
 
@@ -567,9 +538,9 @@ impl ProglessInner {
 	/// This method is used to indicate that a SIGINT was received and that
 	/// the tasks are being wound down (early).
 	///
-	/// For the running [`Progless`], all this really means is that the title
-	/// will be changed to "Early shutdown in progress." (This is purely a
-	/// visual thing.)
+	/// For the running [`Progless`], all this really means is that an
+	/// "Early shutdown in progress." gets pushed. (This is purely a visual
+	/// thing.)
 	///
 	/// The caller must still run [`Progless::finish`] to close everything up
 	/// when the early shutdown actually arrives.
@@ -578,8 +549,10 @@ impl ProglessInner {
 	fn sigint(&self) -> bool {
 		let flags = self.flags.load(SeqCst);
 		if TICKING == flags & (SIGINT | TICKING) {
-			mutex!(self.title).replace(Msg::new(MsgKind::Warning, "Early shutdown in progress."));
-			self.flags.fetch_or(SIGINT | TICK_TITLE, SeqCst);
+			PRINTED_SIGINT.call_once(|| {
+				let _res = self.push_msg(Msg::warning("Early shutdown in progress."));
+			});
+			self.flags.fetch_or(SIGINT, SeqCst);
 			true
 		}
 		else { TICKING == flags & TICKING }
@@ -641,23 +614,21 @@ impl ProglessInner {
 			// The bar and percentage parts depend on the values of done and
 			// total just as done and total depend on themselves, so whether or
 			// not they updated, we'll need to know what they are.
-			let done_total = self.done_total.load(SeqCst);
-			let done = done!(done_total) as u32;
-			let total = total!(done_total) as u32;
+			let (done, total) = self.done_total();
 
 			// If the done value changed, update its buffer.
 			if TICK_DONE == ticked & TICK_DONE { buf.done.replace(done); }
 
 			// Likewise but less likely, the total.
-			if TICK_TOTAL == ticked & TICK_TOTAL { buf.total.replace(total); }
+			if TICK_TOTAL == ticked & TICK_TOTAL { buf.total.replace(total.get()); }
 
 			// The percentage is tied to both done and total, so if either
 			// value changed, we'll need to update its buffer.
 			if 0 != ticked & TICK_PERCENT {
 				let percent =
-					if done == 0 || total == 0 { 0.0 }
-					else if done >= total { 1.0 }
-					else { (f64::from(done) / f64::from(total)) as f32 };
+					if done == 0 { 0.0 }
+					else if done >= total.get() { 1.0 }
+					else { (f64::from(done) / f64::from(total.get())) as f32 };
 				buf.percent.replace(percent);
 			}
 
@@ -781,6 +752,70 @@ impl ProglessInner {
 			None
 		}
 	}
+}
+
+
+
+#[derive(Debug, Clone, Copy)]
+/// # Progless Done/Total.
+///
+/// This struct holds the current and total counts for a `Progless` instance
+/// to reduce the number of operations/locks required to access/change them.
+struct ProglessDoneTotal {
+	/// # Done.
+	done: u32,
+
+	/// # Total.
+	total: NonZeroU32,
+}
+
+impl ProglessDoneTotal {
+	/// # Default.
+	const DEFAULT: Self = Self { done: 0, total: NonZeroU32::MIN };
+
+	#[must_use]
+	/// # New.
+	const fn new(total: NonZeroU32) -> Self {
+		Self { done: 0, total }
+	}
+
+	#[must_use]
+	/// # Done/Total.
+	const fn done_total(self) -> (u32, NonZeroU32) { (self.done, self.total) }
+
+	#[must_use]
+	/// # Increment Done.
+	///
+	/// Returns `true` if there's room for more.
+	const fn increment_n(&mut self, n: u32) -> bool {
+		self.set_done(self.done.saturating_add(n))
+	}
+
+	#[must_use]
+	/// # Set Done.
+	///
+	/// Returns `true` if there's room for more.
+	const fn set_done(&mut self, done: u32) -> bool {
+		if done < self.total.get() {
+			self.done = done;
+			true
+		}
+		else {
+			self.done = self.total.get();
+			false
+		}
+	}
+
+	/// # Set Total.
+	///
+	/// Note this resets `done` to zero.
+	const fn set_total(&mut self, total: NonZeroU32) {
+		self.done = 0;
+		self.total = total;
+	}
+
+	/// # Set Done to Total.
+	const fn stop(&mut self) { self.done = self.total.get(); }
 }
 
 
@@ -963,7 +998,7 @@ impl ProglessBuffer {
 
 impl ProglessBuffer {
 	/// # Set Bars.
-	fn set_bars(&mut self, width: NonZeroU8, done: u32, total: u32) {
+	fn set_bars(&mut self, width: NonZeroU8, done: u32, total: NonZeroU32) {
 		// Default sizes.
 		let mut w_done = 0_u8;
 		let mut w_undone = 0_u8;
@@ -984,14 +1019,14 @@ impl ProglessBuffer {
 		));
 
 		// If we have any space, divide it up proportionately.
-		if total != 0 && MIN_BARS_WIDTH <= space {
+		if MIN_BARS_WIDTH <= space {
 			// Nothing is done.
 			if done == 0 { w_undone = space; }
 			// Everything is done!
-			else if done == total { w_done = space; }
+			else if done == total.get() { w_done = space; }
 			// Working on it!
 			else {
-				w_done = u8::saturating_from((done * u32::from(space)).wrapping_div(total));
+				w_done = u8::saturating_from((done * u32::from(space)).wrapping_div(total.get()));
 				w_undone = space.saturating_sub(w_done);
 			}
 
@@ -1394,7 +1429,7 @@ impl Progless {
 	/// ```
 	pub fn summary<S>(&self, kind: MsgKind, singular: S, plural: S) -> Msg
 	where S: AsRef<str> {
-		let done = done!(self.inner.done_total.load(SeqCst)) as u32;
+		let (done, _) = self.inner.done_total();
 		Msg::new(kind, format!(
 			"{} in {}.",
 			done.nice_inflect(singular.as_ref(), plural.as_ref()),
@@ -1634,28 +1669,3 @@ fn term_size() -> Option<(NonZeroU8, NonZeroU8)> {
 	Some((w, h))
 }
 
-
-
-#[cfg(test)]
-mod test {
-	use super::*;
-
-	#[test]
-	fn t_done_total() {
-		/// # Split Done/Total.
-		const fn split_done_total(done_total: u64) -> (u64, u64) {
-			(done!(done_total), total!(done_total))
-		}
-
-		// Test a total-only initial set.
-		let done_total = AtomicU64::new(55);
-		assert_eq!(split_done_total(done_total.load(SeqCst)), (0, 55));
-
-		// Test setting a done, and extracting non-zero done/total.
-		done_total.store(done_total!(32, 55), SeqCst);
-		assert_eq!(split_done_total(done_total.load(SeqCst)), (32, 55));
-
-		// Verify our mask is the right size.
-		assert_eq!(0xFFFF_FFFF_u64, u64::from(u32::MAX));
-	}
-}

@@ -321,8 +321,8 @@ pub(crate) fn next_ansi(src: &str) -> Option<Range<usize>> {
 	// Find the start of the range.
 	let len = src.len();
 	let start = src.as_bytes()
-		.windows(2)
-		.position(|pair| matches!(pair, b"\x1b[" | b"\x1b]"))?;
+		.array_windows()
+		.position(|[a, b]| *a == b'\x1b' && matches!(*b, b'[' | b']'))?;
 
 	// Now let's look for the end.
 	let mut end = None;
