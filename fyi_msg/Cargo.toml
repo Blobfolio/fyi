@@ -1,6 +1,6 @@
 [package]
 name = "fyi_msg"
-version = "2.4.4"
+version = "2.5.0"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
 rust-version = "1.94"
@@ -26,7 +26,7 @@ version = "0.13.*"
 optional = true
 
 [dependencies.fyi_ansi]
-version = "2.4.*"
+version = "2.5.*"
 path = "../fyi_ansi"
 
 [dependencies.signal-hook]
