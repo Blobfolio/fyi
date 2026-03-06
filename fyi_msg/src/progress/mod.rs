@@ -63,7 +63,9 @@ use std::{
 		Instant,
 	},
 };
+#[cfg(feature = "signals_sigint")] use std::sync::Once;
 use steady::ProglessSteady;
+
 
 
 
@@ -78,6 +80,10 @@ static BAR_UNDONE: [u8; 256] = [b'-'; 256];
 /// This ANSI sequence is used to clear the screen from the current cursor
 /// position (i.e. everything _after_).
 const CLS: &[u8] = b"\x1b[J";
+
+#[cfg(feature = "signals_sigint")]
+/// # Printed Sigint Message.
+static PRINTED_SIGINT: Once = Once::new();
 
 /// # Helper: Mutex Unlock.
 ///
@@ -532,9 +538,9 @@ impl ProglessInner {
 	/// This method is used to indicate that a SIGINT was received and that
 	/// the tasks are being wound down (early).
 	///
-	/// For the running [`Progless`], all this really means is that the title
-	/// will be changed to "Early shutdown in progress." (This is purely a
-	/// visual thing.)
+	/// For the running [`Progless`], all this really means is that an
+	/// "Early shutdown in progress." gets pushed. (This is purely a visual
+	/// thing.)
 	///
 	/// The caller must still run [`Progless::finish`] to close everything up
 	/// when the early shutdown actually arrives.
@@ -543,8 +549,10 @@ impl ProglessInner {
 	fn sigint(&self) -> bool {
 		let flags = self.flags.load(SeqCst);
 		if TICKING == flags & (SIGINT | TICKING) {
-			mutex!(self.title).replace(Msg::new(MsgKind::Warning, "Early shutdown in progress."));
-			self.flags.fetch_or(SIGINT | TICK_TITLE, SeqCst);
+			PRINTED_SIGINT.call_once(|| {
+				let _res = self.push_msg(Msg::warning("Early shutdown in progress."));
+			});
+			self.flags.fetch_or(SIGINT, SeqCst);
 			true
 		}
 		else { TICKING == flags & TICKING }
