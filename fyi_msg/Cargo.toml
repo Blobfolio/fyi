@@ -49,7 +49,7 @@ optional = true
 
 [dev-dependencies]
 brunch = "0.11.*"
-rayon = "1.11.*"
+rayon = "1.12.*"
 
 [[bench]]
 name = "fm_ansi"
