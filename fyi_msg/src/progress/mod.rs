@@ -1267,23 +1267,14 @@ impl Progless {
 	/// ```
 	pub const CURSOR_UNHIDE: &str = "\x1b[?25h";
 
-	#[cfg(target_pointer_width = "16")]
 	/// # Max Total.
 	///
-	/// A [`Progless`] instance cannot have a total higher than this value.
-	/// This is technically `u32::MAX`, but in practice `usize` is used more
-	/// often, so this value reflects whichever of the two is smaller.
-	/// Regardless, it's an awful lot of tasks to try to visualize. Haha.
-	pub const MAX_TOTAL: usize = 65_535;
-
-	#[cfg(not(target_pointer_width = "16"))]
-	/// # Max Total.
-	///
-	/// A [`Progless`] instance cannot have a total higher than this value.
-	/// This is technically `u32::MAX`, but in practice `usize` is used more
-	/// often, so this value reflects whichever of the two is smaller.
-	/// Regardless, it's an awful lot of tasks to try to visualize. Haha.
-	pub const MAX_TOTAL: usize = 4_294_967_295;
+	/// A [`Progless`] instance cannot have a total higher than this value,
+	/// i.e. the smaller of `u32::MAX` and `usize::MAX`.
+	pub const MAX_TOTAL: usize = cfg_select! {
+		target_pointer_width = "16" => 65_535,
+		_ => 4_294_967_295,
+	};
 
 	/// # Total Error.
 	///

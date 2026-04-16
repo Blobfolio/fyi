@@ -1,9 +1,9 @@
 [package]
 name = "fyi_msg"
-version = "2.5.0"
+version = "2.6.0"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
-rust-version = "1.94"
+rust-version = "1.95"
 description = "Simple ANSI-formatted, prefixed messages for console printing."
 license = "WTFPL"
 repository = "https://github.com/Blobfolio/fyi"
@@ -26,7 +26,7 @@ version = "0.13.*"
 optional = true
 
 [dependencies.fyi_ansi]
-version = "2.5.*"
+version = "2.6.*"
 path = "../fyi_ansi"
 
 [dependencies.signal-hook]
@@ -49,7 +49,7 @@ optional = true
 
 [dev-dependencies]
 brunch = "0.11.*"
-rayon = "1.11.*"
+rayon = "1.12.*"
 
 [[bench]]
 name = "fm_ansi"

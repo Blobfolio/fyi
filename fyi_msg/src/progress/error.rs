@@ -42,11 +42,14 @@ impl ProglessError {
 		match self {
 			Self::EmptyTotal => "At least one task is required.",
 
-			#[cfg(target_pointer_width = "16")]
-			Self::TotalOverflow => "Progress can only be displayed for up to 65,535 items.",
-
-			#[cfg(not(target_pointer_width = "16"))]
-			Self::TotalOverflow => "Progress can only be displayed for up to 4,294,967,295 items.",
+			Self::TotalOverflow => concat!(
+				"Progress can only be displayed for up to ",
+				cfg_select! {
+					target_pointer_width = "16" => "65,535",
+					_ => "4,294,967,295",
+				},
+				" items.",
+			),
 		}
 	}
 }
