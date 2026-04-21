@@ -29,55 +29,49 @@ use std::{
 
 
 
-#[cfg(feature = "timestamps")]
 /// # Helper: `Toc` Setup.
 macro_rules! toc {
 	($p_end:expr, $m_end:expr) => (
-		$crate::msg::Toc([
-			0,      // Indentation.
-			0,      // Timestamp.
-			0,      // Prefix.
-			$p_end, // Message.
-			$m_end, // Suffix.
-			$m_end, // Newline.
-			$m_end, // Total Length.
-		])
+		cfg_select! {
+			feature = "timestamps" => $crate::msg::Toc([
+				0,      // Indentation.
+				0,      // Timestamp.
+				0,      // Prefix.
+				$p_end, // Message.
+				$m_end, // Suffix.
+				$m_end, // Newline.
+				$m_end, // Total Length.
+			]),
+			_ => $crate::msg::Toc([
+				0,      // Indentation.
+				0,      // Prefix.
+				$p_end, // Message.
+				$m_end, // Suffix.
+				$m_end, // Newline.
+				$m_end, // Total Length.
+			]),
+		}
 	);
 	($p_end:expr, $m_end:expr, true) => (
-		$crate::msg::Toc([
-			0,          // Indentation.
-			0,          // Timestamp.
-			0,          // Prefix.
-			$p_end,     // Message.
-			$m_end,     // Suffix.
-			$m_end,     // Newline.
-			$m_end + 1, // Total Length.
-		])
-	);
-}
-
-#[cfg(not(feature = "timestamps"))]
-/// # Helper: `Toc` Setup.
-macro_rules! toc {
-	($p_end:expr, $m_end:expr) => (
-		$crate::msg::Toc([
-			0,      // Indentation.
-			0,      // Prefix.
-			$p_end, // Message.
-			$m_end, // Suffix.
-			$m_end, // Newline.
-			$m_end, // Total Length.
-		])
-	);
-	($p_end:expr, $m_end:expr, true) => (
-		$crate::msg::Toc([
-			0,          // Indentation.
-			0,          // Prefix.
-			$p_end,     // Message.
-			$m_end,     // Suffix.
-			$m_end,     // Newline.
-			$m_end + 1, // Total Length.
-		])
+		cfg_select! {
+			feature = "timestamps" => $crate::msg::Toc([
+				0,          // Indentation.
+				0,          // Timestamp.
+				0,          // Prefix.
+				$p_end,     // Message.
+				$m_end,     // Suffix.
+				$m_end,     // Newline.
+				$m_end + 1, // Total Length.
+			]),
+			_ => $crate::msg::Toc([
+				0,          // Indentation.
+				0,          // Prefix.
+				$p_end,     // Message.
+				$m_end,     // Suffix.
+				$m_end,     // Newline.
+				$m_end + 1, // Total Length.
+			]),
+		}
 	);
 }
 use toc; // kind.rs needs this.
@@ -1328,19 +1322,22 @@ enum TocId {
 }
 
 impl TocId {
-	#[cfg(feature = "timestamps")]
-	/// # Parts w/ ANSI.
-	///
-	/// These parts _might_ have formatting.
-	const ANSI_PARTS: [Self; 4] = [
-		Self::Timestamp, Self::Prefix, Self::Message, Self::Suffix,
-	];
-
-	#[cfg(not(feature = "timestamps"))]
-	/// # Parts w/ ANSI.
-	///
-	/// These parts _might_ have formatting.
-	const ANSI_PARTS: [Self; 3] = [Self::Prefix, Self::Message, Self::Suffix];
+	cfg_select! {
+		feature = "timestamps" => {
+			/// # Parts w/ ANSI.
+			///
+			/// These parts _might_ have formatting.
+			const ANSI_PARTS: [Self; 4] = [
+				Self::Timestamp, Self::Prefix, Self::Message, Self::Suffix,
+			];
+		},
+		_ => {
+			/// # Parts w/ ANSI.
+			///
+			/// These parts _might_ have formatting.
+			const ANSI_PARTS: [Self; 3] = [Self::Prefix, Self::Message, Self::Suffix];
+		},
+	}
 }
 
 

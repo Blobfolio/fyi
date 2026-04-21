@@ -131,21 +131,20 @@ fn spawn_ticker(t_state: Arc<(Mutex<bool>, Condvar)>, t_inner: Arc<ProglessInner
 			state = res.0;
 			if *state { return; } // Dead!
 
-			#[cfg(any(feature = "signals_sigint", feature = "signals_sigwinch"))]
-			// Dead, but from the other end.
-			if ! signals.pretick(&t_inner) || ! t_inner.tick(false) {
-				*state = true; // Update the state to match.
-				drop(state);
-				drop(signals);
-				return;
-			}
-
-			#[cfg(not(any(feature = "signals_sigint", feature = "signals_sigwinch")))]
-			// Dead, but from the other end.
-			if ! t_inner.tick(false) {
-				*state = true; // Update the state to match.
-				drop(state);
-				return;
+			// Dead, but from the other end?
+			cfg_select! {
+				any(feature = "signals_sigint", feature = "signals_sigwinch") =>
+					if ! signals.pretick(&t_inner) || ! t_inner.tick(false) {
+						*state = true; // Update the state to match.
+						drop(state);
+						drop(signals);
+						return;
+					},
+				_ => if ! t_inner.tick(false) {
+					*state = true; // Update the state to match.
+					drop(state);
+					return;
+				},
 			}
 		}
 	})
