@@ -127,22 +127,21 @@ macro_rules! msg_kind {
 
 	// Entry point!
 	($( $kind:ident $fn:ident $str:literal $color:tt $color_ident:ident, )+) => (
-		#[cfg(feature = "bin_kinds")]
-		msg_kind!{
-			@build
-			None "",
-			Confirm msg_kind!(@prefix Confirm dark_orange),
-			$( $kind msg_kind!(@prefix $kind $color), )+
-			Blank "",
-			Custom "",
-		}
-
-		#[cfg(not(feature = "bin_kinds"))]
-		msg_kind!{
-			@build
-			None "",
-			Confirm msg_kind!(@prefix Confirm dark_orange),
-			$( $kind msg_kind!(@prefix $kind $color), )+
+		cfg_select! {
+			feature = "bin_kinds" => msg_kind!{
+				@build
+				None "",
+				Confirm msg_kind!(@prefix Confirm dark_orange),
+				$( $kind msg_kind!(@prefix $kind $color), )+
+				Blank "",
+				Custom "",
+			},
+			_ => msg_kind!{
+				@build
+				None "",
+				Confirm msg_kind!(@prefix Confirm dark_orange),
+				$( $kind msg_kind!(@prefix $kind $color), )+
+			},
 		}
 
 		msg_kind!{
@@ -294,22 +293,20 @@ impl fmt::Display for MsgKind {
 
 /// ## Details.
 impl MsgKind {
-	#[cfg(feature = "bin_kinds")]
 	#[must_use]
 	/// # Is Empty.
 	///
 	/// This returns `true` for [`MsgKind::None`], [`MsgKind::Blank`], and
 	/// [`MsgKind::Custom`], `false` for everything else.
 	pub const fn is_empty(self) -> bool {
-		matches!(self, Self::None | Self::Blank | Self::Custom)
+		matches!(
+			self,
+			cfg_select! {
+				feature = "bin_kinds" => Self::None | Self::Blank | Self::Custom,
+				_ => Self::None,
+			}
+		)
 	}
-
-	#[cfg(not(feature = "bin_kinds"))]
-	#[must_use]
-	/// # Is Empty.
-	///
-	/// This returns `true` for [`MsgKind::None`], `false` for everything else.
-	pub const fn is_empty(self) -> bool { matches!(self, Self::None) }
 
 	#[inline]
 	#[must_use]

@@ -1630,7 +1630,6 @@ fn progless_task(src: &str) -> Option<String> {
 	else { Some(out) }
 }
 
-#[cfg(unix)]
 #[must_use]
 #[inline]
 /// # Term Width and Height.
@@ -1639,24 +1638,11 @@ fn progless_task(src: &str) -> Option<String> {
 /// less one to help smooth scroll weirdness.
 fn term_size() -> Option<(NonZeroU8, NonZeroU8)> {
 	use terminal_size::{Height, Width};
-	let (Width(w), Height(h)) = terminal_size::terminal_size_of(std::io::stderr())?;
+	let (Width(w), Height(h)) = cfg_select! {
+		unix => terminal_size::terminal_size_of(std::io::stderr())?,
+		_ => terminal_size::terminal_size()?,
+	};
 	let w = NonZeroU8::new(u8::saturating_from(w.saturating_sub(1)))?;
 	let h = NonZeroU8::new(u8::saturating_from(h).saturating_sub(1))?;
 	Some((w, h))
 }
-
-#[cfg(not(unix))]
-#[must_use]
-#[inline]
-/// # Term Width and Height.
-///
-/// Return the width and height of the terminal attached to STDERR, if any,
-/// less one to help smooth scroll weirdness.
-fn term_size() -> Option<(NonZeroU8, NonZeroU8)> {
-	use terminal_size::{Height, Width};
-	let (Width(w), Height(h)) = terminal_size::terminal_size()?;
-	let w = NonZeroU8::new(u8::saturating_from(w.saturating_sub(1)))?;
-	let h = NonZeroU8::new(u8::saturating_from(h).saturating_sub(1))?;
-	Some((w, h))
-}
-

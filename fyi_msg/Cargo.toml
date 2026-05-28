@@ -1,6 +1,6 @@
 [package]
 name = "fyi_msg"
-version = "2.6.0"
+version = "2.6.1"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
 rust-version = "1.95"
@@ -43,7 +43,7 @@ version = "0.2.*"
 optional = true
 
 [dependencies.utc2k]
-version = "0.19.*"
+version = "0.20.*"
 features = [ "local" ]
 optional = true
 
