@@ -103,7 +103,7 @@ bench BENCH="":
 # Build Release!
 @build:
 	# First let's build the Rust bit.
-	cargo build \
+	cargo auditable build \
 		--bin "{{ pkg_id }}" \
 		--release \
 		--target-dir "{{ cargo_dir }}"
