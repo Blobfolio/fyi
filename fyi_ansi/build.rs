@@ -138,7 +138,7 @@ impl fmt::Display for AnsiTable {
 
 		let mut buf = String::new();
 		for (k, (name, hex)) in COLORS.iter().enumerate() {
-			buf.truncate(0);
+			buf.clear();
 			if name.starts_with("Misc") {
 				write!(&mut buf, "{k}").unwrap();
 			}
