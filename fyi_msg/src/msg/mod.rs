@@ -1139,7 +1139,7 @@ impl Msg {
 			}
 
 			// Print an error and do it all over again.
-			result.truncate(0);
+			result.clear();
 			let err = Self::error(concat!(
 				"Invalid input; enter ",
 				ansi!((light_red) "N"),

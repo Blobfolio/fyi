@@ -1055,7 +1055,7 @@ impl ProglessBuffer {
 		const PREFIX: &[u8; 9] = &[b'\n', 32, 32, 32, 32, 226, 134, 179, 32];
 
 		// Reset.
-		self.doing.truncate(0);
+		self.doing.clear();
 		self.lines_doing = 0;
 
 		// The actual width we can work with is minus six for padding, six for
@@ -1081,7 +1081,7 @@ impl ProglessBuffer {
 	/// # Update Title.
 	fn set_title(&mut self, title: Option<&Msg>, width: NonZeroU8, height: NonZeroU8) {
 		// Reset the title.
-		self.title.truncate(0);
+		self.title.clear();
 
 		// We need at least two lines of screen space to fit a title.
 		if 2 <= height.get() && let Some(title) = title {
