@@ -24,7 +24,7 @@ use std::{
 	hash,
 	io,
 	num::NonZeroUsize,
-	ops::Range,
+	range::legacy::Range,
 };
 
 
