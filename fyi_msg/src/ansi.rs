@@ -6,7 +6,7 @@ use fyi_ansi::csi;
 use std::{
 	fmt,
 	hash,
-	ops::Range,
+	range::legacy::Range,
 };
 
 #[cfg(any(feature = "fitted", feature = "progress"))]
