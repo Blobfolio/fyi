@@ -1,6 +1,6 @@
 [package]
 name = "fyi_msg"
-version = "2.7.0"
+version = "2.7.1"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
 rust-version = "1.98"
@@ -18,11 +18,11 @@ default-target = "x86_64-unknown-linux-gnu"
 targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
 [dependencies.argyle]
-version = "0.15.*"
+version = "0.16.*"
 optional = true
 
 [dependencies.dactyl]
-version = "0.13.*"
+version = "0.14.*"
 optional = true
 
 [dependencies.fyi_ansi]
@@ -43,12 +43,12 @@ version = "0.2.*"
 optional = true
 
 [dependencies.utc2k]
-version = "0.20.*"
+version = "0.21.*"
 features = [ "local" ]
 optional = true
 
 [dev-dependencies]
-brunch = "0.11.*"
+brunch = "0.12.*"
 rayon = "1.12.*"
 
 [[bench]]
