@@ -6,6 +6,27 @@ members = [
     "fyi_msg",
 ]
 
+[workspace.dependencies]
+argyle = "0.16.*"
+brunch = "0.12.*"
+dactyl = "0.14.*"
+rayon = "1.12.*"
+terminal_size = "0.4.*"
+unicode-width = "0.2.*"
+utc2k = "0.21.*"
+
+[workspace.dependencies.fyi_ansi]
+version = "2.7.*"
+path = "fyi_ansi"
+
+[workspace.dependencies.fyi_msg]
+path = "fyi_msg"
+features = ["bin_kinds", "timestamps"]
+
+[workspace.dependencies.signal-hook]
+version = "0.4.*"
+default-features = false
+
 [profile.bench]
 lto = true
 codegen-units = 1

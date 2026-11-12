@@ -1,6 +1,6 @@
 [package]
 name = "fyi"
-version = "2.7.1"
+version = "2.7.2"
 license = "WTFPL"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
@@ -180,22 +180,12 @@ description = "The message!"
 subcommands = [ "confirm", "print", "aborted", "crunched", "debug", "done", "error", "found", "info", "notice", "review", "skipped", "success", "task", "warning" ]
 
 [build-dependencies]
-argyle = "0.16.*"
-
-[build-dependencies.fyi_ansi]
-path = "../fyi_ansi"
-
-[build-dependencies.fyi_msg]
-features = [ "bin_kinds", "timestamps" ]
-path = "../fyi_msg"
+argyle =   { workspace = true }
+fyi_ansi = { workspace = true }
+fyi_msg =  { workspace = true }
 
 [dependencies]
-argyle = "0.16.*"
-dactyl = "0.14.*"
-
-[dependencies.fyi_ansi]
-path = "../fyi_ansi"
-
-[dependencies.fyi_msg]
-path = "../fyi_msg"
-features = [ "bin_kinds", "timestamps" ]
+argyle =   { workspace = true }
+dactyl =   { workspace = true }
+fyi_ansi = { workspace = true }
+fyi_msg =  { workspace = true }

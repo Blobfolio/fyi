@@ -1,6 +1,6 @@
 [package]
 name = "fyi_msg"
-version = "2.7.1"
+version = "2.7.2"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
 rust-version = "1.98"
@@ -17,39 +17,18 @@ features = [ "fitted", "progress", "signals", "timestamps" ]
 default-target = "x86_64-unknown-linux-gnu"
 targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
-[dependencies.argyle]
-version = "0.16.*"
-optional = true
-
-[dependencies.dactyl]
-version = "0.14.*"
-optional = true
-
-[dependencies.fyi_ansi]
-version = "2.7.*"
-path = "../fyi_ansi"
-
-[dependencies.signal-hook]
-version = "0.4.*"
-default-features = false
-optional = true
-
-[dependencies.terminal_size]
-version = "0.4.*"
-optional = true
-
-[dependencies.unicode-width]
-version = "0.2.*"
-optional = true
-
-[dependencies.utc2k]
-version = "0.21.*"
-features = [ "local" ]
-optional = true
+[dependencies]
+argyle =        { workspace = true, optional = true }
+dactyl =        { workspace = true, optional = true }
+fyi_ansi =      { workspace = true }
+signal-hook =   { workspace = true, optional = true }
+terminal_size = { workspace = true, optional = true }
+unicode-width = { workspace = true, optional = true }
+utc2k =         { workspace = true, features = ["local"], optional = true }
 
 [dev-dependencies]
-brunch = "0.12.*"
-rayon = "1.12.*"
+brunch = { workspace = true }
+rayon =  { workspace = true }
 
 [[bench]]
 name = "fm_ansi"
