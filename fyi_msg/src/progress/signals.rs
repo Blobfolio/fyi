@@ -190,6 +190,10 @@ impl Drop for ProglessSignals {
 }
 
 impl ProglessSignals {
+	#[cfg_attr(
+		all(feature = "signals_sigint", not(feature = "signals_sigwinch")),
+		expect(clippy::needless_bool, reason = "False positive."),
+	)]
 	/// # Pre-Tick Actions.
 	///
 	/// Perform some signal-specific touch-ups, if any, before ticking for
