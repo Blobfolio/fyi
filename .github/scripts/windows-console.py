@@ -4,6 +4,7 @@ import argparse
 import ctypes
 from ctypes import wintypes
 import json
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -32,6 +33,8 @@ def main():
     require(sys.platform == "win32", "This test requires Windows")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target")
+    parser.add_argument("--isolate-artifacts", action="store_true",
+                        help="Exercise Cargo layouts with one library directory per artifact")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
     command = ["cargo", "build", "-p", "fyi_msg", "--examples", "--all-features",
@@ -48,9 +51,21 @@ def main():
                 if "example" in a["target"]["kind"]}
     libraries = {a["target"]["name"]: f for a in artifacts for f in a["filenames"]
                  if f.endswith(".rlib")}
-    deps = Path(libraries["fyi_msg"]).parent
     output = root / "target/windows-console-tests"
     output.mkdir(parents=True, exist_ok=True)
+    library_paths = {f for a in artifacts for f in a["filenames"] if f.endswith(".rlib")}
+    if args.isolate_artifacts:
+        # Reproduce Cargo versions that place libraries in separate output
+        # directories instead of a shared debug/deps directory.
+        relocated = {}
+        for index, filename in enumerate(sorted(library_paths)):
+            destination = output / "artifacts" / str(index) / Path(filename).name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(filename, destination)
+            relocated[filename] = str(destination)
+        library_paths = set(relocated.values())
+        libraries = {name: relocated[filename] for name, filename in libraries.items()}
+    dependency_dirs = sorted({str(Path(filename).parent) for filename in library_paths})
 
     # Build a small consumer to check native console flags and policy selection.
     # Each policy runs in its own process because registration is process-wide.
@@ -124,9 +139,13 @@ fn main() {
 ''', encoding="utf-8")
     consumer = output / "consumer.exe"
     compile_command = ["rustc", "--edition=2024", str(source), "-o", str(consumer),
-                       "-L", "dependency=" + str(deps),
                        "--extern", "fyi_msg=" + libraries["fyi_msg"],
                        "--extern", "windows_sys=" + libraries["windows_sys"]]
+    # Direct --extern paths do not tell rustc where to find the libraries'
+    # transitive dependencies. Use all paths reported by Cargo, not just the
+    # directory containing fyi_msg.
+    for directory in dependency_dirs:
+        compile_command += ["-L", "dependency=" + directory]
     if args.target:
         compile_command += ["--target", args.target]
     subprocess.run(compile_command, cwd=root, check=True)

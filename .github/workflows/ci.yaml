@@ -20,6 +20,7 @@ jobs:
     name: All
 
     strategy:
+      fail-fast: false
       matrix:
         target:
         - x86_64-unknown-linux-gnu
@@ -109,7 +110,7 @@ jobs:
     - name: Test Windows Console Events
       if: runner.os == 'Windows'
       run: |
-        python .github/scripts/windows-console.py --target ${{ matrix.target }}
+        python .github/scripts/windows-console.py --target ${{ matrix.target }} --isolate-artifacts
 
     - name: Tests (fyi_msg/Release)
       run: |
