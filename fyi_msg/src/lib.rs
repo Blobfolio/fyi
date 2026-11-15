@@ -44,7 +44,28 @@ For more usage examples, check out the `examples/msg` demo, which covers just ab
 | ------- | ----------- |
 | `fitted` | Enables [`Msg::fitted`] for obtaining a slice trimmed to a specific display width. |
 | `progress` | Enables [`Progless`], a thread-safe CLI progress bar displayer.
+| `signals_sigint` | Adds default, two-strike, or keepalive interrupt handling (`SIGINT` on Unix; Ctrl+C/Ctrl+Break on Windows). |
+| `signals_sigwinch` | Uses Unix resize signals; Windows continues polling terminal dimensions. |
+| `signals` | Enables both signal features. |
 | `timestamps` | Enables timestamp-related methods and flags like [`Msg::with_timestamp`]. |
+
+On Windows, call `fyi_msg::enable_console_ansi()` before printing ANSI-formatted
+output or creating a progress bar. It enables ANSI processing for console stdout
+and stderr while preserving other mode flags, and leaves redirected streams
+alone. This function does not install signal handlers.
+
+The `signals_sigint` policies must be selected before creating the first progress
+bar; the first policy registered wins. Windows console-close, sign-out, and
+shutdown events retain their system defaults. The `signal_hook` re-export is
+available only on Unix.
+
+To try the interrupt policies:
+
+```sh
+cargo run -p fyi_msg --example progless-sigint --features signals
+cargo run -p fyi_msg --example progless-sigint --features signals -- --keepalive
+```
+
 */
 
 #![deny(unsafe_code)]
@@ -104,6 +125,7 @@ For more usage examples, check out the `examples/msg` demo, which covers just ab
 
 mod ansi;
 mod msg;
+#[cfg(windows)] mod windows;
 #[cfg(feature = "fitted")]   mod fitted;
 #[cfg(feature = "progress")] mod progress;
 
@@ -134,8 +156,9 @@ pub use progress::{
 
 // Re-export.
 pub use fyi_ansi;
+#[cfg(windows)] pub use windows::enable_console_ansi;
 #[cfg_attr(docsrs, doc(cfg(feature = "signal-hook")))]
-#[cfg(feature = "signal-hook")] pub use signal_hook;
+#[cfg(all(unix, feature = "signal-hook"))] pub use signal_hook;
 
 #[cfg(test)] use brunch as _;
 #[cfg(test)] use rayon as _;

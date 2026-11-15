@@ -24,11 +24,14 @@ jobs:
         target:
         - x86_64-unknown-linux-gnu
         - aarch64-apple-darwin
+        - x86_64-pc-windows-msvc
         include:
         - target: x86_64-unknown-linux-gnu
           os:     ubuntu-latest
         - target: aarch64-apple-darwin
           os:     macos-latest
+        - target: x86_64-pc-windows-msvc
+          os:     windows-latest
 
     runs-on: ${{matrix.os}}
 
@@ -41,6 +44,16 @@ jobs:
       with:
         targets: ${{ matrix.target }}
         components: clippy
+
+    - name: Prepare Windows Source Links
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        foreach ($path in 'fyi_ansi/skel/ansi256.rs', 'fyi_msg/skel/ansi256.rs') {
+          if ((Get-Item -LiteralPath $path).LinkType -ne 'SymbolicLink') {
+            Copy-Item -LiteralPath skel/ansi256.rs -Destination $path -Force
+          }
+        }
 
     - name: Info
       run: |
@@ -88,6 +101,15 @@ jobs:
         cargo test --manifest-path fyi_msg/Cargo.toml --features=signals_sigwinch --target ${{ matrix.target }}
         cargo test --manifest-path fyi_msg/Cargo.toml --features=signals_sigint --target ${{ matrix.target }}
         cargo test --manifest-path fyi_msg/Cargo.toml --all-features --target ${{ matrix.target }}
+
+    - name: Build Progress Examples
+      run: |
+        cargo build -p fyi_msg --examples --all-features --target ${{ matrix.target }}
+
+    - name: Test Windows Console Events
+      if: runner.os == 'Windows'
+      run: |
+        python .github/scripts/windows-console.py --target ${{ matrix.target }}
 
     - name: Tests (fyi_msg/Release)
       run: |

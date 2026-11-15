@@ -13,6 +13,9 @@ include!("_progless-data.txt");
 
 #[cfg(not(feature = "progress"))]
 fn main() -> std::process::ExitCode {
+	#[cfg(windows)]
+	fyi_msg::enable_console_ansi();
+
 	Msg::error("This example requires the 'progress' feature.").eprint();
 	std::process::ExitCode::FAILURE
 }
@@ -20,6 +23,9 @@ fn main() -> std::process::ExitCode {
 #[cfg(feature = "progress")]
 /// # Do it.
 fn main() {
+	#[cfg(windows)]
+	fyi_msg::enable_console_ansi();
+
 	use fyi_msg::{
 		AnsiColor,
 		MsgKind,

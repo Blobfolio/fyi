@@ -7,7 +7,7 @@ pub(super) mod error;
 mod steady;
 pub(super) mod guard;
 
-#[cfg(any(feature = "signals_sigint", feature = "signals_sigwinch"))]
+#[cfg(any(feature = "signals_sigint", all(unix, feature = "signals_sigwinch")))]
 pub(super) mod signals;
 
 
@@ -703,7 +703,7 @@ impl ProglessInner {
 		}
 	}
 
-	#[cfg(feature = "signals_sigwinch")]
+	#[cfg(all(unix, feature = "signals_sigwinch"))]
 	/// # Set Tick Width/Height.
 	///
 	/// When signal support is enabled, this method is used to query and set
@@ -723,7 +723,7 @@ impl ProglessInner {
 		else { false }
 	}
 
-	#[cfg(feature = "signals_sigwinch")]
+	#[cfg(all(unix, feature = "signals_sigwinch"))]
 	/// # Tick Width/Height.
 	///
 	/// When signal support is enabled, this doesn't need to set anything; it
@@ -735,7 +735,7 @@ impl ProglessInner {
 		Some((width, height))
 	}
 
-	#[cfg(not(feature = "signals_sigwinch"))]
+	#[cfg(not(all(unix, feature = "signals_sigwinch")))]
 	/// # Tick Width/Height.
 	///
 	/// Without signal support, we need to query the terminal dimensions with

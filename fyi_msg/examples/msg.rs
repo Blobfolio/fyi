@@ -4,6 +4,9 @@
 
 /// Do it.
 fn main() {
+	#[cfg(windows)]
+	fyi_msg::enable_console_ansi();
+
 	use fyi_msg::{
 		AnsiColor,
 		confirm,

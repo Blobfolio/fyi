@@ -3,9 +3,11 @@
 */
 
 #[cfg(feature = "signals_sigint")]   use crate::Msg;
-#[cfg(feature = "signals_sigint")]   use signal_hook::consts::SIGINT;
-#[cfg(feature = "signals_sigwinch")] use signal_hook::consts::SIGWINCH;
-#[cfg(feature = "signals_sigwinch")] use signal_hook::SigId;
+#[cfg(all(unix, feature = "signals_sigint"))] use signal_hook::consts::SIGINT;
+#[cfg(all(windows, feature = "signals_sigint"))]
+use crate::windows::{sigint_default, sigint_keepalive, sigint_two_strike};
+#[cfg(all(unix, feature = "signals_sigwinch"))] use signal_hook::consts::SIGWINCH;
+#[cfg(all(unix, feature = "signals_sigwinch"))] use signal_hook::SigId;
 use std::sync::{
 	Arc,
 	atomic::{
@@ -39,6 +41,9 @@ impl Progless {
 	///
 	/// The returned state variable can be used to check whether or not a
 	/// `SIGINT` has come in, and change course accordingly.
+	///
+	/// On Windows, Ctrl+C and Ctrl+Break are handled as console events.
+	/// Closing the console, signing out, and shutdown keep their system defaults.
 	///
 	/// ## Warnings
 	///
@@ -90,6 +95,9 @@ impl Progless {
 	///
 	/// The returned state variable can be used to check whether or not a
 	/// `SIGINT` has come in, and change course accordingly.
+	///
+	/// On Windows, Ctrl+C and Ctrl+Break are handled as console events.
+	/// Closing the console, signing out, and shutdown keep their system defaults.
 	///
 	/// ## Warnings
 	///
@@ -152,7 +160,7 @@ pub(super) struct ProglessSignals {
 	/// at runtime, like hiding the cursor during progress render.
 	sigint: &'static Arc<AtomicBool>,
 
-	#[cfg(feature = "signals_sigwinch")]
+	#[cfg(all(unix, feature = "signals_sigwinch"))]
 	/// # `SIGWINCH` Handler.
 	///
 	/// This is used to reduce resize-related tick latency. Without it, the
@@ -173,7 +181,7 @@ impl Default for ProglessSignals {
 			#[cfg(feature = "signals_sigint")]
 			sigint,
 
-			#[cfg(feature = "signals_sigwinch")]
+			#[cfg(all(unix, feature = "signals_sigwinch"))]
 			sigwinch: ResizeHandler::new(),
 		}
 	}
@@ -190,10 +198,6 @@ impl Drop for ProglessSignals {
 }
 
 impl ProglessSignals {
-	#[cfg_attr(
-		all(feature = "signals_sigint", not(feature = "signals_sigwinch")),
-		expect(clippy::needless_bool, reason = "False positive."),
-	)]
 	/// # Pre-Tick Actions.
 	///
 	/// Perform some signal-specific touch-ups, if any, before ticking for
@@ -201,7 +205,7 @@ impl ProglessSignals {
 	///
 	/// This will return `false` if ticking has stopped.
 	pub(super) fn pretick(&self, inner: &Arc<ProglessInner>) -> bool {
-		#[cfg(feature = "signals_sigwinch")]
+		#[cfg(all(unix, feature = "signals_sigwinch"))]
 		// Did we resize?
 		if
 			self.sigwinch.as_ref().is_none_or(|e| e.switch.swap(false, SeqCst)) &&
@@ -210,19 +214,17 @@ impl ProglessSignals {
 			return false;
 		}
 
-		#[cfg(feature = "signals_sigint")]
 		// Is imminent death pending?
-		if self.sigint.load(SeqCst) && ! inner.sigint() {
-			return false;
+		cfg_select! {
+			feature = "signals_sigint" => ! self.sigint.load(SeqCst) || inner.sigint(),
+			_ => true,
 		}
-
-		true
 	}
 }
 
 
 
-#[cfg(feature = "signals_sigwinch")]
+#[cfg(all(unix, feature = "signals_sigwinch"))]
 /// # Resize Handler.
 ///
 /// This struct holds the information for a custom `SIGWINCH` signal listener
@@ -235,14 +237,14 @@ struct ResizeHandler {
 	id: SigId,
 }
 
-#[cfg(feature = "signals_sigwinch")]
+#[cfg(all(unix, feature = "signals_sigwinch"))]
 impl Drop for ResizeHandler {
 	#[inline]
 	/// # Unbind Handler.
 	fn drop(&mut self) { signal_hook::low_level::unregister(self.id); }
 }
 
-#[cfg(feature = "signals_sigwinch")]
+#[cfg(all(unix, feature = "signals_sigwinch"))]
 impl ResizeHandler {
 	/// # New `SIGWINCH` handler.
 	///
@@ -260,7 +262,7 @@ impl ResizeHandler {
 
 
 
-#[cfg(feature = "signals_sigint")]
+#[cfg(all(unix, feature = "signals_sigint"))]
 #[expect(unsafe_code, reason = "For signal listener.")]
 /// # "Default" `SIGINT` Handler.
 ///
@@ -291,7 +293,7 @@ fn sigint_default() -> Arc<AtomicBool> {
 	switch
 }
 
-#[cfg(feature = "signals_sigint")]
+#[cfg(all(unix, feature = "signals_sigint"))]
 #[expect(unsafe_code, reason = "For signal listener.")]
 /// # Two-Strike `SIGINT` Handler.
 ///
@@ -319,7 +321,7 @@ fn sigint_two_strike() -> Arc<AtomicBool> {
 	switch
 }
 
-#[cfg(feature = "signals_sigint")]
+#[cfg(all(unix, feature = "signals_sigint"))]
 #[expect(unsafe_code, reason = "For signal listener.")]
 /// # Keepalive `SIGINT` Handler.
 ///
@@ -352,7 +354,7 @@ fn sigint_keepalive() -> Arc<AtomicBool> {
 /// # `SIGINT` Handler Registration Error.
 ///
 /// Print an error and die.
-fn sigint_error() -> ! {
+pub(crate) fn sigint_error() -> ! {
 	Msg::error("Unable to register a SIGINT handler!").eprint();
 	std::process::exit(1);
 }
