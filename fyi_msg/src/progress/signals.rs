@@ -43,6 +43,7 @@ impl Progless {
 	/// `SIGINT` has come in, and change course accordingly.
 	///
 	/// On Windows, Ctrl+C and Ctrl+Break are handled as console events.
+	/// Registering a policy re-enables Ctrl+C if the parent process ignored it.
 	/// Closing the console, signing out, and shutdown keep their system defaults.
 	///
 	/// ## Warnings
@@ -97,6 +98,7 @@ impl Progless {
 	/// `SIGINT` has come in, and change course accordingly.
 	///
 	/// On Windows, Ctrl+C and Ctrl+Break are handled as console events.
+	/// Registering a policy re-enables Ctrl+C if the parent process ignored it.
 	/// Closing the console, signing out, and shutdown keep their system defaults.
 	///
 	/// ## Warnings

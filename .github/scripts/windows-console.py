@@ -81,6 +81,19 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let mode = &args[1];
     let ready = PathBuf::from(&args[2]);
+    if mode == "ignored-parent" {
+        use windows_sys::Win32::System::Console::SetConsoleCtrlHandler;
+        unsafe extern "system" fn ignore_events(_: u32) -> i32 { 1 }
+        // A parent can ignore Ctrl+C even though its child explicitly opts
+        // into fyi_msg's signal handling. Keep the parent alive for Ctrl+Break.
+        unsafe {
+            assert_ne!(SetConsoleCtrlHandler(Some(ignore_events), 1), 0);
+            assert_ne!(SetConsoleCtrlHandler(None, 1), 0);
+        }
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .arg("keepalive-first").arg(&ready).status().unwrap();
+        std::process::exit(status.code().unwrap_or(1));
+    }
     let panic_log = ready.with_extension("panic");
     std::panic::set_hook(Box::new(move |info| { let _ = std::fs::write(&panic_log, info.to_string()); }));
     if mode == "ansi" {
@@ -217,21 +230,21 @@ fn main() {
         finally:
             cleanup(process, stdout, stderr)
 
-    for name in ["ansi", "redirected", "keepalive-first", "two-strike-first", "locked-stderr"]:
+    for name in ["ansi", "redirected", "keepalive-first", "two-strike-first", "locked-stderr", "ignored-parent"]:
         marker = output / (name + ".ready")
         process, ready, stdout, stderr = start(name, [str(consumer), name, str(marker)], name == "ansi")
         try:
-            if name.endswith("-first") or name == "locked-stderr":
+            if name.endswith("-first") or name in ("locked-stderr", "ignored-parent"):
                 until(lambda: read(ready) == b"ready", name + " did not initialize")
                 attach(process)
                 signal(0)
                 until(lambda: read(ready) == b"interrupted", name + " did not see Ctrl+C")
                 signal(1)
-                if name == "keepalive-first":
+                if name in ("keepalive-first", "ignored-parent"):
                     time.sleep(0.05)
                     require(process.poll() is None, "Second registration replaced keepalive")
                     ready.with_suffix(".done").write_text("finish", encoding="utf-8")
-                expected = 0 if name == "keepalive-first" else 1
+                expected = 0 if name in ("keepalive-first", "ignored-parent") else 1
             else:
                 expected = 0
             require(process.wait(timeout=10) == expected, name + " failed")

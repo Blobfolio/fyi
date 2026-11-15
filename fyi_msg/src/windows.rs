@@ -91,7 +91,14 @@ mod signals {
 	fn register(policy: Policy) -> Arc<AtomicBool> {
 		let (switch, _) = STATE.get_or_init(|| (Arc::new(AtomicBool::new(false)), policy));
 		// SAFETY: the callback has the required ABI and uses only static state.
-		if unsafe { SetConsoleCtrlHandler(Some(interrupt), 1) } == 0 { sigint_error(); }
+		// Register before enabling Ctrl+C, which a parent such as Git Bash may
+		// have disabled. A custom callback alone does not clear that inherited
+		// setting; opting into our policy must activate interrupt delivery too.
+		let registered = unsafe {
+			SetConsoleCtrlHandler(Some(interrupt), 1) != 0 &&
+			SetConsoleCtrlHandler(None, 0) != 0
+		};
+		if ! registered { sigint_error(); }
 		Arc::clone(switch)
 	}
 
