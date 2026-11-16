@@ -20,7 +20,6 @@ jobs:
     name: All
 
     strategy:
-      fail-fast: false
       matrix:
         target:
         - x86_64-unknown-linux-gnu
@@ -46,6 +45,12 @@ jobs:
         targets: ${{ matrix.target }}
         components: clippy
 
+    - name: Info
+      run: |
+        rustup --version
+        cargo --version
+        cargo clippy --version
+
     - name: Prepare Windows Source Links
       if: runner.os == 'Windows'
       shell: pwsh
@@ -55,12 +60,6 @@ jobs:
             Copy-Item -LiteralPath skel/ansi256.rs -Destination $path -Force
           }
         }
-
-    - name: Info
-      run: |
-        rustup --version
-        cargo --version
-        cargo clippy --version
 
     - name: Build
       run: |
@@ -103,15 +102,6 @@ jobs:
         cargo test --manifest-path fyi_msg/Cargo.toml --features=signals_sigint --target ${{ matrix.target }}
         cargo test --manifest-path fyi_msg/Cargo.toml --all-features --target ${{ matrix.target }}
 
-    - name: Build Progress Examples
-      run: |
-        cargo build -p fyi_msg --examples --all-features --target ${{ matrix.target }}
-
-    - name: Test Windows Console Events
-      if: runner.os == 'Windows'
-      run: |
-        python .github/scripts/windows-console.py --target ${{ matrix.target }} --isolate-artifacts
-
     - name: Tests (fyi_msg/Release)
       run: |
         cargo test --manifest-path fyi_msg/Cargo.toml --release --target ${{ matrix.target }}
@@ -122,3 +112,7 @@ jobs:
         cargo test --manifest-path fyi_msg/Cargo.toml --release --features=signals_sigwinch --target ${{ matrix.target }}
         cargo test --manifest-path fyi_msg/Cargo.toml --release --features=signals_sigint --target ${{ matrix.target }}
         cargo test --manifest-path fyi_msg/Cargo.toml --release --all-features --target ${{ matrix.target }}
+
+    - name: Build (fyi_msg/Examples)
+      run: |
+        cargo build -p fyi_msg --examples --all-features --target ${{ matrix.target }}

@@ -85,13 +85,13 @@ progress = [ "dactyl", "fitted", "terminal_size" ]
 # NOT recommended for general use.
 signals_sigwinch = [ "progress", "signal-hook" ]
 
-# ADVANCED: Add SIGINT (Unix) or Ctrl+C/Ctrl+Break (Windows) support, allowing some
-# quick cleanup/restoration to be sneaked in before premature termination.
+# ADVANCED: Add SIGINT (Unix) or Ctrl+C/Ctrl+Break (Windows) support, allowing
+# some quick cleanup/restoration to be sneaked in before premature termination.
 # (This makes possible subtle UI improvements like hiding the cursor during
 # progress render.)
 #
-# This necessarily replaces the default SIGINT-handling behaviors, so should
-# NOT be used in projects that implement their own handling.
+# This necessarily replaces the default SIGINT-handling behavior for the parent
+# app, so should NOT be used in projects that implement their own handling.
 #
 # NOT recommended for general use.
 signals_sigint = [ "progress", "signal-hook" ]

@@ -4,9 +4,9 @@
 [![deps.rs](https://deps.rs/repo/github/blobfolio/fyi/status.svg?style=flat-square&label=deps.rs)](https://deps.rs/repo/github/blobfolio/fyi)
 [![license](https://img.shields.io/badge/license-wtfpl-ff1493?style=flat-square)](https://en.wikipedia.org/wiki/WTFPL)
 
-FYI is a simple CLI tool for x86-64 Linux machines that prints an arbitrary
-status-style message, optionally indented, timestamped, and/or prefixed.
-You know, stuff like:
+FYI is a simple CLI tool for 64-bit Linux, Mac, and Windows machines that prints
+an arbitrary status-style message, optionally indented, timestamped, and/or
+prefixed. You know, stuff like:
 
 ![Example FYI terminal output.](skel/screenshot.png.webp)
 
@@ -18,7 +18,7 @@ That's it!
 
 The main idea is to make it easier to communicate successes and errors from
 within shell scripts, particularly in regards to color. ANSI formatting isn't
-difficult, but all that extra code is difficult to read.
+difficult, but all that extra code can be difficult to read and write.
 
 Take for example:
 ```bash
@@ -44,6 +44,11 @@ cargo install \
     --bin fyi
 ```
 
+> [!WARNING]
+> 
+> The `cargo install` one-liner will fail on Windows if `git` is configured without symlink support. In such cases, just follow the [offline build instructions](#offlinevendored-builds) instead.
+
+
 ### Offline/Vendored Builds
 
 If your build environment lacks networking support, pre-download the `Source code (tar.gz)` and `vendored-sources.tar.zst` assets attached to the [release](https://github.com/Blobfolio/fyi/releases/latest), then:
@@ -57,6 +62,11 @@ cd fyi-VERSION
 
 # Extract the vendored sources (into the source root).
 tar -xf ../vendored-sources.tar.zst
+
+# Windows users may need to replace the project's two symlinks with normal
+# files before building. That can be done by running:
+# Copy-Item skel/ansi256.rs fyi_ansi/skel/ansi256.rs -Force
+# Copy-Item skel/ansi256.rs fyi_msg/skel/ansi256.rs -Force
 
 # Build! See `cargo build --help` for more options.
 cargo build \
