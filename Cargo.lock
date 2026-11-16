@@ -73,7 +73,7 @@ dependencies = [
 
 [[package]]
 name = "fyi"
-version = "2.7.2"
+version = "2.8.0"
 dependencies = [
  "argyle",
  "dactyl",
@@ -83,11 +83,11 @@ dependencies = [
 
 [[package]]
 name = "fyi_ansi"
-version = "2.7.2"
+version = "2.8.0"
 
 [[package]]
 name = "fyi_msg"
-version = "2.7.2"
+version = "2.8.0"
 dependencies = [
  "argyle",
  "brunch",
