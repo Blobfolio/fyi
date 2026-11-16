@@ -3,27 +3,45 @@
 */
 
 use windows_sys::Win32::System::Console::{
-	ENABLE_VIRTUAL_TERMINAL_PROCESSING, GetConsoleMode, GetStdHandle,
-	STD_ERROR_HANDLE, STD_OUTPUT_HANDLE, SetConsoleMode,
+	ENABLE_VIRTUAL_TERMINAL_PROCESSING,
+	GetConsoleMode,
+	GetStdHandle,
+	SetConsoleMode,
+	STD_ERROR_HANDLE,
+	STD_OUTPUT_HANDLE,
+};
+
+#[cfg(feature = "signals_sigint")]
+pub(crate) use signals::{
+	sigint_default,
+	sigint_keepalive,
+	sigint_two_strike,
 };
 
 
 
 #[expect(unsafe_code, reason = "Windows console mode APIs.")]
+#[cfg_attr(docsrs, doc(cfg(windows)))]
 /// # Enable Windows ANSI Output.
 ///
-/// Enable ANSI processing for console stdout and stderr, preserving other
-/// console mode flags. Redirected streams and unavailable consoles are left
-/// alone. This can be called before printing messages or starting progress.
+/// Enable ANSI processing for console `STDOUT` and `STDERR`, preserving any
+/// other console mode flags that happen to be set.
 ///
-/// Failures are ignored so output can still be redirected or used without a
-/// console. This does not install any interrupt handlers.
+/// When building for Windows targets, this method should be called as early
+/// as possible — before any [`Msg`](crate::Msg) or [`Progless`](crate::Progless)
+/// output — to avoid render issues.
 ///
 /// ## Examples
 ///
 /// ```
-/// #[cfg(windows)]
-/// fyi_msg::enable_console_ansi();
+/// use fyi_msg::Msg;
+///
+/// fn main() {
+///     #[cfg(windows)]
+///     fyi_msg::enable_console_ansi();
+///
+///     Msg::success("This should be pretty now!").eprint();
+/// }
 /// ```
 pub fn enable_console_ansi() {
 	for stream in [STD_OUTPUT_HANDLE, STD_ERROR_HANDLE] {
@@ -42,20 +60,30 @@ pub fn enable_console_ansi() {
 
 
 #[cfg(feature = "signals_sigint")]
-pub(crate) use signals::{sigint_default, sigint_keepalive, sigint_two_strike};
-
-#[cfg(feature = "signals_sigint")]
 /// # Windows Console Interrupt Policies.
 mod signals {
-	use crate::{Progless, progress::signals::sigint_error};
+	use crate::{
+		Progless,
+		progress::signals::sigint_error,
+	};
 	use std::sync::{
-		Arc, OnceLock,
-		atomic::{AtomicBool, Ordering::SeqCst},
+		Arc,
+		OnceLock,
+		atomic::{
+			AtomicBool,
+			Ordering::SeqCst,
+		},
 	};
 	use windows_sys::Win32::{
 		Storage::FileSystem::WriteFile,
 		System::{
-			Console::{CTRL_BREAK_EVENT, CTRL_C_EVENT, GetStdHandle, STD_ERROR_HANDLE, SetConsoleCtrlHandler},
+			Console::{
+				CTRL_BREAK_EVENT,
+				CTRL_C_EVENT,
+				GetStdHandle,
+				STD_ERROR_HANDLE,
+				SetConsoleCtrlHandler,
+			},
 			Threading::ExitProcess,
 		},
 	};
@@ -65,8 +93,10 @@ mod signals {
 	enum Policy {
 		/// # Exit on the First Interrupt.
 		Default,
+
 		/// # Exit on the Second Interrupt.
 		TwoStrike,
+
 		/// # Report Interrupts without Exiting.
 		Keepalive,
 	}
@@ -105,15 +135,24 @@ mod signals {
 	#[expect(unsafe_code, reason = "Windows console callback and immediate process exit.")]
 	/// # Handle Ctrl+C and Ctrl+Break.
 	unsafe extern "system" fn interrupt(event: u32) -> i32 {
+		// Ignore other events.
 		if ! matches!(event, CTRL_C_EVENT | CTRL_BREAK_EVENT) { return 0; }
+
 		let Some((switch, policy)) = STATE.get() else { return 0; };
 		let received = switch.swap(true, SeqCst);
+
+		// Unhide the cursor before doing anything else to give it a chance to
+		// propagate.
 		if ! received { unhide_cursor(); }
+
+		// Closing time?
 		if matches!(policy, Policy::Default) || (received && matches!(policy, Policy::TwoStrike)) {
 			// SAFETY: immediate exit matches the Unix signal handler and avoids
 			// running Rust cleanup while another thread might hold a stdio lock.
 			unsafe { ExitProcess(1); }
 		}
+
+		// We're keeping it between ourselves.
 		1
 	}
 
@@ -125,9 +164,11 @@ mod signals {
 		// write. WriteFile validates the standard handle, including redirection.
 		unsafe {
 			WriteFile(
-				GetStdHandle(STD_ERROR_HANDLE), Progless::CURSOR_UNHIDE.as_ptr(),
+				GetStdHandle(STD_ERROR_HANDLE),
+				Progless::CURSOR_UNHIDE.as_ptr(),
 				u32::try_from(Progless::CURSOR_UNHIDE.len()).unwrap(),
-				&raw mut written, std::ptr::null_mut(),
+				&raw mut written,
+				std::ptr::null_mut(),
 			);
 		}
 	}

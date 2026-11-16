@@ -112,9 +112,9 @@ For more usage examples, check out the `examples/msg` demo, which covers just ab
 
 mod ansi;
 mod msg;
-#[cfg(windows)] mod windows;
 #[cfg(feature = "fitted")]   mod fitted;
 #[cfg(feature = "progress")] mod progress;
+#[cfg(windows)]              mod windows;
 
 pub use ansi::AnsiColor;
 pub use msg::{

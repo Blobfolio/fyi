@@ -2,12 +2,18 @@
 # FYI Msg - Progless Signals.
 */
 
-#[cfg(feature = "signals_sigint")]   use crate::Msg;
-#[cfg(all(unix, feature = "signals_sigint"))] use signal_hook::consts::SIGINT;
+#[cfg(feature = "signals_sigint")]               use crate::Msg;
+#[cfg(all(unix, feature = "signals_sigint"))]    use signal_hook::consts::SIGINT;
+#[cfg(all(unix, feature = "signals_sigwinch"))]  use signal_hook::consts::SIGWINCH;
+#[cfg(all(unix, feature = "signals_sigwinch"))]  use signal_hook::SigId;
+
 #[cfg(all(windows, feature = "signals_sigint"))]
-use crate::windows::{sigint_default, sigint_keepalive, sigint_two_strike};
-#[cfg(all(unix, feature = "signals_sigwinch"))] use signal_hook::consts::SIGWINCH;
-#[cfg(all(unix, feature = "signals_sigwinch"))] use signal_hook::SigId;
+use crate::windows::{
+	sigint_default,
+	sigint_keepalive,
+	sigint_two_strike,
+};
+
 use std::sync::{
 	Arc,
 	atomic::{
@@ -15,8 +21,8 @@ use std::sync::{
 		Ordering::SeqCst,
 	},
 };
-#[cfg(feature = "signals_sigint")] use super::Progless;
 #[cfg(feature = "signals_sigint")] use std::sync::OnceLock;
+#[cfg(feature = "signals_sigint")] use super::Progless;
 use super::ProglessInner;
 
 
@@ -42,9 +48,7 @@ impl Progless {
 	/// The returned state variable can be used to check whether or not a
 	/// `SIGINT` has come in, and change course accordingly.
 	///
-	/// On Windows, Ctrl+C and Ctrl+Break are handled as console events.
-	/// Registering a policy re-enables Ctrl+C if the parent process ignored it.
-	/// Closing the console, signing out, and shutdown keep their system defaults.
+	/// (On Windows, this covers both Ctrl+C and Ctrl+Break events.)
 	///
 	/// ## Warnings
 	///
@@ -97,9 +101,7 @@ impl Progless {
 	/// The returned state variable can be used to check whether or not a
 	/// `SIGINT` has come in, and change course accordingly.
 	///
-	/// On Windows, Ctrl+C and Ctrl+Break are handled as console events.
-	/// Registering a policy re-enables Ctrl+C if the parent process ignored it.
-	/// Closing the console, signing out, and shutdown keep their system defaults.
+	/// (On Windows, this covers both Ctrl+C and Ctrl+Break events.)
 	///
 	/// ## Warnings
 	///
@@ -200,6 +202,10 @@ impl Drop for ProglessSignals {
 }
 
 impl ProglessSignals {
+	#[cfg_attr(
+		all(feature = "signals_sigint", not(all(unix, feature = "signals_sigwinch"))),
+		expect(clippy::needless_bool, reason = "False positive."),
+	)]
 	/// # Pre-Tick Actions.
 	///
 	/// Perform some signal-specific touch-ups, if any, before ticking for
@@ -216,11 +222,13 @@ impl ProglessSignals {
 			return false;
 		}
 
+		#[cfg(feature = "signals_sigint")]
 		// Is imminent death pending?
-		cfg_select! {
-			feature = "signals_sigint" => ! self.sigint.load(SeqCst) || inner.sigint(),
-			_ => true,
+		if self.sigint.load(SeqCst) && ! inner.sigint() {
+			return false;
 		}
+
+		true
 	}
 }
 
