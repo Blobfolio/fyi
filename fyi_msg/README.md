@@ -48,7 +48,4 @@ For more usage examples, check out the `examples/msg` demo, which covers just ab
 | ------- | ----------- |
 | `fitted` | Enables `Msg::fitted` for obtaining a slice trimmed to a specific display width. |
 | `progress` | Enables `Progless`, a thread-safe CLI progress bar displayer.
-| `signals_sigint` | Adds default, two-strike, or keepalive interrupt handling (`SIGINT` on Unix; Ctrl+C/Ctrl+Break on Windows). |
-| `signals_sigwinch` | Uses Unix resize signals; Windows continues polling terminal dimensions. |
-| `signals` | Enables both signal features. |
 | `timestamps` | Enables timestamp-related methods and flags like `Msg::with_timestamp`. |
