@@ -9,11 +9,6 @@
 
 This crate contains the objects providing the heart of the [FYI command line application](https://github.com/blobfolio/fyi), namely `Msg`, a simple struct for status-like messages that can be easily printed to `STDOUT` or `STDERR`.
 
-> [!WARNING]
->
-> On Windows targets, `fyi_msg::enable_console_ansi()` must be called _before_
-> any messages are printed or they'll probably look weird.
-
 
 
 ## Examples
