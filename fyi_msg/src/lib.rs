@@ -8,7 +8,15 @@
 [![deps.rs](https://deps.rs/crate/fyi_msg/latest/status.svg?style=flat-square&label=deps.rs)](https://deps.rs/crate/fyi_msg/)<br>
 [![license](https://img.shields.io/badge/license-wtfpl-ff1493?style=flat-square)](https://en.wikipedia.org/wiki/WTFPL)
 
-This crate contains the objects providing the heart of the [FYI command line application](https://github.com/blobfolio/fyi), namely [`Msg`], a simple struct for status-like messages that can be easily printed to `STDOUT` or `STDERR`.
+This crate contains the objects providing the heart of the
+[FYI command line application](https://github.com/blobfolio/fyi), namely [`Msg`],
+a simple struct for status-like messages that can be easily printed to `STDOUT`
+or `STDERR`.
+
+<div class="warning">
+**Warning:** On Windows targets, `fyi_msg::enable_console_ansi()` must be called
+_before_ any messages are printed or they'll probably look weird.
+</div>
 
 
 
@@ -106,6 +114,7 @@ mod ansi;
 mod msg;
 #[cfg(feature = "fitted")]   mod fitted;
 #[cfg(feature = "progress")] mod progress;
+#[cfg(windows)]              mod windows;
 
 pub use ansi::AnsiColor;
 pub use msg::{
@@ -134,8 +143,9 @@ pub use progress::{
 
 // Re-export.
 pub use fyi_ansi;
+#[cfg(windows)] pub use windows::enable_console_ansi;
 #[cfg_attr(docsrs, doc(cfg(feature = "signal-hook")))]
-#[cfg(feature = "signal-hook")] pub use signal_hook;
+#[cfg(all(unix, feature = "signal-hook"))] pub use signal_hook;
 
 #[cfg(test)] use brunch as _;
 #[cfg(test)] use rayon as _;

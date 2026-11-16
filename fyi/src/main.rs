@@ -69,6 +69,9 @@ use std::process::ExitCode;
 
 /// # Main.
 fn main() -> ExitCode {
+	#[cfg(windows)]
+	fyi_msg::enable_console_ansi();
+
 	match main__() {
 		Ok(()) => ExitCode::SUCCESS,
 		Err(FyiError::PrintHelp(x)) => {

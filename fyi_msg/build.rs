@@ -2,17 +2,13 @@
 # FYI: Build
 */
 
+use fyi_ansi::COLORS;
 use std::{
 	fmt,
 	fs::File,
 	io::Write,
 	path::PathBuf,
 };
-
-
-
-// COLORS: [(name, hex)].
-include!("skel/ansi256.rs");
 
 
 

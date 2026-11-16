@@ -17,7 +17,7 @@ use super::{
 	ProglessInner,
 };
 
-#[cfg(any(feature = "signals_sigint", feature = "signals_sigwinch"))]
+#[cfg(any(feature = "signals_sigint", all(unix, feature = "signals_sigwinch")))]
 use super::signals::ProglessSignals;
 
 
@@ -121,7 +121,7 @@ impl Drop for ProglessSteady {
 fn spawn_ticker(t_state: Arc<(Mutex<bool>, Condvar)>, t_inner: Arc<ProglessInner>)
 -> JoinHandle<()> {
 	std::thread::spawn(move || {
-		#[cfg(any(feature = "signals_sigint", feature = "signals_sigwinch"))]
+		#[cfg(any(feature = "signals_sigint", all(unix, feature = "signals_sigwinch")))]
 		let signals = ProglessSignals::default();
 
 		// Tick while the ticking's good.
@@ -133,7 +133,7 @@ fn spawn_ticker(t_state: Arc<(Mutex<bool>, Condvar)>, t_inner: Arc<ProglessInner
 
 			// Dead, but from the other end?
 			cfg_select! {
-				any(feature = "signals_sigint", feature = "signals_sigwinch") =>
+				any(feature = "signals_sigint", all(unix, feature = "signals_sigwinch")) =>
 					if ! signals.pretick(&t_inner) || ! t_inner.tick(false) {
 						*state = true; // Update the state to match.
 						drop(state);

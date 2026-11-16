@@ -98,6 +98,7 @@ dependencies = [
  "terminal_size",
  "unicode-width",
  "utc2k",
+ "windows-sys",
 ]
 
 [[package]]

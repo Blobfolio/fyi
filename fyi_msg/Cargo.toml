@@ -15,16 +15,31 @@ rustc-args = ["--cfg", "docsrs"]
 rustdoc-args = ["--cfg", "docsrs"]
 features = [ "fitted", "progress", "signals", "timestamps" ]
 default-target = "x86_64-unknown-linux-gnu"
-targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
+targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-pc-windows-msvc" ]
 
 [dependencies]
 argyle =        { workspace = true, optional = true }
 dactyl =        { workspace = true, optional = true }
 fyi_ansi =      { workspace = true }
-signal-hook =   { workspace = true, optional = true }
 terminal_size = { workspace = true, optional = true }
 unicode-width = { workspace = true, optional = true }
 utc2k =         { workspace = true, features = ["local"], optional = true }
+
+[target.'cfg(unix)'.dependencies]
+signal-hook = { workspace = true, optional = true }
+
+[target.'cfg(windows)'.dependencies.windows-sys]
+version = "0.61.2"
+features = [
+	"Win32_Foundation",
+	"Win32_Storage_FileSystem",
+	"Win32_System_Console",
+	"Win32_System_IO",
+	"Win32_System_Threading",
+]
+
+[build-dependencies]
+fyi_ansi = { workspace = true }
 
 [dev-dependencies]
 brunch = { workspace = true }
@@ -68,18 +83,18 @@ timestamps = [ "utc2k" ]
 progress = [ "dactyl", "fitted", "terminal_size" ]
 
 # ADVANCED: Add SIGWINCH signal support to the Progless struct, reducing
-# resize-related latency.
+# resize-related latency on Unix. Windows continues to poll terminal size.
 #
 # NOT recommended for general use.
 signals_sigwinch = [ "progress", "signal-hook" ]
 
-# ADVANCED: Add SIGINT signal support to the Progless struct, allowing some
-# quick cleanup/restoration to be sneaked in before premature termination.
+# ADVANCED: Add SIGINT (Unix) or Ctrl+C/Ctrl+Break (Windows) support, allowing
+# some quick cleanup/restoration to be sneaked in before premature termination.
 # (This makes possible subtle UI improvements like hiding the cursor during
 # progress render.)
 #
-# This necessarily replaces the default SIGINT-handling behaviors, so should
-# NOT be used in projects that implement their own handling.
+# This necessarily replaces the default SIGINT-handling behavior for the parent
+# app, so should NOT be used in projects that implement their own handling.
 #
 # NOT recommended for general use.
 signals_sigint = [ "progress", "signal-hook" ]
