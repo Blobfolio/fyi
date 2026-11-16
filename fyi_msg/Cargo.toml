@@ -38,6 +38,9 @@ features = [
 	"Win32_System_Threading",
 ]
 
+[build-dependencies]
+fyi_ansi = { workspace = true }
+
 [dev-dependencies]
 brunch = { workspace = true }
 rayon =  { workspace = true }

@@ -1,5 +1,6 @@
+#[doc(hidden)]
 /// # Color Names and RGB.
-static COLORS: [(&str, &str); 256] = [
+pub static COLORS: [(&str, &str); 256] = [
 	("Black", "#000000"),
 	("Red", "#800000"),
 	("Green", "#008000"),

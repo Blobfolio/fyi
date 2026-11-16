@@ -51,13 +51,6 @@ jobs:
         cargo --version
         cargo clippy --version
 
-    - name: Verify ansi256.rs
-      if: runner.os == 'Ubuntu'
-      run: |
-        # These two files should always be identical. Windows doesn't
-        # support symlinks so here we are. Haha.
-        cmp fyi_ansi/skel/ansi256.rs fyi_msg/skel/ansi256.rs
-
     - name: Build
       run: |
         cargo build --bin fyi --target ${{ matrix.target }}

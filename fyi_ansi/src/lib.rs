@@ -94,6 +94,11 @@ assert_eq!(strike!("I'm struck!"),        "\x1b[9mI'm struck!\x1b[0m");
 
 
 
+// COLORS: [(name, hex)].
+include!("../skel/ansi256.rs");
+
+
+
 #[macro_use]
 /// # Macros.
 mod macros {
