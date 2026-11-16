@@ -106,3 +106,10 @@ jobs:
     - name: Build (fyi_msg/Examples)
       run: |
         cargo build -p fyi_msg --examples --all-features --target ${{ matrix.target }}
+
+    - name: Build (Vendored)
+      run: |
+        mkdir .cargo
+        cargo vendor --locked > .cargo/config.toml
+        cargo clean
+        cargo build --locked --offline --target ${{ matrix.target }}
