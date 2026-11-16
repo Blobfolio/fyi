@@ -51,15 +51,12 @@ jobs:
         cargo --version
         cargo clippy --version
 
-    - name: Prepare Windows Source Links
-      if: runner.os == 'Windows'
-      shell: pwsh
+    - name: Verify ansi256.rs
+      if: runner.os == 'Ubuntu'
       run: |
-        foreach ($path in 'fyi_ansi/skel/ansi256.rs', 'fyi_msg/skel/ansi256.rs') {
-          if ((Get-Item -LiteralPath $path).LinkType -ne 'SymbolicLink') {
-            Copy-Item -LiteralPath skel/ansi256.rs -Destination $path -Force
-          }
-        }
+        # These two files should always be identical. Windows doesn't
+        # support symlinks so here we are. Haha.
+        cmp fyi_ansi/skel/ansi256.rs fyi_msg/skel/ansi256.rs
 
     - name: Build
       run: |

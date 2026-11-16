@@ -44,11 +44,6 @@ cargo install \
     --bin fyi
 ```
 
-> [!WARNING]
-> 
-> The `cargo install` one-liner will fail on Windows if `git` is configured without symlink support. In such cases, just follow the [offline build instructions](#offlinevendored-builds) instead.
-
-
 ### Offline/Vendored Builds
 
 If your build environment lacks networking support, pre-download the `Source code (tar.gz)` and `vendored-sources.tar.zst` assets attached to the [release](https://github.com/Blobfolio/fyi/releases/latest), then:
@@ -62,11 +57,6 @@ cd fyi-VERSION
 
 # Extract the vendored sources (into the source root).
 tar -xf ../vendored-sources.tar.zst
-
-# Windows users may need to replace the project's two symlinks with normal
-# files before building. That can be done by running:
-# Copy-Item skel/ansi256.rs fyi_ansi/skel/ansi256.rs -Force
-# Copy-Item skel/ansi256.rs fyi_msg/skel/ansi256.rs -Force
 
 # Build! See `cargo build --help` for more options.
 cargo build \

@@ -53,16 +53,6 @@ jobs:
         cargo --version
         cargo clippy --version
 
-    - name: Prepare Windows Source Links
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        foreach ($path in 'fyi_ansi/skel/ansi256.rs', 'fyi_msg/skel/ansi256.rs') {
-          if ((Get-Item -LiteralPath $path).LinkType -ne 'SymbolicLink') {
-            Copy-Item -LiteralPath skel/ansi256.rs -Destination $path -Force
-          }
-        }
-
     - name: MSRV
       run: |
         cargo msrv --path fyi_msg verify -- cargo check --all-features
